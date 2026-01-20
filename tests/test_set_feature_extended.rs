@@ -3,7 +3,6 @@
 //! These tests verify the parameters that were documented in the Python tool
 //! but missing from the initial Rust implementation.
 
-use serde_json::json;
 use sz_configtool_lib::features;
 
 const TEST_CONFIG: &str = r#"{
@@ -45,20 +44,19 @@ fn test_set_feature_behavior() {
     let config = features::set_feature(
         TEST_CONFIG,
         "TEST_FEATURE",
-        None,    // candidates
-        None,    // anonymize
-        None,    // derived
-        None,    // history
-        None,    // matchkey
+        None,         // candidates
+        None,         // anonymize
+        None,         // derived
+        None,         // history
+        None,         // matchkey
         Some("NAME"), // behavior
-        None,    // class
-        None,    // version
-        None,    // rtype_id
+        None,         // class
+        None,         // version
+        None,         // rtype_id
     )
     .expect("Failed to set feature behavior");
 
-    let feature = features::get_feature(&config, "TEST_FEATURE")
-        .expect("Failed to get feature");
+    let feature = features::get_feature(&config, "TEST_FEATURE").expect("Failed to get feature");
 
     assert_eq!(feature["behavior"], "NAME");
     // Verify internal fields
@@ -73,9 +71,15 @@ fn test_set_feature_behavior_with_modifiers() {
     let config = features::set_feature(
         TEST_CONFIG,
         "TEST_FEATURE",
-        None, None, None, None, None,
+        None,
+        None,
+        None,
+        None,
+        None,
         Some("F1ES"), // behavior: F1 + Exclusive + Stable
-        None, None, None,
+        None,
+        None,
+        None,
     )
     .expect("Failed to set feature behavior F1ES");
 
@@ -92,10 +96,15 @@ fn test_set_feature_class() {
     let config = features::set_feature(
         TEST_CONFIG,
         "TEST_FEATURE",
-        None, None, None, None, None,
-        None,              // behavior
-        Some("IDENTITY"),  // class
-        None, None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,             // behavior
+        Some("IDENTITY"), // class
+        None,
+        None,
     )
     .expect("Failed to set feature class");
 
@@ -104,8 +113,7 @@ fn test_set_feature_class() {
     assert_eq!(ftype["FCLASS_ID"], 2);
 
     // Verify via get_feature
-    let feature = features::get_feature(&config, "TEST_FEATURE")
-        .expect("Failed to get feature");
+    let feature = features::get_feature(&config, "TEST_FEATURE").expect("Failed to get feature");
     assert_eq!(feature["class"], "IDENTITY");
 }
 
@@ -115,10 +123,14 @@ fn test_set_feature_rtype_id() {
     let config = features::set_feature(
         TEST_CONFIG,
         "TEST_FEATURE",
-        None, None, None, None, None,
-        None,   // behavior
-        None,   // class
-        None,   // version
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,    // behavior
+        None,    // class
+        None,    // version
         Some(5), // rtype_id
     )
     .expect("Failed to set feature rtype_id");
@@ -162,10 +174,15 @@ fn test_set_feature_invalid_class() {
     let result = features::set_feature(
         TEST_CONFIG,
         "TEST_FEATURE",
-        None, None, None, None, None,
+        None,
+        None,
+        None,
+        None,
+        None,
         None,
         Some("NONEXISTENT_CLASS"),
-        None, None,
+        None,
+        None,
     );
 
     assert!(result.is_err());
@@ -178,9 +195,15 @@ fn test_set_feature_invalid_behavior() {
     let result = features::set_feature(
         TEST_CONFIG,
         "TEST_FEATURE",
-        None, None, None, None, None,
+        None,
+        None,
+        None,
+        None,
+        None,
         Some("INVALID_BEHAVIOR"),
-        None, None, None,
+        None,
+        None,
+        None,
     );
 
     assert!(result.is_err());

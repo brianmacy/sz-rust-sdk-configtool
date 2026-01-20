@@ -5516,8 +5516,8 @@ pub extern "C" fn SzConfigTool_setFeature(
         .and_then(|v| v.as_i64());
 
     handle_result!(crate::features::set_feature(
-        config, code_or_id, candidates, anonymize, derived, history, matchkey,
-        behavior, class, version, rtype_id
+        config, code_or_id, candidates, anonymize, derived, history, matchkey, behavior, class,
+        version, rtype_id
     ))
 }
 
