@@ -1,0 +1,56 @@
+name: Deploy Documentation
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Build Rust Documentation
+        run: cargo doc --no-deps --document-private-items
+
+      - name: Prepare Documentation Directory
+        run: |
+          mkdir -p _site
+          # Copy pre-built index and C API docs
+          cp -r docs/* _site/
+          # Copy Rust docs
+          cp -r target/doc _site/rust
+          # Add .nojekyll to use static files (not Jekyll)
+          touch _site/.nojekyll
+          # Create redirect from root
+          echo '<meta http-equiv="refresh" content="0; url=index.html">' > _site/index.html
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

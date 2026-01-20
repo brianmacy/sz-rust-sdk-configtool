@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C API Documentation - sz-rust-sdk-configtool</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .nav {
+            background: white;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 15px 20px;
+        }
+        .nav a {
+            color: #667eea;
+            text-decoration: none;
+            margin-right: 20px;
+            font-weight: 500;
+        }
+        .nav a:hover {
+            text-decoration: underline;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        .content {
+            background: white;
+            border-radius: 8px;
+            padding: 40px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        h2 {
+            color: #667eea;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+        h3 {
+            color: #764ba2;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+        pre {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 20px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        code {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9em;
+        }
+        .function {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin-right: 8px;
+            background: #a8b9dc;
+            color: #283d6a;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #667eea;
+        }
+        .note {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>C API Documentation</h1>
+        <p>libSzConfigTool - C Shared Library Interface</p>
+    </div>
+
+    <div class="nav">
+        <a href="index.html">← Back to Docs Home</a>
+        <a href="https://github.com/brianmacy/sz-rust-sdk-configtool/blob/main/FFI_IMPLEMENTATION.md">Full FFI Details</a>
+        <a href="https://github.com/brianmacy/sz-rust-sdk-configtool/blob/main/include/libSzConfigTool.h">Header File</a>
+    </div>
+
+    <div class="container">
+        <div class="content">
+            <h2>Overview</h2>
+            <p>The <code>libSzConfigTool</code> C shared library provides 121 C-compatible functions for manipulating Senzing configuration JSON documents. All operations are in-memory JSON transformations with proper memory management.</p>
+
+            <div class="note">
+                <strong>⚠️ Important:</strong> All strings returned by this library must be freed using <code>SzConfigTool_free()</code>. Failure to do so will cause memory leaks.
+            </div>
+
+            <h2>Library Files</h2>
+            <table>
+                <tr>
+                    <th>Platform</th>
+                    <th>Shared Library</th>
+                    <th>Header File</th>
+                </tr>
+                <tr>
+                    <td>macOS</td>
+                    <td><code>libSzConfigTool.dylib</code></td>
+                    <td rowspan="3"><code>libSzConfigTool.h</code></td>
+                </tr>
+                <tr>
+                    <td>Linux</td>
+                    <td><code>libSzConfigTool.so</code></td>
+                </tr>
+                <tr>
+                    <td>Windows</td>
+                    <td><code>SzConfigTool.dll</code></td>
+                </tr>
+            </table>
+
+            <h2>Result Structure</h2>
+            <pre><code>typedef struct SzConfigTool_result {
+    char *response;      // Modified config JSON (must free)
+    int64_t returnCode;  // 0 = success, negative = error
+} SzConfigTool_result;</code></pre>
+
+            <h2>Memory Management</h2>
+
+            <div class="function">
+                <h3>SzConfigTool_free</h3>
+                <span class="badge">Infrastructure</span>
+                <pre><code>void SzConfigTool_free(char *ptr);</code></pre>
+                <p><strong>Description:</strong> Frees memory allocated by this library. Always call this on <code>response</code> pointers.</p>
+            </div>
+
+            <h2>Error Handling</h2>
+
+            <div class="function">
+                <h3>SzConfigTool_getLastError</h3>
+                <span class="badge">Infrastructure</span>
+                <pre><code>const char *SzConfigTool_getLastError(void);</code></pre>
+                <p><strong>Returns:</strong> Error message string (do not free), or NULL if no error.</p>
+            </div>
+
+            <div class="function">
+                <h3>SzConfigTool_getLastErrorCode</h3>
+                <span class="badge">Infrastructure</span>
+                <pre><code>int64_t SzConfigTool_getLastErrorCode(void);</code></pre>
+                <p><strong>Returns:</strong> Error code (0 = no error, negative = error).</p>
+            </div>
+
+            <div class="function">
+                <h3>SzConfigTool_clearLastError</h3>
+                <span class="badge">Infrastructure</span>
+                <pre><code>void SzConfigTool_clearLastError(void);</code></pre>
+                <p><strong>Description:</strong> Clears the last error state.</p>
+            </div>
+
+            <h2>Example Usage</h2>
+            <pre><code>#include "libSzConfigTool.h"
+#include &lt;stdio.h&gt;
+
+int main(void) {
+    const char *config = "{\"G2_CONFIG\":{\"CFG_DSRC\":[]}}";
+
+    // Add data source
+    struct SzConfigTool_result result =
+        SzConfigTool_addDataSource(config, "MY_SOURCE");
+
+    if (result.returnCode == 0) {
+        printf("Success: %s\n", result.response);
+        SzConfigTool_free(result.response);
+    } else {
+        fprintf(stderr, "Error: %s\n",
+                SzConfigTool_getLastError());
+    }
+
+    return 0;
+}</code></pre>
+
+            <h2>Building and Linking</h2>
+
+            <h3>CMake</h3>
+            <pre><code>find_library(SZCONFIGTOOL_LIB NAMES SzConfigTool)
+target_link_libraries(your_app PRIVATE ${SZCONFIGTOOL_LIB})</code></pre>
+
+            <h3>gcc/clang</h3>
+            <pre><code>gcc -o myapp myapp.c -L/path/to/lib -lSzConfigTool -I/path/to/include</code></pre>
+
+            <h2>Function Categories</h2>
+            <ul style="line-height: 2; padding-left: 20px;">
+                <li><strong>Infrastructure:</strong> 4 functions (free, getLastError, etc.)</li>
+                <li><strong>Data Sources:</strong> 5 functions (add, delete, list, get, set)</li>
+                <li><strong>Attributes:</strong> 5 functions (add, delete, list, get, set)</li>
+                <li><strong>Elements:</strong> 5 functions (add, delete, list, get, set)</li>
+                <li><strong>Features:</strong> 3 functions (add, delete, set, list, get)</li>
+                <li><strong>Thresholds:</strong> 9 functions</li>
+                <li><strong>And 85+ more functions...</strong> for config sections, fragments, rules, calls, etc.</li>
+            </ul>
+
+            <h2>Complete Documentation</h2>
+            <p>For the complete list of all 121 functions with detailed signatures and examples, see:</p>
+            <ul style="padding-left: 20px; line-height: 2;">
+                <li><a href="https://github.com/brianmacy/sz-rust-sdk-configtool/blob/main/FFI_IMPLEMENTATION.md">FFI_IMPLEMENTATION.md</a> - Complete implementation details</li>
+                <li><a href="https://github.com/brianmacy/sz-rust-sdk-configtool/blob/main/include/libSzConfigTool.h">libSzConfigTool.h</a> - Full header file</li>
+                <li><a href="https://github.com/brianmacy/sz-rust-sdk-configtool/tree/main/tests/c">tests/c/</a> - C test examples</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
