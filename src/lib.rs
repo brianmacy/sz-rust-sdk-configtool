@@ -56,6 +56,7 @@ pub mod features;
 pub mod thresholds;
 
 // Advanced operations modules
+pub mod command_processor;
 pub mod config_sections;
 pub mod fragments;
 pub mod generic_plans;

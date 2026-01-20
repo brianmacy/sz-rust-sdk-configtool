@@ -42,7 +42,7 @@ pub fn add_behavior_override(
     usage_type: &str,
     behavior: &str,
 ) -> Result<String> {
-    let mut config: Value =
+    let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
     // Lookup FTYPE_ID from feature code
