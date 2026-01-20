@@ -20,8 +20,12 @@ fn test_data_source_workflow() {
     let config = TEST_CONFIG.to_string();
 
     // Add data source using the proper API function
-    let config = datasources::add_data_source(&config, "TEST_SOURCE", None, None, None)
-        .expect("Failed to add data source");
+    let config = datasources::add_data_source(
+        &config,
+        "TEST_SOURCE",
+        datasources::AddDataSourceParams::default(),
+    )
+    .expect("Failed to add data source");
 
     // List data sources - returns transformed format with "id" and "dataSource" fields
     let sources = datasources::list_data_sources(&config).expect("Failed to list data sources");

@@ -2,6 +2,32 @@ use crate::error::{Result, SzConfigError};
 use crate::helpers;
 use serde_json::{Value, json};
 
+// ============================================================================
+// Parameter Structs
+// ============================================================================
+
+/// Parameters for setting a feature element
+#[derive(Debug, Clone, Default)]
+pub struct SetFeatureElementParams<'a> {
+    pub exec_order: Option<i64>,
+    pub display_level: Option<i64>,
+    pub display_delim: Option<&'a str>,
+    pub derived: Option<&'a str>,
+}
+
+impl<'a> TryFrom<&'a Value> for SetFeatureElementParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self> {
+        Ok(Self {
+            exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
+            display_level: json.get("displayLevel").and_then(|v| v.as_i64()),
+            display_delim: json.get("displayDelim").and_then(|v| v.as_str()),
+            derived: json.get("derived").and_then(|v| v.as_str()),
+        })
+    }
+}
+
 /// Add a new element (CFG_FELEM record)
 ///
 /// # Arguments
@@ -192,10 +218,7 @@ pub fn set_element(config_json: &str, felem_code: &str, felem_config: &Value) ->
 /// * `config_json` - JSON configuration string
 /// * `ftype_id` - Feature type ID
 /// * `felem_id` - Element ID
-/// * `exec_order` - Optional execution order
-/// * `display_level` - Optional display level
-/// * `display_delim` - Optional display delimiter
-/// * `derived` - Optional derived flag
+/// * `params` - Feature element parameters (all optional)
 ///
 /// # Returns
 /// Modified configuration JSON string
@@ -203,10 +226,7 @@ pub fn set_feature_element(
     config_json: &str,
     ftype_id: i64,
     felem_id: i64,
-    exec_order: Option<i64>,
-    display_level: Option<i64>,
-    display_delim: Option<&str>,
-    derived: Option<&str>,
+    params: SetFeatureElementParams,
 ) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -230,16 +250,16 @@ pub fn set_feature_element(
         })?;
 
     // Update fields if provided
-    if let Some(order) = exec_order {
+    if let Some(order) = params.exec_order {
         fbom["EXEC_ORDER"] = json!(order);
     }
-    if let Some(level) = display_level {
+    if let Some(level) = params.display_level {
         fbom["DISPLAY_LEVEL"] = json!(level);
     }
-    if let Some(delim) = display_delim {
+    if let Some(delim) = params.display_delim {
         fbom["DISPLAY_DELIM"] = json!(delim);
     }
-    if let Some(der) = derived {
+    if let Some(der) = params.derived {
         fbom["DERIVED"] = json!(der);
     }
 
@@ -266,10 +286,10 @@ pub fn set_feature_element_display_level(
         config_json,
         ftype_id,
         felem_id,
-        None,
-        Some(display_level),
-        None,
-        None,
+        SetFeatureElementParams {
+            display_level: Some(display_level),
+            ..Default::default()
+        },
     )
 }
 
@@ -293,9 +313,9 @@ pub fn set_feature_element_derived(
         config_json,
         ftype_id,
         felem_id,
-        None,
-        None,
-        None,
-        Some(derived),
+        SetFeatureElementParams {
+            derived: Some(derived),
+            ..Default::default()
+        },
     )
 }

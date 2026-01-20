@@ -19,10 +19,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // CREATE: Add data sources using the API
     println!("1. CREATE - Adding data sources...");
 
-    config = datasources::add_data_source(&config, "CUSTOMERS", None, None, None)?;
+    config = datasources::add_data_source(
+        &config,
+        "CUSTOMERS",
+        datasources::AddDataSourceParams::default(),
+    )?;
     println!("  ✓ Added CUSTOMERS");
 
-    config = datasources::add_data_source(&config, "VENDORS", None, None, None)?;
+    config = datasources::add_data_source(
+        &config,
+        "VENDORS",
+        datasources::AddDataSourceParams::default(),
+    )?;
     println!("  ✓ Added VENDORS");
 
     // READ: List all data sources - returns "id" and "dataSource" format

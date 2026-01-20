@@ -2,17 +2,51 @@ use crate::error::{Result, SzConfigError};
 use crate::helpers;
 use serde_json::{Value, json};
 
+// ============================================================================
+// Parameter Structs
+// ============================================================================
+
+/// Parameters for adding an attribute
+#[derive(Debug, Clone)]
+pub struct AddAttributeParams<'a> {
+    pub feature: &'a str,
+    pub element: &'a str,
+    pub class: &'a str,
+    pub default_value: Option<&'a str>,
+    pub internal: Option<&'a str>,
+    pub required: Option<&'a str>,
+}
+
+impl<'a> TryFrom<&'a Value> for AddAttributeParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self> {
+        Ok(Self {
+            feature: json
+                .get("feature")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| SzConfigError::MissingField("feature".to_string()))?,
+            element: json
+                .get("element")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| SzConfigError::MissingField("element".to_string()))?,
+            class: json
+                .get("class")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| SzConfigError::MissingField("class".to_string()))?,
+            default_value: json.get("default").and_then(|v| v.as_str()),
+            internal: json.get("internal").and_then(|v| v.as_str()),
+            required: json.get("required").and_then(|v| v.as_str()),
+        })
+    }
+}
+
 /// Add a new attribute to the configuration
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
 /// * `attribute_code` - Unique attribute code (e.g., "ACCOUNT_NUMBER")
-/// * `feature_code` - Feature type code (e.g., "ACCOUNT")
-/// * `element_code` - Element code (e.g., "ACCOUNT_NUM")
-/// * `attr_class` - Attribute class (e.g., "IDENTIFIER", "NAME", "OTHER")
-/// * `default_value` - Optional default value
-/// * `internal` - Optional internal flag
-/// * `required` - Optional required flag
+/// * `params` - Attribute parameters (feature, element, class required; others optional)
 ///
 /// # Returns
 /// Tuple of (modified_json, new_attribute_value) - returns both the modified config
@@ -23,16 +57,10 @@ use serde_json::{Value, json};
 /// - `InvalidInput` if attribute class is invalid
 /// - `JsonParse` if config_json is invalid
 /// - `MissingSection` if required sections don't exist
-#[allow(clippy::too_many_arguments)]
 pub fn add_attribute(
     config_json: &str,
     attribute_code: &str,
-    feature_code: &str,
-    element_code: &str,
-    attr_class: &str,
-    default_value: Option<&str>,
-    internal: Option<&str>,
-    required: Option<&str>,
+    params: AddAttributeParams,
 ) -> Result<(String, Value)> {
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -47,17 +75,17 @@ pub fn add_attribute(
         "RELATIONSHIP",
         "OTHER",
     ];
-    if !valid_classes.contains(&attr_class) {
+    if !valid_classes.contains(&params.class) {
         return Err(SzConfigError::InvalidInput(format!(
             "Invalid attribute class '{}'. Must be one of: {}",
-            attr_class,
+            params.class,
             valid_classes.join(", ")
         )));
     }
 
     let attribute_upper = attribute_code.to_uppercase();
-    let feature_upper = feature_code.to_uppercase();
-    let element_upper = element_code.to_uppercase();
+    let feature_upper = params.feature.to_uppercase();
+    let element_upper = params.element.to_uppercase();
 
     // Check if attribute already exists
     let attrs = config
@@ -83,12 +111,12 @@ pub fn add_attribute(
     let new_attribute = json!({
         "ATTR_ID": next_attr_id,
         "ATTR_CODE": attribute_upper.clone(),
-        "ATTR_CLASS": attr_class,
+        "ATTR_CLASS": params.class,
         "FTYPE_CODE": feature_upper,  // Use actual feature code, not Null
         "FELEM_CODE": element_upper,  // Use actual element code, not Null
-        "FELEM_REQ": required.unwrap_or("No"),
-        "DEFAULT_VALUE": default_value.map(|v| json!(v)).unwrap_or(Value::Null),
-        "INTERNAL": internal.unwrap_or("No")
+        "FELEM_REQ": params.required.unwrap_or("No"),
+        "DEFAULT_VALUE": params.default_value.map(|v| json!(v)).unwrap_or(Value::Null),
+        "INTERNAL": params.internal.unwrap_or("No")
     });
 
     // Add to CFG_ATTR only (Python does not create FBOM in addAttribute)

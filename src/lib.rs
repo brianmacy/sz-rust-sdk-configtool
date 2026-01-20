@@ -23,18 +23,24 @@
 //!     let config = std::fs::read_to_string("g2config.json")?;
 //!
 //!     // Add a data source
-//!     let config = datasources::add_data_source(&config, "NEW_SOURCE", None, None, None)?;
+//!     let config = datasources::add_data_source(
+//!         &config,
+//!         "NEW_SOURCE",
+//!         datasources::AddDataSourceParams::default(),
+//!     )?;
 //!
 //!     // Add an attribute
 //!     let (config, _) = attributes::add_attribute(
 //!         &config,
 //!         "NEW_ATTR",
-//!         "ADDRESS",
-//!         "ELEMENT",
-//!         "OTHER",
-//!         None,
-//!         None,
-//!         None
+//!         attributes::AddAttributeParams {
+//!             feature: "ADDRESS",
+//!             element: "ELEMENT",
+//!             class: "OTHER",
+//!             default_value: None,
+//!             internal: None,
+//!             required: None,
+//!         },
 //!     )?;
 //!
 //!     // Save modified config

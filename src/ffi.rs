@@ -178,7 +178,11 @@ pub unsafe extern "C" fn SzConfigTool_addDataSource(
     };
 
     // Use default values for optional parameters (matches Python defaults)
-    let result = crate::datasources::add_data_source(config, ds_code, None, None, None);
+    let result = crate::datasources::add_data_source(
+        config,
+        ds_code,
+        crate::datasources::AddDataSourceParams::default(),
+    );
     handle_result!(result)
 }
 
@@ -392,7 +396,16 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute(
     };
 
     let result = crate::attributes::add_attribute(
-        config, attr_code, feat_code, elem_code, class, def_val, int_val, req_val,
+        config,
+        attr_code,
+        crate::attributes::AddAttributeParams {
+            feature: feat_code,
+            element: elem_code,
+            class,
+            default_value: def_val,
+            internal: int_val,
+            required: req_val,
+        },
     )
     .map(|(json, _item)| json);
 
@@ -4218,13 +4231,15 @@ pub extern "C" fn SzConfigTool_addComparisonThreshold(
         config,
         cfunc_id,
         rtnval,
-        ftype_opt,
-        exec_opt,
-        same_opt,
-        close_opt,
-        likely_opt,
-        plausible_opt,
-        unlikely_opt
+        crate::thresholds::AddComparisonThresholdParams {
+            ftype_id: ftype_opt,
+            exec_order: exec_opt,
+            same_score: same_opt,
+            close_score: close_opt,
+            likely_score: likely_opt,
+            plausible_score: plausible_opt,
+            un_likely_score: unlikely_opt,
+        }
     ))
 }
 
@@ -4502,7 +4517,9 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
         scoring_cap,
         candidate_cap,
         redo_str,
-        feature_opt
+        crate::thresholds::AddGenericThresholdParams {
+            feature: feature_opt,
+        }
     ))
 }
 
@@ -5330,19 +5347,21 @@ pub extern "C" fn SzConfigTool_addFeature(
     match crate::features::add_feature(
         config,
         code,
-        element_list,
-        class,
-        behavior,
-        candidates,
-        anonymize,
-        derived,
-        history,
-        matchkey,
-        standardize,
-        expression,
-        comparison,
-        version,
-        rtype_id,
+        crate::features::AddFeatureParams {
+            element_list,
+            class,
+            behavior,
+            candidates,
+            anonymize,
+            derived,
+            history,
+            matchkey,
+            standardize,
+            expression,
+            comparison,
+            version,
+            rtype_id,
+        },
     ) {
         Ok(modified_config) => match CString::new(modified_config) {
             Ok(c_str) => {
@@ -5516,8 +5535,19 @@ pub extern "C" fn SzConfigTool_setFeature(
         .and_then(|v| v.as_i64());
 
     handle_result!(crate::features::set_feature(
-        config, code_or_id, candidates, anonymize, derived, history, matchkey, behavior, class,
-        version, rtype_id
+        config,
+        code_or_id,
+        crate::features::SetFeatureParams {
+            candidates,
+            anonymize,
+            derived,
+            history,
+            matchkey,
+            behavior,
+            class,
+            version,
+            rtype_id,
+        }
     ))
 }
 

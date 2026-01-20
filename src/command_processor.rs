@@ -228,16 +228,17 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
             let internal = get_opt_str_param(params, "internal");
             let default_value = get_opt_str_param(params, "default");
 
-            // Function signature: (attribute, feature, element, class, default, internal, required)
             crate::attributes::add_attribute(
                 config,
                 attr,
-                feature,
-                element,
-                class,
-                default_value,
-                internal,
-                required,
+                crate::attributes::AddAttributeParams {
+                    feature,
+                    element,
+                    class,
+                    default_value,
+                    internal,
+                    required,
+                },
             )
             .map(|(cfg, _)| cfg)
         }
@@ -300,16 +301,6 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
         // ===== Feature Commands =====
         "addFeature" => {
             let feature = get_str_param(params, "feature")?;
-            let class = get_opt_str_param(params, "class");
-            let behavior = get_opt_str_param(params, "behavior");
-            let candidates = get_opt_str_param(params, "candidates");
-            let anonymize = get_opt_str_param(params, "anonymize");
-            let derived = get_opt_str_param(params, "derived");
-            let history = get_opt_str_param(params, "history");
-            let matchkey = get_opt_str_param(params, "matchKey");
-            let standardize = get_opt_str_param(params, "standardize").filter(|s| !s.is_empty());
-            let expression = get_opt_str_param(params, "expression").filter(|s| !s.is_empty());
-            let comparison = get_opt_str_param(params, "comparison").filter(|s| !s.is_empty());
             let element_list = params
                 .get("elementList")
                 .ok_or_else(|| SzConfigError::MissingField("elementList".to_string()))?;
@@ -317,37 +308,41 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
             crate::features::add_feature(
                 config,
                 feature,
-                element_list,
-                class,
-                behavior,
-                candidates,
-                anonymize,
-                derived,
-                history,
-                matchkey,
-                standardize,
-                expression,
-                comparison,
-                None,
-                None,
+                crate::features::AddFeatureParams {
+                    element_list,
+                    class: get_opt_str_param(params, "class"),
+                    behavior: get_opt_str_param(params, "behavior"),
+                    candidates: get_opt_str_param(params, "candidates"),
+                    anonymize: get_opt_str_param(params, "anonymize"),
+                    derived: get_opt_str_param(params, "derived"),
+                    history: get_opt_str_param(params, "history"),
+                    matchkey: get_opt_str_param(params, "matchKey"),
+                    standardize: get_opt_str_param(params, "standardize").filter(|s| !s.is_empty()),
+                    expression: get_opt_str_param(params, "expression").filter(|s| !s.is_empty()),
+                    comparison: get_opt_str_param(params, "comparison").filter(|s| !s.is_empty()),
+                    version: params.get("version").and_then(|v| v.as_i64()),
+                    rtype_id: params.get("rtypeId").and_then(|v| v.as_i64()),
+                },
             )
         }
 
         "setFeature" => {
             let feature = get_str_param(params, "feature")?;
-            let candidates = get_opt_str_param(params, "candidates");
-            let anonymize = get_opt_str_param(params, "anonymize");
-            let derived = get_opt_str_param(params, "derived");
-            let history = get_opt_str_param(params, "history");
-            let matchkey = get_opt_str_param(params, "matchKey");
-            let behavior = get_opt_str_param(params, "behavior");
-            let class = get_opt_str_param(params, "class");
-            let version = params.get("version").and_then(|v| v.as_i64());
-            let rtype_id = params.get("rtypeId").and_then(|v| v.as_i64());
 
             crate::features::set_feature(
-                config, feature, candidates, anonymize, derived, history, matchkey, behavior,
-                class, version, rtype_id,
+                config,
+                feature,
+                crate::features::SetFeatureParams {
+                    candidates: get_opt_str_param(params, "candidates"),
+                    anonymize: get_opt_str_param(params, "anonymize"),
+                    derived: get_opt_str_param(params, "derived"),
+                    history: get_opt_str_param(params, "history"),
+                    matchkey: get_opt_str_param(params, "matchKey"),
+                    behavior: get_opt_str_param(params, "behavior"),
+                    class: get_opt_str_param(params, "class"),
+                    version: params.get("version").and_then(|v| v.as_i64()),
+                    rtype_id: params.get("rtypeId").and_then(|v| v.as_i64()),
+                },
             )
         }
 
@@ -474,14 +469,23 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
             };
 
             crate::thresholds::add_comparison_threshold(
-                config, cfunc_id, score_name, ftype_id, None, // exec_order
-                same, close, likely, plausible, unlikely,
+                config,
+                cfunc_id,
+                score_name,
+                crate::thresholds::AddComparisonThresholdParams {
+                    ftype_id,
+                    exec_order: None,
+                    same_score: same,
+                    close_score: close,
+                    likely_score: likely,
+                    plausible_score: plausible,
+                    un_likely_score: unlikely,
+                },
             )
         }
 
         "addGenericThreshold" => {
             let plan = get_str_param(params, "plan")?;
-            let feature = get_opt_str_param(params, "feature");
             let behavior = get_str_param(params, "behavior")?;
             let candidate_cap = params
                 .get("candidateCap")
@@ -500,7 +504,9 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 scoring_cap,
                 candidate_cap,
                 send_to_redo,
-                feature,
+                crate::thresholds::AddGenericThresholdParams {
+                    feature: get_opt_str_param(params, "feature"),
+                },
             )
         }
 

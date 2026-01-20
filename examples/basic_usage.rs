@@ -20,7 +20,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Add a data source using the library's add_data_source API
     println!("Adding data source 'CUSTOMERS'...");
 
-    let config = datasources::add_data_source(config, "CUSTOMERS", None, None, None)?;
+    let config = datasources::add_data_source(
+        config,
+        "CUSTOMERS",
+        datasources::AddDataSourceParams::default(),
+    )?;
 
     println!("✓ Data source added\n");
 

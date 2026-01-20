@@ -2,14 +2,36 @@ use crate::error::{Result, SzConfigError};
 use crate::helpers;
 use serde_json::{Value, json};
 
+// ============================================================================
+// Parameter Structs
+// ============================================================================
+
+/// Parameters for adding a data source
+#[derive(Debug, Clone, Default)]
+pub struct AddDataSourceParams<'a> {
+    pub retention_level: Option<&'a str>,
+    pub conversational: Option<&'a str>,
+    pub reliability: Option<i64>,
+}
+
+impl<'a> TryFrom<&'a Value> for AddDataSourceParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self> {
+        Ok(Self {
+            retention_level: json.get("retentionLevel").and_then(|v| v.as_str()),
+            conversational: json.get("conversational").and_then(|v| v.as_str()),
+            reliability: json.get("reliability").and_then(|v| v.as_i64()),
+        })
+    }
+}
+
 /// Add a new data source to the configuration
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
 /// * `code` - Unique data source code (e.g., "TEST_DS")
-/// * `retention_level` - Optional retention level ("Remember" or "Forget", default: "Remember")
-/// * `conversational` - Optional conversational flag ("Yes" or "No", default: "No")
-/// * `reliability` - Optional reliability score (default: 1)
+/// * `params` - Data source parameters (all optional)
 ///
 /// # Returns
 /// Modified configuration JSON string
@@ -21,9 +43,7 @@ use serde_json::{Value, json};
 pub fn add_data_source(
     config_json: &str,
     code: &str,
-    retention_level: Option<&str>,
-    conversational: Option<&str>,
-    reliability: Option<i64>,
+    params: AddDataSourceParams,
 ) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -49,9 +69,9 @@ pub fn add_data_source(
     let next_id = helpers::get_next_id_from_array(dsrcs, "DSRC_ID")?;
 
     // Use parameters or defaults (matching Python behavior)
-    let retention = retention_level.unwrap_or("Remember");
-    let conversational_flag = conversational.unwrap_or("No");
-    let reliability_score = reliability.unwrap_or(1);
+    let retention = params.retention_level.unwrap_or("Remember");
+    let conversational_flag = params.conversational.unwrap_or("No");
+    let reliability_score = params.reliability.unwrap_or(1);
 
     dsrcs.push(json!({
         "DSRC_ID": next_id,

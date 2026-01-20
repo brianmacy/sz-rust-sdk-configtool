@@ -44,15 +44,10 @@ fn test_set_feature_behavior() {
     let config = features::set_feature(
         TEST_CONFIG,
         "TEST_FEATURE",
-        None,         // candidates
-        None,         // anonymize
-        None,         // derived
-        None,         // history
-        None,         // matchkey
-        Some("NAME"), // behavior
-        None,         // class
-        None,         // version
-        None,         // rtype_id
+        features::SetFeatureParams {
+            behavior: Some("NAME"),
+            ..Default::default()
+        },
     )
     .expect("Failed to set feature behavior");
 
@@ -71,15 +66,10 @@ fn test_set_feature_behavior_with_modifiers() {
     let config = features::set_feature(
         TEST_CONFIG,
         "TEST_FEATURE",
-        None,
-        None,
-        None,
-        None,
-        None,
-        Some("F1ES"), // behavior: F1 + Exclusive + Stable
-        None,
-        None,
-        None,
+        features::SetFeatureParams {
+            behavior: Some("F1ES"),
+            ..Default::default()
+        },
     )
     .expect("Failed to set feature behavior F1ES");
 
@@ -96,15 +86,10 @@ fn test_set_feature_class() {
     let config = features::set_feature(
         TEST_CONFIG,
         "TEST_FEATURE",
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,             // behavior
-        Some("IDENTITY"), // class
-        None,
-        None,
+        features::SetFeatureParams {
+            class: Some("IDENTITY"),
+            ..Default::default()
+        },
     )
     .expect("Failed to set feature class");
 
@@ -123,15 +108,10 @@ fn test_set_feature_rtype_id() {
     let config = features::set_feature(
         TEST_CONFIG,
         "TEST_FEATURE",
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,    // behavior
-        None,    // class
-        None,    // version
-        Some(5), // rtype_id
+        features::SetFeatureParams {
+            rtype_id: Some(5),
+            ..Default::default()
+        },
     )
     .expect("Failed to set feature rtype_id");
 
@@ -146,15 +126,13 @@ fn test_set_feature_multiple_params() {
     let config = features::set_feature(
         TEST_CONFIG,
         "TEST_FEATURE",
-        Some("Yes"),      // candidates
-        None,             // anonymize
-        None,             // derived
-        None,             // history
-        None,             // matchkey
-        Some("NAME"),     // behavior - critical for embeddings!
-        Some("IDENTITY"), // class
-        Some(2),          // version
-        None,             // rtype_id
+        features::SetFeatureParams {
+            candidates: Some("Yes"),
+            behavior: Some("NAME"),
+            class: Some("IDENTITY"),
+            version: Some(2),
+            ..Default::default()
+        },
     )
     .expect("Failed to set multiple feature parameters");
 
@@ -174,15 +152,10 @@ fn test_set_feature_invalid_class() {
     let result = features::set_feature(
         TEST_CONFIG,
         "TEST_FEATURE",
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        Some("NONEXISTENT_CLASS"),
-        None,
-        None,
+        features::SetFeatureParams {
+            class: Some("NONEXISTENT_CLASS"),
+            ..Default::default()
+        },
     );
 
     assert!(result.is_err());
@@ -195,15 +168,10 @@ fn test_set_feature_invalid_behavior() {
     let result = features::set_feature(
         TEST_CONFIG,
         "TEST_FEATURE",
-        None,
-        None,
-        None,
-        None,
-        None,
-        Some("INVALID_BEHAVIOR"),
-        None,
-        None,
-        None,
+        features::SetFeatureParams {
+            behavior: Some("INVALID_BEHAVIOR"),
+            ..Default::default()
+        },
     );
 
     assert!(result.is_err());

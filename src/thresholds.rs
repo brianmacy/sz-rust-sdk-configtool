@@ -2,6 +2,54 @@ use crate::error::{Result, SzConfigError};
 use crate::helpers;
 use serde_json::{Value, json};
 
+// ============================================================================
+// Parameter Structs
+// ============================================================================
+
+/// Parameters for adding a comparison threshold
+#[derive(Debug, Clone, Default)]
+pub struct AddComparisonThresholdParams {
+    pub ftype_id: Option<i64>,
+    pub exec_order: Option<i64>,
+    pub same_score: Option<i64>,
+    pub close_score: Option<i64>,
+    pub likely_score: Option<i64>,
+    pub plausible_score: Option<i64>,
+    pub un_likely_score: Option<i64>,
+}
+
+impl TryFrom<&Value> for AddComparisonThresholdParams {
+    type Error = SzConfigError;
+
+    fn try_from(json: &Value) -> Result<Self> {
+        Ok(Self {
+            ftype_id: json.get("ftypeId").and_then(|v| v.as_i64()),
+            exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
+            same_score: json.get("sameScore").and_then(|v| v.as_i64()),
+            close_score: json.get("closeScore").and_then(|v| v.as_i64()),
+            likely_score: json.get("likelyScore").and_then(|v| v.as_i64()),
+            plausible_score: json.get("plausibleScore").and_then(|v| v.as_i64()),
+            un_likely_score: json.get("unlikelyScore").and_then(|v| v.as_i64()),
+        })
+    }
+}
+
+/// Parameters for adding a generic threshold
+#[derive(Debug, Clone)]
+pub struct AddGenericThresholdParams<'a> {
+    pub feature: Option<&'a str>,
+}
+
+impl<'a> TryFrom<&'a Value> for AddGenericThresholdParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self> {
+        Ok(Self {
+            feature: json.get("feature").and_then(|v| v.as_str()),
+        })
+    }
+}
+
 // ===== Comparison Thresholds (CFG_CFRTN) =====
 
 /// Add a new comparison threshold (CFG_CFRTN record)
@@ -10,33 +58,20 @@ use serde_json::{Value, json};
 /// * `config_json` - JSON configuration string
 /// * `cfunc_id` - Comparison function ID
 /// * `cfunc_rtnval` - Return value code
-/// * `ftype_id` - Optional feature type ID (default: 0 for all features)
-/// * `exec_order` - Optional execution order
-/// * `same_score` - Optional same score threshold
-/// * `close_score` - Optional close score threshold
-/// * `likely_score` - Optional likely score threshold
-/// * `plausible_score` - Optional plausible score threshold
-/// * `un_likely_score` - Optional unlikely score threshold
+/// * `params` - Threshold parameters (all optional)
 ///
 /// # Returns
 /// Modified configuration JSON string
-#[allow(clippy::too_many_arguments)]
 pub fn add_comparison_threshold(
     config_json: &str,
     cfunc_id: i64,
     cfunc_rtnval: &str,
-    ftype_id: Option<i64>,
-    exec_order: Option<i64>,
-    same_score: Option<i64>,
-    close_score: Option<i64>,
-    likely_score: Option<i64>,
-    plausible_score: Option<i64>,
-    un_likely_score: Option<i64>,
+    params: AddComparisonThresholdParams,
 ) -> Result<String> {
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    let ftype = ftype_id.unwrap_or(0);
+    let ftype = params.ftype_id.unwrap_or(0);
     let rtnval_upper = cfunc_rtnval.to_uppercase();
 
     // Check if already exists
@@ -66,22 +101,22 @@ pub fn add_comparison_threshold(
         "CFUNC_RTNVAL": rtnval_upper,
     });
 
-    if let Some(order) = exec_order {
+    if let Some(order) = params.exec_order {
         record["EXEC_ORDER"] = json!(order);
     }
-    if let Some(score) = same_score {
+    if let Some(score) = params.same_score {
         record["SAME_SCORE"] = json!(score);
     }
-    if let Some(score) = close_score {
+    if let Some(score) = params.close_score {
         record["CLOSE_SCORE"] = json!(score);
     }
-    if let Some(score) = likely_score {
+    if let Some(score) = params.likely_score {
         record["LIKELY_SCORE"] = json!(score);
     }
-    if let Some(score) = plausible_score {
+    if let Some(score) = params.plausible_score {
         record["PLAUSIBLE_SCORE"] = json!(score);
     }
-    if let Some(score) = un_likely_score {
+    if let Some(score) = params.un_likely_score {
         record["UN_LIKELY_SCORE"] = json!(score);
     }
 
@@ -259,7 +294,7 @@ pub fn list_comparison_thresholds(config_json: &str) -> Result<Vec<Value>> {
 /// * `scoring_cap` - Scoring cap threshold
 /// * `candidate_cap` - Candidate cap threshold
 /// * `send_to_redo` - Send to redo flag ("Yes" or "No")
-/// * `feature` - Optional feature name (default: "ALL" for all features)
+/// * `params` - Generic threshold parameters (feature optional)
 ///
 /// # Returns
 /// Modified configuration JSON string
@@ -270,7 +305,7 @@ pub fn add_generic_threshold(
     scoring_cap: i64,
     candidate_cap: i64,
     send_to_redo: &str,
-    feature: Option<&str>,
+    params: AddGenericThresholdParams,
 ) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -278,7 +313,7 @@ pub fn add_generic_threshold(
     let plan_upper = plan.to_uppercase();
     let behavior_upper = behavior.to_uppercase();
     let redo_upper = send_to_redo.to_uppercase();
-    let feature_upper = feature.unwrap_or("ALL").to_uppercase();
+    let feature_upper = params.feature.unwrap_or("ALL").to_uppercase();
 
     // Validate sendToRedo
     if redo_upper != "YES" && redo_upper != "NO" {

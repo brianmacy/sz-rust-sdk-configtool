@@ -2,6 +2,110 @@ use crate::error::{Result, SzConfigError};
 use crate::helpers;
 use serde_json::{Value, json};
 
+// ============================================================================
+// Parameter Structs
+// ============================================================================
+
+/// Parameters for adding a new feature
+#[derive(Debug, Clone, Default)]
+pub struct AddFeatureParams<'a> {
+    pub element_list: &'a Value,
+    pub class: Option<&'a str>,
+    pub behavior: Option<&'a str>,
+    pub candidates: Option<&'a str>,
+    pub anonymize: Option<&'a str>,
+    pub derived: Option<&'a str>,
+    pub history: Option<&'a str>,
+    pub matchkey: Option<&'a str>,
+    pub standardize: Option<&'a str>,
+    pub expression: Option<&'a str>,
+    pub comparison: Option<&'a str>,
+    pub version: Option<i64>,
+    pub rtype_id: Option<i64>,
+}
+
+impl<'a> AddFeatureParams<'a> {
+    pub fn new(element_list: &'a Value) -> Self {
+        Self {
+            element_list,
+            ..Default::default()
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a Value> for AddFeatureParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self> {
+        let element_list = json
+            .get("elementList")
+            .ok_or_else(|| SzConfigError::MissingField("elementList".to_string()))?;
+
+        Ok(Self {
+            element_list,
+            class: json.get("class").and_then(|v| v.as_str()),
+            behavior: json.get("behavior").and_then(|v| v.as_str()),
+            candidates: json.get("candidates").and_then(|v| v.as_str()),
+            anonymize: json.get("anonymize").and_then(|v| v.as_str()),
+            derived: json.get("derived").and_then(|v| v.as_str()),
+            history: json.get("history").and_then(|v| v.as_str()),
+            matchkey: json.get("matchKey").and_then(|v| v.as_str()),
+            standardize: json
+                .get("standardize")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty()),
+            expression: json
+                .get("expression")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty()),
+            comparison: json
+                .get("comparison")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty()),
+            version: json.get("version").and_then(|v| v.as_i64()),
+            rtype_id: json.get("rtypeId").and_then(|v| v.as_i64()),
+        })
+    }
+}
+
+/// Parameters for setting/updating a feature
+#[derive(Debug, Clone, Default)]
+pub struct SetFeatureParams<'a> {
+    pub candidates: Option<&'a str>,
+    pub anonymize: Option<&'a str>,
+    pub derived: Option<&'a str>,
+    pub history: Option<&'a str>,
+    pub matchkey: Option<&'a str>,
+    pub behavior: Option<&'a str>,
+    pub class: Option<&'a str>,
+    pub version: Option<i64>,
+    pub rtype_id: Option<i64>,
+}
+
+impl<'a> SetFeatureParams<'a> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl<'a> TryFrom<&'a Value> for SetFeatureParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self> {
+        Ok(Self {
+            candidates: json.get("candidates").and_then(|v| v.as_str()),
+            anonymize: json.get("anonymize").and_then(|v| v.as_str()),
+            derived: json.get("derived").and_then(|v| v.as_str()),
+            history: json.get("history").and_then(|v| v.as_str()),
+            matchkey: json.get("matchKey").and_then(|v| v.as_str()),
+            behavior: json.get("behavior").and_then(|v| v.as_str()),
+            class: json.get("class").and_then(|v| v.as_str()),
+            version: json.get("version").and_then(|v| v.as_i64()),
+            rtype_id: json.get("rtypeId").and_then(|v| v.as_i64()),
+        })
+    }
+}
+
 // Protected features that cannot be deleted
 const LOCKED_FEATURES: &[&str] = &[
     "NAME",
@@ -23,39 +127,30 @@ const LOCKED_FEATURES: &[&str] = &[
 /// # Arguments
 /// * `config_json` - JSON configuration string
 /// * `feature_code` - Feature code (will be uppercased)
-/// * `element_list` - Array of element definitions (strings or objects)
-/// * `class` - Feature class (default: "OTHER")
-/// * `behavior` - Behavior code (default: "FM")
-/// * `candidates` - Used for candidates (default: "No")
-/// * `anonymize` - Anonymize flag (default: "No")
-/// * `derived` - Derived flag (default: "No")
-/// * `history` - Persist history (default: "Yes")
-/// * `matchkey` - Show in match key (default: "No" unless comparison specified)
-/// * `standardize` - Optional standardize function code
-/// * `expression` - Optional expression function code
-/// * `comparison` - Optional comparison function code
-/// * `version` - Feature version (default: 1)
-/// * `rtype_id` - Optional RTYPE_ID (default: 0)
+/// * `params` - Feature parameters (element_list required, others optional)
 ///
 /// # Returns
 /// Modified configuration JSON string
-#[allow(clippy::too_many_arguments)]
+///
+/// # Example
+/// ```no_run
+/// use sz_configtool_lib::features::{add_feature, AddFeatureParams};
+/// use serde_json::json;
+///
+/// let config = r#"{"G2_CONFIG":{"CFG_FTYPE":[],...}}"#;
+/// let elements = json!([{"element": "NAME"}]);
+/// let result = add_feature(config, "PERSON", AddFeatureParams {
+///     element_list: &elements,
+///     class: Some("IDENTITY"),
+///     behavior: Some("FM"),
+///     ..Default::default()
+/// })?;
+/// # Ok::<(), sz_configtool_lib::error::SzConfigError>(())
+/// ```
 pub fn add_feature(
     config_json: &str,
     feature_code: &str,
-    element_list: &Value,
-    class: Option<&str>,
-    behavior: Option<&str>,
-    candidates: Option<&str>,
-    anonymize: Option<&str>,
-    derived: Option<&str>,
-    history: Option<&str>,
-    matchkey: Option<&str>,
-    standardize: Option<&str>,
-    expression: Option<&str>,
-    comparison: Option<&str>,
-    version: Option<i64>,
-    rtype_id: Option<i64>,
+    params: AddFeatureParams,
 ) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -80,7 +175,7 @@ pub fn add_feature(
     }
 
     // Validate element_list
-    let elements = element_list
+    let elements = params.element_list
         .as_array()
         .ok_or_else(|| SzConfigError::InvalidInput("elementList must be an array".to_string()))?;
 
@@ -90,16 +185,16 @@ pub fn add_feature(
         ));
     }
 
-    // Get defaults
-    let class = class.unwrap_or("OTHER");
-    let behavior = behavior.unwrap_or("FM");
-    let candidates_val = candidates.unwrap_or("No");
-    let anonymize_val = anonymize.unwrap_or("No");
-    let derived_val = derived.unwrap_or("No");
-    let history_val = history.unwrap_or("Yes");
+    // Get defaults from params
+    let class = params.class.unwrap_or("OTHER");
+    let behavior = params.behavior.unwrap_or("FM");
+    let candidates_val = params.candidates.unwrap_or("No");
+    let anonymize_val = params.anonymize.unwrap_or("No");
+    let derived_val = params.derived.unwrap_or("No");
+    let history_val = params.history.unwrap_or("Yes");
 
     // matchkey default depends on whether comparison is specified
-    let matchkey_val = matchkey.unwrap_or(if comparison.is_some() { "Yes" } else { "No" });
+    let matchkey_val = params.matchkey.unwrap_or(if params.comparison.is_some() { "Yes" } else { "No" });
 
     // Get next FTYPE_ID (seed at 1000 for user-created features)
     let ftype_id = helpers::get_next_id_with_min(ftypes, "FTYPE_ID", 1000)?;
@@ -128,19 +223,19 @@ pub fn add_feature(
         .ok_or_else(|| SzConfigError::NotFound(format!("Feature class: {}", class)))?;
 
     // Lookup optional functions
-    let sfunc_id = if let Some(func_code) = standardize {
+    let sfunc_id = if let Some(func_code) = params.standardize {
         lookup_sfunc_id(&config, func_code).unwrap_or(0)
     } else {
         0
     };
 
-    let efunc_id = if let Some(func_code) = expression {
+    let efunc_id = if let Some(func_code) = params.expression {
         lookup_efunc_id(&config, func_code).unwrap_or(0)
     } else {
         0
     };
 
-    let cfunc_id = if let Some(func_code) = comparison {
+    let cfunc_id = if let Some(func_code) = params.comparison {
         lookup_cfunc_id(&config, func_code).unwrap_or(0)
     } else {
         0
@@ -200,8 +295,8 @@ pub fn add_feature(
         "USED_FOR_CAND": candidates_val,
         "SHOW_IN_MATCH_KEY": matchkey_val,
         "PERSIST_HISTORY": history_val,
-        "VERSION": version.unwrap_or(1),
-        "RTYPE_ID": rtype_id.unwrap_or(0)
+        "VERSION": params.version.unwrap_or(1),
+        "RTYPE_ID": params.rtype_id.unwrap_or(0)
     });
 
     // Add to CFG_FTYPE
@@ -653,31 +748,28 @@ pub fn list_features(config_json: &str) -> Result<Vec<Value>> {
 /// # Arguments
 /// * `config_json` - JSON configuration string
 /// * `feature_code_or_id` - Feature code or numeric ID
-/// * `candidates` - Optional: Used for candidates
-/// * `anonymize` - Optional: Anonymize flag
-/// * `derived` - Optional: Derived flag
-/// * `history` - Optional: Persist history flag
-/// * `matchkey` - Optional: Show in match key flag
-/// * `behavior` - Optional: Behavior code (e.g., "FM", "F1E", "NAME")
-/// * `class` - Optional: Feature class name (e.g., "IDENTITY", "OTHER")
-/// * `version` - Optional: Feature version
-/// * `rtype_id` - Optional: Relationship type ID
+/// * `params` - Feature parameters to update (all optional)
 ///
 /// # Returns
 /// Modified configuration JSON string
-#[allow(clippy::too_many_arguments)]
+///
+/// # Example
+/// ```no_run
+/// use sz_configtool_lib::features::{set_feature, SetFeatureParams};
+///
+/// let config = r#"{"G2_CONFIG":{"CFG_FTYPE":[...]}}"#;
+/// let result = set_feature(config, "NAME", SetFeatureParams {
+///     candidates: Some("Yes"),
+///     behavior: Some("NAME"),
+///     version: Some(2),
+///     ..Default::default()
+/// })?;
+/// # Ok::<(), sz_configtool_lib::error::SzConfigError>(())
+/// ```
 pub fn set_feature(
     config_json: &str,
     feature_code_or_id: &str,
-    candidates: Option<&str>,
-    anonymize: Option<&str>,
-    derived: Option<&str>,
-    history: Option<&str>,
-    matchkey: Option<&str>,
-    behavior: Option<&str>,
-    class: Option<&str>,
-    version: Option<i64>,
-    rtype_id: Option<i64>,
+    params: SetFeatureParams,
 ) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -699,30 +791,30 @@ pub fn set_feature(
         .ok_or_else(|| SzConfigError::NotFound(format!("Feature: {}", ftype_id)))?;
 
     // Update fields if provided
-    if let Some(val) = candidates {
+    if let Some(val) = params.candidates {
         ftype["USED_FOR_CAND"] = json!(val);
     }
-    if let Some(val) = anonymize {
+    if let Some(val) = params.anonymize {
         ftype["ANONYMIZE"] = json!(val);
     }
-    if let Some(val) = derived {
+    if let Some(val) = params.derived {
         ftype["DERIVED"] = json!(val);
     }
-    if let Some(val) = history {
+    if let Some(val) = params.history {
         ftype["PERSIST_HISTORY"] = json!(val);
     }
-    if let Some(val) = matchkey {
+    if let Some(val) = params.matchkey {
         ftype["SHOW_IN_MATCH_KEY"] = json!(val);
     }
-    if let Some(val) = version {
+    if let Some(val) = params.version {
         ftype["VERSION"] = json!(val);
     }
-    if let Some(val) = rtype_id {
+    if let Some(val) = params.rtype_id {
         ftype["RTYPE_ID"] = json!(val);
     }
 
     // Parse and set behavior (FTYPE_FREQ, FTYPE_EXCL, FTYPE_STAB)
-    if let Some(behavior_code) = behavior {
+    if let Some(behavior_code) = params.behavior {
         let (frequency, exclusivity, stability) = parse_behavior_code(behavior_code)?;
         ftype["FTYPE_FREQ"] = json!(frequency);
         ftype["FTYPE_EXCL"] = json!(exclusivity);
@@ -730,7 +822,7 @@ pub fn set_feature(
     }
 
     // Lookup and set class (FCLASS_ID) - must do before modifying ftype
-    if let Some(class_name) = class {
+    if let Some(class_name) = params.class {
         // Parse config again to avoid borrow conflict
         let config_for_lookup: Value = serde_json::from_str(config_json)
             .map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
