@@ -396,20 +396,6 @@ Example: Processing 1000 data source additions takes ~50ms on modern hardware.
 3. **English-Only Errors** - Error messages are in English
 4. **No Async Support** - All operations are synchronous
 
-## Roadmap
-
-### v0.2.0 (Future)
-- [ ] Async support for I/O operations
-- [ ] Streaming JSON parser for large configs
-- [ ] Builder pattern for complex operations
-- [ ] Macro for bulk operations
-
-### v0.3.0 (Future)
-- [ ] Config validation functions
-- [ ] Config diff and merge operations
-- [ ] Import/export utilities
-- [ ] Schema migration helpers
-
 ## C FFI Interface
 
 The library provides a C-compatible Foreign Function Interface (FFI) for use from C, C++, Python (ctypes), and other languages.

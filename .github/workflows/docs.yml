@@ -36,10 +36,6 @@ jobs:
           cp -r docs/* _site/
           # Copy Rust docs
           cp -r target/doc _site/rust
-          # Add .nojekyll to use static files (not Jekyll)
-          touch _site/.nojekyll
-          # Create redirect from root
-          echo '<meta http-equiv="refresh" content="0; url=index.html">' > _site/index.html
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
