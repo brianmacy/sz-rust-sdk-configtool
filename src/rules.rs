@@ -32,11 +32,17 @@ impl<'a> TryFrom<&'a Value> for SetRuleParams<'a> {
 
         Ok(Self {
             code,
-            resolve: json.get("resolve").and_then(|v| v.as_str())
+            resolve: json
+                .get("resolve")
+                .and_then(|v| v.as_str())
                 .or_else(|| json.get("RESOLVE").and_then(|v| v.as_str())),
-            relate: json.get("relate").and_then(|v| v.as_str())
+            relate: json
+                .get("relate")
+                .and_then(|v| v.as_str())
                 .or_else(|| json.get("RELATE").and_then(|v| v.as_str())),
-            rtype_id: json.get("rtypeId").and_then(|v| v.as_i64())
+            rtype_id: json
+                .get("rtypeId")
+                .and_then(|v| v.as_i64())
                 .or_else(|| json.get("RTYPE_ID").and_then(|v| v.as_i64())),
         })
     }

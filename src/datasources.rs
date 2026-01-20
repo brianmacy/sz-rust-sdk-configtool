@@ -73,10 +73,7 @@ impl<'a> TryFrom<&'a Value> for SetDataSourceParams<'a> {
 /// - `AlreadyExists` if data source code already exists
 /// - `JsonParse` if config_json is invalid
 /// - `MissingSection` if CFG_DSRC section doesn't exist
-pub fn add_data_source(
-    config_json: &str,
-    params: AddDataSourceParams,
-) -> Result<String> {
+pub fn add_data_source(config_json: &str, params: AddDataSourceParams) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 

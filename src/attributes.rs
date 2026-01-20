@@ -86,10 +86,7 @@ impl<'a> TryFrom<&'a Value> for SetAttributeParams<'a> {
 /// - `InvalidInput` if attribute class is invalid
 /// - `JsonParse` if config_json is invalid
 /// - `MissingSection` if required sections don't exist
-pub fn add_attribute(
-    config_json: &str,
-    params: AddAttributeParams,
-) -> Result<(String, Value)> {
+pub fn add_attribute(config_json: &str, params: AddAttributeParams) -> Result<(String, Value)> {
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 

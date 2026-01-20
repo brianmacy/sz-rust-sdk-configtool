@@ -13,6 +13,42 @@ use serde_json::{Value, json};
 // Parameter Structs
 // ============================================================================
 
+/// Parameters for adding a distinct call
+#[derive(Debug, Clone)]
+pub struct AddDistinctCallParams {
+    pub ftype_code: String,
+    pub dfunc_code: String,
+    pub element_list: Vec<String>,
+}
+
+impl TryFrom<&Value> for AddDistinctCallParams {
+    type Error = SzConfigError;
+
+    fn try_from(json: &Value) -> Result<Self> {
+        Ok(Self {
+            ftype_code: json
+                .get("ftypeCode")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| SzConfigError::MissingField("ftypeCode".to_string()))?
+                .to_string(),
+            dfunc_code: json
+                .get("dfuncCode")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| SzConfigError::MissingField("dfuncCode".to_string()))?
+                .to_string(),
+            element_list: json
+                .get("elementList")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default(),
+        })
+    }
+}
+
 /// Parameters for adding a distinct call element
 #[derive(Debug, Clone)]
 pub struct AddDistinctCallElementParams {
@@ -72,9 +108,7 @@ pub struct SetDistinctCallElementParams {
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `ftype_code` - Feature type code
-/// * `dfunc_code` - Distinct function code
-/// * `element_list` - Vector of element codes to include in distinct check
+/// * `params` - Distinct call parameters (ftype_code, dfunc_code, element_list required)
 ///
 /// # Returns
 /// Tuple of (modified_config, new_dfcall_record)
@@ -82,12 +116,7 @@ pub struct SetDistinctCallElementParams {
 /// # Errors
 /// - `Duplicate` if a distinct call already exists for this feature
 /// - `NotFound` if function/feature/element codes don't exist
-pub fn add_distinct_call(
-    config: &str,
-    ftype_code: &str,
-    dfunc_code: &str,
-    element_list: Vec<String>,
-) -> Result<(String, Value)> {
+pub fn add_distinct_call(config: &str, params: AddDistinctCallParams) -> Result<(String, Value)> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
@@ -95,7 +124,7 @@ pub fn add_distinct_call(
     let dfcall_id = get_next_id(&config_data, "G2_CONFIG.CFG_DFCALL", "DFCALL_ID", 1000)?;
 
     // Lookup feature ID
-    let ftype_id = lookup_feature_id(config, ftype_code)?;
+    let ftype_id = lookup_feature_id(config, &params.ftype_code)?;
 
     // Check if distinct call already exists for this feature (only one allowed per feature)
     let call_exists = config_data["G2_CONFIG"]["CFG_DFCALL"]
@@ -109,18 +138,18 @@ pub fn add_distinct_call(
     if call_exists {
         return Err(SzConfigError::AlreadyExists(format!(
             "Distinct call for feature {} already set",
-            ftype_code
+            params.ftype_code
         )));
     }
 
     // Lookup function ID
-    let dfunc_id = lookup_dfunc_id(config, dfunc_code)?;
+    let dfunc_id = lookup_dfunc_id(config, &params.dfunc_code)?;
 
     // Process element list and create DFBOM records
     let mut dfbom_records = Vec::new();
     let mut exec_order = 0;
 
-    for element_code in element_list {
+    for element_code in params.element_list {
         exec_order += 1;
 
         // Lookup element ID (must belong to the feature)
@@ -144,7 +173,7 @@ pub fn add_distinct_call(
             .ok_or_else(|| {
                 SzConfigError::NotFound(format!(
                     "Element '{}' not found in feature '{}'",
-                    element_code, ftype_code
+                    element_code, params.ftype_code
                 ))
             })?;
 

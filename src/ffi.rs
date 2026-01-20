@@ -397,8 +397,10 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute(
         }
     };
 
-    let result = crate::attributes::add_attribute(config, crate::attributes::AddAttributeParams {
-                    attribute: attr_code,
+    let result = crate::attributes::add_attribute(
+        config,
+        crate::attributes::AddAttributeParams {
+            attribute: attr_code,
             feature: feat_code,
             element: elem_code,
             class,
@@ -2342,11 +2344,17 @@ pub extern "C" fn SzConfigTool_setRule(
     // Build params from code and JSON config
     let params = crate::rules::SetRuleParams {
         code,
-        resolve: rule_value.get("resolve").and_then(|v| v.as_str())
+        resolve: rule_value
+            .get("resolve")
+            .and_then(|v| v.as_str())
             .or_else(|| rule_value.get("RESOLVE").and_then(|v| v.as_str())),
-        relate: rule_value.get("relate").and_then(|v| v.as_str())
+        relate: rule_value
+            .get("relate")
+            .and_then(|v| v.as_str())
             .or_else(|| rule_value.get("RELATE").and_then(|v| v.as_str())),
-        rtype_id: rule_value.get("rtypeId").and_then(|v| v.as_i64())
+        rtype_id: rule_value
+            .get("rtypeId")
+            .and_then(|v| v.as_i64())
             .or_else(|| rule_value.get("RTYPE_ID").and_then(|v| v.as_i64())),
     };
 
@@ -4193,7 +4201,9 @@ pub extern "C" fn SzConfigTool_setStandardizeCall(
         exec_order: updates_value.get("execOrder").and_then(|v| v.as_i64()),
     };
 
-    handle_result!(crate::calls::standardize::set_standardize_call(config, params))
+    handle_result!(crate::calls::standardize::set_standardize_call(
+        config, params
+    ))
 }
 
 /* ============================================================================
@@ -4291,9 +4301,9 @@ pub extern "C" fn SzConfigTool_addComparisonThreshold(
 
     handle_result!(crate::thresholds::add_comparison_threshold(
         config,
-        cfunc_id,
-        rtnval,
         crate::thresholds::AddComparisonThresholdParams {
+            cfunc_id,
+            cfunc_rtnval: rtnval.to_string(),
             ftype_id: ftype_opt,
             exec_order: exec_opt,
             same_score: same_opt,
@@ -4301,7 +4311,7 @@ pub extern "C" fn SzConfigTool_addComparisonThreshold(
             likely_score: likely_opt,
             plausible_score: plausible_opt,
             un_likely_score: unlikely_opt,
-        }
+        },
     ))
 }
 
@@ -4396,8 +4406,14 @@ pub extern "C" fn SzConfigTool_setComparisonThreshold(
 
     handle_result!(crate::thresholds::set_comparison_threshold(
         config,
-        cfrtn_id,
-        &updates_value
+        crate::thresholds::SetComparisonThresholdParams {
+            cfrtn_id,
+            same_score: updates_value.get("sameScore").and_then(|v| v.as_i64()),
+            close_score: updates_value.get("closeScore").and_then(|v| v.as_i64()),
+            likely_score: updates_value.get("likelyScore").and_then(|v| v.as_i64()),
+            plausible_score: updates_value.get("plausibleScore").and_then(|v| v.as_i64()),
+            un_likely_score: updates_value.get("unlikelyScore").and_then(|v| v.as_i64()),
+        },
     ))
 }
 
@@ -4574,14 +4590,14 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
 
     handle_result!(crate::thresholds::add_generic_threshold(
         config,
-        plan_str,
         crate::thresholds::AddGenericThresholdParams {
+            plan: plan_str,
             behavior: behavior_str,
             scoring_cap,
             candidate_cap,
             send_to_redo: redo_str,
             feature: feature_opt,
-        }
+        },
     ))
 }
 
@@ -4613,7 +4629,7 @@ pub extern "C" fn SzConfigTool_deleteGenericThreshold(
         }
     };
 
-    let plan_str = unsafe {
+    let _plan_str = unsafe {
         if plan.is_null() {
             set_error("plan is null".to_string(), -1);
             return SzConfigTool_result {
@@ -4672,9 +4688,11 @@ pub extern "C" fn SzConfigTool_deleteGenericThreshold(
 
     handle_result!(crate::thresholds::delete_generic_threshold(
         config,
-        plan_str,
-        behavior_str,
-        feature_opt
+        crate::thresholds::DeleteGenericThresholdParams {
+            gplan_id: 0, // Note: gplan_id not provided in this FFI signature
+            behavior: behavior_str,
+            feature: feature_opt,
+        },
     ))
 }
 
@@ -4759,9 +4777,17 @@ pub extern "C" fn SzConfigTool_setGenericThreshold(
 
     handle_result!(crate::thresholds::set_generic_threshold(
         config,
-        gplan_id,
-        behavior_str,
-        &updates_value
+        crate::thresholds::SetGenericThresholdParams {
+            gplan_id,
+            behavior: behavior_str.to_string(),
+            ftype_id: updates_value.get("ftypeId").and_then(|v| v.as_i64()),
+            candidate_cap: updates_value.get("candidateCap").and_then(|v| v.as_i64()),
+            scoring_cap: updates_value.get("scoringCap").and_then(|v| v.as_i64()),
+            send_to_redo: updates_value
+                .get("sendToRedo")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+        },
     ))
 }
 
@@ -5410,8 +5436,10 @@ pub extern "C" fn SzConfigTool_addFeature(
         .or_else(|| feature_config.get("rtypeId"))
         .and_then(|v| v.as_i64());
 
-    match crate::features::add_feature(config, crate::features::AddFeatureParams {
-                    feature: code,
+    match crate::features::add_feature(
+        config,
+        crate::features::AddFeatureParams {
+            feature: code,
             element_list,
             class,
             behavior,
@@ -5598,8 +5626,10 @@ pub extern "C" fn SzConfigTool_setFeature(
         .or_else(|| updates_config.get("RTYPE_ID"))
         .and_then(|v| v.as_i64());
 
-    handle_result!(crate::features::set_feature(config, crate::features::SetFeatureParams {
-                    feature: code_or_id,
+    handle_result!(crate::features::set_feature(
+        config,
+        crate::features::SetFeatureParams {
+            feature: code_or_id,
             candidates,
             anonymize,
             derived,
@@ -5895,11 +5925,17 @@ pub extern "C" fn SzConfigTool_addElement(
     // Build params from code and JSON config
     let params = crate::elements::AddElementParams {
         code,
-        description: element_config.get("description").and_then(|v| v.as_str())
+        description: element_config
+            .get("description")
+            .and_then(|v| v.as_str())
             .or_else(|| element_config.get("FELEM_DESC").and_then(|v| v.as_str())),
-        data_type: element_config.get("dataType").and_then(|v| v.as_str())
+        data_type: element_config
+            .get("dataType")
+            .and_then(|v| v.as_str())
             .or_else(|| element_config.get("DATA_TYPE").and_then(|v| v.as_str())),
-        tokenized: element_config.get("tokenized").and_then(|v| v.as_str())
+        tokenized: element_config
+            .get("tokenized")
+            .and_then(|v| v.as_str())
             .or_else(|| element_config.get("TOKENIZED").and_then(|v| v.as_str())),
     };
 
@@ -6036,11 +6072,17 @@ pub extern "C" fn SzConfigTool_setElement(
     // Build params from code and JSON updates
     let params = crate::elements::SetElementParams {
         code,
-        description: updates_config.get("description").and_then(|v| v.as_str())
+        description: updates_config
+            .get("description")
+            .and_then(|v| v.as_str())
             .or_else(|| updates_config.get("FELEM_DESC").and_then(|v| v.as_str())),
-        data_type: updates_config.get("dataType").and_then(|v| v.as_str())
+        data_type: updates_config
+            .get("dataType")
+            .and_then(|v| v.as_str())
             .or_else(|| updates_config.get("DATA_TYPE").and_then(|v| v.as_str())),
-        tokenized: updates_config.get("tokenized").and_then(|v| v.as_str())
+        tokenized: updates_config
+            .get("tokenized")
+            .and_then(|v| v.as_str())
             .or_else(|| updates_config.get("TOKENIZED").and_then(|v| v.as_str())),
     };
 
@@ -6279,10 +6321,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
         is_virtual: virtual_str,
     };
 
-    match crate::calls::expression::add_expression_call(
-        config,
-        call_params,
-    ) {
+    match crate::calls::expression::add_expression_call(config, call_params) {
         Ok((modified_config, _record)) => match CString::new(modified_config) {
             Ok(c_str) => {
                 clear_error();
@@ -6526,7 +6565,9 @@ pub extern "C" fn SzConfigTool_setExpressionCall(
         exec_order: updates_value.get("execOrder").and_then(|v| v.as_i64()),
     };
 
-    handle_result!(crate::calls::expression::set_expression_call(config, params))
+    handle_result!(crate::calls::expression::set_expression_call(
+        config, params
+    ))
 }
 
 // ===== Comparison Call Operations =====
@@ -6650,7 +6691,14 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
         }
     };
 
-    match crate::calls::comparison::add_comparison_call(config, ftype, cfunc, element_list) {
+    match crate::calls::comparison::add_comparison_call(
+        config,
+        crate::calls::comparison::AddComparisonCallParams {
+            ftype_code: ftype.to_string(),
+            cfunc_code: cfunc.to_string(),
+            element_list,
+        },
+    ) {
         Ok((modified_config, _record)) => match CString::new(modified_config) {
             Ok(c_str) => {
                 clear_error();
@@ -6894,7 +6942,9 @@ pub extern "C" fn SzConfigTool_setComparisonCall(
         exec_order: updates_value.get("execOrder").and_then(|v| v.as_i64()),
     };
 
-    handle_result!(crate::calls::comparison::set_comparison_call(config, params))
+    handle_result!(crate::calls::comparison::set_comparison_call(
+        config, params
+    ))
 }
 
 // ============================================================================
@@ -7031,7 +7081,14 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
         }
     };
 
-    match crate::calls::distinct::add_distinct_call(config, ftype, dfunc, element_list) {
+    match crate::calls::distinct::add_distinct_call(
+        config,
+        crate::calls::distinct::AddDistinctCallParams {
+            ftype_code: ftype.to_string(),
+            dfunc_code: dfunc.to_string(),
+            element_list,
+        },
+    ) {
         Ok((modified_config, _record)) => match CString::new(modified_config) {
             Ok(c_str) => {
                 clear_error();

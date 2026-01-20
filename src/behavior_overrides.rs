@@ -281,8 +281,9 @@ mod tests {
     fn test_add_behavior_override() {
         let config = add_behavior_override(
             TEST_CONFIG,
-            AddBehaviorOverrideParams::new("TEST_FEATURE", "BUSINESS", "F1E")
-        ).expect("Failed to add behavior override");
+            AddBehaviorOverrideParams::new("TEST_FEATURE", "BUSINESS", "F1E"),
+        )
+        .expect("Failed to add behavior override");
 
         let config_val: Value = serde_json::from_str(&config).unwrap();
         let overrides = &config_val["G2_CONFIG"]["CFG_FBOVR"];
@@ -301,8 +302,9 @@ mod tests {
     fn test_delete_behavior_override() {
         let config = add_behavior_override(
             TEST_CONFIG,
-            AddBehaviorOverrideParams::new("TEST_FEATURE", "BUSINESS", "F1E")
-        ).expect("Failed to add");
+            AddBehaviorOverrideParams::new("TEST_FEATURE", "BUSINESS", "F1E"),
+        )
+        .expect("Failed to add");
 
         let config = delete_behavior_override(&config, "TEST_FEATURE", "BUSINESS")
             .expect("Failed to delete");
@@ -316,12 +318,14 @@ mod tests {
     fn test_list_behavior_overrides() {
         let config = add_behavior_override(
             TEST_CONFIG,
-            AddBehaviorOverrideParams::new("TEST_FEATURE", "BUSINESS", "F1E")
-        ).expect("Failed to add first");
+            AddBehaviorOverrideParams::new("TEST_FEATURE", "BUSINESS", "F1E"),
+        )
+        .expect("Failed to add first");
         let config = add_behavior_override(
             &config,
-            AddBehaviorOverrideParams::new("TEST_FEATURE", "MOBILE", "FM")
-        ).expect("Failed to add second");
+            AddBehaviorOverrideParams::new("TEST_FEATURE", "MOBILE", "FM"),
+        )
+        .expect("Failed to add second");
 
         let overrides = list_behavior_overrides(&config).expect("Failed to list");
         assert_eq!(overrides.len(), 2);
@@ -357,12 +361,13 @@ mod tests {
     fn test_behavior_override_duplicate() {
         let config = add_behavior_override(
             TEST_CONFIG,
-            AddBehaviorOverrideParams::new("TEST_FEATURE", "BUSINESS", "F1E")
-        ).expect("Failed to add first");
+            AddBehaviorOverrideParams::new("TEST_FEATURE", "BUSINESS", "F1E"),
+        )
+        .expect("Failed to add first");
 
         let result = add_behavior_override(
             &config,
-            AddBehaviorOverrideParams::new("TEST_FEATURE", "BUSINESS", "FM")
+            AddBehaviorOverrideParams::new("TEST_FEATURE", "BUSINESS", "FM"),
         );
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("already exists"));

@@ -188,12 +188,14 @@ pub fn add_expression_call(
     };
 
     // Lookup expression feature ID if specified
-    let efeat_ftype_id =
-        if let Some(expr_feat) = params.expression_feature.filter(|f| !f.eq_ignore_ascii_case("N/A")) {
-            lookup_feature_id(config, expr_feat)?
-        } else {
-            -1
-        };
+    let efeat_ftype_id = if let Some(expr_feat) = params
+        .expression_feature
+        .filter(|f| !f.eq_ignore_ascii_case("N/A"))
+    {
+        lookup_feature_id(config, expr_feat)?
+    } else {
+        -1
+    };
 
     // Process element list and create EFBOM records
     let mut efbom_records = Vec::new();
@@ -571,17 +573,13 @@ pub fn delete_expression_call_element(
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `efcall_id` - Expression call ID
-/// * `key` - Expression call element key (identifying the element to update)
-/// * `updates` - JSON Value with fields to update
+/// * `params` - Expression call element parameters (efcall_id, ftype_id, felem_id, exec_order, updates)
 ///
 /// # Returns
 /// Modified configuration JSON string
 pub fn set_expression_call_element(
     config: &str,
-    _efcall_id: i64,
-    _key: ExpressionCallElementKey,
-    _updates: Value,
+    _params: ExpressionCallElementParams,
 ) -> Result<String> {
     // This is a stub - not commonly used
     Ok(config.to_string())

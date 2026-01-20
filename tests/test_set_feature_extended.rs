@@ -41,7 +41,10 @@ const TEST_CONFIG: &str = r#"{
 #[test]
 fn test_set_feature_behavior() {
     // Test changing behavior from FM to NAME
-    let config = features::set_feature(TEST_CONFIG, features::SetFeatureParams { feature: "TEST_FEATURE",
+    let config = features::set_feature(
+        TEST_CONFIG,
+        features::SetFeatureParams {
+            feature: "TEST_FEATURE",
             behavior: Some("NAME"),
             ..Default::default()
         },
@@ -60,7 +63,10 @@ fn test_set_feature_behavior() {
 #[test]
 fn test_set_feature_behavior_with_modifiers() {
     // Test behavior with exclusivity and stability (F1ES)
-    let config = features::set_feature(TEST_CONFIG, features::SetFeatureParams { feature: "TEST_FEATURE",
+    let config = features::set_feature(
+        TEST_CONFIG,
+        features::SetFeatureParams {
+            feature: "TEST_FEATURE",
             behavior: Some("F1ES"),
             ..Default::default()
         },
@@ -77,7 +83,10 @@ fn test_set_feature_behavior_with_modifiers() {
 #[test]
 fn test_set_feature_class() {
     // Test changing class from OTHER to IDENTITY
-    let config = features::set_feature(TEST_CONFIG, features::SetFeatureParams { feature: "TEST_FEATURE",
+    let config = features::set_feature(
+        TEST_CONFIG,
+        features::SetFeatureParams {
+            feature: "TEST_FEATURE",
             class: Some("IDENTITY"),
             ..Default::default()
         },
@@ -96,7 +105,10 @@ fn test_set_feature_class() {
 #[test]
 fn test_set_feature_rtype_id() {
     // Test setting RTYPE_ID
-    let config = features::set_feature(TEST_CONFIG, features::SetFeatureParams { feature: "TEST_FEATURE",
+    let config = features::set_feature(
+        TEST_CONFIG,
+        features::SetFeatureParams {
+            feature: "TEST_FEATURE",
             rtype_id: Some(5),
             ..Default::default()
         },
@@ -111,7 +123,10 @@ fn test_set_feature_rtype_id() {
 #[test]
 fn test_set_feature_multiple_params() {
     // Test setting multiple parameters at once (real-world use case)
-    let config = features::set_feature(TEST_CONFIG, features::SetFeatureParams { feature: "TEST_FEATURE",
+    let config = features::set_feature(
+        TEST_CONFIG,
+        features::SetFeatureParams {
+            feature: "TEST_FEATURE",
             candidates: Some("Yes"),
             behavior: Some("NAME"),
             class: Some("IDENTITY"),
@@ -134,7 +149,10 @@ fn test_set_feature_multiple_params() {
 #[test]
 fn test_set_feature_invalid_class() {
     // Test error handling for non-existent class
-    let result = features::set_feature(TEST_CONFIG, features::SetFeatureParams { feature: "TEST_FEATURE",
+    let result = features::set_feature(
+        TEST_CONFIG,
+        features::SetFeatureParams {
+            feature: "TEST_FEATURE",
             class: Some("NONEXISTENT_CLASS"),
             ..Default::default()
         },
@@ -147,7 +165,10 @@ fn test_set_feature_invalid_class() {
 #[test]
 fn test_set_feature_invalid_behavior() {
     // Test error handling for invalid behavior code
-    let result = features::set_feature(TEST_CONFIG, features::SetFeatureParams { feature: "TEST_FEATURE",
+    let result = features::set_feature(
+        TEST_CONFIG,
+        features::SetFeatureParams {
+            feature: "TEST_FEATURE",
             behavior: Some("INVALID_BEHAVIOR"),
             ..Default::default()
         },

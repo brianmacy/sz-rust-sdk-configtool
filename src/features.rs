@@ -246,10 +246,7 @@ const LOCKED_FEATURES: &[&str] = &[
 /// })?;
 /// # Ok::<(), sz_configtool_lib::error::SzConfigError>(())
 /// ```
-pub fn add_feature(
-    config_json: &str,
-    params: AddFeatureParams,
-) -> Result<String> {
+pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
@@ -273,7 +270,8 @@ pub fn add_feature(
     }
 
     // Validate element_list
-    let elements = params.element_list
+    let elements = params
+        .element_list
         .as_array()
         .ok_or_else(|| SzConfigError::InvalidInput("elementList must be an array".to_string()))?;
 
@@ -292,7 +290,11 @@ pub fn add_feature(
     let history_val = params.history.unwrap_or("Yes");
 
     // matchkey default depends on whether comparison is specified
-    let matchkey_val = params.matchkey.unwrap_or(if params.comparison.is_some() { "Yes" } else { "No" });
+    let matchkey_val = params.matchkey.unwrap_or(if params.comparison.is_some() {
+        "Yes"
+    } else {
+        "No"
+    });
 
     // Get next FTYPE_ID (seed at 1000 for user-created features)
     let ftype_id = helpers::get_next_id_with_min(ftypes, "FTYPE_ID", 1000)?;
@@ -864,10 +866,7 @@ pub fn list_features(config_json: &str) -> Result<Vec<Value>> {
 /// })?;
 /// # Ok::<(), sz_configtool_lib::error::SzConfigError>(())
 /// ```
-pub fn set_feature(
-    config_json: &str,
-    params: SetFeatureParams,
-) -> Result<String> {
+pub fn set_feature(config_json: &str, params: SetFeatureParams) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
@@ -944,7 +943,6 @@ pub fn set_feature(
 
     serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
 }
-
 
 // Helper functions
 
@@ -1247,7 +1245,8 @@ pub fn add_feature_comparison(
         .ok_or_else(|| SzConfigError::MissingSection("CFG_FBOM".to_string()))?;
 
     if fbom_array.iter().any(|item| {
-        item["FTYPE_ID"].as_i64() == Some(params.ftype_id) && item["FELEM_ID"].as_i64() == Some(params.felem_id)
+        item["FTYPE_ID"].as_i64() == Some(params.ftype_id)
+            && item["FELEM_ID"].as_i64() == Some(params.felem_id)
     }) {
         return Err(SzConfigError::AlreadyExists(format!(
             "Feature comparison: FTYPE_ID={}, FELEM_ID={}",
@@ -1325,7 +1324,10 @@ pub fn delete_feature_comparison(
 ///
 /// # Returns
 /// JSON Value representing the feature comparison
-pub fn get_feature_comparison(config_json: &str, params: GetFeatureComparisonParams) -> Result<Value> {
+pub fn get_feature_comparison(
+    config_json: &str,
+    params: GetFeatureComparisonParams,
+) -> Result<Value> {
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 

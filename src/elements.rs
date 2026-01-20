@@ -295,10 +295,7 @@ pub fn set_element(config_json: &str, params: SetElementParams) -> Result<String
 ///
 /// # Returns
 /// Modified configuration JSON string
-pub fn set_feature_element(
-    config_json: &str,
-    params: SetFeatureElementParams,
-) -> Result<String> {
+pub fn set_feature_element(config_json: &str, params: SetFeatureElementParams) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 

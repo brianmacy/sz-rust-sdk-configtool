@@ -9,6 +9,8 @@ use serde_json::{Value, json};
 /// Parameters for adding a comparison threshold
 #[derive(Debug, Clone, Default)]
 pub struct AddComparisonThresholdParams {
+    pub cfunc_id: i64,
+    pub cfunc_rtnval: String,
     pub ftype_id: Option<i64>,
     pub exec_order: Option<i64>,
     pub same_score: Option<i64>,
@@ -23,6 +25,15 @@ impl TryFrom<&Value> for AddComparisonThresholdParams {
 
     fn try_from(json: &Value) -> Result<Self> {
         Ok(Self {
+            cfunc_id: json
+                .get("cfuncId")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| SzConfigError::MissingField("cfuncId".to_string()))?,
+            cfunc_rtnval: json
+                .get("cfuncRtnval")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| SzConfigError::MissingField("cfuncRtnval".to_string()))?
+                .to_string(),
             ftype_id: json.get("ftypeId").and_then(|v| v.as_i64()),
             exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
             same_score: json.get("sameScore").and_then(|v| v.as_i64()),
@@ -37,6 +48,7 @@ impl TryFrom<&Value> for AddComparisonThresholdParams {
 /// Parameters for adding a generic threshold
 #[derive(Debug, Clone)]
 pub struct AddGenericThresholdParams<'a> {
+    pub plan: &'a str,
     pub behavior: &'a str,
     pub scoring_cap: i64,
     pub candidate_cap: i64,
@@ -45,8 +57,15 @@ pub struct AddGenericThresholdParams<'a> {
 }
 
 impl<'a> AddGenericThresholdParams<'a> {
-    pub fn new(behavior: &'a str, scoring_cap: i64, candidate_cap: i64, send_to_redo: &'a str) -> Self {
+    pub fn new(
+        plan: &'a str,
+        behavior: &'a str,
+        scoring_cap: i64,
+        candidate_cap: i64,
+        send_to_redo: &'a str,
+    ) -> Self {
         Self {
+            plan,
             behavior,
             scoring_cap,
             candidate_cap,
@@ -60,6 +79,10 @@ impl<'a> TryFrom<&'a Value> for AddGenericThresholdParams<'a> {
     type Error = SzConfigError;
 
     fn try_from(json: &'a Value) -> Result<Self> {
+        let plan = json
+            .get("plan")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("plan".to_string()))?;
         let behavior = json
             .get("behavior")
             .and_then(|v| v.as_str())
@@ -78,6 +101,7 @@ impl<'a> TryFrom<&'a Value> for AddGenericThresholdParams<'a> {
             .ok_or_else(|| SzConfigError::MissingField("sendToRedo".to_string()))?;
 
         Ok(Self {
+            plan,
             behavior,
             scoring_cap,
             candidate_cap,
@@ -87,10 +111,10 @@ impl<'a> TryFrom<&'a Value> for AddGenericThresholdParams<'a> {
     }
 }
 
-/// Parameters for setting (updating) a threshold
+/// Parameters for setting (updating) a comparison threshold
 #[derive(Debug, Clone, Default)]
-pub struct SetThresholdParams {
-    pub threshold_id: i64,
+pub struct SetComparisonThresholdParams {
+    pub cfrtn_id: i64,
     pub same_score: Option<i64>,
     pub close_score: Option<i64>,
     pub likely_score: Option<i64>,
@@ -98,22 +122,96 @@ pub struct SetThresholdParams {
     pub un_likely_score: Option<i64>,
 }
 
-impl TryFrom<&Value> for SetThresholdParams {
+impl TryFrom<&Value> for SetComparisonThresholdParams {
     type Error = SzConfigError;
 
     fn try_from(json: &Value) -> Result<Self> {
-        let threshold_id = json
-            .get("thresholdId")
+        let cfrtn_id = json
+            .get("cfrtid")
             .and_then(|v| v.as_i64())
-            .ok_or_else(|| SzConfigError::MissingField("thresholdId".to_string()))?;
+            .ok_or_else(|| SzConfigError::MissingField("cfrtnId".to_string()))?;
 
         Ok(Self {
-            threshold_id,
+            cfrtn_id,
             same_score: json.get("sameScore").and_then(|v| v.as_i64()),
             close_score: json.get("closeScore").and_then(|v| v.as_i64()),
             likely_score: json.get("likelyScore").and_then(|v| v.as_i64()),
             plausible_score: json.get("plausibleScore").and_then(|v| v.as_i64()),
             un_likely_score: json.get("unlikelyScore").and_then(|v| v.as_i64()),
+        })
+    }
+}
+
+/// Parameters for setting (updating) a generic threshold
+#[derive(Debug, Clone, Default)]
+pub struct SetGenericThresholdParams {
+    pub gplan_id: i64,
+    pub behavior: String,
+    pub ftype_id: Option<i64>,
+    pub candidate_cap: Option<i64>,
+    pub scoring_cap: Option<i64>,
+    pub send_to_redo: Option<String>,
+}
+
+impl TryFrom<&Value> for SetGenericThresholdParams {
+    type Error = SzConfigError;
+
+    fn try_from(json: &Value) -> Result<Self> {
+        let gplan_id = json
+            .get("gplanId")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| SzConfigError::MissingField("gplanId".to_string()))?;
+        let behavior = json
+            .get("behavior")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("behavior".to_string()))?
+            .to_string();
+
+        Ok(Self {
+            gplan_id,
+            behavior,
+            ftype_id: json.get("ftypeId").and_then(|v| v.as_i64()),
+            candidate_cap: json.get("candidateCap").and_then(|v| v.as_i64()),
+            scoring_cap: json.get("scoringCap").and_then(|v| v.as_i64()),
+            send_to_redo: json
+                .get("sendToRedo")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string()),
+        })
+    }
+}
+
+/// Parameters for deleting a generic threshold
+#[derive(Debug, Clone)]
+pub struct DeleteGenericThresholdParams<'a> {
+    pub gplan_id: i64,
+    pub behavior: &'a str,
+    pub feature: Option<&'a str>,
+}
+
+/// Parameters for setting a threshold (stub - not yet implemented)
+#[derive(Debug, Clone, Default)]
+pub struct SetThresholdParams {
+    pub threshold_id: i64,
+}
+
+impl<'a> TryFrom<&'a Value> for DeleteGenericThresholdParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self> {
+        let gplan_id = json
+            .get("gplanId")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| SzConfigError::MissingField("gplanId".to_string()))?;
+        let behavior = json
+            .get("behavior")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("behavior".to_string()))?;
+
+        Ok(Self {
+            gplan_id,
+            behavior,
+            feature: json.get("feature").and_then(|v| v.as_str()),
         })
     }
 }
@@ -124,23 +222,19 @@ impl TryFrom<&Value> for SetThresholdParams {
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
-/// * `cfunc_id` - Comparison function ID
-/// * `cfunc_rtnval` - Return value code
-/// * `params` - Threshold parameters (all optional)
+/// * `params` - Threshold parameters (cfunc_id, cfunc_rtnval required; others optional)
 ///
 /// # Returns
 /// Modified configuration JSON string
 pub fn add_comparison_threshold(
     config_json: &str,
-    cfunc_id: i64,
-    cfunc_rtnval: &str,
     params: AddComparisonThresholdParams,
 ) -> Result<String> {
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
     let ftype = params.ftype_id.unwrap_or(0);
-    let rtnval_upper = cfunc_rtnval.to_uppercase();
+    let rtnval_upper = params.cfunc_rtnval.to_uppercase();
 
     // Check if already exists
     let cfrtn_array = config["G2_CONFIG"]["CFG_CFRTN"]
@@ -148,13 +242,13 @@ pub fn add_comparison_threshold(
         .ok_or_else(|| SzConfigError::MissingSection("CFG_CFRTN".to_string()))?;
 
     if cfrtn_array.iter().any(|item| {
-        item["CFUNC_ID"].as_i64() == Some(cfunc_id)
+        item["CFUNC_ID"].as_i64() == Some(params.cfunc_id)
             && item["FTYPE_ID"].as_i64() == Some(ftype)
             && item["CFUNC_RTNVAL"].as_str() == Some(rtnval_upper.as_str())
     }) {
         return Err(SzConfigError::AlreadyExists(format!(
             "Comparison threshold: CFUNC_ID={}, FTYPE_ID={}, CFUNC_RTNVAL={}",
-            cfunc_id, ftype, rtnval_upper
+            params.cfunc_id, ftype, rtnval_upper
         )));
     }
 
@@ -164,7 +258,7 @@ pub fn add_comparison_threshold(
     // Build record
     let mut record = json!({
         "CFRTN_ID": cfrtn_id,
-        "CFUNC_ID": cfunc_id,
+        "CFUNC_ID": params.cfunc_id,
         "FTYPE_ID": ftype,
         "CFUNC_RTNVAL": rtnval_upper,
     });
@@ -229,15 +323,13 @@ pub fn delete_comparison_threshold(config_json: &str, cfrtn_id: i64) -> Result<S
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
-/// * `cfrtn_id` - Comparison threshold ID
-/// * `updates` - JSON object with fields to update
+/// * `params` - Threshold parameters (cfrtn_id required; score fields optional)
 ///
 /// # Returns
 /// Modified configuration JSON string
 pub fn set_comparison_threshold(
     config_json: &str,
-    cfrtn_id: i64,
-    updates: &Value,
+    params: SetComparisonThresholdParams,
 ) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -248,19 +340,27 @@ pub fn set_comparison_threshold(
 
     let cfrtn = cfrtn_array
         .iter_mut()
-        .find(|item| item["CFRTN_ID"].as_i64() == Some(cfrtn_id))
-        .ok_or_else(|| SzConfigError::NotFound(format!("Comparison threshold: {}", cfrtn_id)))?;
+        .find(|item| item["CFRTN_ID"].as_i64() == Some(params.cfrtn_id))
+        .ok_or_else(|| {
+            SzConfigError::NotFound(format!("Comparison threshold: {}", params.cfrtn_id))
+        })?;
 
-    // Update fields from updates object
-    if let Some(src_obj) = updates.as_object() {
-        if let Some(dest_obj) = cfrtn.as_object_mut() {
-            for (key, value) in src_obj {
-                let upper_key = key.to_uppercase();
-                // Skip the ID field
-                if upper_key != "CFRTN_ID" {
-                    dest_obj.insert(upper_key, value.clone());
-                }
-            }
+    // Update fields from params
+    if let Some(dest_obj) = cfrtn.as_object_mut() {
+        if let Some(score) = params.same_score {
+            dest_obj.insert("SAME_SCORE".to_string(), json!(score));
+        }
+        if let Some(score) = params.close_score {
+            dest_obj.insert("CLOSE_SCORE".to_string(), json!(score));
+        }
+        if let Some(score) = params.likely_score {
+            dest_obj.insert("LIKELY_SCORE".to_string(), json!(score));
+        }
+        if let Some(score) = params.plausible_score {
+            dest_obj.insert("PLAUSIBLE_SCORE".to_string(), json!(score));
+        }
+        if let Some(score) = params.un_likely_score {
+            dest_obj.insert("UN_LIKELY_SCORE".to_string(), json!(score));
         }
     }
 
@@ -357,20 +457,18 @@ pub fn list_comparison_thresholds(config_json: &str) -> Result<Vec<Value>> {
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
-/// * `plan` - Generic plan name
-/// * `params` - Generic threshold parameters
+/// * `params` - Generic threshold parameters (plan, behavior, caps required; feature optional)
 ///
 /// # Returns
 /// Modified configuration JSON string
 pub fn add_generic_threshold(
     config_json: &str,
-    plan: &str,
     params: AddGenericThresholdParams,
 ) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    let plan_upper = plan.to_uppercase();
+    let plan_upper = params.plan.to_uppercase();
     let behavior_upper = params.behavior.to_uppercase();
     let redo_upper = params.send_to_redo.to_uppercase();
     let feature_upper = params.feature.unwrap_or("ALL").to_uppercase();
@@ -446,35 +544,22 @@ pub fn add_generic_threshold(
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
-/// * `plan` - Generic plan name
-/// * `behavior` - Behavior code
-/// * `feature` - Optional feature name (default: "ALL")
+/// * `params` - Delete parameters (gplan_id, behavior required; feature optional)
 ///
 /// # Returns
 /// Modified configuration JSON string
 pub fn delete_generic_threshold(
     config_json: &str,
-    plan: &str,
-    behavior: &str,
-    feature: Option<&str>,
+    params: DeleteGenericThresholdParams,
 ) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    let plan_upper = plan.to_uppercase();
-    let behavior_upper = behavior.to_uppercase();
-    let feature_upper = feature.unwrap_or("ALL").to_uppercase();
+    let behavior_upper = params.behavior.to_uppercase();
+    let feature_upper = params.feature.unwrap_or("ALL").to_uppercase();
 
-    // Lookup plan ID
-    let gplan_array = config["G2_CONFIG"]["CFG_GPLAN"]
-        .as_array()
-        .ok_or_else(|| SzConfigError::MissingSection("CFG_GPLAN".to_string()))?;
-
-    let gplan_id = gplan_array
-        .iter()
-        .find(|p| p["GPLAN_CODE"].as_str() == Some(plan_upper.as_str()))
-        .and_then(|p| p["GPLAN_ID"].as_i64())
-        .ok_or_else(|| SzConfigError::NotFound(format!("Generic plan: {}", plan_upper.clone())))?;
+    // Use the gplan_id directly from params
+    let gplan_id = params.gplan_id;
 
     // Lookup feature ID (0 for "all")
     let ftype_id = if feature_upper == "ALL" {
@@ -507,8 +592,8 @@ pub fn delete_generic_threshold(
 
     if !found {
         return Err(SzConfigError::NotFound(format!(
-            "Generic threshold not found: plan={}, behavior={}, feature={}",
-            plan_upper, behavior_upper, feature_upper
+            "Generic threshold not found: GPLAN_ID={}, behavior={}, feature={}",
+            gplan_id, behavior_upper, feature_upper
         )));
     }
 
@@ -519,22 +604,18 @@ pub fn delete_generic_threshold(
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
-/// * `gplan_id` - Generic plan ID
-/// * `behavior` - Behavior code
-/// * `updates` - JSON object with fields to update
+/// * `params` - Threshold parameters (gplan_id, behavior required; caps/redo optional)
 ///
 /// # Returns
 /// Modified configuration JSON string
 pub fn set_generic_threshold(
     config_json: &str,
-    gplan_id: i64,
-    behavior: &str,
-    updates: &Value,
+    params: SetGenericThresholdParams,
 ) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    let behavior_upper = behavior.to_uppercase();
+    let behavior_upper = params.behavior.to_uppercase();
 
     let gthresh_array = config["G2_CONFIG"]["CFG_GENERIC_THRESHOLD"]
         .as_array_mut()
@@ -543,26 +624,29 @@ pub fn set_generic_threshold(
     let gthresh = gthresh_array
         .iter_mut()
         .find(|item| {
-            item["GPLAN_ID"].as_i64() == Some(gplan_id)
+            item["GPLAN_ID"].as_i64() == Some(params.gplan_id)
                 && item["BEHAVIOR"].as_str() == Some(behavior_upper.as_str())
         })
         .ok_or_else(|| {
             SzConfigError::NotFound(format!(
                 "Generic threshold not found: GPLAN_ID={}, BEHAVIOR={}",
-                gplan_id, behavior_upper
+                params.gplan_id, behavior_upper
             ))
         })?;
 
-    // Update fields from updates object
-    if let Some(src_obj) = updates.as_object() {
-        if let Some(dest_obj) = gthresh.as_object_mut() {
-            for (key, value) in src_obj {
-                let upper_key = key.to_uppercase();
-                // Skip ID and BEHAVIOR fields
-                if upper_key != "GPLAN_ID" && upper_key != "BEHAVIOR" {
-                    dest_obj.insert(upper_key, value.clone());
-                }
-            }
+    // Update fields from params
+    if let Some(dest_obj) = gthresh.as_object_mut() {
+        if let Some(ftype_id) = params.ftype_id {
+            dest_obj.insert("FTYPE_ID".to_string(), json!(ftype_id));
+        }
+        if let Some(cap) = params.candidate_cap {
+            dest_obj.insert("CANDIDATE_CAP".to_string(), json!(cap));
+        }
+        if let Some(cap) = params.scoring_cap {
+            dest_obj.insert("SCORING_CAP".to_string(), json!(cap));
+        }
+        if let Some(redo) = params.send_to_redo {
+            dest_obj.insert("SEND_TO_REDO".to_string(), json!(redo));
         }
     }
 

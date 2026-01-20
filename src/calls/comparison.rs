@@ -13,9 +13,46 @@ use serde_json::{Value, json};
 // Parameter Structs
 // ============================================================================
 
+/// Parameters for adding a comparison call
+#[derive(Debug, Clone)]
+pub struct AddComparisonCallParams {
+    pub ftype_code: String,
+    pub cfunc_code: String,
+    pub element_list: Vec<String>,
+}
+
+impl TryFrom<&Value> for AddComparisonCallParams {
+    type Error = SzConfigError;
+
+    fn try_from(json: &Value) -> Result<Self> {
+        Ok(Self {
+            ftype_code: json
+                .get("ftypeCode")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| SzConfigError::MissingField("ftypeCode".to_string()))?
+                .to_string(),
+            cfunc_code: json
+                .get("cfuncCode")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| SzConfigError::MissingField("cfuncCode".to_string()))?
+                .to_string(),
+            element_list: json
+                .get("elementList")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default(),
+        })
+    }
+}
+
 /// Parameters for adding a comparison call element (CBOM record)
 #[derive(Debug, Clone)]
 pub struct AddComparisonCallElementParams {
+    pub cfcall_id: i64,
     pub ftype_id: i64,
     pub felem_id: i64,
     pub exec_order: i64,
@@ -26,6 +63,10 @@ impl TryFrom<&Value> for AddComparisonCallElementParams {
 
     fn try_from(json: &Value) -> Result<Self> {
         Ok(Self {
+            cfcall_id: json
+                .get("cfcallId")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| SzConfigError::MissingField("cfcallId".to_string()))?,
             ftype_id: json
                 .get("ftypeId")
                 .and_then(|v| v.as_i64())
@@ -90,9 +131,7 @@ pub struct SetComparisonCallElementParams {
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `ftype_code` - Feature type code
-/// * `cfunc_code` - Comparison function code
-/// * `element_list` - Vector of element codes to include in comparison
+/// * `params` - Comparison call parameters (ftype_code, cfunc_code, element_list required)
 ///
 /// # Returns
 /// Tuple of (modified_config, new_cfcall_record)
@@ -102,9 +141,7 @@ pub struct SetComparisonCallElementParams {
 /// - `NotFound` if function/feature/element codes don't exist
 pub fn add_comparison_call(
     config: &str,
-    ftype_code: &str,
-    cfunc_code: &str,
-    element_list: Vec<String>,
+    params: AddComparisonCallParams,
 ) -> Result<(String, Value)> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -113,7 +150,7 @@ pub fn add_comparison_call(
     let cfcall_id = get_next_id(&config_data, "G2_CONFIG.CFG_CFCALL", "CFCALL_ID", 1000)?;
 
     // Lookup feature ID
-    let ftype_id = lookup_feature_id(config, ftype_code)?;
+    let ftype_id = lookup_feature_id(config, &params.ftype_code)?;
 
     // Check if comparison call already exists for this feature (only one allowed per feature)
     let call_exists = config_data["G2_CONFIG"]["CFG_CFCALL"]
@@ -127,18 +164,18 @@ pub fn add_comparison_call(
     if call_exists {
         return Err(SzConfigError::AlreadyExists(format!(
             "Comparison call for feature {} already set",
-            ftype_code
+            params.ftype_code
         )));
     }
 
     // Lookup function ID
-    let cfunc_id = lookup_cfunc_id(config, cfunc_code)?;
+    let cfunc_id = lookup_cfunc_id(config, &params.cfunc_code)?;
 
     // Process element list and create CFBOM records
     let mut cfbom_records = Vec::new();
     let mut exec_order = 0;
 
-    for element_code in element_list {
+    for element_code in params.element_list {
         exec_order += 1;
 
         // Lookup element ID (must belong to the feature)
@@ -162,7 +199,7 @@ pub fn add_comparison_call(
             .ok_or_else(|| {
                 SzConfigError::NotFound(format!(
                     "Element '{}' not found in feature '{}'",
-                    element_code, ftype_code
+                    element_code, params.ftype_code
                 ))
             })?;
 
@@ -353,14 +390,12 @@ pub fn set_comparison_call(config: &str, _params: SetComparisonCallParams) -> Re
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `cfcall_id` - Comparison call ID
-/// * `params` - Element parameters (ftype_id, felem_id, exec_order)
+/// * `params` - Element parameters (cfcall_id, ftype_id, felem_id, exec_order required)
 ///
 /// # Returns
 /// Tuple of (modified_config, new_cbom_record)
 pub fn add_comparison_call_element(
     config: &str,
-    cfcall_id: i64,
     params: AddComparisonCallElementParams,
 ) -> Result<(String, Value)> {
     let mut config_data: Value =
@@ -373,7 +408,7 @@ pub fn add_comparison_call_element(
         .and_then(|v| v.as_array())
     {
         for item in cbom_array {
-            if item.get("CFCALL_ID").and_then(|v| v.as_i64()) == Some(cfcall_id)
+            if item.get("CFCALL_ID").and_then(|v| v.as_i64()) == Some(params.cfcall_id)
                 && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
                 && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(params.felem_id)
                 && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order)
@@ -387,7 +422,7 @@ pub fn add_comparison_call_element(
 
     // Create new CBOM record
     let new_record = json!({
-        "CFCALL_ID": cfcall_id,
+        "CFCALL_ID": params.cfcall_id,
         "FTYPE_ID": params.ftype_id,
         "FELEM_ID": params.felem_id,
         "EXEC_ORDER": params.exec_order

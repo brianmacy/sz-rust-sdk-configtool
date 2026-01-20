@@ -228,7 +228,9 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
             let internal = get_opt_str_param(params, "internal");
             let default_value = get_opt_str_param(params, "default");
 
-            crate::attributes::add_attribute(config, crate::attributes::AddAttributeParams {
+            crate::attributes::add_attribute(
+                config,
+                crate::attributes::AddAttributeParams {
                     attribute: attr,
                     feature,
                     element,
@@ -299,7 +301,9 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 .get("elementList")
                 .ok_or_else(|| SzConfigError::MissingField("elementList".to_string()))?;
 
-            crate::features::add_feature(config, crate::features::AddFeatureParams {
+            crate::features::add_feature(
+                config,
+                crate::features::AddFeatureParams {
                     feature,
                     element_list,
                     class: get_opt_str_param(params, "class"),
@@ -321,7 +325,9 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
         "setFeature" => {
             let feature = get_str_param(params, "feature")?;
 
-            crate::features::set_feature(config, crate::features::SetFeatureParams {
+            crate::features::set_feature(
+                config,
+                crate::features::SetFeatureParams {
                     feature,
                     candidates: get_opt_str_param(params, "candidates"),
                     anonymize: get_opt_str_param(params, "anonymize"),
@@ -344,7 +350,9 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
 
             crate::behavior_overrides::add_behavior_override(
                 config,
-                crate::behavior_overrides::AddBehaviorOverrideParams::new(feature, usage_type, behavior)
+                crate::behavior_overrides::AddBehaviorOverrideParams::new(
+                    feature, usage_type, behavior,
+                ),
             )
         }
 
@@ -482,9 +490,9 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
 
             crate::thresholds::add_comparison_threshold(
                 config,
-                cfunc_id,
-                score_name,
                 crate::thresholds::AddComparisonThresholdParams {
+                    cfunc_id,
+                    cfunc_rtnval: score_name.to_string(),
                     ftype_id,
                     exec_order: None,
                     same_score: same,
@@ -497,14 +505,8 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
         }
 
         "addGenericThreshold" => {
-            let plan = get_str_param(params, "plan")?;
             let threshold_params = crate::thresholds::AddGenericThresholdParams::try_from(params)?;
-
-            crate::thresholds::add_generic_threshold(
-                config,
-                plan,
-                threshold_params,
-            )
+            crate::thresholds::add_generic_threshold(config, threshold_params)
         }
 
         // ===== Call Commands - Expression =====
@@ -531,10 +533,8 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 is_virtual: virtual_flag,
             };
 
-            let (new_config, _) = crate::calls::expression::add_expression_call(
-                config,
-                call_params,
-            )?;
+            let (new_config, _) =
+                crate::calls::expression::add_expression_call(config, call_params)?;
 
             Ok(new_config)
         }
