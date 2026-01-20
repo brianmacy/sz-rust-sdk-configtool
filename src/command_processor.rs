@@ -166,9 +166,8 @@ fn parse_command_line(line: &str) -> Result<(String, Value)> {
     let cmd = parts[0].to_string();
 
     let params = if parts.len() > 1 {
-        serde_json::from_str(parts[1]).map_err(|e| {
-            SzConfigError::JsonParse(format!("Invalid JSON in '{}': {}", cmd, e))
-        })?
+        serde_json::from_str(parts[1])
+            .map_err(|e| SzConfigError::JsonParse(format!("Invalid JSON in '{}': {}", cmd, e)))?
     } else {
         Value::Null
     };
@@ -363,13 +362,12 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
 
         // ===== Fragment Commands =====
         "deleteFragment" => {
-            let fragment = get_str_param(params, "fragment")
-                .or_else(|_| {
-                    // Support old format: deleteFragment FRAGMENT_NAME
-                    params
-                        .as_str()
-                        .ok_or_else(|| SzConfigError::MissingField("fragment".to_string()))
-                })?;
+            let fragment = get_str_param(params, "fragment").or_else(|_| {
+                // Support old format: deleteFragment FRAGMENT_NAME
+                params
+                    .as_str()
+                    .ok_or_else(|| SzConfigError::MissingField("fragment".to_string()))
+            })?;
             crate::fragments::delete_fragment(config, fragment)
         }
 
@@ -602,7 +600,10 @@ fn parse_element_list(list: &Value) -> Result<Vec<(String, String, Option<String
                 .and_then(|v| v.as_str())
                 .unwrap_or("No")
                 .to_string();
-            let feature = item.get("feature").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let feature = item
+                .get("feature")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
 
             Ok((element, required, feature))
         })

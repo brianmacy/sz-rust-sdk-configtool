@@ -6,7 +6,7 @@
 
 use crate::error::{Result, SzConfigError};
 use crate::helpers;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// Add a behavior override for a feature based on usage type
 ///
@@ -336,9 +336,6 @@ mod tests {
 
         let result = add_behavior_override(&config, "TEST_FEATURE", "BUSINESS", "FM");
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("already exists"));
+        assert!(result.unwrap_err().to_string().contains("already exists"));
     }
 }

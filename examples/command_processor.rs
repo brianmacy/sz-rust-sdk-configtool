@@ -100,7 +100,10 @@ save
 
     let name_feature = &config["G2_CONFIG"]["CFG_FTYPE"][0];
     println!("  NAME feature version: {}", name_feature["VERSION"]);
-    println!("  NAME used for candidates: {}", name_feature["USED_FOR_CAND"]);
+    println!(
+        "  NAME used for candidates: {}",
+        name_feature["USED_FOR_CAND"]
+    );
 
     let overrides = config["G2_CONFIG"]["CFG_FBOVR"].as_array().unwrap();
     println!("  Behavior overrides: {}", overrides.len());
