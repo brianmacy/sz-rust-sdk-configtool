@@ -114,14 +114,15 @@ save
 
     // Verify version upgrade
     assert_eq!(
-        upgraded_config["G2_CONFIG"]["CONFIG_BASE_VERSION"]["COMPATIBILITY_VERSION"]
-            ["CONFIG_VERSION"],
+        upgraded_config["G2_CONFIG"]["CONFIG_BASE_VERSION"]["COMPATIBILITY_VERSION"]["CONFIG_VERSION"],
         "11",
         "Config version should be upgraded to 11"
     );
 
     // Verify fragment deletion
-    let fragments = upgraded_config["G2_CONFIG"]["CFG_ERFRAG"].as_array().unwrap();
+    let fragments = upgraded_config["G2_CONFIG"]["CFG_ERFRAG"]
+        .as_array()
+        .unwrap();
     let has_trusted_id = fragments
         .iter()
         .any(|f| f["ERFRAG_CODE"].as_str() == Some("TRUSTED_ID"));
@@ -135,7 +136,9 @@ save
     assert!(!has_dsrc_action, "DSRC_ACTION attribute should be deleted");
 
     // Verify new elements added
-    let elements = upgraded_config["G2_CONFIG"]["CFG_FELEM"].as_array().unwrap();
+    let elements = upgraded_config["G2_CONFIG"]["CFG_FELEM"]
+        .as_array()
+        .unwrap();
     let has_embedding = elements
         .iter()
         .any(|e| e["FELEM_CODE"].as_str() == Some("EMBEDDING"));
@@ -146,7 +149,9 @@ save
     assert!(has_algorithm, "ALGORITHM element should be added");
 
     // Verify feature updates
-    let features = upgraded_config["G2_CONFIG"]["CFG_FTYPE"].as_array().unwrap();
+    let features = upgraded_config["G2_CONFIG"]["CFG_FTYPE"]
+        .as_array()
+        .unwrap();
     let phone = features
         .iter()
         .find(|f| f["FTYPE_CODE"].as_str() == Some("PHONE"))
@@ -166,23 +171,33 @@ save
     );
 
     // Verify new comparison function added
-    let cfuncs = upgraded_config["G2_CONFIG"]["CFG_CFUNC"].as_array().unwrap();
+    let cfuncs = upgraded_config["G2_CONFIG"]["CFG_CFUNC"]
+        .as_array()
+        .unwrap();
     let has_semantic = cfuncs
         .iter()
         .any(|f| f["CFUNC_CODE"].as_str() == Some("SEMANTIC_SIMILARITY_COMP"));
-    assert!(has_semantic, "SEMANTIC_SIMILARITY_COMP function should be added");
+    assert!(
+        has_semantic,
+        "SEMANTIC_SIMILARITY_COMP function should be added"
+    );
 
     // Verify attribute added
     let semantic_attr = attrs
         .iter()
         .find(|a| a["ATTR_CODE"].as_str() == Some("SEMANTIC_EMBEDDING"));
-    assert!(semantic_attr.is_some(), "SEMANTIC_EMBEDDING attribute should be added");
+    assert!(
+        semantic_attr.is_some(),
+        "SEMANTIC_EMBEDDING attribute should be added"
+    );
 
     // Verify call elements were removed
-    let cfbom = upgraded_config["G2_CONFIG"]["CFG_CFBOM"].as_array().unwrap();
-    let has_placekey = cfbom.iter().any(|bom| {
-        bom["FTYPE_ID"].as_i64() == Some(1) && bom["FELEM_ID"].as_i64() == Some(1)
-    });
+    let cfbom = upgraded_config["G2_CONFIG"]["CFG_CFBOM"]
+        .as_array()
+        .unwrap();
+    let has_placekey = cfbom
+        .iter()
+        .any(|bom| bom["FTYPE_ID"].as_i64() == Some(1) && bom["FELEM_ID"].as_i64() == Some(1));
     assert!(!has_placekey, "PLACEKEY should be removed from CFG_CFBOM");
 
     // Verify command count

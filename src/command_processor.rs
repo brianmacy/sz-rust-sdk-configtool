@@ -565,9 +565,9 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                     ))
                 })?;
 
-            let cfcall_id = cfcall["CFCALL_ID"].as_i64().ok_or_else(|| {
-                SzConfigError::InvalidStructure("CFCALL_ID missing".to_string())
-            })?;
+            let cfcall_id = cfcall["CFCALL_ID"]
+                .as_i64()
+                .ok_or_else(|| SzConfigError::InvalidStructure("CFCALL_ID missing".to_string()))?;
 
             // Find exec_order from CFBOM
             let cfbom_array = config_val["G2_CONFIG"]["CFG_CFBOM"]
@@ -588,9 +588,9 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                     ))
                 })?;
 
-            let exec_order = cfbom["EXEC_ORDER"].as_i64().ok_or_else(|| {
-                SzConfigError::InvalidStructure("EXEC_ORDER missing".to_string())
-            })?;
+            let exec_order = cfbom["EXEC_ORDER"]
+                .as_i64()
+                .ok_or_else(|| SzConfigError::InvalidStructure("EXEC_ORDER missing".to_string()))?;
 
             // Call underlying SDK function
             crate::calls::comparison::delete_comparison_call_element(
@@ -628,9 +628,9 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                     ))
                 })?;
 
-            let cfcall_id = cfcall["CFCALL_ID"].as_i64().ok_or_else(|| {
-                SzConfigError::InvalidStructure("CFCALL_ID missing".to_string())
-            })?;
+            let cfcall_id = cfcall["CFCALL_ID"]
+                .as_i64()
+                .ok_or_else(|| SzConfigError::InvalidStructure("CFCALL_ID missing".to_string()))?;
 
             // Determine next exec_order
             let cfbom_array = config_val["G2_CONFIG"]["CFG_CFBOM"]
@@ -680,12 +680,15 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 .iter()
                 .find(|call| call["FTYPE_ID"].as_i64() == Some(ftype_id))
                 .ok_or_else(|| {
-                    SzConfigError::NotFound(format!("No distinct call found for feature {}", feature))
+                    SzConfigError::NotFound(format!(
+                        "No distinct call found for feature {}",
+                        feature
+                    ))
                 })?;
 
-            let dfcall_id = dfcall["DFCALL_ID"].as_i64().ok_or_else(|| {
-                SzConfigError::InvalidStructure("DFCALL_ID missing".to_string())
-            })?;
+            let dfcall_id = dfcall["DFCALL_ID"]
+                .as_i64()
+                .ok_or_else(|| SzConfigError::InvalidStructure("DFCALL_ID missing".to_string()))?;
 
             // Find exec_order from DFBOM
             let dfbom_array = config_val["G2_CONFIG"]["CFG_DFBOM"]
@@ -706,9 +709,9 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                     ))
                 })?;
 
-            let exec_order = dfbom["EXEC_ORDER"].as_i64().ok_or_else(|| {
-                SzConfigError::InvalidStructure("EXEC_ORDER missing".to_string())
-            })?;
+            let exec_order = dfbom["EXEC_ORDER"]
+                .as_i64()
+                .ok_or_else(|| SzConfigError::InvalidStructure("EXEC_ORDER missing".to_string()))?;
 
             // Call underlying SDK function
             crate::calls::distinct::delete_distinct_call_element(

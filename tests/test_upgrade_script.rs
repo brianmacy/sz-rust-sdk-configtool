@@ -73,17 +73,24 @@ deleteComparisonCallElement {"feature": "ADDRESS", "element": "PLACEKEY"}
     let mut processor = CommandProcessor::new(TEST_CONFIG_WITH_CALLS.to_string());
     let result = processor.process_script(script);
 
-    assert!(result.is_ok(), "Failed to process script: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to process script: {:?}",
+        result.err()
+    );
 
     let config: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
 
     // Verify PLACEKEY was removed from CFG_CFBOM for ADDRESS feature
     let cfbom = config["G2_CONFIG"]["CFG_CFBOM"].as_array().unwrap();
-    let has_placekey = cfbom.iter().any(|bom| {
-        bom["FTYPE_ID"].as_i64() == Some(1) && bom["FELEM_ID"].as_i64() == Some(1)
-    });
+    let has_placekey = cfbom
+        .iter()
+        .any(|bom| bom["FTYPE_ID"].as_i64() == Some(1) && bom["FELEM_ID"].as_i64() == Some(1));
 
-    assert!(!has_placekey, "PLACEKEY should have been removed from CFG_CFBOM");
+    assert!(
+        !has_placekey,
+        "PLACEKEY should have been removed from CFG_CFBOM"
+    );
 }
 
 #[test]
@@ -96,7 +103,11 @@ addComparisonCallElement {"feature": "NATIONAL_ID", "element": "ID_TYPE"}
     let mut processor = CommandProcessor::new(TEST_CONFIG_WITH_CALLS.to_string());
     let result = processor.process_script(script);
 
-    assert!(result.is_ok(), "Failed to process script: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to process script: {:?}",
+        result.err()
+    );
 
     let config: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
 
@@ -120,17 +131,24 @@ deleteDistinctCallElement {"feature": "ADDRESS", "element": "PLACEKEY"}
     let mut processor = CommandProcessor::new(TEST_CONFIG_WITH_CALLS.to_string());
     let result = processor.process_script(script);
 
-    assert!(result.is_ok(), "Failed to process script: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to process script: {:?}",
+        result.err()
+    );
 
     let config: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
 
     // Verify PLACEKEY was removed from CFG_DFBOM for ADDRESS feature
     let dfbom = config["G2_CONFIG"]["CFG_DFBOM"].as_array().unwrap();
-    let has_placekey = dfbom.iter().any(|bom| {
-        bom["DFCALL_ID"].as_i64() == Some(1) && bom["FELEM_ID"].as_i64() == Some(1)
-    });
+    let has_placekey = dfbom
+        .iter()
+        .any(|bom| bom["DFCALL_ID"].as_i64() == Some(1) && bom["FELEM_ID"].as_i64() == Some(1));
 
-    assert!(!has_placekey, "PLACEKEY should have been removed from CFG_DFBOM");
+    assert!(
+        !has_placekey,
+        "PLACEKEY should have been removed from CFG_DFBOM"
+    );
 }
 
 #[test]
@@ -155,7 +173,11 @@ save
     let mut processor = CommandProcessor::new(TEST_CONFIG_WITH_CALLS.to_string());
     let result = processor.process_script(script);
 
-    assert!(result.is_ok(), "Failed to process upgrade script: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Failed to process upgrade script: {:?}",
+        result.err()
+    );
 
     // Verify version was upgraded
     let config: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
@@ -168,15 +190,18 @@ save
     let cfbom = config["G2_CONFIG"]["CFG_CFBOM"].as_array().unwrap();
 
     // PLACEKEY (felem_id=1) should be deleted from ADDRESS (ftype_id=1)
-    let has_placekey = cfbom.iter().any(|bom| {
-        bom["FTYPE_ID"].as_i64() == Some(1) && bom["FELEM_ID"].as_i64() == Some(1)
-    });
-    assert!(!has_placekey, "PLACEKEY should have been removed from ADDRESS");
+    let has_placekey = cfbom
+        .iter()
+        .any(|bom| bom["FTYPE_ID"].as_i64() == Some(1) && bom["FELEM_ID"].as_i64() == Some(1));
+    assert!(
+        !has_placekey,
+        "PLACEKEY should have been removed from ADDRESS"
+    );
 
     // ID_TYPE (felem_id=2) should be added to NATIONAL_ID (ftype_id=2)
-    let has_id_type = cfbom.iter().any(|bom| {
-        bom["CFCALL_ID"].as_i64() == Some(2) && bom["FELEM_ID"].as_i64() == Some(2)
-    });
+    let has_id_type = cfbom
+        .iter()
+        .any(|bom| bom["CFCALL_ID"].as_i64() == Some(2) && bom["FELEM_ID"].as_i64() == Some(2));
     assert!(has_id_type, "ID_TYPE should have been added to NATIONAL_ID");
 
     // Verify 4 commands executed

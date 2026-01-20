@@ -7,8 +7,8 @@
 //! - Validate the results
 //! - Save the upgraded configuration
 
-use sz_configtool_lib::command_processor::CommandProcessor;
 use std::env;
+use sz_configtool_lib::command_processor::CommandProcessor;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Process Real Senzing Upgrade Script ===\n");
@@ -16,7 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get paths from arguments or use defaults
     let args: Vec<String> = env::args().collect();
 
-    let config_path = args.get(1)
+    let config_path = args
+        .get(1)
         .map(|s| s.as_str())
         .unwrap_or("g2config_v10.json");
 
@@ -24,7 +25,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(|s| s.as_str())
         .unwrap_or("/opt/homebrew/opt/senzing/runtime/er/resources/config/szcore-configuration-upgrade-10-to-11.gtc");
 
-    let output_path = args.get(3)
+    let output_path = args
+        .get(3)
         .map(|s| s.as_str())
         .unwrap_or("g2config_v11.json");
 
@@ -42,17 +44,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => {
             eprintln!("  ✗ Failed to load config: {}", e);
-            eprintln!("\nUsage: {} [config.json] [upgrade.gtc] [output.json]", args[0]);
+            eprintln!(
+                "\nUsage: {} [config.json] [upgrade.gtc] [output.json]",
+                args[0]
+            );
             std::process::exit(1);
         }
     };
 
     // Verify starting version
     let config_val: serde_json::Value = serde_json::from_str(&config)?;
-    let start_version = config_val["G2_CONFIG"]["CONFIG_BASE_VERSION"]["COMPATIBILITY_VERSION"]
-        ["CONFIG_VERSION"]
-        .as_str()
-        .unwrap_or("unknown");
+    let start_version =
+        config_val["G2_CONFIG"]["CONFIG_BASE_VERSION"]["COMPATIBILITY_VERSION"]["CONFIG_VERSION"]
+            .as_str()
+            .unwrap_or("unknown");
     println!("  Starting version: {}\n", start_version);
 
     // Load upgrade script
@@ -60,11 +65,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let script = match std::fs::read_to_string(script_path) {
         Ok(s) => {
             let line_count = s.lines().count();
-            let command_count = s.lines().filter(|l| {
-                let trimmed = l.trim();
-                !trimmed.is_empty() && !trimmed.starts_with('#') && trimmed != "save"
-            }).count();
-            println!("  ✓ Loaded {} lines ({} commands)", line_count, command_count);
+            let command_count = s
+                .lines()
+                .filter(|l| {
+                    let trimmed = l.trim();
+                    !trimmed.is_empty() && !trimmed.starts_with('#') && trimmed != "save"
+                })
+                .count();
+            println!(
+                "  ✓ Loaded {} lines ({} commands)",
+                line_count, command_count
+            );
             s
         }
         Err(e) => {
@@ -96,10 +107,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Verify ending version
     let upgraded_val: serde_json::Value = serde_json::from_str(&upgraded_config)?;
-    let end_version = upgraded_val["G2_CONFIG"]["CONFIG_BASE_VERSION"]["COMPATIBILITY_VERSION"]
-        ["CONFIG_VERSION"]
-        .as_str()
-        .unwrap_or("unknown");
+    let end_version =
+        upgraded_val["G2_CONFIG"]["CONFIG_BASE_VERSION"]["COMPATIBILITY_VERSION"]["CONFIG_VERSION"]
+            .as_str()
+            .unwrap_or("unknown");
     println!("  Ending version: {}\n", end_version);
 
     // Show sample of executed commands
@@ -108,7 +119,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("  - {}", cmd);
     }
     if processor.get_executed_commands().len() > 10 {
-        println!("  ... and {} more", processor.get_executed_commands().len() - 10);
+        println!(
+            "  ... and {} more",
+            processor.get_executed_commands().len() - 10
+        );
     }
 
     // Save upgraded configuration
@@ -125,7 +139,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("\n=== Upgrade Complete! ===");
-    println!("Configuration successfully upgraded from v{} to v{}", start_version, end_version);
+    println!(
+        "Configuration successfully upgraded from v{} to v{}",
+        start_version, end_version
+    );
 
     Ok(())
 }
