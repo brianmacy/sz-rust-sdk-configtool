@@ -5521,6 +5521,204 @@ pub extern "C" fn SzConfigTool_setFeature(
     ))
 }
 
+// ===== Behavior Override Operations =====
+
+/// Add a behavior override for a feature based on usage type
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_addBehaviorOverride(
+    config_json: *const c_char,
+    feature_code: *const c_char,
+    usage_type: *const c_char,
+    behavior: *const c_char,
+) -> SzConfigTool_result {
+    let config = unsafe {
+        if config_json.is_null() {
+            set_error("config_json is null".to_string(), -1);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -1,
+            };
+        }
+        match CStr::from_ptr(config_json).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                return SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -2,
+                };
+            }
+        }
+    };
+
+    let feature = unsafe {
+        if feature_code.is_null() {
+            set_error("feature_code is null".to_string(), -1);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -1,
+            };
+        }
+        match CStr::from_ptr(feature_code).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_error(format!("Invalid UTF-8 in feature_code: {}", e), -2);
+                return SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -2,
+                };
+            }
+        }
+    };
+
+    let utype = unsafe {
+        if usage_type.is_null() {
+            set_error("usage_type is null".to_string(), -1);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -1,
+            };
+        }
+        match CStr::from_ptr(usage_type).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_error(format!("Invalid UTF-8 in usage_type: {}", e), -2);
+                return SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -2,
+                };
+            }
+        }
+    };
+
+    let bhvr = unsafe {
+        if behavior.is_null() {
+            set_error("behavior is null".to_string(), -1);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -1,
+            };
+        }
+        match CStr::from_ptr(behavior).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_error(format!("Invalid UTF-8 in behavior: {}", e), -2);
+                return SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -2,
+                };
+            }
+        }
+    };
+
+    handle_result!(crate::behavior_overrides::add_behavior_override(
+        config, feature, utype, bhvr
+    ))
+}
+
+/// Delete a behavior override
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_deleteBehaviorOverride(
+    config_json: *const c_char,
+    feature_code: *const c_char,
+    usage_type: *const c_char,
+) -> SzConfigTool_result {
+    let config = unsafe {
+        if config_json.is_null() {
+            set_error("config_json is null".to_string(), -1);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -1,
+            };
+        }
+        match CStr::from_ptr(config_json).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                return SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -2,
+                };
+            }
+        }
+    };
+
+    let feature = unsafe {
+        if feature_code.is_null() {
+            set_error("feature_code is null".to_string(), -1);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -1,
+            };
+        }
+        match CStr::from_ptr(feature_code).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_error(format!("Invalid UTF-8 in feature_code: {}", e), -2);
+                return SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -2,
+                };
+            }
+        }
+    };
+
+    let utype = unsafe {
+        if usage_type.is_null() {
+            set_error("usage_type is null".to_string(), -1);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -1,
+            };
+        }
+        match CStr::from_ptr(usage_type).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_error(format!("Invalid UTF-8 in usage_type: {}", e), -2);
+                return SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -2,
+                };
+            }
+        }
+    };
+
+    handle_result!(crate::behavior_overrides::delete_behavior_override(
+        config, feature, utype
+    ))
+}
+
+/// List all behavior overrides
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_listBehaviorOverrides(
+    config_json: *const c_char,
+) -> SzConfigTool_result {
+    let config = unsafe {
+        if config_json.is_null() {
+            set_error("config_json is null".to_string(), -1);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -1,
+            };
+        }
+        match CStr::from_ptr(config_json).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                return SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -2,
+                };
+            }
+        }
+    };
+
+    let result = crate::behavior_overrides::list_behavior_overrides(config).and_then(|vec| {
+        serde_json::to_string(&vec).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    });
+    handle_result!(result)
+}
+
 // ===== Element Operations =====
 
 /// Add an element with JSON configuration

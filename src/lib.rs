@@ -49,6 +49,7 @@ pub mod helpers;
 
 // Core entity modules
 pub mod attributes;
+pub mod behavior_overrides;
 pub mod datasources;
 pub mod elements;
 pub mod features;
