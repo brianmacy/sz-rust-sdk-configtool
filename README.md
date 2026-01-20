@@ -18,7 +18,31 @@ Pure Rust library for manipulating Senzing configuration JSON documents.
 - ✅ **Type-Safe Errors** - Comprehensive error handling with `SzConfigError`
 - ✅ **Well-Documented** - All public functions have rustdoc comments
 - ✅ **Tested** - Comprehensive unit and integration tests
-- ✅ **Parameter Alignment** - Function signatures match sz_configtool CLI commands
+- ✅ **Clean API** - Parameter structs for self-documenting code
+- ✅ **Modern Design** - All functions use `(config, params)` pattern
+
+## API Design
+
+This library uses **parameter structs** for a clean, self-documenting API:
+
+```rust
+// ✨ Named fields - crystal clear what each parameter does
+features::set_feature(&config, SetFeatureParams {
+    feature: "NAME",
+    candidates: Some("Yes"),
+    behavior: Some("NAME"),
+    version: Some(2),
+    ..Default::default()
+})?;
+```
+
+**Benefits:**
+- 🔍 **Self-documenting** - No need to count parameters or check docs
+- 🛡️ **Type-safe** - Compile-time field validation
+- 📈 **Extensible** - Add fields without breaking existing code
+- 💡 **IDE-friendly** - Auto-completion shows available fields
+
+All parameter structs implement `TryFrom<&Value>` for easy JSON conversion.
 
 ## Installation
 
@@ -47,43 +71,66 @@ sz_configtool_lib = "0.1.0"
 
 ```rust
 use sz_configtool_lib::{datasources, attributes, features};
+use sz_configtool_lib::datasources::AddDataSourceParams;
+use sz_configtool_lib::attributes::AddAttributeParams;
+use sz_configtool_lib::features::{AddFeatureParams, SetFeatureParams};
+use serde_json::json;
 use std::fs;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load existing config
     let config = fs::read_to_string("g2config.json")?;
 
-    // Add a data source
-    let config = datasources::add_data_source(&config, "MY_SOURCE")?;
+    // Add a data source (with named parameters!)
+    let config = datasources::add_data_source(
+        &config,
+        AddDataSourceParams {
+            code: "MY_SOURCE",
+            ..Default::default()
+        },
+    )?;
 
-    // Add an attribute
+    // Add an attribute (self-documenting!)
     let (config, _attr) = attributes::add_attribute(
         &config,
-        "MY_ATTR",
-        "ADDRESS",    // feature
-        "ELEMENT",    // element
-        None,         // class (optional)
-        None,         // ftype (optional)
-        None,         // felem (optional)
-        None,         // felem_req (optional)
-        None,         // default (optional)
-        None,         // advanced (optional)
+        AddAttributeParams {
+            attribute: "MY_ATTR",
+            feature: "ADDRESS",
+            element: "ADDR_LINE1",
+            class: "ADDRESS",
+            default_value: None,
+            internal: Some("No"),
+            required: Some("No"),
+        },
     )?;
 
     // Add a feature with element list
-    let element_list = serde_json::json!([
+    let element_list = json!([
         {"element": "NAME", "expressed": "No"},
         {"element": "ADDRESS", "expressed": "No"}
     ]);
 
-    let (config, _feature) = features::add_feature(
+    let config = features::add_feature(
         &config,
-        "MY_FEATURE",
-        &element_list,
-        None,  // class (optional)
-        None,  // behavior (optional)
-        None,  // candidates (optional)
-        None,  // ftype (optional)
+        AddFeatureParams {
+            feature: "MY_FEATURE",
+            element_list: &element_list,
+            class: Some("IDENTITY"),
+            behavior: Some("FM"),
+            candidates: Some("Yes"),
+            ..Default::default()
+        },
+    )?;
+
+    // Update a feature (crystal clear what's changing!)
+    let config = features::set_feature(
+        &config,
+        SetFeatureParams {
+            feature: "MY_FEATURE",
+            behavior: Some("NAME"),
+            version: Some(2),
+            ..Default::default()
+        },
     )?;
 
     // Save modified config
@@ -145,15 +192,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Data Source Operations
 
 ```rust
-use sz_configtool_lib::datasources;
+use sz_configtool_lib::datasources::{self, AddDataSourceParams, SetDataSourceParams};
 
-// Add a data source
-let config = datasources::add_data_source(&config, "CUSTOMERS")?;
+// Add a data source with named parameters
+let config = datasources::add_data_source(
+    &config,
+    AddDataSourceParams {
+        code: "CUSTOMERS",
+        retention_level: Some("Remember"),
+        reliability: Some(2),
+        ..Default::default()
+    },
+)?;
 
 // List all data sources
 let sources = datasources::list_data_sources(&config)?;
 for source in sources {
-    println!("{}: {}", source["DSRC_CODE"], source["DSRC_DESC"]);
+    println!("{}: {}", source["dataSource"], source["id"]);
 }
 
 // Get specific data source
@@ -162,10 +217,12 @@ let source = datasources::get_data_source(&config, "CUSTOMERS")?;
 // Update data source
 let config = datasources::set_data_source(
     &config,
-    "CUSTOMERS",
-    Some("Customer Records"),  // description
-    Some(2),                    // reliability
-    Some("REMEMBER"),           // retention level
+    SetDataSourceParams {
+        code: "CUSTOMERS",
+        retention_level: Some("Forget"),
+        reliability: Some(3),
+        ..Default::default()
+    },
 )?;
 
 // Delete data source
@@ -175,7 +232,7 @@ let config = datasources::delete_data_source(&config, "CUSTOMERS")?;
 ### Feature Operations
 
 ```rust
-use sz_configtool_lib::features;
+use sz_configtool_lib::features::{self, AddFeatureParams, SetFeatureParams};
 use serde_json::json;
 
 // Define element list
@@ -185,15 +242,17 @@ let elements = json!([
     {"element": "PHONE", "expressed": "No"}
 ]);
 
-// Add feature
-let (config, feature) = features::add_feature(
+// Add feature with named parameters
+let config = features::add_feature(
     &config,
-    "PERSON",
-    &elements,
-    Some("PROFILE"),    // class
-    Some("NAME"),       // behavior
-    Some("Yes"),        // candidates
-    None,               // ftype (auto-detect)
+    AddFeatureParams {
+        feature: "PERSON",
+        element_list: &elements,
+        class: Some("IDENTITY"),
+        behavior: Some("FM"),
+        candidates: Some("Yes"),
+        ..Default::default()
+    },
 )?;
 
 // List features
@@ -202,47 +261,94 @@ let features_list = features::list_features(&config)?;
 // Get feature with full element list
 let feature = features::get_feature(&config, "PERSON")?;
 
-// Update feature
+// Update feature (self-documenting!)
 let config = features::set_feature(
     &config,
-    "PERSON",
-    Some("IDENTITY"),   // new class
-    Some("USED_FOR_RESOLUTION"),  // new behavior
-    None,               // keep candidates
-    None,               // keep ftype
+    SetFeatureParams {
+        feature: "PERSON",
+        class: Some("IDENTITY"),
+        behavior: Some("NAME"),
+        version: Some(2),
+        ..Default::default()
+    },
 )?;
 ```
 
 ### Threshold Operations
 
 ```rust
-use sz_configtool_lib::thresholds;
+use sz_configtool_lib::thresholds::{self, AddComparisonThresholdParams, AddGenericThresholdParams};
 
-// Add comparison threshold
-let (config, threshold) = thresholds::add_comparison_threshold(
+// Add comparison threshold with named parameters
+let config = thresholds::add_comparison_threshold(
     &config,
-    1,      // cfunc_id
-    85,     // SAME score
-    75,     // CLOSE score
-    60,     // LIKELY score
-    45,     // PLAUSIBLE score
-    30,     // UNLIKELY score
+    AddComparisonThresholdParams {
+        cfunc_id: 1,
+        cfunc_rtnval: "FULL_SCORE".to_string(),
+        same_score: Some(85),
+        close_score: Some(75),
+        likely_score: Some(60),
+        plausible_score: Some(45),
+        un_likely_score: Some(30),
+        ..Default::default()
+    },
 )?;
 
 // Add generic threshold
-let (config, threshold) = thresholds::add_generic_threshold(
+let config = thresholds::add_generic_threshold(
     &config,
-    1,              // gplan_id
-    "NAME",         // behavior
-    "NAME",         // ftype_code
-    1000,           // candidate_cap
-    1000,           // scoring_cap
-    None,           // send_to_redo
+    AddGenericThresholdParams {
+        plan: "SEARCH",
+        behavior: "NAME",
+        scoring_cap: 1000,
+        candidate_cap: 1000,
+        send_to_redo: "Yes",
+        feature: Some("NAME"),
+    },
 )?;
 
 // List all generic thresholds
 let thresholds = thresholds::list_generic_thresholds(&config)?;
 ```
+
+### Command Script Processing
+
+Process Senzing `.gtc` command scripts for automated config upgrades:
+
+```rust
+use sz_configtool_lib::command_processor::CommandProcessor;
+
+// Load config
+let config = std::fs::read_to_string("g2config_v10.json")?;
+
+// Create processor
+let mut processor = CommandProcessor::new(config);
+
+// Process upgrade script
+let upgraded = processor.process_file(
+    "/path/to/szcore-configuration-upgrade-10-to-11.gtc"
+)?;
+
+// Save upgraded config
+std::fs::write("g2config_v11.json", upgraded)?;
+
+println!("✓ {}", processor.summary());
+// Output: "✓ Executed 90 commands"
+```
+
+**Supported commands (27 total):**
+- Versioning: `verifyCompatibilityVersion`, `updateCompatibilityVersion`
+- Attributes: `addAttribute`, `deleteAttribute`, `setAttribute`
+- Features: `addFeature`, `setFeature`, `addBehaviorOverride`
+- Elements: `addElement`, `setFeatureElement`
+- Fragments: `deleteFragment`, `setFragment`
+- Functions: `addExpressionFunction`, `addComparisonFunction`, etc.
+- Thresholds: `addComparisonThreshold`, `addGenericThreshold`
+- Rules: `addRule`, `setRule`
+- System: `setSetting`
+- And 10+ more...
+
+See `examples/command_processor.rs` for a complete working example.
 
 ### Function and Call Management
 

@@ -541,28 +541,185 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
 
         // ===== Call Commands - Comparison =====
         "deleteComparisonCallElement" => {
-            // TODO: Complex command - requires finding call ID from feature
-            // The SDK function needs: cfcall_id, ftype_id, felem_id, exec_order
-            // The script only provides: feature, element
-            // Need to find the call record first, then delete from it
-            Err(SzConfigError::NotImplemented(
-                "deleteComparisonCallElement requires call lookup - use SDK directly".to_string(),
-            ))
+            let feature = get_str_param(params, "feature")?;
+            let element = get_str_param(params, "element")?;
+
+            // Lookup IDs
+            let ftype_id = crate::helpers::lookup_feature_id(config, feature)?;
+            let felem_id = crate::helpers::lookup_element_id(config, element)?;
+
+            // Find the cfcall_id for this feature
+            let config_val: Value = serde_json::from_str(config)?;
+            let cfcall_array = config_val["G2_CONFIG"]["CFG_CFCALL"]
+                .as_array()
+                .ok_or_else(|| SzConfigError::MissingSection("CFG_CFCALL".to_string()))?;
+
+            // Find comparison call for this feature
+            let cfcall = cfcall_array
+                .iter()
+                .find(|call| call["FTYPE_ID"].as_i64() == Some(ftype_id))
+                .ok_or_else(|| {
+                    SzConfigError::NotFound(format!(
+                        "No comparison call found for feature {}",
+                        feature
+                    ))
+                })?;
+
+            let cfcall_id = cfcall["CFCALL_ID"].as_i64().ok_or_else(|| {
+                SzConfigError::InvalidStructure("CFCALL_ID missing".to_string())
+            })?;
+
+            // Find exec_order from CFBOM
+            let cfbom_array = config_val["G2_CONFIG"]["CFG_CFBOM"]
+                .as_array()
+                .ok_or_else(|| SzConfigError::MissingSection("CFG_CFBOM".to_string()))?;
+
+            let cfbom = cfbom_array
+                .iter()
+                .find(|bom| {
+                    bom["CFCALL_ID"].as_i64() == Some(cfcall_id)
+                        && bom["FTYPE_ID"].as_i64() == Some(ftype_id)
+                        && bom["FELEM_ID"].as_i64() == Some(felem_id)
+                })
+                .ok_or_else(|| {
+                    SzConfigError::NotFound(format!(
+                        "Element {} not found in comparison call for feature {}",
+                        element, feature
+                    ))
+                })?;
+
+            let exec_order = cfbom["EXEC_ORDER"].as_i64().ok_or_else(|| {
+                SzConfigError::InvalidStructure("EXEC_ORDER missing".to_string())
+            })?;
+
+            // Call underlying SDK function
+            crate::calls::comparison::delete_comparison_call_element(
+                config,
+                cfcall_id,
+                crate::calls::comparison::DeleteComparisonCallElementParams {
+                    ftype_id,
+                    felem_id,
+                    exec_order,
+                },
+            )
         }
 
         "addComparisonCallElement" => {
-            // TODO: Complex command - requires finding call ID from feature
-            Err(SzConfigError::NotImplemented(
-                "addComparisonCallElement requires call lookup - use SDK directly".to_string(),
-            ))
+            let feature = get_str_param(params, "feature")?;
+            let element = get_str_param(params, "element")?;
+
+            // Lookup IDs
+            let ftype_id = crate::helpers::lookup_feature_id(config, feature)?;
+            let felem_id = crate::helpers::lookup_element_id(config, element)?;
+
+            // Find the cfcall_id for this feature
+            let config_val: Value = serde_json::from_str(config)?;
+            let cfcall_array = config_val["G2_CONFIG"]["CFG_CFCALL"]
+                .as_array()
+                .ok_or_else(|| SzConfigError::MissingSection("CFG_CFCALL".to_string()))?;
+
+            let cfcall = cfcall_array
+                .iter()
+                .find(|call| call["FTYPE_ID"].as_i64() == Some(ftype_id))
+                .ok_or_else(|| {
+                    SzConfigError::NotFound(format!(
+                        "No comparison call found for feature {}",
+                        feature
+                    ))
+                })?;
+
+            let cfcall_id = cfcall["CFCALL_ID"].as_i64().ok_or_else(|| {
+                SzConfigError::InvalidStructure("CFCALL_ID missing".to_string())
+            })?;
+
+            // Determine next exec_order
+            let cfbom_array = config_val["G2_CONFIG"]["CFG_CFBOM"]
+                .as_array()
+                .ok_or_else(|| SzConfigError::MissingSection("CFG_CFBOM".to_string()))?;
+
+            let next_order = cfbom_array
+                .iter()
+                .filter(|bom| {
+                    bom["CFCALL_ID"].as_i64() == Some(cfcall_id)
+                        && bom["FTYPE_ID"].as_i64() == Some(ftype_id)
+                })
+                .filter_map(|bom| bom["EXEC_ORDER"].as_i64())
+                .max()
+                .unwrap_or(0)
+                + 1;
+
+            // Call underlying SDK function
+            crate::calls::comparison::add_comparison_call_element(
+                config,
+                crate::calls::comparison::AddComparisonCallElementParams {
+                    cfcall_id,
+                    ftype_id,
+                    felem_id,
+                    exec_order: next_order,
+                },
+            )
+            .map(|(cfg, _)| cfg)
         }
 
         // ===== Call Commands - Distinct =====
         "deleteDistinctCallElement" => {
-            // TODO: Complex command - requires finding call ID from feature
-            Err(SzConfigError::NotImplemented(
-                "deleteDistinctCallElement requires call lookup - use SDK directly".to_string(),
-            ))
+            let feature = get_str_param(params, "feature")?;
+            let element = get_str_param(params, "element")?;
+
+            // Lookup IDs
+            let ftype_id = crate::helpers::lookup_feature_id(config, feature)?;
+            let felem_id = crate::helpers::lookup_element_id(config, element)?;
+
+            // Find the dfcall_id for this feature
+            let config_val: Value = serde_json::from_str(config)?;
+            let dfcall_array = config_val["G2_CONFIG"]["CFG_DFCALL"]
+                .as_array()
+                .ok_or_else(|| SzConfigError::MissingSection("CFG_DFCALL".to_string()))?;
+
+            let dfcall = dfcall_array
+                .iter()
+                .find(|call| call["FTYPE_ID"].as_i64() == Some(ftype_id))
+                .ok_or_else(|| {
+                    SzConfigError::NotFound(format!("No distinct call found for feature {}", feature))
+                })?;
+
+            let dfcall_id = dfcall["DFCALL_ID"].as_i64().ok_or_else(|| {
+                SzConfigError::InvalidStructure("DFCALL_ID missing".to_string())
+            })?;
+
+            // Find exec_order from DFBOM
+            let dfbom_array = config_val["G2_CONFIG"]["CFG_DFBOM"]
+                .as_array()
+                .ok_or_else(|| SzConfigError::MissingSection("CFG_DFBOM".to_string()))?;
+
+            let dfbom = dfbom_array
+                .iter()
+                .find(|bom| {
+                    bom["DFCALL_ID"].as_i64() == Some(dfcall_id)
+                        && bom["FTYPE_ID"].as_i64() == Some(ftype_id)
+                        && bom["FELEM_ID"].as_i64() == Some(felem_id)
+                })
+                .ok_or_else(|| {
+                    SzConfigError::NotFound(format!(
+                        "Element {} not found in distinct call for feature {}",
+                        element, feature
+                    ))
+                })?;
+
+            let exec_order = dfbom["EXEC_ORDER"].as_i64().ok_or_else(|| {
+                SzConfigError::InvalidStructure("EXEC_ORDER missing".to_string())
+            })?;
+
+            // Call underlying SDK function
+            crate::calls::distinct::delete_distinct_call_element(
+                config,
+                crate::calls::distinct::DeleteDistinctCallElementParams {
+                    dfcall_id,
+                    ftype_id,
+                    felem_id,
+                    exec_order,
+                },
+            )
         }
 
         // ===== No-op Commands =====
