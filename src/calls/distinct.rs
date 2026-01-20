@@ -1,6 +1,6 @@
 //! Distinct call management operations
 //!
-//! Functions for managing CFG_DFCALL (distinct calls) and CFG_DBOM
+//! Functions for managing CFG_DFCALL (distinct calls) and CFG_DFBOM
 //! (distinct bill of materials) configuration sections.
 
 use crate::error::{Result, SzConfigError};
@@ -380,7 +380,7 @@ pub fn add_distinct_call_element(
     // Check if element already exists
     if let Some(dbom_array) = config_data
         .get("G2_CONFIG")
-        .and_then(|g| g.get("CFG_DBOM"))
+        .and_then(|g| g.get("CFG_DFBOM"))
         .and_then(|v| v.as_array())
     {
         for item in dbom_array {
@@ -404,11 +404,11 @@ pub fn add_distinct_call_element(
         "EXEC_ORDER": params.exec_order
     });
 
-    // Add to CFG_DBOM
-    if let Some(dbom_array) = config_data["G2_CONFIG"]["CFG_DBOM"].as_array_mut() {
+    // Add to CFG_DFBOM
+    if let Some(dbom_array) = config_data["G2_CONFIG"]["CFG_DFBOM"].as_array_mut() {
         dbom_array.push(new_record.clone());
     } else {
-        return Err(SzConfigError::MissingSection("CFG_DBOM".to_string()));
+        return Err(SzConfigError::MissingSection("CFG_DFBOM".to_string()));
     }
 
     let modified_config =
@@ -433,7 +433,7 @@ pub fn delete_distinct_call_element(
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
     // Validate that the element exists
-    let element_exists = config_data["G2_CONFIG"]["CFG_DBOM"]
+    let element_exists = config_data["G2_CONFIG"]["CFG_DFBOM"]
         .as_array()
         .map(|arr| {
             arr.iter().any(|item| {
@@ -452,7 +452,7 @@ pub fn delete_distinct_call_element(
     }
 
     // Delete the element
-    if let Some(dbom_array) = config_data["G2_CONFIG"]["CFG_DBOM"].as_array_mut() {
+    if let Some(dbom_array) = config_data["G2_CONFIG"]["CFG_DFBOM"].as_array_mut() {
         dbom_array.retain(|item| {
             !(item.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(params.dfcall_id)
                 && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)

@@ -111,7 +111,6 @@ addComparisonCallElement {"feature": "NATIONAL_ID", "element": "ID_TYPE"}
 }
 
 #[test]
-#[ignore] // TODO: Fix bug in calls/distinct.rs - uses CFG_DBOM instead of CFG_DFBOM
 fn test_delete_distinct_call_element_command() {
     // Test deleteDistinctCallElement command from upgrade script
     let script = r#"
