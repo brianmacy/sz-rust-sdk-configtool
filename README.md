@@ -1,5 +1,10 @@
 # sz_configtool_lib
 
+[![CI](https://github.com/brianmacy/sz-rust-sdk-configtool/actions/workflows/ci.yml/badge.svg)](https://github.com/brianmacy/sz-rust-sdk-configtool/actions/workflows/ci.yml)
+[![Security Audit](https://github.com/brianmacy/sz-rust-sdk-configtool/actions/workflows/security.yml/badge.svg)](https://github.com/brianmacy/sz-rust-sdk-configtool/actions/workflows/security.yml)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Rust Version](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
+
 Pure Rust library for manipulating Senzing configuration JSON documents.
 
 ## Overview
