@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+  build-artifacts:
+    name: Build Release Artifacts
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: libsz_configtool_lib.so
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: libsz_configtool_lib.dylib
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: sz_configtool_lib.dll
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build release
+        run: cargo build --lib --release --target ${{ matrix.target }}
+
+      - name: Prepare artifact (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ${{ matrix.artifact_name }}.tar.gz ${{ matrix.artifact_name }}
+
+      - name: Prepare artifact (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          7z a ${{ matrix.artifact_name }}.zip ${{ matrix.artifact_name }}
+
+      - name: Upload artifact (Unix)
+        if: runner.os != 'Windows'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}.tar.gz
+          asset_name: ${{ matrix.artifact_name }}-${{ matrix.target }}.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload artifact (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}.zip
+          asset_name: ${{ matrix.artifact_name }}-${{ matrix.target }}.zip
+          asset_content_type: application/zip
+
+  # Future: Publish to crates.io
+  # publish-crates-io:
+  #   name: Publish to crates.io
+  #   needs: build-artifacts
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - name: Install Rust
+  #       uses: dtolnay/rust-toolchain@stable
+  #     - name: Publish
+  #       run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}

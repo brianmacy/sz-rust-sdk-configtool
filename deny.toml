@@ -1,0 +1,76 @@
+# cargo-deny configuration for PRODUCTION builds
+# https://embarkstudios.github.io/cargo-deny/
+#
+# This configuration is designed for strict production security:
+# - Denies all security vulnerabilities
+# - Denies unmaintained dependencies
+# - Denies yanked crates
+# - Strict license allow-list (no copyleft)
+# - Only allows crates.io registry
+
+[licenses]
+# Strict allow-list for production code
+# In cargo-deny v2, only use 'allow' - unlisted licenses will be rejected
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Zlib",
+    "Unicode-3.0",
+    "BSL-1.0",           # Boost Software License (OSI, FSF Free/Libre)
+]
+
+# High confidence threshold for license detection
+confidence-threshold = 0.9
+
+# No exceptions - all licenses must be explicitly allowed
+exceptions = []
+
+# Note: In v2, any license not in 'allow' will cause an error
+# This effectively denies GPL, LGPL, AGPL, and all other licenses
+
+[bans]
+# Warn about multiple versions of the same crate
+multiple-versions = "warn"
+
+# Deny wildcard dependencies in Cargo.toml (use specific versions)
+wildcards = "deny"
+
+# Ban specific crates if needed
+deny = []
+
+# Skip checking certain crates for version conflicts
+skip = []
+skip-tree = []
+
+[advisories]
+# Fail build on any security issues
+version = 2
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+
+# For production: NO ignored vulnerabilities
+# For development/testing: You may add specific RUSTSECs here temporarily
+# NOTE: cargo-deny v2 doesn't support vulnerability/unmaintained/yanked severity settings
+# All advisories are checked by default. Use ignore[] to exclude specific ones.
+# Example: "RUSTSEC-2024-0370"  # With justification and plan to remove
+ignore = []
+
+# To enforce strict checking:
+# - Run: cargo deny check advisories
+# - This will fail on ANY advisory unless explicitly ignored above
+# - Review advisories regularly and update dependencies to remove ignored entries
+
+[sources]
+# Production: Only allow crates.io
+unknown-registry = "deny"
+
+# Production: No git dependencies (unpinned versions are risky)
+unknown-git = "deny"
+
+# Only allow the official crates.io registry
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+# Allow specific git sources (sz-rust-sdk pinned to tag)
+allow-git = ["https://github.com/brianmacy/sz-rust-sdk"]
