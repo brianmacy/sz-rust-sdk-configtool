@@ -658,7 +658,10 @@ pub fn list_features(config_json: &str) -> Result<Vec<Value>> {
 /// * `derived` - Optional: Derived flag
 /// * `history` - Optional: Persist history flag
 /// * `matchkey` - Optional: Show in match key flag
+/// * `behavior` - Optional: Behavior code (e.g., "FM", "F1E", "NAME")
+/// * `class` - Optional: Feature class name (e.g., "IDENTITY", "OTHER")
 /// * `version` - Optional: Feature version
+/// * `rtype_id` - Optional: Relationship type ID
 ///
 /// # Returns
 /// Modified configuration JSON string
@@ -671,7 +674,10 @@ pub fn set_feature(
     derived: Option<&str>,
     history: Option<&str>,
     matchkey: Option<&str>,
+    behavior: Option<&str>,
+    class: Option<&str>,
     version: Option<i64>,
+    rtype_id: Option<i64>,
 ) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -710,6 +716,41 @@ pub fn set_feature(
     }
     if let Some(val) = version {
         ftype["VERSION"] = json!(val);
+    }
+    if let Some(val) = rtype_id {
+        ftype["RTYPE_ID"] = json!(val);
+    }
+
+    // Parse and set behavior (FTYPE_FREQ, FTYPE_EXCL, FTYPE_STAB)
+    if let Some(behavior_code) = behavior {
+        let (frequency, exclusivity, stability) = parse_behavior_code(behavior_code)?;
+        ftype["FTYPE_FREQ"] = json!(frequency);
+        ftype["FTYPE_EXCL"] = json!(exclusivity);
+        ftype["FTYPE_STAB"] = json!(stability);
+    }
+
+    // Lookup and set class (FCLASS_ID) - must do before modifying ftype
+    if let Some(class_name) = class {
+        // Parse config again to avoid borrow conflict
+        let config_for_lookup: Value = serde_json::from_str(config_json)
+            .map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
+        let fclass_array = config_for_lookup["G2_CONFIG"]["CFG_FCLASS"]
+            .as_array()
+            .ok_or_else(|| SzConfigError::MissingSection("CFG_FCLASS".to_string()))?;
+
+        let fclass_id = fclass_array
+            .iter()
+            .find(|c| {
+                c["FCLASS_CODE"]
+                    .as_str()
+                    .map(|s| s.eq_ignore_ascii_case(class_name))
+                    .unwrap_or(false)
+            })
+            .and_then(|c| c["FCLASS_ID"].as_i64())
+            .ok_or_else(|| SzConfigError::NotFound(format!("Feature class: {}", class_name)))?;
+
+        ftype["FCLASS_ID"] = json!(fclass_id);
     }
 
     serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))

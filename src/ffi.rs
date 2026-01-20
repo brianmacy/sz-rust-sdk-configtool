@@ -5507,10 +5507,17 @@ pub extern "C" fn SzConfigTool_setFeature(
         .get("matchkey")
         .or_else(|| updates_config.get("matchKey"))
         .and_then(|v| v.as_str());
+    let behavior = updates_config.get("behavior").and_then(|v| v.as_str());
+    let class = updates_config.get("class").and_then(|v| v.as_str());
     let version = updates_config.get("version").and_then(|v| v.as_i64());
+    let rtype_id = updates_config
+        .get("rtypeId")
+        .or_else(|| updates_config.get("RTYPE_ID"))
+        .and_then(|v| v.as_i64());
 
     handle_result!(crate::features::set_feature(
-        config, code_or_id, candidates, anonymize, derived, history, matchkey, version
+        config, code_or_id, candidates, anonymize, derived, history, matchkey,
+        behavior, class, version, rtype_id
     ))
 }
 
