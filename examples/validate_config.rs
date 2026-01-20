@@ -10,10 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Senzing Config Validator ===\n");
 
     let args: Vec<String> = env::args().collect();
-    let config_path = args
-        .get(1)
-        .map(|s| s.as_str())
-        .unwrap_or("g2config.json");
+    let config_path = args.get(1).map(|s| s.as_str()).unwrap_or("g2config.json");
 
     println!("Loading: {}", config_path);
     let config_json = match std::fs::read_to_string(config_path) {
@@ -94,7 +91,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 warnings.push("Missing COMPATIBILITY_VERSION".to_string());
             } else {
                 let compat = &base_version["COMPATIBILITY_VERSION"];
-                if let Some(config_version) = compat.get("CONFIG_VERSION").and_then(|v| v.as_str()) {
+                if let Some(config_version) = compat.get("CONFIG_VERSION").and_then(|v| v.as_str())
+                {
                     println!("  Config version: {}", config_version);
                 } else {
                     warnings.push("Missing CONFIG_VERSION".to_string());
