@@ -22,8 +22,10 @@ fn test_data_source_workflow() {
     // Add data source using the proper API function
     let config = datasources::add_data_source(
         &config,
-        "TEST_SOURCE",
-        datasources::AddDataSourceParams::default(),
+        datasources::AddDataSourceParams {
+            code: "TEST_SOURCE",
+            ..Default::default()
+        },
     )
     .expect("Failed to add data source");
 
@@ -52,14 +54,14 @@ fn test_element_workflow() {
     let config = TEST_CONFIG.to_string();
 
     // Add element
-    let elem_config = json!({
-        "FELEM_CODE": "TEST_ELEM",
-        "FELEM_DESC": "Test Element",
-        "DATA_TYPE": "string"
-    });
+    let add_params = elements::AddElementParams {
+        code: "TEST_ELEM",
+        description: Some("Test Element"),
+        data_type: Some("string"),
+        tokenized: None,
+    };
 
-    let config =
-        elements::add_element(&config, "TEST_ELEM", &elem_config).expect("Failed to add element");
+    let config = elements::add_element(&config, add_params).expect("Failed to add element");
 
     // List elements
     let elems = elements::list_elements(&config).expect("Failed to list elements");

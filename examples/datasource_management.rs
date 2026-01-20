@@ -2,7 +2,6 @@
 //!
 //! Demonstrates data source operations using the library's actual API.
 
-use serde_json::json;
 use sz_configtool_lib::datasources;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -21,15 +20,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     config = datasources::add_data_source(
         &config,
-        "CUSTOMERS",
-        datasources::AddDataSourceParams::default(),
+        datasources::AddDataSourceParams {
+            code: "CUSTOMERS",
+            ..Default::default()
+        },
     )?;
     println!("  ✓ Added CUSTOMERS");
 
     config = datasources::add_data_source(
         &config,
-        "VENDORS",
-        datasources::AddDataSourceParams::default(),
+        datasources::AddDataSourceParams {
+            code: "VENDORS",
+            ..Default::default()
+        },
     )?;
     println!("  ✓ Added VENDORS");
 
@@ -49,15 +52,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Description: {}", vendor_source["DSRC_DESC"]);
 
     // UPDATE: Modify data source
-    println!("\n4. UPDATE - Updating CUSTOMERS description:");
-    let updates = json!({
-        "DSRC_DESC": "Updated: Customer records from Salesforce CRM"
-    });
-
-    config = datasources::set_data_source(&config, "CUSTOMERS", &updates)?;
+    println!("\n4. UPDATE - Updating CUSTOMERS reliability:");
+    config = datasources::set_data_source(
+        &config,
+        datasources::SetDataSourceParams {
+            code: "CUSTOMERS",
+            reliability: Some(10),
+            ..Default::default()
+        },
+    )?;
 
     let updated_source = datasources::get_data_source(&config, "CUSTOMERS")?;
-    println!("  New description: {}", updated_source["DSRC_DESC"]);
+    println!("  New reliability: {}", updated_source["DSRC_RELY"]);
 
     // DELETE: Remove a data source
     println!("\n5. DELETE - Removing VENDORS:");

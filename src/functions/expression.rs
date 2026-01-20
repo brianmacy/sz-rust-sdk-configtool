@@ -9,14 +9,47 @@ use crate::helpers::{
 };
 use serde_json::{Value, json};
 
+// ============================================================================
+// Parameter Structs
+// ============================================================================
+
+/// Parameters for adding an expression function
+#[derive(Debug, Clone, Default)]
+pub struct AddExpressionFunctionParams<'a> {
+    pub connect_str: &'a str,
+    pub description: Option<&'a str>,
+    pub language: Option<&'a str>,
+}
+
+impl<'a> TryFrom<&'a Value> for AddExpressionFunctionParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self, SzConfigError> {
+        Ok(Self {
+            connect_str: json
+                .get("connectStr")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| SzConfigError::MissingField("connectStr".to_string()))?,
+            description: json.get("description").and_then(|v| v.as_str()),
+            language: json.get("language").and_then(|v| v.as_str()),
+        })
+    }
+}
+
+/// Parameters for setting an expression function
+#[derive(Debug, Clone, Default)]
+pub struct SetExpressionFunctionParams<'a> {
+    pub connect_str: Option<&'a str>,
+    pub description: Option<&'a str>,
+    pub language: Option<&'a str>,
+}
+
 /// Add a new expression function
 ///
 /// # Arguments
 /// * `config_json` - The configuration JSON string
 /// * `efunc_code` - Function code (will be uppercased)
-/// * `connect_str` - Connection string
-/// * `efunc_desc` - Optional description
-/// * `language` - Optional language code
+/// * `params` - Function parameters (connect_str required, others optional)
 ///
 /// # Returns
 /// Result with modified JSON string and the new function record
@@ -26,9 +59,7 @@ use serde_json::{Value, json};
 pub fn add_expression_function(
     config_json: &str,
     efunc_code: &str,
-    connect_str: &str,
-    efunc_desc: Option<&str>,
-    language: Option<&str>,
+    params: AddExpressionFunctionParams,
 ) -> Result<(String, Value), SzConfigError> {
     let efunc_code = efunc_code.to_uppercase();
 
@@ -49,15 +80,15 @@ pub fn add_expression_function(
     let mut new_record = json!({
         "EFUNC_ID": efunc_id,
         "EFUNC_CODE": efunc_code,
-        "CONNECT_STR": connect_str,
+        "CONNECT_STR": params.connect_str,
     });
 
     // Add optional fields
     if let Some(obj) = new_record.as_object_mut() {
-        if let Some(desc) = efunc_desc {
+        if let Some(desc) = params.description {
             obj.insert("EFUNC_DESC".to_string(), json!(desc));
         }
-        if let Some(lang) = language {
+        if let Some(lang) = params.language {
             obj.insert("LANGUAGE".to_string(), json!(lang));
         }
     }
@@ -161,9 +192,7 @@ pub fn list_expression_functions(config_json: &str) -> Result<Vec<Value>, SzConf
 /// # Arguments
 /// * `config_json` - The configuration JSON string
 /// * `efunc_code` - Function code to update
-/// * `connect_str` - Optional new connection string
-/// * `efunc_desc` - Optional new description
-/// * `language` - Optional new language code
+/// * `params` - Function parameters to update (all optional)
 ///
 /// # Returns
 /// Result with modified JSON string and the updated function record
@@ -173,9 +202,7 @@ pub fn list_expression_functions(config_json: &str) -> Result<Vec<Value>, SzConf
 pub fn set_expression_function(
     config_json: &str,
     efunc_code: &str,
-    connect_str: Option<&str>,
-    efunc_desc: Option<&str>,
-    language: Option<&str>,
+    params: SetExpressionFunctionParams,
 ) -> Result<(String, Value), SzConfigError> {
     let efunc_code = efunc_code.to_uppercase();
 
@@ -187,13 +214,13 @@ pub fn set_expression_function(
 
     // Update fields if provided
     if let Some(obj) = function.as_object_mut() {
-        if let Some(conn) = connect_str {
+        if let Some(conn) = params.connect_str {
             obj.insert("CONNECT_STR".to_string(), json!(conn));
         }
-        if let Some(desc) = efunc_desc {
+        if let Some(desc) = params.description {
             obj.insert("EFUNC_DESC".to_string(), json!(desc));
         }
-        if let Some(lang) = language {
+        if let Some(lang) = params.language {
             obj.insert("LANGUAGE".to_string(), json!(lang));
         }
     }
@@ -231,9 +258,11 @@ mod tests {
         let result = add_expression_function(
             &config,
             "custom_expr",
-            "g2CustomExpr",
-            Some("Custom expression"),
-            Some("en"),
+            AddExpressionFunctionParams {
+                connect_str: "g2CustomExpr",
+                description: Some("Custom expression"),
+                language: Some("en"),
+            },
         );
         assert!(result.is_ok());
         let (modified, record) = result.unwrap();

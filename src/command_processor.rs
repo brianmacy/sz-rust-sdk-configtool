@@ -228,10 +228,8 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
             let internal = get_opt_str_param(params, "internal");
             let default_value = get_opt_str_param(params, "default");
 
-            crate::attributes::add_attribute(
-                config,
-                attr,
-                crate::attributes::AddAttributeParams {
+            crate::attributes::add_attribute(config, crate::attributes::AddAttributeParams {
+                    attribute: attr,
                     feature,
                     element,
                     class,
@@ -249,27 +247,23 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
         }
 
         "setAttribute" => {
-            let attr = get_str_param(params, "attribute")?;
-            // Remove "attribute" key, pass rest as updates
-            let mut updates = params.clone();
-            if let Some(obj) = updates.as_object_mut() {
-                obj.remove("attribute");
-            }
-            crate::attributes::set_attribute(config, attr, &updates)
+            let set_params = crate::attributes::SetAttributeParams::try_from(params)?;
+            crate::attributes::set_attribute(config, set_params)
         }
 
         // ===== Element Commands =====
         "addElement" => {
             let element = get_str_param(params, "element")?;
-            let datatype = get_opt_str_param(params, "datatype").unwrap_or("string");
+            let datatype = get_opt_str_param(params, "datatype");
 
-            let elem_config = serde_json::json!({
-                "FELEM_CODE": element,
-                "FELEM_DESC": element,
-                "DATA_TYPE": datatype
-            });
+            let add_params = crate::elements::AddElementParams {
+                code: element,
+                description: None, // Will default to code
+                data_type: datatype,
+                tokenized: None,
+            };
 
-            crate::elements::add_element(config, element, &elem_config)
+            crate::elements::add_element(config, add_params)
         }
 
         "setFeatureElement" => {
@@ -305,10 +299,8 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 .get("elementList")
                 .ok_or_else(|| SzConfigError::MissingField("elementList".to_string()))?;
 
-            crate::features::add_feature(
-                config,
-                feature,
-                crate::features::AddFeatureParams {
+            crate::features::add_feature(config, crate::features::AddFeatureParams {
+                    feature,
                     element_list,
                     class: get_opt_str_param(params, "class"),
                     behavior: get_opt_str_param(params, "behavior"),
@@ -329,10 +321,8 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
         "setFeature" => {
             let feature = get_str_param(params, "feature")?;
 
-            crate::features::set_feature(
-                config,
-                feature,
-                crate::features::SetFeatureParams {
+            crate::features::set_feature(config, crate::features::SetFeatureParams {
+                    feature,
                     candidates: get_opt_str_param(params, "candidates"),
                     anonymize: get_opt_str_param(params, "anonymize"),
                     derived: get_opt_str_param(params, "derived"),
@@ -352,7 +342,10 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
             let usage_type = get_str_param(params, "usageType")?;
             let behavior = get_str_param(params, "behavior")?;
 
-            crate::behavior_overrides::add_behavior_override(config, feature, usage_type, behavior)
+            crate::behavior_overrides::add_behavior_override(
+                config,
+                crate::behavior_overrides::AddBehaviorOverrideParams::new(feature, usage_type, behavior)
+            )
         }
 
         // ===== Fragment Commands =====
@@ -387,8 +380,8 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
         "addRule" => crate::rules::add_rule(config, params).map(|(cfg, _)| cfg),
 
         "setRule" => {
-            let rule_code = get_str_param(params, "rule")?;
-            crate::rules::set_rule(config, rule_code, params)
+            let set_params = crate::rules::SetRuleParams::try_from(params)?;
+            crate::rules::set_rule(config, set_params)
         }
 
         // ===== System Parameter Commands =====
@@ -412,7 +405,13 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
             let language = get_opt_str_param(params, "language");
 
             crate::functions::standardize::add_standardize_function(
-                config, func, connect, desc, language,
+                config,
+                func,
+                crate::functions::standardize::AddStandardizeFunctionParams {
+                    connect_str: connect,
+                    description: desc,
+                    language,
+                },
             )
             .map(|(cfg, _)| cfg)
         }
@@ -431,7 +430,14 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
             let desc = get_opt_str_param(params, "description");
 
             crate::functions::comparison::add_comparison_function(
-                config, func, connect, desc, None, anon,
+                config,
+                func,
+                crate::functions::comparison::AddComparisonFunctionParams {
+                    connect_str: connect,
+                    description: desc,
+                    language: None,
+                    anon_support: anon,
+                },
             )
             .map(|(cfg, _)| cfg)
         }
@@ -444,7 +450,13 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
             let language = get_opt_str_param(params, "language");
 
             crate::functions::expression::add_expression_function(
-                config, func, connect, desc, language,
+                config,
+                func,
+                crate::functions::expression::AddExpressionFunctionParams {
+                    connect_str: connect,
+                    description: desc,
+                    language,
+                },
             )
             .map(|(cfg, _)| cfg)
         }
@@ -486,27 +498,12 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
 
         "addGenericThreshold" => {
             let plan = get_str_param(params, "plan")?;
-            let behavior = get_str_param(params, "behavior")?;
-            let candidate_cap = params
-                .get("candidateCap")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(0);
-            let scoring_cap = params
-                .get("scoringCap")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(0);
-            let send_to_redo = get_opt_str_param(params, "sendToRedo").unwrap_or("No");
+            let threshold_params = crate::thresholds::AddGenericThresholdParams::try_from(params)?;
 
             crate::thresholds::add_generic_threshold(
                 config,
                 plan,
-                behavior,
-                scoring_cap,
-                candidate_cap,
-                send_to_redo,
-                crate::thresholds::AddGenericThresholdParams {
-                    feature: get_opt_str_param(params, "feature"),
-                },
+                threshold_params,
             )
         }
 
@@ -524,15 +521,19 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
             // Parse elementList: [{"element": "NAME", "required": "Yes", "feature": "NAME"}, ...]
             let element_list = parse_element_list(element_list_json)?;
 
+            let call_params = crate::calls::expression::AddExpressionCallParams {
+                efunc_code: function,
+                element_list,
+                ftype_code: Some(feature),
+                felem_code: None,
+                exec_order,
+                expression_feature: expr_feature,
+                is_virtual: virtual_flag,
+            };
+
             let (new_config, _) = crate::calls::expression::add_expression_call(
                 config,
-                Some(feature),
-                None,
-                exec_order,
-                function,
-                element_list,
-                expr_feature,
-                virtual_flag,
+                call_params,
             )?;
 
             Ok(new_config)

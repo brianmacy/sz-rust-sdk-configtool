@@ -9,14 +9,47 @@ use crate::helpers::{
 };
 use serde_json::{Value, json};
 
+// ============================================================================
+// Parameter Structs
+// ============================================================================
+
+/// Parameters for adding a distinct function
+#[derive(Debug, Clone, Default)]
+pub struct AddDistinctFunctionParams<'a> {
+    pub connect_str: &'a str,
+    pub description: Option<&'a str>,
+    pub language: Option<&'a str>,
+}
+
+impl<'a> TryFrom<&'a Value> for AddDistinctFunctionParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self, SzConfigError> {
+        Ok(Self {
+            connect_str: json
+                .get("connectStr")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| SzConfigError::MissingField("connectStr".to_string()))?,
+            description: json.get("description").and_then(|v| v.as_str()),
+            language: json.get("language").and_then(|v| v.as_str()),
+        })
+    }
+}
+
+/// Parameters for setting a distinct function
+#[derive(Debug, Clone, Default)]
+pub struct SetDistinctFunctionParams<'a> {
+    pub connect_str: Option<&'a str>,
+    pub description: Option<&'a str>,
+    pub language: Option<&'a str>,
+}
+
 /// Add a new distinct function
 ///
 /// # Arguments
 /// * `config_json` - The configuration JSON string
 /// * `dfunc_code` - Function code (will be uppercased)
-/// * `connect_str` - Connection string
-/// * `dfunc_desc` - Optional description
-/// * `language` - Optional language code
+/// * `params` - Function parameters (connect_str required, others optional)
 ///
 /// # Returns
 /// Result with modified JSON string and the new function record
@@ -26,9 +59,7 @@ use serde_json::{Value, json};
 pub fn add_distinct_function(
     config_json: &str,
     dfunc_code: &str,
-    connect_str: &str,
-    dfunc_desc: Option<&str>,
-    language: Option<&str>,
+    params: AddDistinctFunctionParams,
 ) -> Result<(String, Value), SzConfigError> {
     let dfunc_code = dfunc_code.to_uppercase();
 
@@ -49,15 +80,15 @@ pub fn add_distinct_function(
     let mut new_record = json!({
         "DFUNC_ID": dfunc_id,
         "DFUNC_CODE": dfunc_code,
-        "CONNECT_STR": connect_str,
+        "CONNECT_STR": params.connect_str,
     });
 
     // Add optional fields
     if let Some(obj) = new_record.as_object_mut() {
-        if let Some(desc) = dfunc_desc {
+        if let Some(desc) = params.description {
             obj.insert("DFUNC_DESC".to_string(), json!(desc));
         }
-        if let Some(lang) = language {
+        if let Some(lang) = params.language {
             obj.insert("LANGUAGE".to_string(), json!(lang));
         }
     }
@@ -158,9 +189,7 @@ pub fn list_distinct_functions(config_json: &str) -> Result<Vec<Value>, SzConfig
 /// # Arguments
 /// * `config_json` - The configuration JSON string
 /// * `dfunc_code` - Function code to update
-/// * `connect_str` - Optional new connection string
-/// * `dfunc_desc` - Optional new description
-/// * `language` - Optional new language code
+/// * `params` - Function parameters to update (all optional)
 ///
 /// # Returns
 /// Result with modified JSON string and the updated function record
@@ -170,9 +199,7 @@ pub fn list_distinct_functions(config_json: &str) -> Result<Vec<Value>, SzConfig
 pub fn set_distinct_function(
     config_json: &str,
     dfunc_code: &str,
-    connect_str: Option<&str>,
-    dfunc_desc: Option<&str>,
-    language: Option<&str>,
+    params: SetDistinctFunctionParams,
 ) -> Result<(String, Value), SzConfigError> {
     let dfunc_code = dfunc_code.to_uppercase();
 
@@ -184,13 +211,13 @@ pub fn set_distinct_function(
 
     // Update fields if provided
     if let Some(obj) = function.as_object_mut() {
-        if let Some(conn) = connect_str {
+        if let Some(conn) = params.connect_str {
             obj.insert("CONNECT_STR".to_string(), json!(conn));
         }
-        if let Some(desc) = dfunc_desc {
+        if let Some(desc) = params.description {
             obj.insert("DFUNC_DESC".to_string(), json!(desc));
         }
-        if let Some(lang) = language {
+        if let Some(lang) = params.language {
             obj.insert("LANGUAGE".to_string(), json!(lang));
         }
     }
@@ -228,9 +255,11 @@ mod tests {
         let result = add_distinct_function(
             &config,
             "custom_dist",
-            "g2CustomDist",
-            Some("Custom distinct"),
-            Some("en"),
+            AddDistinctFunctionParams {
+                connect_str: "g2CustomDist",
+                description: Some("Custom distinct"),
+                language: Some("en"),
+            },
         );
         assert!(result.is_ok());
         let (modified, record) = result.unwrap();

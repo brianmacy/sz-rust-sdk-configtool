@@ -7,6 +7,41 @@ use crate::error::{Result, SzConfigError};
 use crate::helpers;
 use serde_json::{Value, json};
 
+// ============================================================================
+// Parameter Structs
+// ============================================================================
+
+/// Parameters for setting (updating) a rule
+#[derive(Debug, Clone)]
+pub struct SetRuleParams<'a> {
+    pub code: &'a str,
+    pub resolve: Option<&'a str>,
+    pub relate: Option<&'a str>,
+    pub rtype_id: Option<i64>,
+}
+
+impl<'a> TryFrom<&'a Value> for SetRuleParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self> {
+        let code = json
+            .get("code")
+            .and_then(|v| v.as_str())
+            .or_else(|| json.get("rule").and_then(|v| v.as_str()))
+            .ok_or_else(|| SzConfigError::MissingField("code or rule".to_string()))?;
+
+        Ok(Self {
+            code,
+            resolve: json.get("resolve").and_then(|v| v.as_str())
+                .or_else(|| json.get("RESOLVE").and_then(|v| v.as_str())),
+            relate: json.get("relate").and_then(|v| v.as_str())
+                .or_else(|| json.get("RELATE").and_then(|v| v.as_str())),
+            rtype_id: json.get("rtypeId").and_then(|v| v.as_i64())
+                .or_else(|| json.get("RTYPE_ID").and_then(|v| v.as_i64())),
+        })
+    }
+}
+
 /// Add a new rule to the configuration
 ///
 /// # Arguments
@@ -215,19 +250,34 @@ pub fn list_rules(config_json: &str) -> Result<Vec<Value>> {
 ///
 /// ```
 /// use sz_configtool_lib::rules;
-/// use serde_json::json;
 ///
 /// let config = r#"{"G2_CONFIG": {"CFG_ERRULE": [{"ERRULE_ID": 1, "ERRULE_CODE": "TEST"}]}}"#;
-/// let new_config = json!({"RESOLVE": "Yes", "RELATE": "No"});
-/// let modified = rules::set_rule(config, "TEST", &new_config).unwrap();
+/// let params = rules::SetRuleParams {
+///     code: "TEST",
+///     resolve: Some("Yes"),
+///     relate: Some("No"),
+///     rtype_id: None,
+/// };
+/// let modified = rules::set_rule(config, params).unwrap();
 /// ```
-pub fn set_rule(config_json: &str, rule_code: &str, rule_config: &Value) -> Result<String> {
-    let code = rule_code.to_uppercase();
+pub fn set_rule(config_json: &str, params: SetRuleParams) -> Result<String> {
+    let code = params.code.to_uppercase();
 
-    // Ensure the code field matches
-    let mut updated_item = rule_config.clone();
+    // Build update object from params
+    let mut updated_item = json!({
+        "ERRULE_CODE": code.clone()
+    });
+
     if let Some(obj) = updated_item.as_object_mut() {
-        obj.insert("ERRULE_CODE".to_string(), json!(code.clone()));
+        if let Some(resolve) = params.resolve {
+            obj.insert("RESOLVE".to_string(), json!(resolve));
+        }
+        if let Some(relate) = params.relate {
+            obj.insert("RELATE".to_string(), json!(relate));
+        }
+        if let Some(rtype_id) = params.rtype_id {
+            obj.insert("RTYPE_ID".to_string(), json!(rtype_id));
+        }
     }
 
     // Update the item in the config

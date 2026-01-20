@@ -180,8 +180,10 @@ pub unsafe extern "C" fn SzConfigTool_addDataSource(
     // Use default values for optional parameters (matches Python defaults)
     let result = crate::datasources::add_data_source(
         config,
-        ds_code,
-        crate::datasources::AddDataSourceParams::default(),
+        crate::datasources::AddDataSourceParams {
+            code: ds_code,
+            ..Default::default()
+        },
     );
     handle_result!(result)
 }
@@ -395,10 +397,8 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute(
         }
     };
 
-    let result = crate::attributes::add_attribute(
-        config,
-        attr_code,
-        crate::attributes::AddAttributeParams {
+    let result = crate::attributes::add_attribute(config, crate::attributes::AddAttributeParams {
+                    attribute: attr_code,
             feature: feat_code,
             element: elem_code,
             class,
@@ -595,8 +595,15 @@ pub unsafe extern "C" fn SzConfigTool_setAttribute(
         }
     };
 
-    let result = crate::attributes::set_attribute(config, attr_code, &updates);
-    handle_result!(result)
+    // Build params with attribute from parameter and optional updates from JSON
+    let params = crate::attributes::SetAttributeParams {
+        attribute: attr_code,
+        internal: updates.get("internal").and_then(|v| v.as_str()),
+        required: updates.get("required").and_then(|v| v.as_str()),
+        default_value: updates.get("default").and_then(|v| v.as_str()),
+    };
+
+    handle_result!(crate::attributes::set_attribute(config, params))
 }
 
 // ============================================================================
@@ -2332,7 +2339,18 @@ pub extern "C" fn SzConfigTool_setRule(
         }
     };
 
-    handle_result!(crate::rules::set_rule(config, code, &rule_value))
+    // Build params from code and JSON config
+    let params = crate::rules::SetRuleParams {
+        code,
+        resolve: rule_value.get("resolve").and_then(|v| v.as_str())
+            .or_else(|| rule_value.get("RESOLVE").and_then(|v| v.as_str())),
+        relate: rule_value.get("relate").and_then(|v| v.as_str())
+            .or_else(|| rule_value.get("RELATE").and_then(|v| v.as_str())),
+        rtype_id: rule_value.get("rtypeId").and_then(|v| v.as_i64())
+            .or_else(|| rule_value.get("RTYPE_ID").and_then(|v| v.as_i64())),
+    };
+
+    handle_result!(crate::rules::set_rule(config, params))
 }
 
 /* ============================================================================
@@ -2445,7 +2463,13 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
     };
 
     match crate::functions::standardize::add_standardize_function(
-        config, code, conn, desc_opt, lang_opt,
+        config,
+        code,
+        crate::functions::standardize::AddStandardizeFunctionParams {
+            connect_str: conn,
+            description: desc_opt,
+            language: lang_opt,
+        },
     ) {
         Ok((modified_config, _record)) => match CString::new(modified_config) {
             Ok(c_str) => {
@@ -2783,7 +2807,13 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
     };
 
     match crate::functions::standardize::set_standardize_function(
-        config, code, conn_opt, desc_opt, lang_opt,
+        config,
+        code,
+        crate::functions::standardize::SetStandardizeFunctionParams {
+            connect_str: conn_opt,
+            description: desc_opt,
+            language: lang_opt,
+        },
     ) {
         Ok((modified_config, _record)) => match CString::new(modified_config) {
             Ok(c_str) => {
@@ -2921,7 +2951,13 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
     };
 
     match crate::functions::expression::add_expression_function(
-        config, code, conn, desc_opt, lang_opt,
+        config,
+        code,
+        crate::functions::expression::AddExpressionFunctionParams {
+            connect_str: conn,
+            description: desc_opt,
+            language: lang_opt,
+        },
     ) {
         Ok((modified_config, _)) => match CString::new(modified_config) {
             Ok(c_str) => {
@@ -3259,7 +3295,13 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
     };
 
     match crate::functions::expression::set_expression_function(
-        config, code, conn_opt, desc_opt, lang_opt,
+        config,
+        code,
+        crate::functions::expression::SetExpressionFunctionParams {
+            connect_str: conn_opt,
+            description: desc_opt,
+            language: lang_opt,
+        },
     ) {
         Ok((modified_config, _)) => match CString::new(modified_config) {
             Ok(c_str) => {
@@ -3416,7 +3458,14 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
     };
 
     match crate::functions::comparison::add_comparison_function(
-        config, code, conn, desc_opt, lang_opt, anon_opt,
+        config,
+        code,
+        crate::functions::comparison::AddComparisonFunctionParams {
+            connect_str: conn,
+            description: desc_opt,
+            language: lang_opt,
+            anon_support: anon_opt,
+        },
     ) {
         Ok((modified_config, _)) => match CString::new(modified_config) {
             Ok(c_str) => {
@@ -3773,7 +3822,14 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
     };
 
     match crate::functions::comparison::set_comparison_function(
-        config, code, conn_opt, desc_opt, lang_opt, anon_opt,
+        config,
+        code,
+        crate::functions::comparison::SetComparisonFunctionParams {
+            connect_str: conn_opt,
+            description: desc_opt,
+            language: lang_opt,
+            anon_support: anon_opt,
+        },
     ) {
         Ok((modified_config, _)) => match CString::new(modified_config) {
             Ok(c_str) => {
@@ -3896,9 +3952,14 @@ pub extern "C" fn SzConfigTool_addStandardizeCall(
         }
     };
 
-    match crate::calls::standardize::add_standardize_call(
-        config, ftype_opt, felem_opt, exec_opt, sfunc,
-    ) {
+    let params = crate::calls::standardize::AddStandardizeCallParams {
+        ftype_code: ftype_opt,
+        felem_code: felem_opt,
+        exec_order: exec_opt,
+        sfunc_code: sfunc,
+    };
+
+    match crate::calls::standardize::add_standardize_call(config, params) {
         Ok((modified_config, _)) => match CString::new(modified_config) {
             Ok(c_str) => {
                 clear_error();
@@ -4127,11 +4188,12 @@ pub extern "C" fn SzConfigTool_setStandardizeCall(
         }
     };
 
-    handle_result!(crate::calls::standardize::set_standardize_call(
-        config,
+    let params = crate::calls::standardize::SetStandardizeCallParams {
         sfcall_id,
-        updates_value
-    ))
+        exec_order: updates_value.get("execOrder").and_then(|v| v.as_i64()),
+    };
+
+    handle_result!(crate::calls::standardize::set_standardize_call(config, params))
 }
 
 /* ============================================================================
@@ -4513,11 +4575,11 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
     handle_result!(crate::thresholds::add_generic_threshold(
         config,
         plan_str,
-        behavior_str,
-        scoring_cap,
-        candidate_cap,
-        redo_str,
         crate::thresholds::AddGenericThresholdParams {
+            behavior: behavior_str,
+            scoring_cap,
+            candidate_cap,
+            send_to_redo: redo_str,
             feature: feature_opt,
         }
     ))
@@ -5206,11 +5268,15 @@ pub extern "C" fn SzConfigTool_setDataSource(
         }
     };
 
-    handle_result!(crate::datasources::set_data_source(
-        config,
-        ds_code,
-        &updates_value
-    ))
+    // Build params with code from parameter and optional updates from JSON
+    let params = crate::datasources::SetDataSourceParams {
+        code: ds_code,
+        retention_level: updates_value.get("retentionLevel").and_then(|v| v.as_str()),
+        conversational: updates_value.get("conversational").and_then(|v| v.as_str()),
+        reliability: updates_value.get("reliability").and_then(|v| v.as_i64()),
+    };
+
+    handle_result!(crate::datasources::set_data_source(config, params))
 }
 
 /* ============================================================================
@@ -5344,10 +5410,8 @@ pub extern "C" fn SzConfigTool_addFeature(
         .or_else(|| feature_config.get("rtypeId"))
         .and_then(|v| v.as_i64());
 
-    match crate::features::add_feature(
-        config,
-        code,
-        crate::features::AddFeatureParams {
+    match crate::features::add_feature(config, crate::features::AddFeatureParams {
+                    feature: code,
             element_list,
             class,
             behavior,
@@ -5534,10 +5598,8 @@ pub extern "C" fn SzConfigTool_setFeature(
         .or_else(|| updates_config.get("RTYPE_ID"))
         .and_then(|v| v.as_i64());
 
-    handle_result!(crate::features::set_feature(
-        config,
-        code_or_id,
-        crate::features::SetFeatureParams {
+    handle_result!(crate::features::set_feature(config, crate::features::SetFeatureParams {
+                    feature: code_or_id,
             candidates,
             anonymize,
             derived,
@@ -5642,7 +5704,8 @@ pub extern "C" fn SzConfigTool_addBehaviorOverride(
     };
 
     handle_result!(crate::behavior_overrides::add_behavior_override(
-        config, feature, utype, bhvr
+        config,
+        crate::behavior_overrides::AddBehaviorOverrideParams::new(feature, utype, bhvr)
     ))
 }
 
@@ -5829,7 +5892,18 @@ pub extern "C" fn SzConfigTool_addElement(
         }
     };
 
-    handle_result!(crate::elements::add_element(config, code, &element_config))
+    // Build params from code and JSON config
+    let params = crate::elements::AddElementParams {
+        code,
+        description: element_config.get("description").and_then(|v| v.as_str())
+            .or_else(|| element_config.get("FELEM_DESC").and_then(|v| v.as_str())),
+        data_type: element_config.get("dataType").and_then(|v| v.as_str())
+            .or_else(|| element_config.get("DATA_TYPE").and_then(|v| v.as_str())),
+        tokenized: element_config.get("tokenized").and_then(|v| v.as_str())
+            .or_else(|| element_config.get("TOKENIZED").and_then(|v| v.as_str())),
+    };
+
+    handle_result!(crate::elements::add_element(config, params))
 }
 
 /// Delete an element by code
@@ -5959,7 +6033,18 @@ pub extern "C" fn SzConfigTool_setElement(
         }
     };
 
-    handle_result!(crate::elements::set_element(config, code, &updates_config))
+    // Build params from code and JSON updates
+    let params = crate::elements::SetElementParams {
+        code,
+        description: updates_config.get("description").and_then(|v| v.as_str())
+            .or_else(|| updates_config.get("FELEM_DESC").and_then(|v| v.as_str())),
+        data_type: updates_config.get("dataType").and_then(|v| v.as_str())
+            .or_else(|| updates_config.get("DATA_TYPE").and_then(|v| v.as_str())),
+        tokenized: updates_config.get("tokenized").and_then(|v| v.as_str())
+            .or_else(|| updates_config.get("TOKENIZED").and_then(|v| v.as_str())),
+    };
+
+    handle_result!(crate::elements::set_element(config, params))
 }
 
 /* ============================================================================
@@ -6184,15 +6269,19 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
         Some(exec_order)
     };
 
+    let call_params = crate::calls::expression::AddExpressionCallParams {
+        efunc_code: efunc,
+        element_list,
+        ftype_code: ftype_opt,
+        felem_code: felem_opt,
+        exec_order: exec_opt,
+        expression_feature: expr_feat_opt,
+        is_virtual: virtual_str,
+    };
+
     match crate::calls::expression::add_expression_call(
         config,
-        ftype_opt,
-        felem_opt,
-        exec_opt,
-        efunc,
-        element_list,
-        expr_feat_opt,
-        virtual_str,
+        call_params,
     ) {
         Ok((modified_config, _record)) => match CString::new(modified_config) {
             Ok(c_str) => {
@@ -6432,11 +6521,12 @@ pub extern "C" fn SzConfigTool_setExpressionCall(
         }
     };
 
-    handle_result!(crate::calls::expression::set_expression_call(
-        config,
+    let params = crate::calls::expression::SetExpressionCallParams {
         efcall_id,
-        updates_value
-    ))
+        exec_order: updates_value.get("execOrder").and_then(|v| v.as_i64()),
+    };
+
+    handle_result!(crate::calls::expression::set_expression_call(config, params))
 }
 
 // ===== Comparison Call Operations =====
@@ -6799,11 +6889,12 @@ pub extern "C" fn SzConfigTool_setComparisonCall(
         }
     };
 
-    handle_result!(crate::calls::comparison::set_comparison_call(
-        config,
+    let params = crate::calls::comparison::SetComparisonCallParams {
         cfcall_id,
-        updates_value
-    ))
+        exec_order: updates_value.get("execOrder").and_then(|v| v.as_i64()),
+    };
+
+    handle_result!(crate::calls::comparison::set_comparison_call(config, params))
 }
 
 // ============================================================================
@@ -7247,7 +7338,12 @@ pub extern "C" fn SzConfigTool_setDistinctCall(
         }
     };
 
-    match crate::calls::distinct::set_distinct_call(config, dfcall_id, updates_value) {
+    let params = crate::calls::distinct::SetDistinctCallParams {
+        dfcall_id,
+        exec_order: updates_value.get("execOrder").and_then(|v| v.as_i64()),
+    };
+
+    match crate::calls::distinct::set_distinct_call(config, params) {
         Ok(modified_config) => match CString::new(modified_config) {
             Ok(c_str) => {
                 clear_error();
@@ -7787,7 +7883,13 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
     };
 
     match crate::functions::distinct::add_distinct_function(
-        config, dfunc, connect, desc_opt, lang_opt,
+        config,
+        dfunc,
+        crate::functions::distinct::AddDistinctFunctionParams {
+            connect_str: connect,
+            description: desc_opt,
+            language: lang_opt,
+        },
     ) {
         Ok((modified_config, _record)) => match CString::new(modified_config) {
             Ok(c_str) => {
@@ -8134,9 +8236,11 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
     match crate::functions::distinct::set_distinct_function(
         config,
         dfunc,
-        connect_opt,
-        desc_opt,
-        lang_opt,
+        crate::functions::distinct::SetDistinctFunctionParams {
+            connect_str: connect_opt,
+            description: desc_opt,
+            language: lang_opt,
+        },
     ) {
         Ok((modified_config, _record)) => match CString::new(modified_config) {
             Ok(c_str) => {

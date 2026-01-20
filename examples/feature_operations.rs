@@ -4,7 +4,6 @@
 //! Feature creation requires a more complete config with CFG_FCLASS, so this
 //! example focuses on element operations which are simpler.
 
-use serde_json::json;
 use sz_configtool_lib::elements;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -49,13 +48,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Add a new element
     println!("\n1. Adding new element 'EMAIL'...");
-    let email_config = json!({
-        "FELEM_CODE": "EMAIL",
-        "FELEM_DESC": "Email Address",
-        "DATA_TYPE": "string"
-    });
+    let add_params = elements::AddElementParams {
+        code: "EMAIL",
+        description: Some("Email Address"),
+        data_type: Some("string"),
+        tokenized: None,
+    };
 
-    config = elements::add_element(&config, "EMAIL", &email_config)?;
+    config = elements::add_element(&config, add_params)?;
     println!("  ✓ Added element");
 
     // List elements after addition

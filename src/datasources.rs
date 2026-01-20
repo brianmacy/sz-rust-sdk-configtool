@@ -9,6 +9,16 @@ use serde_json::{Value, json};
 /// Parameters for adding a data source
 #[derive(Debug, Clone, Default)]
 pub struct AddDataSourceParams<'a> {
+    pub code: &'a str,
+    pub retention_level: Option<&'a str>,
+    pub conversational: Option<&'a str>,
+    pub reliability: Option<i64>,
+}
+
+/// Parameters for setting (updating) a data source
+#[derive(Debug, Clone, Default)]
+pub struct SetDataSourceParams<'a> {
+    pub code: &'a str,
     pub retention_level: Option<&'a str>,
     pub conversational: Option<&'a str>,
     pub reliability: Option<i64>,
@@ -18,7 +28,31 @@ impl<'a> TryFrom<&'a Value> for AddDataSourceParams<'a> {
     type Error = SzConfigError;
 
     fn try_from(json: &'a Value) -> Result<Self> {
+        let code = json
+            .get("code")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("code".to_string()))?;
+
         Ok(Self {
+            code,
+            retention_level: json.get("retentionLevel").and_then(|v| v.as_str()),
+            conversational: json.get("conversational").and_then(|v| v.as_str()),
+            reliability: json.get("reliability").and_then(|v| v.as_i64()),
+        })
+    }
+}
+
+impl<'a> TryFrom<&'a Value> for SetDataSourceParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self> {
+        let code = json
+            .get("code")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("code".to_string()))?;
+
+        Ok(Self {
+            code,
             retention_level: json.get("retentionLevel").and_then(|v| v.as_str()),
             conversational: json.get("conversational").and_then(|v| v.as_str()),
             reliability: json.get("reliability").and_then(|v| v.as_i64()),
@@ -30,8 +64,7 @@ impl<'a> TryFrom<&'a Value> for AddDataSourceParams<'a> {
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
-/// * `code` - Unique data source code (e.g., "TEST_DS")
-/// * `params` - Data source parameters (all optional)
+/// * `params` - Data source parameters (code required, others optional)
 ///
 /// # Returns
 /// Modified configuration JSON string
@@ -42,7 +75,6 @@ impl<'a> TryFrom<&'a Value> for AddDataSourceParams<'a> {
 /// - `MissingSection` if CFG_DSRC section doesn't exist
 pub fn add_data_source(
     config_json: &str,
-    code: &str,
     params: AddDataSourceParams,
 ) -> Result<String> {
     let mut config: Value =
@@ -55,7 +87,7 @@ pub fn add_data_source(
         .ok_or_else(|| SzConfigError::MissingSection("CFG_DSRC".to_string()))?;
 
     // Check for duplicates
-    let code_upper = code.to_uppercase();
+    let code_upper = params.code.to_uppercase();
     if dsrcs
         .iter()
         .any(|d| d["DSRC_CODE"].as_str() == Some(&code_upper))
@@ -188,8 +220,7 @@ pub fn list_data_sources(config_json: &str) -> Result<Vec<Value>> {
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
-/// * `code` - Data source code to update
-/// * `updates` - JSON Value with fields to update
+/// * `params` - Data source parameters (code required, others optional to update)
 ///
 /// # Returns
 /// Modified configuration JSON string
@@ -198,11 +229,11 @@ pub fn list_data_sources(config_json: &str) -> Result<Vec<Value>> {
 /// - `NotFound` if data source doesn't exist
 /// - `JsonParse` if config_json is invalid
 /// - `MissingSection` if CFG_DSRC section doesn't exist
-pub fn set_data_source(config_json: &str, code: &str, updates: &Value) -> Result<String> {
+pub fn set_data_source(config_json: &str, params: SetDataSourceParams) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    let code_upper = code.to_uppercase();
+    let code_upper = params.code.to_uppercase();
     let dsrcs = config
         .get_mut("G2_CONFIG")
         .and_then(|g| g.get_mut("CFG_DSRC"))
@@ -214,12 +245,16 @@ pub fn set_data_source(config_json: &str, code: &str, updates: &Value) -> Result
         .find(|d| d["DSRC_CODE"].as_str() == Some(&code_upper))
         .ok_or_else(|| SzConfigError::NotFound(format!("Data source not found: {}", code_upper)))?;
 
-    // Merge updates into existing record
-    if let Some(updates_obj) = updates.as_object() {
-        if let Some(dsrc_obj) = dsrc.as_object_mut() {
-            for (key, value) in updates_obj {
-                dsrc_obj.insert(key.clone(), value.clone());
-            }
+    // Update fields if provided
+    if let Some(dsrc_obj) = dsrc.as_object_mut() {
+        if let Some(retention) = params.retention_level {
+            dsrc_obj.insert("RETENTION_LEVEL".to_string(), json!(retention));
+        }
+        if let Some(conversational) = params.conversational {
+            dsrc_obj.insert("CONVERSATIONAL".to_string(), json!(conversational));
+        }
+        if let Some(reliability) = params.reliability {
+            dsrc_obj.insert("DSRC_RELY".to_string(), json!(reliability));
         }
     }
 

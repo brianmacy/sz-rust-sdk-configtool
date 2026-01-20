@@ -9,14 +9,47 @@ use crate::helpers::{
 };
 use serde_json::{Value, json};
 
+// ============================================================================
+// Parameter Structs
+// ============================================================================
+
+/// Parameters for adding a standardize function
+#[derive(Debug, Clone, Default)]
+pub struct AddStandardizeFunctionParams<'a> {
+    pub connect_str: &'a str,
+    pub description: Option<&'a str>,
+    pub language: Option<&'a str>,
+}
+
+impl<'a> TryFrom<&'a Value> for AddStandardizeFunctionParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self, SzConfigError> {
+        Ok(Self {
+            connect_str: json
+                .get("connectStr")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| SzConfigError::MissingField("connectStr".to_string()))?,
+            description: json.get("description").and_then(|v| v.as_str()),
+            language: json.get("language").and_then(|v| v.as_str()),
+        })
+    }
+}
+
+/// Parameters for setting a standardize function
+#[derive(Debug, Clone, Default)]
+pub struct SetStandardizeFunctionParams<'a> {
+    pub connect_str: Option<&'a str>,
+    pub description: Option<&'a str>,
+    pub language: Option<&'a str>,
+}
+
 /// Add a new standardize function
 ///
 /// # Arguments
 /// * `config_json` - The configuration JSON string
 /// * `sfunc_code` - Function code (will be uppercased)
-/// * `connect_str` - Connection string
-/// * `sfunc_desc` - Optional description
-/// * `language` - Optional language code
+/// * `params` - Function parameters (connect_str required, others optional)
 ///
 /// # Returns
 /// Result with modified JSON string and the new function record
@@ -26,9 +59,7 @@ use serde_json::{Value, json};
 pub fn add_standardize_function(
     config_json: &str,
     sfunc_code: &str,
-    connect_str: &str,
-    sfunc_desc: Option<&str>,
-    language: Option<&str>,
+    params: AddStandardizeFunctionParams,
 ) -> Result<(String, Value), SzConfigError> {
     let sfunc_code = sfunc_code.to_uppercase();
 
@@ -49,15 +80,15 @@ pub fn add_standardize_function(
     let mut new_record = json!({
         "SFUNC_ID": sfunc_id,
         "SFUNC_CODE": sfunc_code,
-        "CONNECT_STR": connect_str,
+        "CONNECT_STR": params.connect_str,
     });
 
     // Add optional fields
     if let Some(obj) = new_record.as_object_mut() {
-        if let Some(desc) = sfunc_desc {
+        if let Some(desc) = params.description {
             obj.insert("SFUNC_DESC".to_string(), json!(desc));
         }
-        if let Some(lang) = language {
+        if let Some(lang) = params.language {
             obj.insert("LANGUAGE".to_string(), json!(lang));
         }
     }
@@ -161,9 +192,7 @@ pub fn list_standardize_functions(config_json: &str) -> Result<Vec<Value>, SzCon
 /// # Arguments
 /// * `config_json` - The configuration JSON string
 /// * `sfunc_code` - Function code to update
-/// * `connect_str` - Optional new connection string
-/// * `sfunc_desc` - Optional new description
-/// * `language` - Optional new language code
+/// * `params` - Function parameters to update (all optional)
 ///
 /// # Returns
 /// Result with modified JSON string and the updated function record
@@ -173,9 +202,7 @@ pub fn list_standardize_functions(config_json: &str) -> Result<Vec<Value>, SzCon
 pub fn set_standardize_function(
     config_json: &str,
     sfunc_code: &str,
-    connect_str: Option<&str>,
-    sfunc_desc: Option<&str>,
-    language: Option<&str>,
+    params: SetStandardizeFunctionParams,
 ) -> Result<(String, Value), SzConfigError> {
     let sfunc_code = sfunc_code.to_uppercase();
 
@@ -187,13 +214,13 @@ pub fn set_standardize_function(
 
     // Update fields if provided
     if let Some(obj) = function.as_object_mut() {
-        if let Some(conn) = connect_str {
+        if let Some(conn) = params.connect_str {
             obj.insert("CONNECT_STR".to_string(), json!(conn));
         }
-        if let Some(desc) = sfunc_desc {
+        if let Some(desc) = params.description {
             obj.insert("SFUNC_DESC".to_string(), json!(desc));
         }
-        if let Some(lang) = language {
+        if let Some(lang) = params.language {
             obj.insert("LANGUAGE".to_string(), json!(lang));
         }
     }
@@ -231,9 +258,11 @@ mod tests {
         let result = add_standardize_function(
             &config,
             "custom_parse",
-            "g2CustomParse",
-            Some("Custom parser"),
-            Some("en"),
+            AddStandardizeFunctionParams {
+                connect_str: "g2CustomParse",
+                description: Some("Custom parser"),
+                language: Some("en"),
+            },
         );
         assert!(result.is_ok());
         let (modified, record) = result.unwrap();

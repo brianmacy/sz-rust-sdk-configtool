@@ -9,15 +9,50 @@ use crate::helpers::{
 };
 use serde_json::{Value, json};
 
+// ============================================================================
+// Parameter Structs
+// ============================================================================
+
+/// Parameters for adding a comparison function
+#[derive(Debug, Clone, Default)]
+pub struct AddComparisonFunctionParams<'a> {
+    pub connect_str: &'a str,
+    pub description: Option<&'a str>,
+    pub language: Option<&'a str>,
+    pub anon_support: Option<&'a str>,
+}
+
+impl<'a> TryFrom<&'a Value> for AddComparisonFunctionParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self, SzConfigError> {
+        Ok(Self {
+            connect_str: json
+                .get("connectStr")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| SzConfigError::MissingField("connectStr".to_string()))?,
+            description: json.get("description").and_then(|v| v.as_str()),
+            language: json.get("language").and_then(|v| v.as_str()),
+            anon_support: json.get("anonSupport").and_then(|v| v.as_str()),
+        })
+    }
+}
+
+/// Parameters for setting a comparison function
+#[derive(Debug, Clone, Default)]
+pub struct SetComparisonFunctionParams<'a> {
+    pub connect_str: Option<&'a str>,
+    pub description: Option<&'a str>,
+    pub language: Option<&'a str>,
+    pub anon_support: Option<&'a str>,
+}
+
 /// Add a new comparison function
 ///
 /// # Arguments
 /// * `config_json` - The configuration JSON string
 /// * `cfunc_code` - Function code (will be uppercased)
-/// * `connect_str` - Connection string
-/// * `cfunc_desc` - Optional description
-/// * `language` - Optional language code
-/// * `anon_support` - Optional anonymous support flag
+/// * `params` - Function parameters (connect_str required, others optional)
 ///
 /// # Returns
 /// Result with modified JSON string and the new function record
@@ -27,10 +62,7 @@ use serde_json::{Value, json};
 pub fn add_comparison_function(
     config_json: &str,
     cfunc_code: &str,
-    connect_str: &str,
-    cfunc_desc: Option<&str>,
-    language: Option<&str>,
-    anon_support: Option<&str>,
+    params: AddComparisonFunctionParams,
 ) -> Result<(String, Value), SzConfigError> {
     let cfunc_code = cfunc_code.to_uppercase();
 
@@ -51,18 +83,18 @@ pub fn add_comparison_function(
     let mut new_record = json!({
         "CFUNC_ID": cfunc_id,
         "CFUNC_CODE": cfunc_code,
-        "CONNECT_STR": connect_str,
+        "CONNECT_STR": params.connect_str,
     });
 
     // Add optional fields
     if let Some(obj) = new_record.as_object_mut() {
-        if let Some(desc) = cfunc_desc {
+        if let Some(desc) = params.description {
             obj.insert("CFUNC_DESC".to_string(), json!(desc));
         }
-        if let Some(lang) = language {
+        if let Some(lang) = params.language {
             obj.insert("LANGUAGE".to_string(), json!(lang));
         }
-        if let Some(anon) = anon_support {
+        if let Some(anon) = params.anon_support {
             obj.insert("ANON_SUPPORT".to_string(), json!(anon));
         }
     }
@@ -167,10 +199,7 @@ pub fn list_comparison_functions(config_json: &str) -> Result<Vec<Value>, SzConf
 /// # Arguments
 /// * `config_json` - The configuration JSON string
 /// * `cfunc_code` - Function code to update
-/// * `connect_str` - Optional new connection string
-/// * `cfunc_desc` - Optional new description
-/// * `language` - Optional new language code
-/// * `anon_support` - Optional new anonymous support flag
+/// * `params` - Function parameters to update (all optional)
 ///
 /// # Returns
 /// Result with modified JSON string and the updated function record
@@ -180,10 +209,7 @@ pub fn list_comparison_functions(config_json: &str) -> Result<Vec<Value>, SzConf
 pub fn set_comparison_function(
     config_json: &str,
     cfunc_code: &str,
-    connect_str: Option<&str>,
-    cfunc_desc: Option<&str>,
-    language: Option<&str>,
-    anon_support: Option<&str>,
+    params: SetComparisonFunctionParams,
 ) -> Result<(String, Value), SzConfigError> {
     let cfunc_code = cfunc_code.to_uppercase();
 
@@ -195,16 +221,16 @@ pub fn set_comparison_function(
 
     // Update fields if provided
     if let Some(obj) = function.as_object_mut() {
-        if let Some(conn) = connect_str {
+        if let Some(conn) = params.connect_str {
             obj.insert("CONNECT_STR".to_string(), json!(conn));
         }
-        if let Some(desc) = cfunc_desc {
+        if let Some(desc) = params.description {
             obj.insert("CFUNC_DESC".to_string(), json!(desc));
         }
-        if let Some(lang) = language {
+        if let Some(lang) = params.language {
             obj.insert("LANGUAGE".to_string(), json!(lang));
         }
-        if let Some(anon) = anon_support {
+        if let Some(anon) = params.anon_support {
             obj.insert("ANON_SUPPORT".to_string(), json!(anon));
         }
     }
@@ -317,10 +343,12 @@ mod tests {
         let result = add_comparison_function(
             &config,
             "custom_cmp",
-            "g2CustomCmp",
-            Some("Custom compare"),
-            Some("en"),
-            Some("Yes"),
+            AddComparisonFunctionParams {
+                connect_str: "g2CustomCmp",
+                description: Some("Custom compare"),
+                language: Some("en"),
+                anon_support: Some("Yes"),
+            },
         );
         assert!(result.is_ok());
         let (modified, record) = result.unwrap();

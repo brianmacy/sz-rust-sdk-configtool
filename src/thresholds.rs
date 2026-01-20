@@ -37,15 +37,83 @@ impl TryFrom<&Value> for AddComparisonThresholdParams {
 /// Parameters for adding a generic threshold
 #[derive(Debug, Clone)]
 pub struct AddGenericThresholdParams<'a> {
+    pub behavior: &'a str,
+    pub scoring_cap: i64,
+    pub candidate_cap: i64,
+    pub send_to_redo: &'a str,
     pub feature: Option<&'a str>,
+}
+
+impl<'a> AddGenericThresholdParams<'a> {
+    pub fn new(behavior: &'a str, scoring_cap: i64, candidate_cap: i64, send_to_redo: &'a str) -> Self {
+        Self {
+            behavior,
+            scoring_cap,
+            candidate_cap,
+            send_to_redo,
+            feature: None,
+        }
+    }
 }
 
 impl<'a> TryFrom<&'a Value> for AddGenericThresholdParams<'a> {
     type Error = SzConfigError;
 
     fn try_from(json: &'a Value) -> Result<Self> {
+        let behavior = json
+            .get("behavior")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("behavior".to_string()))?;
+        let scoring_cap = json
+            .get("scoringCap")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| SzConfigError::MissingField("scoringCap".to_string()))?;
+        let candidate_cap = json
+            .get("candidateCap")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| SzConfigError::MissingField("candidateCap".to_string()))?;
+        let send_to_redo = json
+            .get("sendToRedo")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("sendToRedo".to_string()))?;
+
         Ok(Self {
+            behavior,
+            scoring_cap,
+            candidate_cap,
+            send_to_redo,
             feature: json.get("feature").and_then(|v| v.as_str()),
+        })
+    }
+}
+
+/// Parameters for setting (updating) a threshold
+#[derive(Debug, Clone, Default)]
+pub struct SetThresholdParams {
+    pub threshold_id: i64,
+    pub same_score: Option<i64>,
+    pub close_score: Option<i64>,
+    pub likely_score: Option<i64>,
+    pub plausible_score: Option<i64>,
+    pub un_likely_score: Option<i64>,
+}
+
+impl TryFrom<&Value> for SetThresholdParams {
+    type Error = SzConfigError;
+
+    fn try_from(json: &Value) -> Result<Self> {
+        let threshold_id = json
+            .get("thresholdId")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| SzConfigError::MissingField("thresholdId".to_string()))?;
+
+        Ok(Self {
+            threshold_id,
+            same_score: json.get("sameScore").and_then(|v| v.as_i64()),
+            close_score: json.get("closeScore").and_then(|v| v.as_i64()),
+            likely_score: json.get("likelyScore").and_then(|v| v.as_i64()),
+            plausible_score: json.get("plausibleScore").and_then(|v| v.as_i64()),
+            un_likely_score: json.get("unlikelyScore").and_then(|v| v.as_i64()),
         })
     }
 }
@@ -290,36 +358,28 @@ pub fn list_comparison_thresholds(config_json: &str) -> Result<Vec<Value>> {
 /// # Arguments
 /// * `config_json` - JSON configuration string
 /// * `plan` - Generic plan name
-/// * `behavior` - Behavior code
-/// * `scoring_cap` - Scoring cap threshold
-/// * `candidate_cap` - Candidate cap threshold
-/// * `send_to_redo` - Send to redo flag ("Yes" or "No")
-/// * `params` - Generic threshold parameters (feature optional)
+/// * `params` - Generic threshold parameters
 ///
 /// # Returns
 /// Modified configuration JSON string
 pub fn add_generic_threshold(
     config_json: &str,
     plan: &str,
-    behavior: &str,
-    scoring_cap: i64,
-    candidate_cap: i64,
-    send_to_redo: &str,
     params: AddGenericThresholdParams,
 ) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
     let plan_upper = plan.to_uppercase();
-    let behavior_upper = behavior.to_uppercase();
-    let redo_upper = send_to_redo.to_uppercase();
+    let behavior_upper = params.behavior.to_uppercase();
+    let redo_upper = params.send_to_redo.to_uppercase();
     let feature_upper = params.feature.unwrap_or("ALL").to_uppercase();
 
     // Validate sendToRedo
     if redo_upper != "YES" && redo_upper != "NO" {
         return Err(SzConfigError::InvalidInput(format!(
             "Invalid sendToRedo value '{}'. Must be 'Yes' or 'No'",
-            send_to_redo
+            params.send_to_redo
         )));
     }
 
@@ -370,8 +430,8 @@ pub fn add_generic_threshold(
         "GPLAN_ID": gplan_id,
         "BEHAVIOR": behavior_upper,
         "FTYPE_ID": ftype_id,
-        "CANDIDATE_CAP": candidate_cap,
-        "SCORING_CAP": scoring_cap,
+        "CANDIDATE_CAP": params.candidate_cap,
+        "SCORING_CAP": params.scoring_cap,
         "SEND_TO_REDO": redo_upper
     });
 
@@ -596,12 +656,11 @@ pub fn get_threshold(_config_json: &str, _threshold_id: i64) -> Result<Value> {
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
-/// * `threshold_id` - Threshold ID
-/// * `updates` - JSON object with fields to update
+/// * `params` - Threshold parameters (threshold_id required to identify, others optional to update)
 ///
 /// # Returns
 /// Modified configuration JSON string
-pub fn set_threshold(_config_json: &str, _threshold_id: i64, _updates: &Value) -> Result<String> {
+pub fn set_threshold(_config_json: &str, _params: SetThresholdParams) -> Result<String> {
     Err(SzConfigError::InvalidInput(
         "set_threshold not yet implemented".to_string(),
     ))

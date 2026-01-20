@@ -9,6 +9,79 @@ use crate::helpers::{
 };
 use serde_json::{Value, json};
 
+// ============================================================================
+// Parameter Structs
+// ============================================================================
+
+/// Parameters for adding a standardize call
+#[derive(Debug, Clone)]
+pub struct AddStandardizeCallParams<'a> {
+    pub ftype_code: Option<&'a str>,
+    pub felem_code: Option<&'a str>,
+    pub exec_order: Option<i64>,
+    pub sfunc_code: &'a str,
+}
+
+impl<'a> AddStandardizeCallParams<'a> {
+    pub fn new(sfunc_code: &'a str) -> Self {
+        Self {
+            ftype_code: None,
+            felem_code: None,
+            exec_order: None,
+            sfunc_code,
+        }
+    }
+}
+
+/// Parameters for adding a standardize call element
+#[derive(Debug, Clone)]
+pub struct AddStandardizeCallElementParams {
+    pub ftype_id: i64,
+    pub sfunc_id: i64,
+    pub felem_id: Option<i64>,
+    pub exec_order: Option<i64>,
+}
+
+/// Parameters for setting (updating) a standardize call
+#[derive(Debug, Clone, Default)]
+pub struct SetStandardizeCallParams {
+    pub sfcall_id: i64,
+    pub exec_order: Option<i64>,
+}
+
+impl TryFrom<&Value> for SetStandardizeCallParams {
+    type Error = SzConfigError;
+
+    fn try_from(json: &Value) -> Result<Self> {
+        let sfcall_id = json
+            .get("sfcallId")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| SzConfigError::MissingField("sfcallId".to_string()))?;
+
+        Ok(Self {
+            sfcall_id,
+            exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
+        })
+    }
+}
+
+/// Parameters for deleting a standardize call element
+#[derive(Debug, Clone)]
+pub struct DeleteStandardizeCallElementParams {
+    pub ftype_id: i64,
+    pub sfunc_id: i64,
+    pub felem_id: Option<i64>,
+}
+
+/// Parameters for setting a standardize call element
+#[derive(Debug, Clone)]
+pub struct SetStandardizeCallElementParams {
+    pub ftype_id: i64,
+    pub sfunc_id: i64,
+    pub felem_id: Option<i64>,
+    pub updates: Value,
+}
+
 /// Add a new standardize call
 ///
 /// Creates a new standardize call linking a function to a feature or element
@@ -16,10 +89,7 @@ use serde_json::{Value, json};
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `ftype_code` - Feature type code (use "ALL" for all features, or None)
-/// * `felem_code` - Feature element code (use "N/A" for no element, or None)
-/// * `exec_order` - Optional execution order (if None, next available is used)
-/// * `sfunc_code` - Standardize function code
+/// * `params` - Call parameters (ftype_code, felem_code, exec_order, sfunc_code)
 ///
 /// # Returns
 /// Tuple of (modified_config, new_sfcall_record)
@@ -30,10 +100,7 @@ use serde_json::{Value, json};
 /// - `NotFound` if function/feature/element codes don't exist
 pub fn add_standardize_call(
     config: &str,
-    ftype_code: Option<&str>,
-    felem_code: Option<&str>,
-    exec_order: Option<i64>,
-    sfunc_code: &str,
+    params: AddStandardizeCallParams,
 ) -> Result<(String, Value)> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -42,17 +109,17 @@ pub fn add_standardize_call(
     let sfcall_id = get_next_id(&config_data, "G2_CONFIG.CFG_SFCALL", "SFCALL_ID", 1000)?;
 
     // Lookup function ID
-    let sfunc_id = lookup_sfunc_id(config, sfunc_code)?;
+    let sfunc_id = lookup_sfunc_id(config, params.sfunc_code)?;
 
     // Determine FTYPE_ID and FELEM_ID (-1 means not specified)
     let mut ftype_id: i64 = -1;
     let mut felem_id: i64 = -1;
 
-    if let Some(feature) = ftype_code.filter(|f| !f.eq_ignore_ascii_case("ALL")) {
+    if let Some(feature) = params.ftype_code.filter(|f| !f.eq_ignore_ascii_case("ALL")) {
         ftype_id = lookup_feature_id(config, feature)?;
     }
 
-    if let Some(element) = felem_code.filter(|e| !e.eq_ignore_ascii_case("N/A")) {
+    if let Some(element) = params.felem_code.filter(|e| !e.eq_ignore_ascii_case("N/A")) {
         felem_id = lookup_element_id(config, element)?;
     }
 
@@ -64,7 +131,7 @@ pub fn add_standardize_call(
     }
 
     // Determine exec_order: use provided value or get next available for this feature/element
-    let final_exec_order = if let Some(order) = exec_order {
+    let final_exec_order = if let Some(order) = params.exec_order {
         // Check if this exec_order is already taken for this feature/element
         let order_taken = config_data["G2_CONFIG"]["CFG_SFCALL"]
             .as_array()
@@ -281,12 +348,11 @@ pub fn list_standardize_calls(config: &str) -> Result<Vec<Value>> {
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `sfcall_id` - Standardize call ID to update
-/// * `updates` - JSON Value with fields to update
+/// * `params` - Standardize call parameters (sfcall_id required, others optional to update)
 ///
 /// # Returns
 /// Modified configuration JSON string
-pub fn set_standardize_call(config: &str, _sfcall_id: i64, _updates: Value) -> Result<String> {
+pub fn set_standardize_call(config: &str, _params: SetStandardizeCallParams) -> Result<String> {
     // This is a stub - the Python version doesn't implement this
     Ok(config.to_string())
 }
@@ -297,24 +363,18 @@ pub fn set_standardize_call(config: &str, _sfcall_id: i64, _updates: Value) -> R
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `ftype_id` - Feature type ID
-/// * `sfunc_id` - Standardize function ID
-/// * `felem_id` - Optional feature element ID (default: -1)
-/// * `exec_order` - Optional execution order
+/// * `params` - Element parameters (ftype_id, sfunc_id, felem_id, exec_order)
 ///
 /// # Returns
 /// Tuple of (modified_config, new_sbom_record)
 pub fn add_standardize_call_element(
     config: &str,
-    ftype_id: i64,
-    sfunc_id: i64,
-    felem_id: Option<i64>,
-    exec_order: Option<i64>,
+    params: AddStandardizeCallElementParams,
 ) -> Result<(String, Value)> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    let final_felem_id = felem_id.unwrap_or(-1);
+    let final_felem_id = params.felem_id.unwrap_or(-1);
 
     // Check if call element already exists
     if let Some(sfcall_array) = config_data
@@ -323,8 +383,8 @@ pub fn add_standardize_call_element(
         .and_then(|v| v.as_array())
     {
         for item in sfcall_array {
-            if item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ftype_id)
-                && item.get("SFUNC_ID").and_then(|v| v.as_i64()) == Some(sfunc_id)
+            if item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
+                && item.get("SFUNC_ID").and_then(|v| v.as_i64()) == Some(params.sfunc_id)
                 && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(final_felem_id)
             {
                 return Err(SzConfigError::AlreadyExists(
@@ -340,13 +400,13 @@ pub fn add_standardize_call_element(
     // Create new call element record
     let mut new_record = json!({
         "SFCALL_ID": sfcall_id,
-        "FTYPE_ID": ftype_id,
+        "FTYPE_ID": params.ftype_id,
         "FELEM_ID": final_felem_id,
-        "SFUNC_ID": sfunc_id,
+        "SFUNC_ID": params.sfunc_id,
     });
 
     // Add optional exec_order if provided
-    if let Some(order) = exec_order {
+    if let Some(order) = params.exec_order {
         if let Some(obj) = new_record.as_object_mut() {
             obj.insert("EXEC_ORDER".to_string(), json!(order));
         }
@@ -369,30 +429,26 @@ pub fn add_standardize_call_element(
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `ftype_id` - Feature type ID
-/// * `sfunc_id` - Standardize function ID
-/// * `felem_id` - Optional feature element ID
+/// * `params` - Element parameters (ftype_id, sfunc_id, felem_id)
 ///
 /// # Returns
 /// Modified configuration JSON string
 pub fn delete_standardize_call_element(
     config: &str,
-    ftype_id: i64,
-    sfunc_id: i64,
-    felem_id: Option<i64>,
+    params: DeleteStandardizeCallElementParams,
 ) -> Result<String> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    let final_felem_id = felem_id.unwrap_or(-1);
+    let final_felem_id = params.felem_id.unwrap_or(-1);
 
     // Validate that the element exists
     let element_exists = config_data["G2_CONFIG"]["CFG_SFCALL"]
         .as_array()
         .map(|arr| {
             arr.iter().any(|item| {
-                item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ftype_id)
-                    && item.get("SFUNC_ID").and_then(|v| v.as_i64()) == Some(sfunc_id)
+                item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
+                    && item.get("SFUNC_ID").and_then(|v| v.as_i64()) == Some(params.sfunc_id)
                     && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(final_felem_id)
             })
         })
@@ -407,8 +463,8 @@ pub fn delete_standardize_call_element(
     // Delete the element
     if let Some(sfcall_array) = config_data["G2_CONFIG"]["CFG_SFCALL"].as_array_mut() {
         sfcall_array.retain(|item| {
-            !(item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ftype_id)
-                && item.get("SFUNC_ID").and_then(|v| v.as_i64()) == Some(sfunc_id)
+            !(item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
+                && item.get("SFUNC_ID").and_then(|v| v.as_i64()) == Some(params.sfunc_id)
                 && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(final_felem_id))
         });
     }
@@ -420,19 +476,13 @@ pub fn delete_standardize_call_element(
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `ftype_id` - Feature type ID
-/// * `sfunc_id` - Standardize function ID
-/// * `felem_id` - Optional feature element ID
-/// * `updates` - JSON Value with fields to update
+/// * `params` - Element parameters including updates
 ///
 /// # Returns
 /// Modified configuration JSON string
 pub fn set_standardize_call_element(
     config: &str,
-    _ftype_id: i64,
-    _sfunc_id: i64,
-    _felem_id: Option<i64>,
-    _updates: Value,
+    _params: SetStandardizeCallElementParams,
 ) -> Result<String> {
     // This is a stub - not commonly used
     Ok(config.to_string())

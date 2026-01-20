@@ -9,6 +9,61 @@ use crate::helpers::{
 };
 use serde_json::{Value, json};
 
+// ============================================================================
+// Parameter Structs
+// ============================================================================
+
+/// Parameters for adding a distinct call element
+#[derive(Debug, Clone)]
+pub struct AddDistinctCallElementParams {
+    pub dfcall_id: i64,
+    pub ftype_id: i64,
+    pub felem_id: i64,
+    pub exec_order: i64,
+}
+
+/// Parameters for deleting a distinct call element
+#[derive(Debug, Clone)]
+pub struct DeleteDistinctCallElementParams {
+    pub dfcall_id: i64,
+    pub ftype_id: i64,
+    pub felem_id: i64,
+    pub exec_order: i64,
+}
+
+/// Parameters for setting (updating) a distinct call
+#[derive(Debug, Clone, Default)]
+pub struct SetDistinctCallParams {
+    pub dfcall_id: i64,
+    pub exec_order: Option<i64>,
+}
+
+impl TryFrom<&Value> for SetDistinctCallParams {
+    type Error = SzConfigError;
+
+    fn try_from(json: &Value) -> Result<Self> {
+        let dfcall_id = json
+            .get("dfcallId")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| SzConfigError::MissingField("dfcallId".to_string()))?;
+
+        Ok(Self {
+            dfcall_id,
+            exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
+        })
+    }
+}
+
+/// Parameters for setting a distinct call element
+#[derive(Debug, Clone)]
+pub struct SetDistinctCallElementParams {
+    pub dfcall_id: i64,
+    pub ftype_id: i64,
+    pub felem_id: i64,
+    pub exec_order: i64,
+    pub updates: Value,
+}
+
 /// Add a new distinct call with element list
 ///
 /// Creates a new distinct call linking a function to a feature
@@ -267,12 +322,11 @@ pub fn list_distinct_calls(config: &str) -> Result<Vec<Value>> {
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `dfcall_id` - Distinct call ID to update
-/// * `updates` - JSON Value with fields to update
+/// * `params` - Distinct call parameters (dfcall_id required, others optional to update)
 ///
 /// # Returns
 /// Modified configuration JSON string
-pub fn set_distinct_call(config: &str, _dfcall_id: i64, _updates: Value) -> Result<String> {
+pub fn set_distinct_call(config: &str, _params: SetDistinctCallParams) -> Result<String> {
     // This is a stub - the Python version doesn't implement this
     Ok(config.to_string())
 }
@@ -283,19 +337,13 @@ pub fn set_distinct_call(config: &str, _dfcall_id: i64, _updates: Value) -> Resu
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `dfcall_id` - Distinct call ID
-/// * `ftype_id` - Feature type ID
-/// * `felem_id` - Feature element ID
-/// * `exec_order` - Execution order
+/// * `params` - Element parameters (dfcall_id, ftype_id, felem_id, exec_order)
 ///
 /// # Returns
 /// Tuple of (modified_config, new_dbom_record)
 pub fn add_distinct_call_element(
     config: &str,
-    dfcall_id: i64,
-    ftype_id: i64,
-    felem_id: i64,
-    exec_order: i64,
+    params: AddDistinctCallElementParams,
 ) -> Result<(String, Value)> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -307,10 +355,10 @@ pub fn add_distinct_call_element(
         .and_then(|v| v.as_array())
     {
         for item in dbom_array {
-            if item.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(dfcall_id)
-                && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ftype_id)
-                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
+            if item.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(params.dfcall_id)
+                && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
+                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(params.felem_id)
+                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order)
             {
                 return Err(SzConfigError::AlreadyExists(
                     "Distinct call element already exists".to_string(),
@@ -321,10 +369,10 @@ pub fn add_distinct_call_element(
 
     // Create new DBOM record
     let new_record = json!({
-        "DFCALL_ID": dfcall_id,
-        "FTYPE_ID": ftype_id,
-        "FELEM_ID": felem_id,
-        "EXEC_ORDER": exec_order
+        "DFCALL_ID": params.dfcall_id,
+        "FTYPE_ID": params.ftype_id,
+        "FELEM_ID": params.felem_id,
+        "EXEC_ORDER": params.exec_order
     });
 
     // Add to CFG_DBOM
@@ -344,19 +392,13 @@ pub fn add_distinct_call_element(
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `dfcall_id` - Distinct call ID
-/// * `ftype_id` - Feature type ID
-/// * `felem_id` - Feature element ID
-/// * `exec_order` - Execution order
+/// * `params` - Element parameters (dfcall_id, ftype_id, felem_id, exec_order)
 ///
 /// # Returns
 /// Modified configuration JSON string
 pub fn delete_distinct_call_element(
     config: &str,
-    dfcall_id: i64,
-    ftype_id: i64,
-    felem_id: i64,
-    exec_order: i64,
+    params: DeleteDistinctCallElementParams,
 ) -> Result<String> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -366,10 +408,10 @@ pub fn delete_distinct_call_element(
         .as_array()
         .map(|arr| {
             arr.iter().any(|item| {
-                item.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(dfcall_id)
-                    && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ftype_id)
-                    && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
-                    && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
+                item.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(params.dfcall_id)
+                    && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
+                    && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(params.felem_id)
+                    && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order)
             })
         })
         .unwrap_or(false);
@@ -383,10 +425,10 @@ pub fn delete_distinct_call_element(
     // Delete the element
     if let Some(dbom_array) = config_data["G2_CONFIG"]["CFG_DBOM"].as_array_mut() {
         dbom_array.retain(|item| {
-            !(item.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(dfcall_id)
-                && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ftype_id)
-                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order))
+            !(item.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(params.dfcall_id)
+                && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
+                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(params.felem_id)
+                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order))
         });
     }
 
@@ -397,21 +439,13 @@ pub fn delete_distinct_call_element(
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `dfcall_id` - Distinct call ID
-/// * `ftype_id` - Feature type ID
-/// * `felem_id` - Feature element ID
-/// * `exec_order` - Execution order
-/// * `updates` - JSON Value with fields to update
+/// * `params` - Element parameters including updates
 ///
 /// # Returns
 /// Modified configuration JSON string
 pub fn set_distinct_call_element(
     config: &str,
-    _dfcall_id: i64,
-    _ftype_id: i64,
-    _felem_id: i64,
-    _exec_order: i64,
-    _updates: Value,
+    _params: SetDistinctCallElementParams,
 ) -> Result<String> {
     // This is a stub - not commonly used
     Ok(config.to_string())

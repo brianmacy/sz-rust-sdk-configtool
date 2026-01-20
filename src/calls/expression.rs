@@ -9,6 +9,97 @@ use crate::helpers::{
 };
 use serde_json::{Value, json};
 
+// ============================================================================
+// Parameter Structs
+// ============================================================================
+
+/// Parameters for adding an expression call
+#[derive(Debug, Clone)]
+pub struct AddExpressionCallParams<'a> {
+    pub efunc_code: &'a str,
+    pub element_list: Vec<(String, String, Option<String>)>, // (element, required, feature)
+    pub ftype_code: Option<&'a str>,
+    pub felem_code: Option<&'a str>,
+    pub exec_order: Option<i64>,
+    pub expression_feature: Option<&'a str>,
+    pub is_virtual: &'a str,
+}
+
+impl<'a> AddExpressionCallParams<'a> {
+    pub fn new(efunc_code: &'a str, element_list: Vec<(String, String, Option<String>)>) -> Self {
+        Self {
+            efunc_code,
+            element_list,
+            ftype_code: None,
+            felem_code: None,
+            exec_order: None,
+            expression_feature: None,
+            is_virtual: "No",
+        }
+    }
+}
+
+/// Parameters for expression call element operations
+#[derive(Debug, Clone)]
+pub struct ExpressionCallElementParams {
+    pub ftype_id: i64,
+    pub felem_id: i64,
+    pub exec_order: i64,
+    pub felem_req: String,
+}
+
+impl ExpressionCallElementParams {
+    pub fn new(ftype_id: i64, felem_id: i64, exec_order: i64, felem_req: String) -> Self {
+        Self {
+            ftype_id,
+            felem_id,
+            exec_order,
+            felem_req,
+        }
+    }
+}
+
+/// Parameters for identifying expression call element (for delete operations)
+#[derive(Debug, Clone)]
+pub struct ExpressionCallElementKey {
+    pub ftype_id: i64,
+    pub felem_id: i64,
+    pub exec_order: i64,
+}
+
+impl ExpressionCallElementKey {
+    pub fn new(ftype_id: i64, felem_id: i64, exec_order: i64) -> Self {
+        Self {
+            ftype_id,
+            felem_id,
+            exec_order,
+        }
+    }
+}
+
+/// Parameters for setting (updating) an expression call
+#[derive(Debug, Clone, Default)]
+pub struct SetExpressionCallParams {
+    pub efcall_id: i64,
+    pub exec_order: Option<i64>,
+}
+
+impl TryFrom<&Value> for SetExpressionCallParams {
+    type Error = SzConfigError;
+
+    fn try_from(json: &Value) -> Result<Self> {
+        let efcall_id = json
+            .get("efcallId")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| SzConfigError::MissingField("efcallId".to_string()))?;
+
+        Ok(Self {
+            efcall_id,
+            exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
+        })
+    }
+}
+
 /// Add a new expression call with element list
 ///
 /// Creates a new expression call linking a function to a feature or element
@@ -16,13 +107,7 @@ use serde_json::{Value, json};
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `ftype_code` - Feature type code (use "ALL" for all features, or None)
-/// * `felem_code` - Feature element code (use "N/A" for no element, or None)
-/// * `exec_order` - Optional execution order (if None, next available is used)
-/// * `efunc_code` - Expression function code
-/// * `element_list` - Vector of (element_code, required, feature_code) tuples
-/// * `expression_feature` - Optional expression feature code
-/// * `is_virtual` - Virtual flag ("Yes", "No", "Any", "Desired")
+/// * `params` - Expression call parameters
 ///
 /// # Returns
 /// Tuple of (modified_config, new_efcall_record)
@@ -31,16 +116,9 @@ use serde_json::{Value, json};
 /// - `InvalidParameter` if both ftype_code and felem_code are specified or both missing
 /// - `Duplicate` if exec_order is already taken for the feature/element
 /// - `NotFound` if function/feature/element codes don't exist
-#[allow(clippy::too_many_arguments)]
 pub fn add_expression_call(
     config: &str,
-    ftype_code: Option<&str>,
-    felem_code: Option<&str>,
-    exec_order: Option<i64>,
-    efunc_code: &str,
-    element_list: Vec<(String, String, Option<String>)>, // (element, required, feature)
-    expression_feature: Option<&str>,
-    is_virtual: &str,
+    params: AddExpressionCallParams,
 ) -> Result<(String, Value)> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -49,17 +127,17 @@ pub fn add_expression_call(
     let efcall_id = get_next_id(&config_data, "G2_CONFIG.CFG_EFCALL", "EFCALL_ID", 1000)?;
 
     // Lookup function ID
-    let efunc_id = lookup_efunc_id(config, efunc_code)?;
+    let efunc_id = lookup_efunc_id(config, params.efunc_code)?;
 
     // Determine FTYPE_ID and FELEM_ID (-1 means not specified)
     let mut ftype_id: i64 = -1;
     let mut felem_id: i64 = -1;
 
-    if let Some(feature) = ftype_code.filter(|f| !f.eq_ignore_ascii_case("ALL")) {
+    if let Some(feature) = params.ftype_code.filter(|f| !f.eq_ignore_ascii_case("ALL")) {
         ftype_id = lookup_feature_id(config, feature)?;
     }
 
-    if let Some(element) = felem_code.filter(|e| !e.eq_ignore_ascii_case("N/A")) {
+    if let Some(element) = params.felem_code.filter(|e| !e.eq_ignore_ascii_case("N/A")) {
         felem_id = lookup_element_id(config, element)?;
     }
 
@@ -71,7 +149,7 @@ pub fn add_expression_call(
     }
 
     // Determine exec_order
-    let final_exec_order = if let Some(order) = exec_order {
+    let final_exec_order = if let Some(order) = params.exec_order {
         // Check if this exec_order is already taken for this feature/element
         let order_taken = config_data["G2_CONFIG"]["CFG_EFCALL"]
             .as_array()
@@ -111,7 +189,7 @@ pub fn add_expression_call(
 
     // Lookup expression feature ID if specified
     let efeat_ftype_id =
-        if let Some(expr_feat) = expression_feature.filter(|f| !f.eq_ignore_ascii_case("N/A")) {
+        if let Some(expr_feat) = params.expression_feature.filter(|f| !f.eq_ignore_ascii_case("N/A")) {
             lookup_feature_id(config, expr_feat)?
         } else {
             -1
@@ -121,7 +199,7 @@ pub fn add_expression_call(
     let mut efbom_records = Vec::new();
     let mut bom_exec_order = 0;
 
-    for (element_code, required, feature_opt) in element_list {
+    for (element_code, required, feature_opt) in params.element_list {
         bom_exec_order += 1;
 
         // Determine BOM FTYPE_ID
@@ -181,7 +259,7 @@ pub fn add_expression_call(
         "EFUNC_ID": efunc_id,
         "EXEC_ORDER": final_exec_order,
         "EFEAT_FTYPE_ID": efeat_ftype_id,
-        "IS_VIRTUAL": is_virtual
+        "IS_VIRTUAL": params.is_virtual
     });
 
     // Add to config
@@ -371,12 +449,11 @@ pub fn list_expression_calls(config: &str) -> Result<Vec<Value>> {
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `efcall_id` - Expression call ID to update
-/// * `updates` - JSON Value with fields to update
+/// * `params` - Expression call parameters (efcall_id required, others optional to update)
 ///
 /// # Returns
 /// Modified configuration JSON string
-pub fn set_expression_call(config: &str, _efcall_id: i64, _updates: Value) -> Result<String> {
+pub fn set_expression_call(config: &str, _params: SetExpressionCallParams) -> Result<String> {
     // This is a stub - the Python version doesn't implement this
     Ok(config.to_string())
 }
@@ -388,20 +465,14 @@ pub fn set_expression_call(config: &str, _efcall_id: i64, _updates: Value) -> Re
 /// # Arguments
 /// * `config` - Configuration JSON string
 /// * `efcall_id` - Expression call ID
-/// * `ftype_id` - Feature type ID
-/// * `felem_id` - Feature element ID
-/// * `exec_order` - Execution order
-/// * `felem_req` - Element required flag ("Yes" or "No")
+/// * `params` - Expression call element parameters
 ///
 /// # Returns
 /// Tuple of (modified_config, new_ebom_record)
 pub fn add_expression_call_element(
     config: &str,
     efcall_id: i64,
-    ftype_id: i64,
-    felem_id: i64,
-    exec_order: i64,
-    felem_req: &str,
+    params: ExpressionCallElementParams,
 ) -> Result<(String, Value)> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -414,9 +485,9 @@ pub fn add_expression_call_element(
     {
         for item in ebom_array {
             if item.get("EFCALL_ID").and_then(|v| v.as_i64()) == Some(efcall_id)
-                && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ftype_id)
-                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
+                && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
+                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(params.felem_id)
+                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order)
             {
                 return Err(SzConfigError::AlreadyExists(
                     "Expression call element already exists".to_string(),
@@ -428,10 +499,10 @@ pub fn add_expression_call_element(
     // Create new EBOM record
     let new_record = json!({
         "EFCALL_ID": efcall_id,
-        "FTYPE_ID": ftype_id,
-        "FELEM_ID": felem_id,
-        "EXEC_ORDER": exec_order,
-        "FELEM_REQ": felem_req
+        "FTYPE_ID": params.ftype_id,
+        "FELEM_ID": params.felem_id,
+        "EXEC_ORDER": params.exec_order,
+        "FELEM_REQ": params.felem_req
     });
 
     // Add to CFG_EFBOM
@@ -452,18 +523,14 @@ pub fn add_expression_call_element(
 /// # Arguments
 /// * `config` - Configuration JSON string
 /// * `efcall_id` - Expression call ID
-/// * `ftype_id` - Feature type ID
-/// * `felem_id` - Feature element ID
-/// * `exec_order` - Execution order
+/// * `key` - Expression call element key (identifying the element to delete)
 ///
 /// # Returns
 /// Modified configuration JSON string
 pub fn delete_expression_call_element(
     config: &str,
     efcall_id: i64,
-    ftype_id: i64,
-    felem_id: i64,
-    exec_order: i64,
+    key: ExpressionCallElementKey,
 ) -> Result<String> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -474,9 +541,9 @@ pub fn delete_expression_call_element(
         .map(|arr| {
             arr.iter().any(|item| {
                 item.get("EFCALL_ID").and_then(|v| v.as_i64()) == Some(efcall_id)
-                    && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ftype_id)
-                    && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
-                    && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
+                    && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(key.ftype_id)
+                    && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(key.felem_id)
+                    && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(key.exec_order)
             })
         })
         .unwrap_or(false);
@@ -491,9 +558,9 @@ pub fn delete_expression_call_element(
     if let Some(ebom_array) = config_data["G2_CONFIG"]["CFG_EFBOM"].as_array_mut() {
         ebom_array.retain(|item| {
             !(item.get("EFCALL_ID").and_then(|v| v.as_i64()) == Some(efcall_id)
-                && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ftype_id)
-                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order))
+                && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(key.ftype_id)
+                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(key.felem_id)
+                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(key.exec_order))
         });
     }
 
@@ -505,9 +572,7 @@ pub fn delete_expression_call_element(
 /// # Arguments
 /// * `config` - Configuration JSON string
 /// * `efcall_id` - Expression call ID
-/// * `ftype_id` - Feature type ID
-/// * `felem_id` - Feature element ID
-/// * `exec_order` - Execution order
+/// * `key` - Expression call element key (identifying the element to update)
 /// * `updates` - JSON Value with fields to update
 ///
 /// # Returns
@@ -515,9 +580,7 @@ pub fn delete_expression_call_element(
 pub fn set_expression_call_element(
     config: &str,
     _efcall_id: i64,
-    _ftype_id: i64,
-    _felem_id: i64,
-    _exec_order: i64,
+    _key: ExpressionCallElementKey,
     _updates: Value,
 ) -> Result<String> {
     // This is a stub - not commonly used

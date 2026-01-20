@@ -6,9 +6,65 @@ use serde_json::{Value, json};
 // Parameter Structs
 // ============================================================================
 
+/// Parameters for adding an element
+#[derive(Debug, Clone)]
+pub struct AddElementParams<'a> {
+    pub code: &'a str,
+    pub description: Option<&'a str>,
+    pub data_type: Option<&'a str>,
+    pub tokenized: Option<&'a str>,
+}
+
+impl<'a> TryFrom<&'a Value> for AddElementParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self> {
+        let code = json
+            .get("code")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("code".to_string()))?;
+
+        Ok(Self {
+            code,
+            description: json.get("description").and_then(|v| v.as_str()),
+            data_type: json.get("dataType").and_then(|v| v.as_str()),
+            tokenized: json.get("tokenized").and_then(|v| v.as_str()),
+        })
+    }
+}
+
+/// Parameters for setting (updating) an element
+#[derive(Debug, Clone)]
+pub struct SetElementParams<'a> {
+    pub code: &'a str,
+    pub description: Option<&'a str>,
+    pub data_type: Option<&'a str>,
+    pub tokenized: Option<&'a str>,
+}
+
+impl<'a> TryFrom<&'a Value> for SetElementParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self> {
+        let code = json
+            .get("code")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("code".to_string()))?;
+
+        Ok(Self {
+            code,
+            description: json.get("description").and_then(|v| v.as_str()),
+            data_type: json.get("dataType").and_then(|v| v.as_str()),
+            tokenized: json.get("tokenized").and_then(|v| v.as_str()),
+        })
+    }
+}
+
 /// Parameters for setting a feature element
 #[derive(Debug, Clone, Default)]
 pub struct SetFeatureElementParams<'a> {
+    pub ftype_id: i64,
+    pub felem_id: i64,
     pub exec_order: Option<i64>,
     pub display_level: Option<i64>,
     pub display_delim: Option<&'a str>,
@@ -19,7 +75,19 @@ impl<'a> TryFrom<&'a Value> for SetFeatureElementParams<'a> {
     type Error = SzConfigError;
 
     fn try_from(json: &'a Value) -> Result<Self> {
+        let ftype_id = json
+            .get("ftypeId")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| SzConfigError::MissingField("ftypeId".to_string()))?;
+
+        let felem_id = json
+            .get("felemId")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| SzConfigError::MissingField("felemId".to_string()))?;
+
         Ok(Self {
+            ftype_id,
+            felem_id,
             exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
             display_level: json.get("displayLevel").and_then(|v| v.as_i64()),
             display_delim: json.get("displayDelim").and_then(|v| v.as_str()),
@@ -32,16 +100,15 @@ impl<'a> TryFrom<&'a Value> for SetFeatureElementParams<'a> {
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
-/// * `felem_code` - Element code
-/// * `felem_config` - JSON object with element fields (FELEM_DESC, DATA_TYPE, etc.)
+/// * `params` - Element parameters (code required, others optional)
 ///
 /// # Returns
 /// Modified configuration JSON string
-pub fn add_element(config_json: &str, felem_code: &str, felem_config: &Value) -> Result<String> {
+pub fn add_element(config_json: &str, params: AddElementParams) -> Result<String> {
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    let code_upper = felem_code.to_uppercase();
+    let code_upper = params.code.to_uppercase();
 
     // Check if already exists
     let felem_array = config["G2_CONFIG"]["CFG_FELEM"]
@@ -61,11 +128,24 @@ pub fn add_element(config_json: &str, felem_code: &str, felem_config: &Value) ->
     // Get next ID
     let felem_id = helpers::get_next_id_with_min(felem_array, "FELEM_ID", 1000)?;
 
-    // Build record with provided config plus ID and CODE
-    let mut new_record = felem_config.clone();
+    // Build record from params
+    let mut new_record = json!({
+        "FELEM_ID": felem_id,
+        "FELEM_CODE": code_upper.clone(),
+    });
+
     if let Some(obj) = new_record.as_object_mut() {
-        obj.insert("FELEM_ID".to_string(), json!(felem_id));
-        obj.insert("FELEM_CODE".to_string(), json!(code_upper));
+        if let Some(desc) = params.description {
+            obj.insert("FELEM_DESC".to_string(), json!(desc));
+        } else {
+            obj.insert("FELEM_DESC".to_string(), json!(code_upper));
+        }
+        if let Some(dt) = params.data_type {
+            obj.insert("DATA_TYPE".to_string(), json!(dt));
+        }
+        if let Some(tok) = params.tokenized {
+            obj.insert("TOKENIZED".to_string(), json!(tok));
+        }
     }
 
     helpers::add_to_config_array(config_json, "CFG_FELEM", new_record)
@@ -169,16 +249,15 @@ pub fn list_elements(config_json: &str) -> Result<Vec<Value>> {
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
-/// * `felem_code` - Element code
-/// * `felem_config` - JSON object with fields to update
+/// * `params` - Element parameters (code required to identify, others optional to update)
 ///
 /// # Returns
 /// Modified configuration JSON string
-pub fn set_element(config_json: &str, felem_code: &str, felem_config: &Value) -> Result<String> {
+pub fn set_element(config_json: &str, params: SetElementParams) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    let code_upper = felem_code.to_uppercase();
+    let code_upper = params.code.to_uppercase();
 
     let felem_array = config["G2_CONFIG"]["CFG_FELEM"]
         .as_array_mut()
@@ -190,21 +269,17 @@ pub fn set_element(config_json: &str, felem_code: &str, felem_config: &Value) ->
         .find(|e| e["FELEM_CODE"].as_str() == Some(code_upper.as_str()))
         .ok_or_else(|| SzConfigError::NotFound(format!("Element: {}", code_upper.clone())))?;
 
-    // Merge config fields into existing record
-    if let Some(src_obj) = felem_config.as_object() {
-        if let Some(dest_obj) = felem.as_object_mut() {
-            for (key, value) in src_obj {
-                // Don't allow changing the CODE
-                if key != "FELEM_CODE" && key != "felem_code" {
-                    dest_obj.insert(key.clone(), value.clone());
-                }
-            }
+    // Update fields from params
+    if let Some(dest_obj) = felem.as_object_mut() {
+        if let Some(desc) = params.description {
+            dest_obj.insert("FELEM_DESC".to_string(), json!(desc));
         }
-    }
-
-    // Ensure CODE is preserved
-    if let Some(obj) = felem.as_object_mut() {
-        obj.insert("FELEM_CODE".to_string(), json!(code_upper));
+        if let Some(dt) = params.data_type {
+            dest_obj.insert("DATA_TYPE".to_string(), json!(dt));
+        }
+        if let Some(tok) = params.tokenized {
+            dest_obj.insert("TOKENIZED".to_string(), json!(tok));
+        }
     }
 
     serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
@@ -216,16 +291,12 @@ pub fn set_element(config_json: &str, felem_code: &str, felem_config: &Value) ->
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
-/// * `ftype_id` - Feature type ID
-/// * `felem_id` - Element ID
-/// * `params` - Feature element parameters (all optional)
+/// * `params` - Feature element parameters (ftype_id, felem_id required; updates optional)
 ///
 /// # Returns
 /// Modified configuration JSON string
 pub fn set_feature_element(
     config_json: &str,
-    ftype_id: i64,
-    felem_id: i64,
     params: SetFeatureElementParams,
 ) -> Result<String> {
     let mut config: Value =
@@ -239,13 +310,13 @@ pub fn set_feature_element(
     let fbom = fbom_array
         .iter_mut()
         .find(|item| {
-            item["FTYPE_ID"].as_i64() == Some(ftype_id)
-                && item["FELEM_ID"].as_i64() == Some(felem_id)
+            item["FTYPE_ID"].as_i64() == Some(params.ftype_id)
+                && item["FELEM_ID"].as_i64() == Some(params.felem_id)
         })
         .ok_or_else(|| {
             SzConfigError::NotFound(format!(
                 "Feature element mapping not found: FTYPE_ID={}, FELEM_ID={}",
-                ftype_id, felem_id
+                params.ftype_id, params.felem_id
             ))
         })?;
 
@@ -284,9 +355,9 @@ pub fn set_feature_element_display_level(
 ) -> Result<String> {
     set_feature_element(
         config_json,
-        ftype_id,
-        felem_id,
         SetFeatureElementParams {
+            ftype_id,
+            felem_id,
             display_level: Some(display_level),
             ..Default::default()
         },
@@ -311,9 +382,9 @@ pub fn set_feature_element_derived(
 ) -> Result<String> {
     set_feature_element(
         config_json,
-        ftype_id,
-        felem_id,
         SetFeatureElementParams {
+            ftype_id,
+            felem_id,
             derived: Some(derived),
             ..Default::default()
         },

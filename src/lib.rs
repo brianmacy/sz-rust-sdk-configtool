@@ -25,15 +25,17 @@
 //!     // Add a data source
 //!     let config = datasources::add_data_source(
 //!         &config,
-//!         "NEW_SOURCE",
-//!         datasources::AddDataSourceParams::default(),
+//!         datasources::AddDataSourceParams {
+//!             code: "NEW_SOURCE",
+//!             ..Default::default()
+//!         },
 //!     )?;
 //!
 //!     // Add an attribute
 //!     let (config, _) = attributes::add_attribute(
 //!         &config,
-//!         "NEW_ATTR",
 //!         attributes::AddAttributeParams {
+//!             attribute: "NEW_ATTR",
 //!             feature: "ADDRESS",
 //!             element: "ELEMENT",
 //!             class: "OTHER",

@@ -8,13 +8,33 @@ use crate::error::{Result, SzConfigError};
 use crate::helpers;
 use serde_json::{Value, json};
 
+// ============================================================================
+// Parameter Structs
+// ============================================================================
+
+/// Parameters for adding a behavior override
+#[derive(Debug, Clone)]
+pub struct AddBehaviorOverrideParams<'a> {
+    pub feature_code: &'a str,
+    pub usage_type: &'a str,
+    pub behavior: &'a str,
+}
+
+impl<'a> AddBehaviorOverrideParams<'a> {
+    pub fn new(feature_code: &'a str, usage_type: &'a str, behavior: &'a str) -> Self {
+        Self {
+            feature_code,
+            usage_type,
+            behavior,
+        }
+    }
+}
+
 /// Add a behavior override for a feature based on usage type
 ///
 /// # Arguments
 /// * `config_json` - Configuration JSON string
-/// * `feature_code` - Feature code (e.g., "PLACEKEY", "PHONE")
-/// * `usage_type` - Usage type code (e.g., "BUSINESS", "MOBILE", "ORGANIZATION")
-/// * `behavior` - Behavior code (e.g., "F1E", "FM", "NAME")
+/// * `params` - Override parameters (feature_code, usage_type, behavior)
 ///
 /// # Returns
 /// Modified configuration JSON string
@@ -26,32 +46,28 @@ use serde_json::{Value, json};
 ///
 /// # Example
 /// ```no_run
-/// use sz_configtool_lib::behavior_overrides;
+/// use sz_configtool_lib::behavior_overrides::{add_behavior_override, AddBehaviorOverrideParams};
 /// let config = r#"{"G2_CONFIG":{"CFG_FTYPE":[...], "CFG_FBOVR":[]}}"#;
-/// let updated = behavior_overrides::add_behavior_override(
+/// let updated = add_behavior_override(
 ///     &config,
-///     "PLACEKEY",
-///     "BUSINESS",
-///     "F1E"
+///     AddBehaviorOverrideParams::new("PLACEKEY", "BUSINESS", "F1E")
 /// )?;
 /// # Ok::<(), sz_configtool_lib::error::SzConfigError>(())
 /// ```
 pub fn add_behavior_override(
     config_json: &str,
-    feature_code: &str,
-    usage_type: &str,
-    behavior: &str,
+    params: AddBehaviorOverrideParams,
 ) -> Result<String> {
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
     // Lookup FTYPE_ID from feature code
-    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
+    let ftype_id = helpers::lookup_feature_id(config_json, params.feature_code)?;
 
     // Parse behavior code into frequency, exclusivity, stability
-    let (frequency, exclusivity, stability) = parse_behavior_code(behavior)?;
+    let (frequency, exclusivity, stability) = parse_behavior_code(params.behavior)?;
 
-    let utype_upper = usage_type.to_uppercase();
+    let utype_upper = params.usage_type.to_uppercase();
 
     // Check for existing override for this feature+usage combination
     let fbovr_array = config
@@ -66,7 +82,7 @@ pub fn add_behavior_override(
     }) {
         return Err(SzConfigError::AlreadyExists(format!(
             "Behavior override already exists for feature {} with usage type {}",
-            feature_code, utype_upper
+            params.feature_code, utype_upper
         )));
     }
 
@@ -263,8 +279,10 @@ mod tests {
 
     #[test]
     fn test_add_behavior_override() {
-        let config = add_behavior_override(TEST_CONFIG, "TEST_FEATURE", "BUSINESS", "F1E")
-            .expect("Failed to add behavior override");
+        let config = add_behavior_override(
+            TEST_CONFIG,
+            AddBehaviorOverrideParams::new("TEST_FEATURE", "BUSINESS", "F1E")
+        ).expect("Failed to add behavior override");
 
         let config_val: Value = serde_json::from_str(&config).unwrap();
         let overrides = &config_val["G2_CONFIG"]["CFG_FBOVR"];
@@ -281,8 +299,10 @@ mod tests {
 
     #[test]
     fn test_delete_behavior_override() {
-        let config = add_behavior_override(TEST_CONFIG, "TEST_FEATURE", "BUSINESS", "F1E")
-            .expect("Failed to add");
+        let config = add_behavior_override(
+            TEST_CONFIG,
+            AddBehaviorOverrideParams::new("TEST_FEATURE", "BUSINESS", "F1E")
+        ).expect("Failed to add");
 
         let config = delete_behavior_override(&config, "TEST_FEATURE", "BUSINESS")
             .expect("Failed to delete");
@@ -294,10 +314,14 @@ mod tests {
 
     #[test]
     fn test_list_behavior_overrides() {
-        let config = add_behavior_override(TEST_CONFIG, "TEST_FEATURE", "BUSINESS", "F1E")
-            .expect("Failed to add first");
-        let config = add_behavior_override(&config, "TEST_FEATURE", "MOBILE", "FM")
-            .expect("Failed to add second");
+        let config = add_behavior_override(
+            TEST_CONFIG,
+            AddBehaviorOverrideParams::new("TEST_FEATURE", "BUSINESS", "F1E")
+        ).expect("Failed to add first");
+        let config = add_behavior_override(
+            &config,
+            AddBehaviorOverrideParams::new("TEST_FEATURE", "MOBILE", "FM")
+        ).expect("Failed to add second");
 
         let overrides = list_behavior_overrides(&config).expect("Failed to list");
         assert_eq!(overrides.len(), 2);
@@ -331,10 +355,15 @@ mod tests {
 
     #[test]
     fn test_behavior_override_duplicate() {
-        let config = add_behavior_override(TEST_CONFIG, "TEST_FEATURE", "BUSINESS", "F1E")
-            .expect("Failed to add first");
+        let config = add_behavior_override(
+            TEST_CONFIG,
+            AddBehaviorOverrideParams::new("TEST_FEATURE", "BUSINESS", "F1E")
+        ).expect("Failed to add first");
 
-        let result = add_behavior_override(&config, "TEST_FEATURE", "BUSINESS", "FM");
+        let result = add_behavior_override(
+            &config,
+            AddBehaviorOverrideParams::new("TEST_FEATURE", "BUSINESS", "FM")
+        );
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("already exists"));
     }

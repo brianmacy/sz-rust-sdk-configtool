@@ -22,8 +22,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = datasources::add_data_source(
         config,
-        "CUSTOMERS",
-        datasources::AddDataSourceParams::default(),
+        datasources::AddDataSourceParams {
+            code: "CUSTOMERS",
+            ..Default::default()
+        },
     )?;
 
     println!("✓ Data source added\n");

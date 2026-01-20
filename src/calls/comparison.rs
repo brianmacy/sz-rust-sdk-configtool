@@ -9,6 +9,79 @@ use crate::helpers::{
 };
 use serde_json::{Value, json};
 
+// ============================================================================
+// Parameter Structs
+// ============================================================================
+
+/// Parameters for adding a comparison call element (CBOM record)
+#[derive(Debug, Clone)]
+pub struct AddComparisonCallElementParams {
+    pub ftype_id: i64,
+    pub felem_id: i64,
+    pub exec_order: i64,
+}
+
+impl TryFrom<&Value> for AddComparisonCallElementParams {
+    type Error = SzConfigError;
+
+    fn try_from(json: &Value) -> Result<Self> {
+        Ok(Self {
+            ftype_id: json
+                .get("ftypeId")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| SzConfigError::MissingField("ftypeId".to_string()))?,
+            felem_id: json
+                .get("felemId")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| SzConfigError::MissingField("felemId".to_string()))?,
+            exec_order: json
+                .get("execOrder")
+                .and_then(|v| v.as_i64())
+                .ok_or_else(|| SzConfigError::MissingField("execOrder".to_string()))?,
+        })
+    }
+}
+
+/// Parameters for deleting a comparison call element
+#[derive(Debug, Clone)]
+pub struct DeleteComparisonCallElementParams {
+    pub ftype_id: i64,
+    pub felem_id: i64,
+    pub exec_order: i64,
+}
+
+/// Parameters for setting (updating) a comparison call
+#[derive(Debug, Clone, Default)]
+pub struct SetComparisonCallParams {
+    pub cfcall_id: i64,
+    pub exec_order: Option<i64>,
+}
+
+impl TryFrom<&Value> for SetComparisonCallParams {
+    type Error = SzConfigError;
+
+    fn try_from(json: &Value) -> Result<Self> {
+        let cfcall_id = json
+            .get("cfcallId")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| SzConfigError::MissingField("cfcallId".to_string()))?;
+
+        Ok(Self {
+            cfcall_id,
+            exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
+        })
+    }
+}
+
+/// Parameters for setting a comparison call element
+#[derive(Debug, Clone)]
+pub struct SetComparisonCallElementParams {
+    pub ftype_id: i64,
+    pub felem_id: i64,
+    pub exec_order: i64,
+    pub updates: Value,
+}
+
 /// Add a new comparison call with element list
 ///
 /// Creates a new comparison call linking a function to a feature
@@ -265,12 +338,11 @@ pub fn list_comparison_calls(config: &str) -> Result<Vec<Value>> {
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `cfcall_id` - Comparison call ID to update
-/// * `updates` - JSON Value with fields to update
+/// * `params` - Comparison call parameters (cfcall_id required, others optional to update)
 ///
 /// # Returns
 /// Modified configuration JSON string
-pub fn set_comparison_call(config: &str, _cfcall_id: i64, _updates: Value) -> Result<String> {
+pub fn set_comparison_call(config: &str, _params: SetComparisonCallParams) -> Result<String> {
     // This is a stub - the Python version doesn't implement this
     Ok(config.to_string())
 }
@@ -282,18 +354,14 @@ pub fn set_comparison_call(config: &str, _cfcall_id: i64, _updates: Value) -> Re
 /// # Arguments
 /// * `config` - Configuration JSON string
 /// * `cfcall_id` - Comparison call ID
-/// * `ftype_id` - Feature type ID
-/// * `felem_id` - Feature element ID
-/// * `exec_order` - Execution order
+/// * `params` - Element parameters (ftype_id, felem_id, exec_order)
 ///
 /// # Returns
 /// Tuple of (modified_config, new_cbom_record)
 pub fn add_comparison_call_element(
     config: &str,
     cfcall_id: i64,
-    ftype_id: i64,
-    felem_id: i64,
-    exec_order: i64,
+    params: AddComparisonCallElementParams,
 ) -> Result<(String, Value)> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -306,9 +374,9 @@ pub fn add_comparison_call_element(
     {
         for item in cbom_array {
             if item.get("CFCALL_ID").and_then(|v| v.as_i64()) == Some(cfcall_id)
-                && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ftype_id)
-                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
+                && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
+                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(params.felem_id)
+                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order)
             {
                 return Err(SzConfigError::AlreadyExists(
                     "Comparison call element already exists".to_string(),
@@ -320,9 +388,9 @@ pub fn add_comparison_call_element(
     // Create new CBOM record
     let new_record = json!({
         "CFCALL_ID": cfcall_id,
-        "FTYPE_ID": ftype_id,
-        "FELEM_ID": felem_id,
-        "EXEC_ORDER": exec_order
+        "FTYPE_ID": params.ftype_id,
+        "FELEM_ID": params.felem_id,
+        "EXEC_ORDER": params.exec_order
     });
 
     // Add to CFG_CFBOM
@@ -343,18 +411,14 @@ pub fn add_comparison_call_element(
 /// # Arguments
 /// * `config` - Configuration JSON string
 /// * `cfcall_id` - Comparison call ID
-/// * `ftype_id` - Feature type ID
-/// * `felem_id` - Feature element ID
-/// * `exec_order` - Execution order
+/// * `params` - Element parameters (ftype_id, felem_id, exec_order)
 ///
 /// # Returns
 /// Modified configuration JSON string
 pub fn delete_comparison_call_element(
     config: &str,
     cfcall_id: i64,
-    ftype_id: i64,
-    felem_id: i64,
-    exec_order: i64,
+    params: DeleteComparisonCallElementParams,
 ) -> Result<String> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -365,9 +429,9 @@ pub fn delete_comparison_call_element(
         .map(|arr| {
             arr.iter().any(|item| {
                 item.get("CFCALL_ID").and_then(|v| v.as_i64()) == Some(cfcall_id)
-                    && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ftype_id)
-                    && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
-                    && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
+                    && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
+                    && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(params.felem_id)
+                    && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order)
             })
         })
         .unwrap_or(false);
@@ -382,9 +446,9 @@ pub fn delete_comparison_call_element(
     if let Some(cbom_array) = config_data["G2_CONFIG"]["CFG_CFBOM"].as_array_mut() {
         cbom_array.retain(|item| {
             !(item.get("CFCALL_ID").and_then(|v| v.as_i64()) == Some(cfcall_id)
-                && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ftype_id)
-                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order))
+                && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
+                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(params.felem_id)
+                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order))
         });
     }
 
@@ -396,20 +460,14 @@ pub fn delete_comparison_call_element(
 /// # Arguments
 /// * `config` - Configuration JSON string
 /// * `cfcall_id` - Comparison call ID
-/// * `ftype_id` - Feature type ID
-/// * `felem_id` - Feature element ID
-/// * `exec_order` - Execution order
-/// * `updates` - JSON Value with fields to update
+/// * `params` - Element parameters including updates
 ///
 /// # Returns
 /// Modified configuration JSON string
 pub fn set_comparison_call_element(
     config: &str,
     _cfcall_id: i64,
-    _ftype_id: i64,
-    _felem_id: i64,
-    _exec_order: i64,
-    _updates: Value,
+    _params: SetComparisonCallElementParams,
 ) -> Result<String> {
     // This is a stub - not commonly used
     Ok(config.to_string())

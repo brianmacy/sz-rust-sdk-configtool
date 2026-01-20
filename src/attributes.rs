@@ -9,6 +9,7 @@ use serde_json::{Value, json};
 /// Parameters for adding an attribute
 #[derive(Debug, Clone)]
 pub struct AddAttributeParams<'a> {
+    pub attribute: &'a str,
     pub feature: &'a str,
     pub element: &'a str,
     pub class: &'a str,
@@ -22,6 +23,10 @@ impl<'a> TryFrom<&'a Value> for AddAttributeParams<'a> {
 
     fn try_from(json: &'a Value) -> Result<Self> {
         Ok(Self {
+            attribute: json
+                .get("attribute")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| SzConfigError::MissingField("attribute".to_string()))?,
             feature: json
                 .get("feature")
                 .and_then(|v| v.as_str())
@@ -41,12 +46,36 @@ impl<'a> TryFrom<&'a Value> for AddAttributeParams<'a> {
     }
 }
 
+/// Parameters for setting an attribute
+#[derive(Debug, Clone, Default)]
+pub struct SetAttributeParams<'a> {
+    pub attribute: &'a str,
+    pub internal: Option<&'a str>,
+    pub required: Option<&'a str>,
+    pub default_value: Option<&'a str>,
+}
+
+impl<'a> TryFrom<&'a Value> for SetAttributeParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self> {
+        Ok(Self {
+            attribute: json
+                .get("attribute")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| SzConfigError::MissingField("attribute".to_string()))?,
+            internal: json.get("internal").and_then(|v| v.as_str()),
+            required: json.get("required").and_then(|v| v.as_str()),
+            default_value: json.get("default").and_then(|v| v.as_str()),
+        })
+    }
+}
+
 /// Add a new attribute to the configuration
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
-/// * `attribute_code` - Unique attribute code (e.g., "ACCOUNT_NUMBER")
-/// * `params` - Attribute parameters (feature, element, class required; others optional)
+/// * `params` - Attribute parameters (attribute, feature, element, class required; others optional)
 ///
 /// # Returns
 /// Tuple of (modified_json, new_attribute_value) - returns both the modified config
@@ -59,7 +88,6 @@ impl<'a> TryFrom<&'a Value> for AddAttributeParams<'a> {
 /// - `MissingSection` if required sections don't exist
 pub fn add_attribute(
     config_json: &str,
-    attribute_code: &str,
     params: AddAttributeParams,
 ) -> Result<(String, Value)> {
     let config: Value =
@@ -83,7 +111,7 @@ pub fn add_attribute(
         )));
     }
 
-    let attribute_upper = attribute_code.to_uppercase();
+    let attribute_upper = params.attribute.to_uppercase();
     let feature_upper = params.feature.to_uppercase();
     let element_upper = params.element.to_uppercase();
 
@@ -224,12 +252,32 @@ pub fn list_attributes(config_json: &str) -> Result<Vec<Value>> {
 /// - `NotFound` if attribute doesn't exist
 /// - `JsonParse` if config_json is invalid
 /// - `MissingSection` if CFG_ATTR section doesn't exist
-pub fn set_attribute(config_json: &str, code: &str, updates: &Value) -> Result<String> {
-    helpers::update_in_config_array(
-        config_json,
-        "CFG_ATTR",
-        "ATTR_CODE",
-        &code.to_uppercase(),
-        updates.clone(),
-    )
+pub fn set_attribute(config_json: &str, params: SetAttributeParams) -> Result<String> {
+    let mut config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
+    let code_upper = params.attribute.to_uppercase();
+    let attrs = config
+        .get_mut("G2_CONFIG")
+        .and_then(|g| g.get_mut("CFG_ATTR"))
+        .and_then(|v| v.as_array_mut())
+        .ok_or_else(|| SzConfigError::MissingSection("CFG_ATTR".to_string()))?;
+
+    let attr = attrs
+        .iter_mut()
+        .find(|a| a["ATTR_CODE"].as_str() == Some(&code_upper))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Attribute not found: {}", code_upper)))?;
+
+    // Update fields if provided
+    if let Some(val) = params.internal {
+        attr["INTERNAL"] = json!(val);
+    }
+    if let Some(val) = params.required {
+        attr["FELEM_REQ"] = json!(val);
+    }
+    if let Some(val) = params.default_value {
+        attr["DEFAULT_VALUE"] = json!(val);
+    }
+
+    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
 }
