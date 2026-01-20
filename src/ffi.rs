@@ -520,6 +520,72 @@ pub unsafe extern "C" fn SzConfigTool_listAttributes(
     handle_result!(result)
 }
 
+/// Set (update) an attribute's properties
+///
+/// # Safety
+/// configJson, attributeCode, and updatesJson must be valid null-terminated C strings
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn SzConfigTool_setAttribute(
+    config_json: *const c_char,
+    attribute_code: *const c_char,
+    updates_json: *const c_char,
+) -> SzConfigTool_result {
+    if config_json.is_null() || attribute_code.is_null() || updates_json.is_null() {
+        set_error("Null pointer provided".to_string(), -1);
+        return SzConfigTool_result {
+            response: std::ptr::null_mut(),
+            returnCode: -1,
+        };
+    }
+
+    let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -1,
+            };
+        }
+    };
+
+    let attr_code = match unsafe { CStr::from_ptr(attribute_code) }.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            set_error(format!("Invalid UTF-8 in attributeCode: {}", e), -1);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -1,
+            };
+        }
+    };
+
+    let updates_str = match unsafe { CStr::from_ptr(updates_json) }.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            set_error(format!("Invalid UTF-8 in updatesJson: {}", e), -1);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -1,
+            };
+        }
+    };
+
+    let updates: serde_json::Value = match serde_json::from_str(updates_str) {
+        Ok(v) => v,
+        Err(e) => {
+            set_error(format!("Invalid JSON in updatesJson: {}", e), -1);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -1,
+            };
+        }
+    };
+
+    let result = crate::attributes::set_attribute(config, attr_code, &updates);
+    handle_result!(result)
+}
+
 // ============================================================================
 // Feature Functions (Phase 1: read-only)
 // ============================================================================

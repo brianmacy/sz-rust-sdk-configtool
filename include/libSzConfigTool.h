@@ -132,6 +132,16 @@ struct SzConfigTool_result SzConfigTool_getAttribute(const char *config_json,
  */
 struct SzConfigTool_result SzConfigTool_listAttributes(const char *config_json);
 
+/**
+ * Set (update) an attribute's properties
+ *
+ * # Safety
+ * configJson, attributeCode, and updatesJson must be valid null-terminated C strings
+ */
+struct SzConfigTool_result SzConfigTool_setAttribute(const char *config_json,
+                                                       const char *attribute_code,
+                                                       const char *updates_json);
+
 /* ============================================================================
  * Feature Functions (Phase 1: read-only)
  * ============================================================================ */
