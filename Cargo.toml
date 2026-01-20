@@ -12,6 +12,7 @@ categories = ["config", "data-structures"]
 readme = "README.md"
 
 [lib]
+name = "sz_configtool_lib"  # Rust library name (snake_case required)
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [dependencies]

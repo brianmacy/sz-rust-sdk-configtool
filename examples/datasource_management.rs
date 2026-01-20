@@ -3,7 +3,7 @@
 //! Demonstrates data source operations using the library's actual API.
 
 use serde_json::json;
-use sz_configtool_lib::{datasources, helpers};
+use sz_configtool_lib::datasources;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Data Source Management Example ===\n");
@@ -16,37 +16,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }"#
     .to_string();
 
-    // CREATE: Add data sources
+    // CREATE: Add data sources using the API
     println!("1. CREATE - Adding data sources...");
 
-    let dsrc1 = json!({
-        "DSRC_CODE": "CUSTOMERS",
-        "DSRC_DESC": "Customer records from CRM"
-    });
-
-    config = helpers::add_to_config_array(&config, "CFG_DSRC", dsrc1)?;
+    config = datasources::add_data_source(&config, "CUSTOMERS", None, None, None)?;
     println!("  ✓ Added CUSTOMERS");
 
-    let dsrc2 = json!({
-        "DSRC_CODE": "VENDORS",
-        "DSRC_DESC": "Vendor records from ERP"
-    });
-
-    config = helpers::add_to_config_array(&config, "CFG_DSRC", dsrc2)?;
+    config = datasources::add_data_source(&config, "VENDORS", None, None, None)?;
     println!("  ✓ Added VENDORS");
 
-    // READ: List all data sources
+    // READ: List all data sources - returns "id" and "dataSource" format
     println!("\n2. READ - Listing all data sources:");
     let sources = datasources::list_data_sources(&config)?;
 
     for source in &sources {
-        println!(
-            "  • {} (ID: {}): {}",
-            source["DSRC_CODE"], source["DSRC_ID"], source["DSRC_DESC"]
-        );
+        println!("  • {} (ID: {})", source["dataSource"], source["id"]);
     }
 
-    // READ: Get specific data source
+    // READ: Get specific data source - returns raw format with DSRC_CODE, DSRC_ID, etc.
     println!("\n3. READ - Getting specific data source (VENDORS):");
     let vendor_source = datasources::get_data_source(&config, "VENDORS")?;
     println!("  Code: {}", vendor_source["DSRC_CODE"]);
@@ -66,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // DELETE: Remove a data source
     println!("\n5. DELETE - Removing VENDORS:");
-    config = helpers::delete_from_config_array(&config, "CFG_DSRC", "DSRC_CODE", "VENDORS")?;
+    config = datasources::delete_data_source(&config, "VENDORS")?;
     println!("  ✓ VENDORS deleted");
 
     // Verify deletion
@@ -75,10 +62,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Total: {} data sources", final_sources.len());
 
     for source in &final_sources {
-        println!(
-            "  • {} (ID: {}): {}",
-            source["DSRC_CODE"], source["DSRC_ID"], source["DSRC_DESC"]
-        );
+        println!("  • {} (ID: {})", source["dataSource"], source["id"]);
     }
 
     // Error handling example

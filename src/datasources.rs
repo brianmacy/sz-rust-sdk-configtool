@@ -179,11 +179,29 @@ pub fn list_data_sources(config_json: &str) -> Result<Vec<Value>> {
 /// - `JsonParse` if config_json is invalid
 /// - `MissingSection` if CFG_DSRC section doesn't exist
 pub fn set_data_source(config_json: &str, code: &str, updates: &Value) -> Result<String> {
-    helpers::update_in_config_array(
-        config_json,
-        "CFG_DSRC",
-        "DSRC_CODE",
-        &code.to_uppercase(),
-        updates.clone(),
-    )
+    let mut config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
+    let code_upper = code.to_uppercase();
+    let dsrcs = config
+        .get_mut("G2_CONFIG")
+        .and_then(|g| g.get_mut("CFG_DSRC"))
+        .and_then(|v| v.as_array_mut())
+        .ok_or_else(|| SzConfigError::MissingSection("CFG_DSRC".to_string()))?;
+
+    let dsrc = dsrcs
+        .iter_mut()
+        .find(|d| d["DSRC_CODE"].as_str() == Some(&code_upper))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Data source not found: {}", code_upper)))?;
+
+    // Merge updates into existing record
+    if let Some(updates_obj) = updates.as_object() {
+        if let Some(dsrc_obj) = dsrc.as_object_mut() {
+            for (key, value) in updates_obj {
+                dsrc_obj.insert(key.clone(), value.clone());
+            }
+        }
+    }
+
+    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
 }

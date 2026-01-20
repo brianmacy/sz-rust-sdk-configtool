@@ -36,11 +36,12 @@ const _DLEXPORT: &str = "";
 
 /// Result structure for operations that return modified configuration JSON
 #[repr(C)]
+#[allow(non_snake_case)] // Match C convention from SzHelpers
 pub struct SzConfigTool_result {
     /// Modified configuration JSON (caller must free with SzConfigTool_free)
     pub response: *mut c_char,
-    /// Return code: 0 = success, negative = error
-    pub return_code: i64,
+    /// Return code: 0 = success, negative = error (matches SzHelpers convention)
+    pub returnCode: i64,
 }
 
 // ============================================================================
@@ -101,13 +102,13 @@ macro_rules! handle_result {
                 match CString::new(json) {
                     Ok(c_str) => SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     },
                     Err(e) => {
                         set_error(format!("Failed to convert result to C string: {}", e), -1);
                         SzConfigTool_result {
                             response: std::ptr::null_mut(),
-                            return_code: -1,
+                            returnCode: -1,
                         }
                     }
                 }
@@ -116,7 +117,7 @@ macro_rules! handle_result {
                 set_error(format!("{}", e), -2);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 }
             }
         }
@@ -142,7 +143,7 @@ fn clear_error() {
 /// # Safety
 /// configJson and dataSourceCode must be valid null-terminated C strings
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn SzConfigTool_addDataSource_helper(
+pub unsafe extern "C" fn SzConfigTool_addDataSource(
     config_json: *const c_char,
     data_source_code: *const c_char,
 ) -> SzConfigTool_result {
@@ -150,7 +151,7 @@ pub unsafe extern "C" fn SzConfigTool_addDataSource_helper(
         set_error("Null pointer provided".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -160,7 +161,7 @@ pub unsafe extern "C" fn SzConfigTool_addDataSource_helper(
             set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -171,7 +172,7 @@ pub unsafe extern "C" fn SzConfigTool_addDataSource_helper(
             set_error(format!("Invalid UTF-8 in dataSourceCode: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -186,7 +187,7 @@ pub unsafe extern "C" fn SzConfigTool_addDataSource_helper(
 /// # Safety
 /// configJson and dataSourceCode must be valid null-terminated C strings
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn SzConfigTool_deleteDataSource_helper(
+pub unsafe extern "C" fn SzConfigTool_deleteDataSource(
     config_json: *const c_char,
     data_source_code: *const c_char,
 ) -> SzConfigTool_result {
@@ -194,7 +195,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteDataSource_helper(
         set_error("Null pointer provided".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -204,7 +205,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteDataSource_helper(
             set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -215,7 +216,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteDataSource_helper(
             set_error(format!("Invalid UTF-8 in dataSourceCode: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -229,14 +230,14 @@ pub unsafe extern "C" fn SzConfigTool_deleteDataSource_helper(
 /// # Safety
 /// configJson must be a valid null-terminated C string
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn SzConfigTool_listDataSources_helper(
+pub unsafe extern "C" fn SzConfigTool_listDataSources(
     config_json: *const c_char,
 ) -> SzConfigTool_result {
     if config_json.is_null() {
         set_error("Null pointer provided".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -246,7 +247,7 @@ pub unsafe extern "C" fn SzConfigTool_listDataSources_helper(
             set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -267,7 +268,7 @@ pub unsafe extern "C" fn SzConfigTool_listDataSources_helper(
 /// All string parameters must be valid null-terminated C strings
 /// Optional parameters can be null
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn SzConfigTool_addAttribute_helper(
+pub unsafe extern "C" fn SzConfigTool_addAttribute(
     config_json: *const c_char,
     attribute_code: *const c_char,
     feature_code: *const c_char,
@@ -286,7 +287,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute_helper(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -296,7 +297,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute_helper(
             set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -307,7 +308,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute_helper(
             set_error(format!("Invalid UTF-8 in attributeCode: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -318,7 +319,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute_helper(
             set_error(format!("Invalid UTF-8 in featureCode: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -329,7 +330,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute_helper(
             set_error(format!("Invalid UTF-8 in elementCode: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -340,7 +341,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute_helper(
             set_error(format!("Invalid UTF-8 in attrClass: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -354,7 +355,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute_helper(
                 set_error(format!("Invalid UTF-8 in defaultValue: {}", e), -1);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -1,
+                    returnCode: -1,
                 };
             }
         }
@@ -369,7 +370,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute_helper(
                 set_error(format!("Invalid UTF-8 in internal: {}", e), -1);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -1,
+                    returnCode: -1,
                 };
             }
         }
@@ -384,7 +385,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute_helper(
                 set_error(format!("Invalid UTF-8 in required: {}", e), -1);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -1,
+                    returnCode: -1,
                 };
             }
         }
@@ -403,7 +404,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute_helper(
 /// # Safety
 /// configJson and attributeCode must be valid null-terminated C strings
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn SzConfigTool_deleteAttribute_helper(
+pub unsafe extern "C" fn SzConfigTool_deleteAttribute(
     config_json: *const c_char,
     attribute_code: *const c_char,
 ) -> SzConfigTool_result {
@@ -411,7 +412,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteAttribute_helper(
         set_error("Null pointer provided".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -421,7 +422,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteAttribute_helper(
             set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -432,7 +433,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteAttribute_helper(
             set_error(format!("Invalid UTF-8 in attributeCode: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -446,7 +447,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteAttribute_helper(
 /// # Safety
 /// configJson and attributeCode must be valid null-terminated C strings
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn SzConfigTool_getAttribute_helper(
+pub unsafe extern "C" fn SzConfigTool_getAttribute(
     config_json: *const c_char,
     attribute_code: *const c_char,
 ) -> SzConfigTool_result {
@@ -454,7 +455,7 @@ pub unsafe extern "C" fn SzConfigTool_getAttribute_helper(
         set_error("Null pointer provided".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -464,7 +465,7 @@ pub unsafe extern "C" fn SzConfigTool_getAttribute_helper(
             set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -475,7 +476,7 @@ pub unsafe extern "C" fn SzConfigTool_getAttribute_helper(
             set_error(format!("Invalid UTF-8 in attributeCode: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -491,14 +492,14 @@ pub unsafe extern "C" fn SzConfigTool_getAttribute_helper(
 /// # Safety
 /// configJson must be a valid null-terminated C string
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn SzConfigTool_listAttributes_helper(
+pub unsafe extern "C" fn SzConfigTool_listAttributes(
     config_json: *const c_char,
 ) -> SzConfigTool_result {
     if config_json.is_null() {
         set_error("Null pointer provided".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -508,7 +509,7 @@ pub unsafe extern "C" fn SzConfigTool_listAttributes_helper(
             set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -530,7 +531,7 @@ pub unsafe extern "C" fn SzConfigTool_listAttributes_helper(
 /// # Safety
 /// configJson and featureCode must be valid null-terminated C strings
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn SzConfigTool_getFeature_helper(
+pub unsafe extern "C" fn SzConfigTool_getFeature(
     config_json: *const c_char,
     feature_code: *const c_char,
 ) -> SzConfigTool_result {
@@ -538,7 +539,7 @@ pub unsafe extern "C" fn SzConfigTool_getFeature_helper(
         set_error("Null pointer provided".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -548,7 +549,7 @@ pub unsafe extern "C" fn SzConfigTool_getFeature_helper(
             set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -559,7 +560,7 @@ pub unsafe extern "C" fn SzConfigTool_getFeature_helper(
             set_error(format!("Invalid UTF-8 in featureCode: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -575,14 +576,14 @@ pub unsafe extern "C" fn SzConfigTool_getFeature_helper(
 /// # Safety
 /// configJson must be a valid null-terminated C string
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn SzConfigTool_listFeatures_helper(
+pub unsafe extern "C" fn SzConfigTool_listFeatures(
     config_json: *const c_char,
 ) -> SzConfigTool_result {
     if config_json.is_null() {
         set_error("Null pointer provided".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -592,7 +593,7 @@ pub unsafe extern "C" fn SzConfigTool_listFeatures_helper(
             set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -614,7 +615,7 @@ pub unsafe extern "C" fn SzConfigTool_listFeatures_helper(
 /// # Safety
 /// configJson and elementCode must be valid null-terminated C strings
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn SzConfigTool_getElement_helper(
+pub unsafe extern "C" fn SzConfigTool_getElement(
     config_json: *const c_char,
     element_code: *const c_char,
 ) -> SzConfigTool_result {
@@ -622,7 +623,7 @@ pub unsafe extern "C" fn SzConfigTool_getElement_helper(
         set_error("Null pointer provided".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -632,7 +633,7 @@ pub unsafe extern "C" fn SzConfigTool_getElement_helper(
             set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -643,7 +644,7 @@ pub unsafe extern "C" fn SzConfigTool_getElement_helper(
             set_error(format!("Invalid UTF-8 in elementCode: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -659,14 +660,14 @@ pub unsafe extern "C" fn SzConfigTool_getElement_helper(
 /// # Safety
 /// configJson must be a valid null-terminated C string
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn SzConfigTool_listElements_helper(
+pub unsafe extern "C" fn SzConfigTool_listElements(
     config_json: *const c_char,
 ) -> SzConfigTool_result {
     if config_json.is_null() {
         set_error("Null pointer provided".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -676,7 +677,7 @@ pub unsafe extern "C" fn SzConfigTool_listElements_helper(
             set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
     };
@@ -698,7 +699,7 @@ pub unsafe extern "C" fn SzConfigTool_setFragmentWithJson(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -708,7 +709,7 @@ pub unsafe extern "C" fn SzConfigTool_setFragmentWithJson(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -719,7 +720,7 @@ pub unsafe extern "C" fn SzConfigTool_setFragmentWithJson(
             set_error(format!("Invalid UTF-8 in fragment_code: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -730,7 +731,7 @@ pub unsafe extern "C" fn SzConfigTool_setFragmentWithJson(
             set_error(format!("Invalid UTF-8 in fragment_config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -741,7 +742,7 @@ pub unsafe extern "C" fn SzConfigTool_setFragmentWithJson(
             set_error(format!("Failed to parse fragment_config_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -762,7 +763,7 @@ pub unsafe extern "C" fn SzConfigTool_cloneGenericPlan(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -772,7 +773,7 @@ pub unsafe extern "C" fn SzConfigTool_cloneGenericPlan(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -783,7 +784,7 @@ pub unsafe extern "C" fn SzConfigTool_cloneGenericPlan(
             set_error(format!("Invalid UTF-8 in source_gplan_code: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -794,7 +795,7 @@ pub unsafe extern "C" fn SzConfigTool_cloneGenericPlan(
             set_error(format!("Invalid UTF-8 in new_gplan_code: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -808,7 +809,7 @@ pub unsafe extern "C" fn SzConfigTool_cloneGenericPlan(
                 set_error(format!("Invalid UTF-8 in new_gplan_desc: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -820,14 +821,14 @@ pub unsafe extern "C" fn SzConfigTool_cloneGenericPlan(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -835,7 +836,7 @@ pub unsafe extern "C" fn SzConfigTool_cloneGenericPlan(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -852,7 +853,7 @@ pub unsafe extern "C" fn SzConfigTool_setGenericPlan(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -862,7 +863,7 @@ pub unsafe extern "C" fn SzConfigTool_setGenericPlan(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -873,7 +874,7 @@ pub unsafe extern "C" fn SzConfigTool_setGenericPlan(
             set_error(format!("Invalid UTF-8 in gplan_code: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -884,7 +885,7 @@ pub unsafe extern "C" fn SzConfigTool_setGenericPlan(
             set_error(format!("Invalid UTF-8 in gplan_desc: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -895,14 +896,14 @@ pub unsafe extern "C" fn SzConfigTool_setGenericPlan(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -910,7 +911,7 @@ pub unsafe extern "C" fn SzConfigTool_setGenericPlan(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -926,7 +927,7 @@ pub unsafe extern "C" fn SzConfigTool_listGenericPlans(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -936,7 +937,7 @@ pub unsafe extern "C" fn SzConfigTool_listGenericPlans(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -950,7 +951,7 @@ pub unsafe extern "C" fn SzConfigTool_listGenericPlans(
                 set_error(format!("Invalid UTF-8 in filter: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -963,14 +964,14 @@ pub unsafe extern "C" fn SzConfigTool_listGenericPlans(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to convert result: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -978,7 +979,7 @@ pub unsafe extern "C" fn SzConfigTool_listGenericPlans(
                 set_error(format!("Failed to serialize result: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -986,7 +987,7 @@ pub unsafe extern "C" fn SzConfigTool_listGenericPlans(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -1002,7 +1003,7 @@ pub unsafe extern "C" fn SzConfigTool_addToSsnLast4Hash(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -1012,7 +1013,7 @@ pub unsafe extern "C" fn SzConfigTool_addToSsnLast4Hash(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1023,7 +1024,7 @@ pub unsafe extern "C" fn SzConfigTool_addToSsnLast4Hash(
             set_error(format!("Invalid UTF-8 in name: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1042,7 +1043,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteFromSsnLast4Hash(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -1052,7 +1053,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteFromSsnLast4Hash(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1063,7 +1064,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteFromSsnLast4Hash(
             set_error(format!("Invalid UTF-8 in name: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1082,7 +1083,7 @@ pub unsafe extern "C" fn SzConfigTool_getThreshold(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -1092,7 +1093,7 @@ pub unsafe extern "C" fn SzConfigTool_getThreshold(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1104,14 +1105,14 @@ pub unsafe extern "C" fn SzConfigTool_getThreshold(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to convert result: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -1119,7 +1120,7 @@ pub unsafe extern "C" fn SzConfigTool_getThreshold(
                 set_error(format!("Failed to serialize result: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -1127,7 +1128,7 @@ pub unsafe extern "C" fn SzConfigTool_getThreshold(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -1142,7 +1143,7 @@ pub unsafe extern "C" fn SzConfigTool_listSystemParameters(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -1152,7 +1153,7 @@ pub unsafe extern "C" fn SzConfigTool_listSystemParameters(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1164,14 +1165,14 @@ pub unsafe extern "C" fn SzConfigTool_listSystemParameters(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to convert result: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -1179,7 +1180,7 @@ pub unsafe extern "C" fn SzConfigTool_listSystemParameters(
                 set_error(format!("Failed to serialize result: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -1187,7 +1188,7 @@ pub unsafe extern "C" fn SzConfigTool_listSystemParameters(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -1204,7 +1205,7 @@ pub unsafe extern "C" fn SzConfigTool_setSystemParameterWithJson(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -1214,7 +1215,7 @@ pub unsafe extern "C" fn SzConfigTool_setSystemParameterWithJson(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1225,7 +1226,7 @@ pub unsafe extern "C" fn SzConfigTool_setSystemParameterWithJson(
             set_error(format!("Invalid UTF-8 in parameter_name: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1236,7 +1237,7 @@ pub unsafe extern "C" fn SzConfigTool_setSystemParameterWithJson(
             set_error(format!("Invalid UTF-8 in parameter_value_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1247,7 +1248,7 @@ pub unsafe extern "C" fn SzConfigTool_setSystemParameterWithJson(
             set_error(format!("Failed to parse parameter_value_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -1265,7 +1266,7 @@ pub unsafe extern "C" fn SzConfigTool_getVersion(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -1275,7 +1276,7 @@ pub unsafe extern "C" fn SzConfigTool_getVersion(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1286,14 +1287,14 @@ pub unsafe extern "C" fn SzConfigTool_getVersion(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -1301,7 +1302,7 @@ pub unsafe extern "C" fn SzConfigTool_getVersion(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -1316,7 +1317,7 @@ pub unsafe extern "C" fn SzConfigTool_getCompatibilityVersion(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -1326,7 +1327,7 @@ pub unsafe extern "C" fn SzConfigTool_getCompatibilityVersion(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1337,14 +1338,14 @@ pub unsafe extern "C" fn SzConfigTool_getCompatibilityVersion(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -1352,7 +1353,7 @@ pub unsafe extern "C" fn SzConfigTool_getCompatibilityVersion(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -1368,7 +1369,7 @@ pub unsafe extern "C" fn SzConfigTool_updateCompatibilityVersion(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -1378,7 +1379,7 @@ pub unsafe extern "C" fn SzConfigTool_updateCompatibilityVersion(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1389,7 +1390,7 @@ pub unsafe extern "C" fn SzConfigTool_updateCompatibilityVersion(
             set_error(format!("Invalid UTF-8 in new_version: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1408,7 +1409,7 @@ pub unsafe extern "C" fn SzConfigTool_updateFeatureVersion(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -1418,7 +1419,7 @@ pub unsafe extern "C" fn SzConfigTool_updateFeatureVersion(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1429,7 +1430,7 @@ pub unsafe extern "C" fn SzConfigTool_updateFeatureVersion(
             set_error(format!("Invalid UTF-8 in version: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1448,7 +1449,7 @@ pub unsafe extern "C" fn SzConfigTool_verifyCompatibilityVersion(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -1458,7 +1459,7 @@ pub unsafe extern "C" fn SzConfigTool_verifyCompatibilityVersion(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1469,7 +1470,7 @@ pub unsafe extern "C" fn SzConfigTool_verifyCompatibilityVersion(
             set_error(format!("Invalid UTF-8 in expected_version: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1480,14 +1481,14 @@ pub unsafe extern "C" fn SzConfigTool_verifyCompatibilityVersion(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -1495,7 +1496,7 @@ pub unsafe extern "C" fn SzConfigTool_verifyCompatibilityVersion(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -1511,7 +1512,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSection(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -1521,7 +1522,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSection(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1532,7 +1533,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSection(
             set_error(format!("Invalid UTF-8 in section_name: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1551,7 +1552,7 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSection(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -1561,7 +1562,7 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSection(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1572,7 +1573,7 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSection(
             set_error(format!("Invalid UTF-8 in section_name: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1592,7 +1593,7 @@ pub unsafe extern "C" fn SzConfigTool_getConfigSection(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -1602,7 +1603,7 @@ pub unsafe extern "C" fn SzConfigTool_getConfigSection(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1613,7 +1614,7 @@ pub unsafe extern "C" fn SzConfigTool_getConfigSection(
             set_error(format!("Invalid UTF-8 in section_name: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1627,7 +1628,7 @@ pub unsafe extern "C" fn SzConfigTool_getConfigSection(
                 set_error(format!("Invalid UTF-8 in filter: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -1640,14 +1641,14 @@ pub unsafe extern "C" fn SzConfigTool_getConfigSection(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to convert result: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -1655,7 +1656,7 @@ pub unsafe extern "C" fn SzConfigTool_getConfigSection(
                 set_error(format!("Failed to serialize result: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -1663,7 +1664,7 @@ pub unsafe extern "C" fn SzConfigTool_getConfigSection(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -1678,7 +1679,7 @@ pub unsafe extern "C" fn SzConfigTool_listConfigSections(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -1688,7 +1689,7 @@ pub unsafe extern "C" fn SzConfigTool_listConfigSections(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1700,14 +1701,14 @@ pub unsafe extern "C" fn SzConfigTool_listConfigSections(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to convert result: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -1715,7 +1716,7 @@ pub unsafe extern "C" fn SzConfigTool_listConfigSections(
                 set_error(format!("Failed to serialize result: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -1723,7 +1724,7 @@ pub unsafe extern "C" fn SzConfigTool_listConfigSections(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -1745,7 +1746,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSectionField(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -1755,7 +1756,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSectionField(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1766,7 +1767,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSectionField(
             set_error(format!("Invalid UTF-8 in section_name: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1777,7 +1778,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSectionField(
             set_error(format!("Invalid UTF-8 in field_name: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1788,7 +1789,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSectionField(
             set_error(format!("Invalid UTF-8 in field_value_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1799,7 +1800,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSectionField(
             set_error(format!("Failed to parse field_value_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -1810,14 +1811,14 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSectionField(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -1825,7 +1826,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSectionField(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -1842,7 +1843,7 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSectionField(
         set_error("Required parameter is null".to_string(), -1);
         return SzConfigTool_result {
             response: std::ptr::null_mut(),
-            return_code: -1,
+            returnCode: -1,
         };
     }
 
@@ -1852,7 +1853,7 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSectionField(
             set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1863,7 +1864,7 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSectionField(
             set_error(format!("Invalid UTF-8 in section_name: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1874,7 +1875,7 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSectionField(
             set_error(format!("Invalid UTF-8 in field_name: {}", e), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -2,
+                returnCode: -2,
             };
         }
     };
@@ -1885,14 +1886,14 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSectionField(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -1900,7 +1901,7 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSectionField(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -1921,7 +1922,7 @@ pub extern "C" fn SzConfigTool_addRule(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -1930,7 +1931,7 @@ pub extern "C" fn SzConfigTool_addRule(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -1941,7 +1942,7 @@ pub extern "C" fn SzConfigTool_addRule(
             set_error("rule_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(rule_json).to_str() {
@@ -1950,7 +1951,7 @@ pub extern "C" fn SzConfigTool_addRule(
                 set_error(format!("Invalid UTF-8 in rule_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -1962,7 +1963,7 @@ pub extern "C" fn SzConfigTool_addRule(
             set_error(format!("Invalid JSON in rule_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -1973,14 +1974,14 @@ pub extern "C" fn SzConfigTool_addRule(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -1988,7 +1989,7 @@ pub extern "C" fn SzConfigTool_addRule(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -2005,7 +2006,7 @@ pub extern "C" fn SzConfigTool_deleteRule(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -2014,7 +2015,7 @@ pub extern "C" fn SzConfigTool_deleteRule(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2025,7 +2026,7 @@ pub extern "C" fn SzConfigTool_deleteRule(
             set_error("rule_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(rule_code).to_str() {
@@ -2034,7 +2035,7 @@ pub extern "C" fn SzConfigTool_deleteRule(
                 set_error(format!("Invalid UTF-8 in rule_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2054,7 +2055,7 @@ pub extern "C" fn SzConfigTool_getRule(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -2063,7 +2064,7 @@ pub extern "C" fn SzConfigTool_getRule(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2074,7 +2075,7 @@ pub extern "C" fn SzConfigTool_getRule(
             set_error("code_or_id is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(code_or_id).to_str() {
@@ -2083,7 +2084,7 @@ pub extern "C" fn SzConfigTool_getRule(
                 set_error(format!("Invalid UTF-8 in code_or_id: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2098,14 +2099,14 @@ pub extern "C" fn SzConfigTool_getRule(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to convert result: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             }
@@ -2114,7 +2115,7 @@ pub extern "C" fn SzConfigTool_getRule(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -2128,7 +2129,7 @@ pub extern "C" fn SzConfigTool_listRules(config_json: *const c_char) -> SzConfig
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -2137,7 +2138,7 @@ pub extern "C" fn SzConfigTool_listRules(config_json: *const c_char) -> SzConfig
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2152,14 +2153,14 @@ pub extern "C" fn SzConfigTool_listRules(config_json: *const c_char) -> SzConfig
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to convert result: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             }
@@ -2168,7 +2169,7 @@ pub extern "C" fn SzConfigTool_listRules(config_json: *const c_char) -> SzConfig
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -2186,7 +2187,7 @@ pub extern "C" fn SzConfigTool_setRule(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -2195,7 +2196,7 @@ pub extern "C" fn SzConfigTool_setRule(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2206,7 +2207,7 @@ pub extern "C" fn SzConfigTool_setRule(
             set_error("rule_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(rule_code).to_str() {
@@ -2215,7 +2216,7 @@ pub extern "C" fn SzConfigTool_setRule(
                 set_error(format!("Invalid UTF-8 in rule_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2226,7 +2227,7 @@ pub extern "C" fn SzConfigTool_setRule(
             set_error("rule_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(rule_json).to_str() {
@@ -2235,7 +2236,7 @@ pub extern "C" fn SzConfigTool_setRule(
                 set_error(format!("Invalid UTF-8 in rule_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2247,7 +2248,7 @@ pub extern "C" fn SzConfigTool_setRule(
             set_error(format!("Invalid JSON in rule_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -2273,7 +2274,7 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -2282,7 +2283,7 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2293,7 +2294,7 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
             set_error("sfunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(sfunc_code).to_str() {
@@ -2302,7 +2303,7 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
                 set_error(format!("Invalid UTF-8 in sfunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2313,7 +2314,7 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
             set_error("connect_str is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(connect_str).to_str() {
@@ -2322,7 +2323,7 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
                 set_error(format!("Invalid UTF-8 in connect_str: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2339,7 +2340,7 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
                     set_error(format!("Invalid UTF-8 in sfunc_desc: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -2357,7 +2358,7 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
                     set_error(format!("Invalid UTF-8 in language: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -2372,14 +2373,14 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -2387,7 +2388,7 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -2404,7 +2405,7 @@ pub extern "C" fn SzConfigTool_deleteStandardizeFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -2413,7 +2414,7 @@ pub extern "C" fn SzConfigTool_deleteStandardizeFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2424,7 +2425,7 @@ pub extern "C" fn SzConfigTool_deleteStandardizeFunction(
             set_error("sfunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(sfunc_code).to_str() {
@@ -2433,7 +2434,7 @@ pub extern "C" fn SzConfigTool_deleteStandardizeFunction(
                 set_error(format!("Invalid UTF-8 in sfunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2445,14 +2446,14 @@ pub extern "C" fn SzConfigTool_deleteStandardizeFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -2460,7 +2461,7 @@ pub extern "C" fn SzConfigTool_deleteStandardizeFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -2477,7 +2478,7 @@ pub extern "C" fn SzConfigTool_getStandardizeFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -2486,7 +2487,7 @@ pub extern "C" fn SzConfigTool_getStandardizeFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2497,7 +2498,7 @@ pub extern "C" fn SzConfigTool_getStandardizeFunction(
             set_error("sfunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(sfunc_code).to_str() {
@@ -2506,7 +2507,7 @@ pub extern "C" fn SzConfigTool_getStandardizeFunction(
                 set_error(format!("Invalid UTF-8 in sfunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2521,14 +2522,14 @@ pub extern "C" fn SzConfigTool_getStandardizeFunction(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to convert result: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             }
@@ -2537,7 +2538,7 @@ pub extern "C" fn SzConfigTool_getStandardizeFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -2553,7 +2554,7 @@ pub extern "C" fn SzConfigTool_listStandardizeFunctions(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -2562,7 +2563,7 @@ pub extern "C" fn SzConfigTool_listStandardizeFunctions(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2577,14 +2578,14 @@ pub extern "C" fn SzConfigTool_listStandardizeFunctions(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to convert result: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             }
@@ -2593,7 +2594,7 @@ pub extern "C" fn SzConfigTool_listStandardizeFunctions(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -2613,7 +2614,7 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -2622,7 +2623,7 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2633,7 +2634,7 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
             set_error("sfunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(sfunc_code).to_str() {
@@ -2642,7 +2643,7 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
                 set_error(format!("Invalid UTF-8 in sfunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2659,7 +2660,7 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
                     set_error(format!("Invalid UTF-8 in connect_str: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -2677,7 +2678,7 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
                     set_error(format!("Invalid UTF-8 in sfunc_desc: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -2695,7 +2696,7 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
                     set_error(format!("Invalid UTF-8 in language: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -2710,14 +2711,14 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -2725,7 +2726,7 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -2749,7 +2750,7 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -2758,7 +2759,7 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2769,7 +2770,7 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
             set_error("efunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(efunc_code).to_str() {
@@ -2778,7 +2779,7 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
                 set_error(format!("Invalid UTF-8 in efunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2789,7 +2790,7 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
             set_error("connect_str is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(connect_str).to_str() {
@@ -2798,7 +2799,7 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
                 set_error(format!("Invalid UTF-8 in connect_str: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2815,7 +2816,7 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
                     set_error(format!("Invalid UTF-8 in efunc_desc: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -2833,7 +2834,7 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
                     set_error(format!("Invalid UTF-8 in language: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -2848,14 +2849,14 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -2863,7 +2864,7 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -2880,7 +2881,7 @@ pub extern "C" fn SzConfigTool_deleteExpressionFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -2889,7 +2890,7 @@ pub extern "C" fn SzConfigTool_deleteExpressionFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2900,7 +2901,7 @@ pub extern "C" fn SzConfigTool_deleteExpressionFunction(
             set_error("efunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(efunc_code).to_str() {
@@ -2909,7 +2910,7 @@ pub extern "C" fn SzConfigTool_deleteExpressionFunction(
                 set_error(format!("Invalid UTF-8 in efunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2921,14 +2922,14 @@ pub extern "C" fn SzConfigTool_deleteExpressionFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -2936,7 +2937,7 @@ pub extern "C" fn SzConfigTool_deleteExpressionFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -2953,7 +2954,7 @@ pub extern "C" fn SzConfigTool_getExpressionFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -2962,7 +2963,7 @@ pub extern "C" fn SzConfigTool_getExpressionFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2973,7 +2974,7 @@ pub extern "C" fn SzConfigTool_getExpressionFunction(
             set_error("efunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(efunc_code).to_str() {
@@ -2982,7 +2983,7 @@ pub extern "C" fn SzConfigTool_getExpressionFunction(
                 set_error(format!("Invalid UTF-8 in efunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -2997,14 +2998,14 @@ pub extern "C" fn SzConfigTool_getExpressionFunction(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to convert result: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             }
@@ -3013,7 +3014,7 @@ pub extern "C" fn SzConfigTool_getExpressionFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -3029,7 +3030,7 @@ pub extern "C" fn SzConfigTool_listExpressionFunctions(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -3038,7 +3039,7 @@ pub extern "C" fn SzConfigTool_listExpressionFunctions(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3053,14 +3054,14 @@ pub extern "C" fn SzConfigTool_listExpressionFunctions(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to convert result: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             }
@@ -3069,7 +3070,7 @@ pub extern "C" fn SzConfigTool_listExpressionFunctions(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -3089,7 +3090,7 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -3098,7 +3099,7 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3109,7 +3110,7 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
             set_error("efunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(efunc_code).to_str() {
@@ -3118,7 +3119,7 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
                 set_error(format!("Invalid UTF-8 in efunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3135,7 +3136,7 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
                     set_error(format!("Invalid UTF-8 in connect_str: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -3153,7 +3154,7 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
                     set_error(format!("Invalid UTF-8 in efunc_desc: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -3171,7 +3172,7 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
                     set_error(format!("Invalid UTF-8 in language: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -3186,14 +3187,14 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -3201,7 +3202,7 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -3226,7 +3227,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -3235,7 +3236,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3246,7 +3247,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
             set_error("cfunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(cfunc_code).to_str() {
@@ -3255,7 +3256,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
                 set_error(format!("Invalid UTF-8 in cfunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3266,7 +3267,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
             set_error("connect_str is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(connect_str).to_str() {
@@ -3275,7 +3276,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
                 set_error(format!("Invalid UTF-8 in connect_str: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3292,7 +3293,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
                     set_error(format!("Invalid UTF-8 in cfunc_desc: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -3310,7 +3311,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
                     set_error(format!("Invalid UTF-8 in language: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -3328,7 +3329,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
                     set_error(format!("Invalid UTF-8 in anon_support: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -3343,14 +3344,14 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -3358,7 +3359,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -3375,7 +3376,7 @@ pub extern "C" fn SzConfigTool_deleteComparisonFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -3384,7 +3385,7 @@ pub extern "C" fn SzConfigTool_deleteComparisonFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3395,7 +3396,7 @@ pub extern "C" fn SzConfigTool_deleteComparisonFunction(
             set_error("cfunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(cfunc_code).to_str() {
@@ -3404,7 +3405,7 @@ pub extern "C" fn SzConfigTool_deleteComparisonFunction(
                 set_error(format!("Invalid UTF-8 in cfunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3416,14 +3417,14 @@ pub extern "C" fn SzConfigTool_deleteComparisonFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -3431,7 +3432,7 @@ pub extern "C" fn SzConfigTool_deleteComparisonFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -3448,7 +3449,7 @@ pub extern "C" fn SzConfigTool_getComparisonFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -3457,7 +3458,7 @@ pub extern "C" fn SzConfigTool_getComparisonFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3468,7 +3469,7 @@ pub extern "C" fn SzConfigTool_getComparisonFunction(
             set_error("cfunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(cfunc_code).to_str() {
@@ -3477,7 +3478,7 @@ pub extern "C" fn SzConfigTool_getComparisonFunction(
                 set_error(format!("Invalid UTF-8 in cfunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3492,14 +3493,14 @@ pub extern "C" fn SzConfigTool_getComparisonFunction(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to convert result: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             }
@@ -3508,7 +3509,7 @@ pub extern "C" fn SzConfigTool_getComparisonFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -3524,7 +3525,7 @@ pub extern "C" fn SzConfigTool_listComparisonFunctions(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -3533,7 +3534,7 @@ pub extern "C" fn SzConfigTool_listComparisonFunctions(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3548,14 +3549,14 @@ pub extern "C" fn SzConfigTool_listComparisonFunctions(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to convert result: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             }
@@ -3564,7 +3565,7 @@ pub extern "C" fn SzConfigTool_listComparisonFunctions(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -3585,7 +3586,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -3594,7 +3595,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3605,7 +3606,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
             set_error("cfunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(cfunc_code).to_str() {
@@ -3614,7 +3615,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
                 set_error(format!("Invalid UTF-8 in cfunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3631,7 +3632,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
                     set_error(format!("Invalid UTF-8 in connect_str: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -3649,7 +3650,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
                     set_error(format!("Invalid UTF-8 in cfunc_desc: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -3667,7 +3668,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
                     set_error(format!("Invalid UTF-8 in language: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -3685,7 +3686,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
                     set_error(format!("Invalid UTF-8 in anon_support: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -3700,14 +3701,14 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -3715,7 +3716,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -3739,7 +3740,7 @@ pub extern "C" fn SzConfigTool_addStandardizeCall(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -3748,7 +3749,7 @@ pub extern "C" fn SzConfigTool_addStandardizeCall(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3765,7 +3766,7 @@ pub extern "C" fn SzConfigTool_addStandardizeCall(
                     set_error(format!("Invalid UTF-8 in ftype_code: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -3783,7 +3784,7 @@ pub extern "C" fn SzConfigTool_addStandardizeCall(
                     set_error(format!("Invalid UTF-8 in felem_code: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -3801,7 +3802,7 @@ pub extern "C" fn SzConfigTool_addStandardizeCall(
             set_error("sfunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(sfunc_code).to_str() {
@@ -3810,7 +3811,7 @@ pub extern "C" fn SzConfigTool_addStandardizeCall(
                 set_error(format!("Invalid UTF-8 in sfunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3824,14 +3825,14 @@ pub extern "C" fn SzConfigTool_addStandardizeCall(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to convert result: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -3839,7 +3840,7 @@ pub extern "C" fn SzConfigTool_addStandardizeCall(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -3856,7 +3857,7 @@ pub extern "C" fn SzConfigTool_deleteStandardizeCall(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -3865,7 +3866,7 @@ pub extern "C" fn SzConfigTool_deleteStandardizeCall(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3887,7 +3888,7 @@ pub extern "C" fn SzConfigTool_getStandardizeCall(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -3896,7 +3897,7 @@ pub extern "C" fn SzConfigTool_getStandardizeCall(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3911,14 +3912,14 @@ pub extern "C" fn SzConfigTool_getStandardizeCall(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to convert result: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             }
@@ -3927,7 +3928,7 @@ pub extern "C" fn SzConfigTool_getStandardizeCall(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -3943,7 +3944,7 @@ pub extern "C" fn SzConfigTool_listStandardizeCalls(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -3952,7 +3953,7 @@ pub extern "C" fn SzConfigTool_listStandardizeCalls(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -3967,14 +3968,14 @@ pub extern "C" fn SzConfigTool_listStandardizeCalls(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to convert result: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             }
@@ -3983,7 +3984,7 @@ pub extern "C" fn SzConfigTool_listStandardizeCalls(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -4001,7 +4002,7 @@ pub extern "C" fn SzConfigTool_setStandardizeCall(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -4010,7 +4011,7 @@ pub extern "C" fn SzConfigTool_setStandardizeCall(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4021,7 +4022,7 @@ pub extern "C" fn SzConfigTool_setStandardizeCall(
             set_error("updates_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(updates_json).to_str() {
@@ -4030,7 +4031,7 @@ pub extern "C" fn SzConfigTool_setStandardizeCall(
                 set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4042,7 +4043,7 @@ pub extern "C" fn SzConfigTool_setStandardizeCall(
             set_error(format!("Invalid JSON in updates_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -4079,7 +4080,7 @@ pub extern "C" fn SzConfigTool_addComparisonThreshold(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -4088,7 +4089,7 @@ pub extern "C" fn SzConfigTool_addComparisonThreshold(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4099,7 +4100,7 @@ pub extern "C" fn SzConfigTool_addComparisonThreshold(
             set_error("cfunc_rtnval is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(cfunc_rtnval).to_str() {
@@ -4108,7 +4109,7 @@ pub extern "C" fn SzConfigTool_addComparisonThreshold(
                 set_error(format!("Invalid UTF-8 in cfunc_rtnval: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4172,7 +4173,7 @@ pub extern "C" fn SzConfigTool_deleteComparisonThreshold(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -4181,7 +4182,7 @@ pub extern "C" fn SzConfigTool_deleteComparisonThreshold(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4204,7 +4205,7 @@ pub extern "C" fn SzConfigTool_setComparisonThreshold(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -4213,7 +4214,7 @@ pub extern "C" fn SzConfigTool_setComparisonThreshold(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4224,7 +4225,7 @@ pub extern "C" fn SzConfigTool_setComparisonThreshold(
             set_error("updates_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(updates_json).to_str() {
@@ -4233,7 +4234,7 @@ pub extern "C" fn SzConfigTool_setComparisonThreshold(
                 set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4245,7 +4246,7 @@ pub extern "C" fn SzConfigTool_setComparisonThreshold(
             set_error(format!("Invalid JSON in updates_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -4267,7 +4268,7 @@ pub extern "C" fn SzConfigTool_listComparisonThresholds(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -4276,7 +4277,7 @@ pub extern "C" fn SzConfigTool_listComparisonThresholds(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4289,14 +4290,14 @@ pub extern "C" fn SzConfigTool_listComparisonThresholds(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -4304,7 +4305,7 @@ pub extern "C" fn SzConfigTool_listComparisonThresholds(
                 set_error(format!("Failed to serialize list: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -4312,7 +4313,7 @@ pub extern "C" fn SzConfigTool_listComparisonThresholds(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -4336,7 +4337,7 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -4345,7 +4346,7 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4356,7 +4357,7 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
             set_error("plan is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(plan).to_str() {
@@ -4365,7 +4366,7 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
                 set_error(format!("Invalid UTF-8 in plan: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4376,7 +4377,7 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
             set_error("behavior is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(behavior).to_str() {
@@ -4385,7 +4386,7 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
                 set_error(format!("Invalid UTF-8 in behavior: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4396,7 +4397,7 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
             set_error("send_to_redo is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(send_to_redo).to_str() {
@@ -4405,7 +4406,7 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
                 set_error(format!("Invalid UTF-8 in send_to_redo: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4421,7 +4422,7 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
                     set_error(format!("Invalid UTF-8 in feature: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -4452,7 +4453,7 @@ pub extern "C" fn SzConfigTool_deleteGenericThreshold(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -4461,7 +4462,7 @@ pub extern "C" fn SzConfigTool_deleteGenericThreshold(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4472,7 +4473,7 @@ pub extern "C" fn SzConfigTool_deleteGenericThreshold(
             set_error("plan is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(plan).to_str() {
@@ -4481,7 +4482,7 @@ pub extern "C" fn SzConfigTool_deleteGenericThreshold(
                 set_error(format!("Invalid UTF-8 in plan: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4492,7 +4493,7 @@ pub extern "C" fn SzConfigTool_deleteGenericThreshold(
             set_error("behavior is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(behavior).to_str() {
@@ -4501,7 +4502,7 @@ pub extern "C" fn SzConfigTool_deleteGenericThreshold(
                 set_error(format!("Invalid UTF-8 in behavior: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4517,7 +4518,7 @@ pub extern "C" fn SzConfigTool_deleteGenericThreshold(
                     set_error(format!("Invalid UTF-8 in feature: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -4545,7 +4546,7 @@ pub extern "C" fn SzConfigTool_setGenericThreshold(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -4554,7 +4555,7 @@ pub extern "C" fn SzConfigTool_setGenericThreshold(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4565,7 +4566,7 @@ pub extern "C" fn SzConfigTool_setGenericThreshold(
             set_error("behavior is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(behavior).to_str() {
@@ -4574,7 +4575,7 @@ pub extern "C" fn SzConfigTool_setGenericThreshold(
                 set_error(format!("Invalid UTF-8 in behavior: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4585,7 +4586,7 @@ pub extern "C" fn SzConfigTool_setGenericThreshold(
             set_error("updates_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(updates_json).to_str() {
@@ -4594,7 +4595,7 @@ pub extern "C" fn SzConfigTool_setGenericThreshold(
                 set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4606,7 +4607,7 @@ pub extern "C" fn SzConfigTool_setGenericThreshold(
             set_error(format!("Invalid JSON in updates_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -4629,7 +4630,7 @@ pub extern "C" fn SzConfigTool_listGenericThresholds(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -4638,7 +4639,7 @@ pub extern "C" fn SzConfigTool_listGenericThresholds(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4651,14 +4652,14 @@ pub extern "C" fn SzConfigTool_listGenericThresholds(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -4666,7 +4667,7 @@ pub extern "C" fn SzConfigTool_listGenericThresholds(
                 set_error(format!("Failed to serialize list: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -4674,7 +4675,7 @@ pub extern "C" fn SzConfigTool_listGenericThresholds(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -4697,7 +4698,7 @@ pub extern "C" fn SzConfigTool_getFragment(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -4706,7 +4707,7 @@ pub extern "C" fn SzConfigTool_getFragment(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4717,7 +4718,7 @@ pub extern "C" fn SzConfigTool_getFragment(
             set_error("code_or_id is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(code_or_id).to_str() {
@@ -4726,7 +4727,7 @@ pub extern "C" fn SzConfigTool_getFragment(
                 set_error(format!("Invalid UTF-8 in code_or_id: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4739,14 +4740,14 @@ pub extern "C" fn SzConfigTool_getFragment(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -4754,7 +4755,7 @@ pub extern "C" fn SzConfigTool_getFragment(
                 set_error(format!("Failed to serialize fragment: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -4762,7 +4763,7 @@ pub extern "C" fn SzConfigTool_getFragment(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -4776,7 +4777,7 @@ pub extern "C" fn SzConfigTool_listFragments(config_json: *const c_char) -> SzCo
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -4785,7 +4786,7 @@ pub extern "C" fn SzConfigTool_listFragments(config_json: *const c_char) -> SzCo
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4798,14 +4799,14 @@ pub extern "C" fn SzConfigTool_listFragments(config_json: *const c_char) -> SzCo
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -4813,7 +4814,7 @@ pub extern "C" fn SzConfigTool_listFragments(config_json: *const c_char) -> SzCo
                 set_error(format!("Failed to serialize list: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -4821,7 +4822,7 @@ pub extern "C" fn SzConfigTool_listFragments(config_json: *const c_char) -> SzCo
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -4838,7 +4839,7 @@ pub extern "C" fn SzConfigTool_addFragment(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -4847,7 +4848,7 @@ pub extern "C" fn SzConfigTool_addFragment(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4858,7 +4859,7 @@ pub extern "C" fn SzConfigTool_addFragment(
             set_error("fragment_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(fragment_json).to_str() {
@@ -4867,7 +4868,7 @@ pub extern "C" fn SzConfigTool_addFragment(
                 set_error(format!("Invalid UTF-8 in fragment_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4879,7 +4880,7 @@ pub extern "C" fn SzConfigTool_addFragment(
             set_error(format!("Invalid JSON in fragment_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -4890,14 +4891,14 @@ pub extern "C" fn SzConfigTool_addFragment(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -4905,7 +4906,7 @@ pub extern "C" fn SzConfigTool_addFragment(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -4922,7 +4923,7 @@ pub extern "C" fn SzConfigTool_deleteFragment(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -4931,7 +4932,7 @@ pub extern "C" fn SzConfigTool_deleteFragment(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4942,7 +4943,7 @@ pub extern "C" fn SzConfigTool_deleteFragment(
             set_error("fragment_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(fragment_code).to_str() {
@@ -4951,7 +4952,7 @@ pub extern "C" fn SzConfigTool_deleteFragment(
                 set_error(format!("Invalid UTF-8 in fragment_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4973,7 +4974,7 @@ pub extern "C" fn SzConfigTool_getDataSource(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -4982,7 +4983,7 @@ pub extern "C" fn SzConfigTool_getDataSource(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -4993,7 +4994,7 @@ pub extern "C" fn SzConfigTool_getDataSource(
             set_error("code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(code).to_str() {
@@ -5002,7 +5003,7 @@ pub extern "C" fn SzConfigTool_getDataSource(
                 set_error(format!("Invalid UTF-8 in code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5015,14 +5016,14 @@ pub extern "C" fn SzConfigTool_getDataSource(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -5030,7 +5031,7 @@ pub extern "C" fn SzConfigTool_getDataSource(
                 set_error(format!("Failed to serialize data source: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -5038,7 +5039,7 @@ pub extern "C" fn SzConfigTool_getDataSource(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -5056,7 +5057,7 @@ pub extern "C" fn SzConfigTool_setDataSource(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -5065,7 +5066,7 @@ pub extern "C" fn SzConfigTool_setDataSource(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5076,7 +5077,7 @@ pub extern "C" fn SzConfigTool_setDataSource(
             set_error("code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(code).to_str() {
@@ -5085,7 +5086,7 @@ pub extern "C" fn SzConfigTool_setDataSource(
                 set_error(format!("Invalid UTF-8 in code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5096,7 +5097,7 @@ pub extern "C" fn SzConfigTool_setDataSource(
             set_error("updates_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(updates_json).to_str() {
@@ -5105,7 +5106,7 @@ pub extern "C" fn SzConfigTool_setDataSource(
                 set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5117,7 +5118,7 @@ pub extern "C" fn SzConfigTool_setDataSource(
             set_error(format!("Invalid JSON in updates_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -5159,7 +5160,7 @@ pub extern "C" fn SzConfigTool_addFeature(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -5168,7 +5169,7 @@ pub extern "C" fn SzConfigTool_addFeature(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5179,7 +5180,7 @@ pub extern "C" fn SzConfigTool_addFeature(
             set_error("feature_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(feature_code).to_str() {
@@ -5188,7 +5189,7 @@ pub extern "C" fn SzConfigTool_addFeature(
                 set_error(format!("Invalid UTF-8 in feature_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5199,7 +5200,7 @@ pub extern "C" fn SzConfigTool_addFeature(
             set_error("feature_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(feature_json).to_str() {
@@ -5208,7 +5209,7 @@ pub extern "C" fn SzConfigTool_addFeature(
                 set_error(format!("Invalid UTF-8 in feature_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5221,7 +5222,7 @@ pub extern "C" fn SzConfigTool_addFeature(
             set_error(format!("Invalid JSON in feature_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -5236,7 +5237,7 @@ pub extern "C" fn SzConfigTool_addFeature(
             set_error("Missing required field: elementList".to_string(), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -5282,14 +5283,14 @@ pub extern "C" fn SzConfigTool_addFeature(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -5297,7 +5298,7 @@ pub extern "C" fn SzConfigTool_addFeature(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -5314,7 +5315,7 @@ pub extern "C" fn SzConfigTool_deleteFeature(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -5323,7 +5324,7 @@ pub extern "C" fn SzConfigTool_deleteFeature(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5334,7 +5335,7 @@ pub extern "C" fn SzConfigTool_deleteFeature(
             set_error("feature_code_or_id is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(feature_code_or_id).to_str() {
@@ -5343,7 +5344,7 @@ pub extern "C" fn SzConfigTool_deleteFeature(
                 set_error(format!("Invalid UTF-8 in feature_code_or_id: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5364,7 +5365,7 @@ pub extern "C" fn SzConfigTool_setFeature(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -5373,7 +5374,7 @@ pub extern "C" fn SzConfigTool_setFeature(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5384,7 +5385,7 @@ pub extern "C" fn SzConfigTool_setFeature(
             set_error("feature_code_or_id is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(feature_code_or_id).to_str() {
@@ -5393,7 +5394,7 @@ pub extern "C" fn SzConfigTool_setFeature(
                 set_error(format!("Invalid UTF-8 in feature_code_or_id: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5404,7 +5405,7 @@ pub extern "C" fn SzConfigTool_setFeature(
             set_error("updates_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(updates_json).to_str() {
@@ -5413,7 +5414,7 @@ pub extern "C" fn SzConfigTool_setFeature(
                 set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5426,7 +5427,7 @@ pub extern "C" fn SzConfigTool_setFeature(
             set_error(format!("Invalid JSON in updates_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -5461,7 +5462,7 @@ pub extern "C" fn SzConfigTool_addElement(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -5470,7 +5471,7 @@ pub extern "C" fn SzConfigTool_addElement(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5481,7 +5482,7 @@ pub extern "C" fn SzConfigTool_addElement(
             set_error("element_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(element_code).to_str() {
@@ -5490,7 +5491,7 @@ pub extern "C" fn SzConfigTool_addElement(
                 set_error(format!("Invalid UTF-8 in element_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5501,7 +5502,7 @@ pub extern "C" fn SzConfigTool_addElement(
             set_error("element_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(element_json).to_str() {
@@ -5510,7 +5511,7 @@ pub extern "C" fn SzConfigTool_addElement(
                 set_error(format!("Invalid UTF-8 in element_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5522,7 +5523,7 @@ pub extern "C" fn SzConfigTool_addElement(
             set_error(format!("Invalid JSON in element_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -5541,7 +5542,7 @@ pub extern "C" fn SzConfigTool_deleteElement(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -5550,7 +5551,7 @@ pub extern "C" fn SzConfigTool_deleteElement(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5561,7 +5562,7 @@ pub extern "C" fn SzConfigTool_deleteElement(
             set_error("element_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(element_code).to_str() {
@@ -5570,7 +5571,7 @@ pub extern "C" fn SzConfigTool_deleteElement(
                 set_error(format!("Invalid UTF-8 in element_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5591,7 +5592,7 @@ pub extern "C" fn SzConfigTool_setElement(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -5600,7 +5601,7 @@ pub extern "C" fn SzConfigTool_setElement(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5611,7 +5612,7 @@ pub extern "C" fn SzConfigTool_setElement(
             set_error("element_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(element_code).to_str() {
@@ -5620,7 +5621,7 @@ pub extern "C" fn SzConfigTool_setElement(
                 set_error(format!("Invalid UTF-8 in element_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5631,7 +5632,7 @@ pub extern "C" fn SzConfigTool_setElement(
             set_error("updates_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(updates_json).to_str() {
@@ -5640,7 +5641,7 @@ pub extern "C" fn SzConfigTool_setElement(
                 set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5652,7 +5653,7 @@ pub extern "C" fn SzConfigTool_setElement(
             set_error(format!("Invalid JSON in updates_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -5688,7 +5689,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -5697,7 +5698,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5714,7 +5715,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
                     set_error(format!("Invalid UTF-8 in ftype_code: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -5732,7 +5733,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
                     set_error(format!("Invalid UTF-8 in felem_code: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -5744,7 +5745,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
             set_error("efunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(efunc_code).to_str() {
@@ -5753,7 +5754,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
                 set_error(format!("Invalid UTF-8 in efunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5764,7 +5765,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
             set_error("element_list_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(element_list_json).to_str() {
@@ -5773,7 +5774,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
                 set_error(format!("Invalid UTF-8 in element_list_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5790,7 +5791,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
                     set_error(format!("Invalid UTF-8 in expression_feature: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -5802,7 +5803,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
             set_error("is_virtual is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(is_virtual).to_str() {
@@ -5811,7 +5812,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
                 set_error(format!("Invalid UTF-8 in is_virtual: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5824,7 +5825,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
             set_error(format!("Invalid JSON in element_list_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -5871,7 +5872,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
             set_error("element_list_json must be a JSON array".to_string(), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -5897,14 +5898,14 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -5912,7 +5913,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -5929,7 +5930,7 @@ pub extern "C" fn SzConfigTool_deleteExpressionCall(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -5938,7 +5939,7 @@ pub extern "C" fn SzConfigTool_deleteExpressionCall(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5960,7 +5961,7 @@ pub extern "C" fn SzConfigTool_getExpressionCall(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -5969,7 +5970,7 @@ pub extern "C" fn SzConfigTool_getExpressionCall(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -5982,14 +5983,14 @@ pub extern "C" fn SzConfigTool_getExpressionCall(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -5997,7 +5998,7 @@ pub extern "C" fn SzConfigTool_getExpressionCall(
                 set_error(format!("Failed to serialize record: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -6005,7 +6006,7 @@ pub extern "C" fn SzConfigTool_getExpressionCall(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -6021,7 +6022,7 @@ pub extern "C" fn SzConfigTool_listExpressionCalls(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -6030,7 +6031,7 @@ pub extern "C" fn SzConfigTool_listExpressionCalls(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6043,14 +6044,14 @@ pub extern "C" fn SzConfigTool_listExpressionCalls(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -6058,7 +6059,7 @@ pub extern "C" fn SzConfigTool_listExpressionCalls(
                 set_error(format!("Failed to serialize list: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -6066,7 +6067,7 @@ pub extern "C" fn SzConfigTool_listExpressionCalls(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -6084,7 +6085,7 @@ pub extern "C" fn SzConfigTool_setExpressionCall(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -6093,7 +6094,7 @@ pub extern "C" fn SzConfigTool_setExpressionCall(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6104,7 +6105,7 @@ pub extern "C" fn SzConfigTool_setExpressionCall(
             set_error("updates_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(updates_json).to_str() {
@@ -6113,7 +6114,7 @@ pub extern "C" fn SzConfigTool_setExpressionCall(
                 set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6125,7 +6126,7 @@ pub extern "C" fn SzConfigTool_setExpressionCall(
             set_error(format!("Invalid JSON in updates_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -6155,7 +6156,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -6164,7 +6165,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6175,7 +6176,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
             set_error("ftype_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(ftype_code).to_str() {
@@ -6184,7 +6185,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
                 set_error(format!("Invalid UTF-8 in ftype_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6195,7 +6196,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
             set_error("cfunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(cfunc_code).to_str() {
@@ -6204,7 +6205,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
                 set_error(format!("Invalid UTF-8 in cfunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6215,7 +6216,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
             set_error("element_list_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(element_list_json).to_str() {
@@ -6224,7 +6225,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
                 set_error(format!("Invalid UTF-8 in element_list_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6237,7 +6238,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
             set_error(format!("Invalid JSON in element_list_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -6253,7 +6254,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
             set_error("element_list_json must be a JSON array".to_string(), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -6264,14 +6265,14 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -6279,7 +6280,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -6296,7 +6297,7 @@ pub extern "C" fn SzConfigTool_deleteComparisonCall(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -6305,7 +6306,7 @@ pub extern "C" fn SzConfigTool_deleteComparisonCall(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6327,7 +6328,7 @@ pub extern "C" fn SzConfigTool_getComparisonCall(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -6336,7 +6337,7 @@ pub extern "C" fn SzConfigTool_getComparisonCall(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6349,14 +6350,14 @@ pub extern "C" fn SzConfigTool_getComparisonCall(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -6364,7 +6365,7 @@ pub extern "C" fn SzConfigTool_getComparisonCall(
                 set_error(format!("Failed to serialize record: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -6372,7 +6373,7 @@ pub extern "C" fn SzConfigTool_getComparisonCall(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -6388,7 +6389,7 @@ pub extern "C" fn SzConfigTool_listComparisonCalls(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -6397,7 +6398,7 @@ pub extern "C" fn SzConfigTool_listComparisonCalls(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6410,14 +6411,14 @@ pub extern "C" fn SzConfigTool_listComparisonCalls(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -6425,7 +6426,7 @@ pub extern "C" fn SzConfigTool_listComparisonCalls(
                 set_error(format!("Failed to serialize list: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -6433,7 +6434,7 @@ pub extern "C" fn SzConfigTool_listComparisonCalls(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -6451,7 +6452,7 @@ pub extern "C" fn SzConfigTool_setComparisonCall(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -6460,7 +6461,7 @@ pub extern "C" fn SzConfigTool_setComparisonCall(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6471,7 +6472,7 @@ pub extern "C" fn SzConfigTool_setComparisonCall(
             set_error("updates_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(updates_json).to_str() {
@@ -6480,7 +6481,7 @@ pub extern "C" fn SzConfigTool_setComparisonCall(
                 set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6492,7 +6493,7 @@ pub extern "C" fn SzConfigTool_setComparisonCall(
             set_error(format!("Invalid JSON in updates_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -6536,7 +6537,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -6545,7 +6546,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6556,7 +6557,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
             set_error("ftype_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(ftype_code).to_str() {
@@ -6565,7 +6566,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
                 set_error(format!("Invalid UTF-8 in ftype_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6576,7 +6577,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
             set_error("dfunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(dfunc_code).to_str() {
@@ -6585,7 +6586,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
                 set_error(format!("Invalid UTF-8 in dfunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6596,7 +6597,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
             set_error("element_list_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(element_list_json).to_str() {
@@ -6605,7 +6606,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
                 set_error(format!("Invalid UTF-8 in element_list_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6618,7 +6619,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
             set_error(format!("Failed to parse element_list_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -6633,7 +6634,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
             set_error("element_list_json must be a JSON array".to_string(), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -6644,14 +6645,14 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -6659,7 +6660,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -6686,7 +6687,7 @@ pub extern "C" fn SzConfigTool_deleteDistinctCall(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -6695,7 +6696,7 @@ pub extern "C" fn SzConfigTool_deleteDistinctCall(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6707,14 +6708,14 @@ pub extern "C" fn SzConfigTool_deleteDistinctCall(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -6722,7 +6723,7 @@ pub extern "C" fn SzConfigTool_deleteDistinctCall(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -6751,7 +6752,7 @@ pub extern "C" fn SzConfigTool_getDistinctCall(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -6760,7 +6761,7 @@ pub extern "C" fn SzConfigTool_getDistinctCall(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6773,14 +6774,14 @@ pub extern "C" fn SzConfigTool_getDistinctCall(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -6788,7 +6789,7 @@ pub extern "C" fn SzConfigTool_getDistinctCall(
                 set_error(format!("Failed to serialize record: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -6796,7 +6797,7 @@ pub extern "C" fn SzConfigTool_getDistinctCall(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -6823,7 +6824,7 @@ pub extern "C" fn SzConfigTool_listDistinctCalls(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -6832,7 +6833,7 @@ pub extern "C" fn SzConfigTool_listDistinctCalls(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6845,14 +6846,14 @@ pub extern "C" fn SzConfigTool_listDistinctCalls(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -6860,7 +6861,7 @@ pub extern "C" fn SzConfigTool_listDistinctCalls(
                 set_error(format!("Failed to serialize list: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -6868,7 +6869,7 @@ pub extern "C" fn SzConfigTool_listDistinctCalls(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -6899,7 +6900,7 @@ pub extern "C" fn SzConfigTool_setDistinctCall(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -6908,7 +6909,7 @@ pub extern "C" fn SzConfigTool_setDistinctCall(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6919,7 +6920,7 @@ pub extern "C" fn SzConfigTool_setDistinctCall(
             set_error("updates_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(updates_json).to_str() {
@@ -6928,7 +6929,7 @@ pub extern "C" fn SzConfigTool_setDistinctCall(
                 set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -6940,7 +6941,7 @@ pub extern "C" fn SzConfigTool_setDistinctCall(
             set_error(format!("Failed to parse updates_json: {}", e), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -3,
+                returnCode: -3,
             };
         }
     };
@@ -6951,14 +6952,14 @@ pub extern "C" fn SzConfigTool_setDistinctCall(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -6966,7 +6967,7 @@ pub extern "C" fn SzConfigTool_setDistinctCall(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -6990,7 +6991,7 @@ pub extern "C" fn SzConfigTool_addMatchingFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -6999,7 +7000,7 @@ pub extern "C" fn SzConfigTool_addMatchingFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7010,7 +7011,7 @@ pub extern "C" fn SzConfigTool_addMatchingFunction(
             set_error("rtype_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(rtype_code).to_str() {
@@ -7019,7 +7020,7 @@ pub extern "C" fn SzConfigTool_addMatchingFunction(
                 set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7030,7 +7031,7 @@ pub extern "C" fn SzConfigTool_addMatchingFunction(
             set_error("matching_func is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(matching_func).to_str() {
@@ -7039,7 +7040,7 @@ pub extern "C" fn SzConfigTool_addMatchingFunction(
                 set_error(format!("Invalid UTF-8 in matching_func: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7051,14 +7052,14 @@ pub extern "C" fn SzConfigTool_addMatchingFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -7066,7 +7067,7 @@ pub extern "C" fn SzConfigTool_addMatchingFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -7083,7 +7084,7 @@ pub extern "C" fn SzConfigTool_deleteMatchingFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -7092,7 +7093,7 @@ pub extern "C" fn SzConfigTool_deleteMatchingFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7103,7 +7104,7 @@ pub extern "C" fn SzConfigTool_deleteMatchingFunction(
             set_error("rtype_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(rtype_code).to_str() {
@@ -7112,7 +7113,7 @@ pub extern "C" fn SzConfigTool_deleteMatchingFunction(
                 set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7124,14 +7125,14 @@ pub extern "C" fn SzConfigTool_deleteMatchingFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -7139,7 +7140,7 @@ pub extern "C" fn SzConfigTool_deleteMatchingFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -7156,7 +7157,7 @@ pub extern "C" fn SzConfigTool_getMatchingFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -7165,7 +7166,7 @@ pub extern "C" fn SzConfigTool_getMatchingFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7176,7 +7177,7 @@ pub extern "C" fn SzConfigTool_getMatchingFunction(
             set_error("rtype_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(rtype_code).to_str() {
@@ -7185,7 +7186,7 @@ pub extern "C" fn SzConfigTool_getMatchingFunction(
                 set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7198,14 +7199,14 @@ pub extern "C" fn SzConfigTool_getMatchingFunction(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -7213,7 +7214,7 @@ pub extern "C" fn SzConfigTool_getMatchingFunction(
                 set_error(format!("Failed to serialize record: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -7221,7 +7222,7 @@ pub extern "C" fn SzConfigTool_getMatchingFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -7237,7 +7238,7 @@ pub extern "C" fn SzConfigTool_listMatchingFunctions(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -7246,7 +7247,7 @@ pub extern "C" fn SzConfigTool_listMatchingFunctions(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7259,14 +7260,14 @@ pub extern "C" fn SzConfigTool_listMatchingFunctions(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -7274,7 +7275,7 @@ pub extern "C" fn SzConfigTool_listMatchingFunctions(
                 set_error(format!("Failed to serialize list: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -7282,7 +7283,7 @@ pub extern "C" fn SzConfigTool_listMatchingFunctions(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -7300,7 +7301,7 @@ pub extern "C" fn SzConfigTool_setMatchingFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -7309,7 +7310,7 @@ pub extern "C" fn SzConfigTool_setMatchingFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7320,7 +7321,7 @@ pub extern "C" fn SzConfigTool_setMatchingFunction(
             set_error("rtype_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(rtype_code).to_str() {
@@ -7329,7 +7330,7 @@ pub extern "C" fn SzConfigTool_setMatchingFunction(
                 set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7345,7 +7346,7 @@ pub extern "C" fn SzConfigTool_setMatchingFunction(
                     set_error(format!("Invalid UTF-8 in matching_func: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -7358,14 +7359,14 @@ pub extern "C" fn SzConfigTool_setMatchingFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -7373,7 +7374,7 @@ pub extern "C" fn SzConfigTool_setMatchingFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -7395,7 +7396,7 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -7404,7 +7405,7 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7415,7 +7416,7 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
             set_error("dfunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(dfunc_code).to_str() {
@@ -7424,7 +7425,7 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
                 set_error(format!("Invalid UTF-8 in dfunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7435,7 +7436,7 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
             set_error("connect_str is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(connect_str).to_str() {
@@ -7444,7 +7445,7 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
                 set_error(format!("Invalid UTF-8 in connect_str: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7460,7 +7461,7 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
                     set_error(format!("Invalid UTF-8 in dfunc_desc: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -7477,7 +7478,7 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
                     set_error(format!("Invalid UTF-8 in language: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -7492,14 +7493,14 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -7507,7 +7508,7 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -7524,7 +7525,7 @@ pub extern "C" fn SzConfigTool_deleteDistinctFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -7533,7 +7534,7 @@ pub extern "C" fn SzConfigTool_deleteDistinctFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7544,7 +7545,7 @@ pub extern "C" fn SzConfigTool_deleteDistinctFunction(
             set_error("dfunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(dfunc_code).to_str() {
@@ -7553,7 +7554,7 @@ pub extern "C" fn SzConfigTool_deleteDistinctFunction(
                 set_error(format!("Invalid UTF-8 in dfunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7565,14 +7566,14 @@ pub extern "C" fn SzConfigTool_deleteDistinctFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -7580,7 +7581,7 @@ pub extern "C" fn SzConfigTool_deleteDistinctFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -7597,7 +7598,7 @@ pub extern "C" fn SzConfigTool_getDistinctFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -7606,7 +7607,7 @@ pub extern "C" fn SzConfigTool_getDistinctFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7617,7 +7618,7 @@ pub extern "C" fn SzConfigTool_getDistinctFunction(
             set_error("dfunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(dfunc_code).to_str() {
@@ -7626,7 +7627,7 @@ pub extern "C" fn SzConfigTool_getDistinctFunction(
                 set_error(format!("Invalid UTF-8 in dfunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7639,14 +7640,14 @@ pub extern "C" fn SzConfigTool_getDistinctFunction(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -7654,7 +7655,7 @@ pub extern "C" fn SzConfigTool_getDistinctFunction(
                 set_error(format!("Failed to serialize record: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -7662,7 +7663,7 @@ pub extern "C" fn SzConfigTool_getDistinctFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -7678,7 +7679,7 @@ pub extern "C" fn SzConfigTool_listDistinctFunctions(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -7687,7 +7688,7 @@ pub extern "C" fn SzConfigTool_listDistinctFunctions(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7700,14 +7701,14 @@ pub extern "C" fn SzConfigTool_listDistinctFunctions(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -7715,7 +7716,7 @@ pub extern "C" fn SzConfigTool_listDistinctFunctions(
                 set_error(format!("Failed to serialize list: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -7723,7 +7724,7 @@ pub extern "C" fn SzConfigTool_listDistinctFunctions(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -7743,7 +7744,7 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -7752,7 +7753,7 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7763,7 +7764,7 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
             set_error("dfunc_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(dfunc_code).to_str() {
@@ -7772,7 +7773,7 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
                 set_error(format!("Invalid UTF-8 in dfunc_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7788,7 +7789,7 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
                     set_error(format!("Invalid UTF-8 in connect_str: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -7805,7 +7806,7 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
                     set_error(format!("Invalid UTF-8 in dfunc_desc: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -7822,7 +7823,7 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
                     set_error(format!("Invalid UTF-8 in language: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -7841,14 +7842,14 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -7856,7 +7857,7 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -7880,7 +7881,7 @@ pub extern "C" fn SzConfigTool_addCandidateFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -7889,7 +7890,7 @@ pub extern "C" fn SzConfigTool_addCandidateFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7900,7 +7901,7 @@ pub extern "C" fn SzConfigTool_addCandidateFunction(
             set_error("rtype_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(rtype_code).to_str() {
@@ -7909,7 +7910,7 @@ pub extern "C" fn SzConfigTool_addCandidateFunction(
                 set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7920,7 +7921,7 @@ pub extern "C" fn SzConfigTool_addCandidateFunction(
             set_error("candidate_func is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(candidate_func).to_str() {
@@ -7929,7 +7930,7 @@ pub extern "C" fn SzConfigTool_addCandidateFunction(
                 set_error(format!("Invalid UTF-8 in candidate_func: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7941,14 +7942,14 @@ pub extern "C" fn SzConfigTool_addCandidateFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -7956,7 +7957,7 @@ pub extern "C" fn SzConfigTool_addCandidateFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -7973,7 +7974,7 @@ pub extern "C" fn SzConfigTool_deleteCandidateFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -7982,7 +7983,7 @@ pub extern "C" fn SzConfigTool_deleteCandidateFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -7993,7 +7994,7 @@ pub extern "C" fn SzConfigTool_deleteCandidateFunction(
             set_error("rtype_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(rtype_code).to_str() {
@@ -8002,7 +8003,7 @@ pub extern "C" fn SzConfigTool_deleteCandidateFunction(
                 set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8014,14 +8015,14 @@ pub extern "C" fn SzConfigTool_deleteCandidateFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -8029,7 +8030,7 @@ pub extern "C" fn SzConfigTool_deleteCandidateFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -8046,7 +8047,7 @@ pub extern "C" fn SzConfigTool_getCandidateFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -8055,7 +8056,7 @@ pub extern "C" fn SzConfigTool_getCandidateFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8066,7 +8067,7 @@ pub extern "C" fn SzConfigTool_getCandidateFunction(
             set_error("rtype_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(rtype_code).to_str() {
@@ -8075,7 +8076,7 @@ pub extern "C" fn SzConfigTool_getCandidateFunction(
                 set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8088,14 +8089,14 @@ pub extern "C" fn SzConfigTool_getCandidateFunction(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -8103,7 +8104,7 @@ pub extern "C" fn SzConfigTool_getCandidateFunction(
                 set_error(format!("Failed to serialize record: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -8111,7 +8112,7 @@ pub extern "C" fn SzConfigTool_getCandidateFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -8127,7 +8128,7 @@ pub extern "C" fn SzConfigTool_listCandidateFunctions(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -8136,7 +8137,7 @@ pub extern "C" fn SzConfigTool_listCandidateFunctions(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8149,14 +8150,14 @@ pub extern "C" fn SzConfigTool_listCandidateFunctions(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -8164,7 +8165,7 @@ pub extern "C" fn SzConfigTool_listCandidateFunctions(
                 set_error(format!("Failed to serialize list: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -8172,7 +8173,7 @@ pub extern "C" fn SzConfigTool_listCandidateFunctions(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -8190,7 +8191,7 @@ pub extern "C" fn SzConfigTool_setCandidateFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -8199,7 +8200,7 @@ pub extern "C" fn SzConfigTool_setCandidateFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8210,7 +8211,7 @@ pub extern "C" fn SzConfigTool_setCandidateFunction(
             set_error("rtype_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(rtype_code).to_str() {
@@ -8219,7 +8220,7 @@ pub extern "C" fn SzConfigTool_setCandidateFunction(
                 set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8235,7 +8236,7 @@ pub extern "C" fn SzConfigTool_setCandidateFunction(
                     set_error(format!("Invalid UTF-8 in candidate_func: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -8248,14 +8249,14 @@ pub extern "C" fn SzConfigTool_setCandidateFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -8263,7 +8264,7 @@ pub extern "C" fn SzConfigTool_setCandidateFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -8283,7 +8284,7 @@ pub extern "C" fn SzConfigTool_addValidationFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -8292,7 +8293,7 @@ pub extern "C" fn SzConfigTool_addValidationFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8303,7 +8304,7 @@ pub extern "C" fn SzConfigTool_addValidationFunction(
             set_error("attr_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(attr_code).to_str() {
@@ -8312,7 +8313,7 @@ pub extern "C" fn SzConfigTool_addValidationFunction(
                 set_error(format!("Invalid UTF-8 in attr_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8323,7 +8324,7 @@ pub extern "C" fn SzConfigTool_addValidationFunction(
             set_error("validation_func is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(validation_func).to_str() {
@@ -8332,7 +8333,7 @@ pub extern "C" fn SzConfigTool_addValidationFunction(
                 set_error(format!("Invalid UTF-8 in validation_func: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8344,14 +8345,14 @@ pub extern "C" fn SzConfigTool_addValidationFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -8359,7 +8360,7 @@ pub extern "C" fn SzConfigTool_addValidationFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -8376,7 +8377,7 @@ pub extern "C" fn SzConfigTool_deleteValidationFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -8385,7 +8386,7 @@ pub extern "C" fn SzConfigTool_deleteValidationFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8396,7 +8397,7 @@ pub extern "C" fn SzConfigTool_deleteValidationFunction(
             set_error("attr_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(attr_code).to_str() {
@@ -8405,7 +8406,7 @@ pub extern "C" fn SzConfigTool_deleteValidationFunction(
                 set_error(format!("Invalid UTF-8 in attr_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8417,14 +8418,14 @@ pub extern "C" fn SzConfigTool_deleteValidationFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -8432,7 +8433,7 @@ pub extern "C" fn SzConfigTool_deleteValidationFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -8449,7 +8450,7 @@ pub extern "C" fn SzConfigTool_getValidationFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -8458,7 +8459,7 @@ pub extern "C" fn SzConfigTool_getValidationFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8469,7 +8470,7 @@ pub extern "C" fn SzConfigTool_getValidationFunction(
             set_error("attr_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(attr_code).to_str() {
@@ -8478,7 +8479,7 @@ pub extern "C" fn SzConfigTool_getValidationFunction(
                 set_error(format!("Invalid UTF-8 in attr_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8491,14 +8492,14 @@ pub extern "C" fn SzConfigTool_getValidationFunction(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -8506,7 +8507,7 @@ pub extern "C" fn SzConfigTool_getValidationFunction(
                 set_error(format!("Failed to serialize record: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -8514,7 +8515,7 @@ pub extern "C" fn SzConfigTool_getValidationFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -8530,7 +8531,7 @@ pub extern "C" fn SzConfigTool_listValidationFunctions(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -8539,7 +8540,7 @@ pub extern "C" fn SzConfigTool_listValidationFunctions(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8552,14 +8553,14 @@ pub extern "C" fn SzConfigTool_listValidationFunctions(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -8567,7 +8568,7 @@ pub extern "C" fn SzConfigTool_listValidationFunctions(
                 set_error(format!("Failed to serialize list: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -8575,7 +8576,7 @@ pub extern "C" fn SzConfigTool_listValidationFunctions(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -8593,7 +8594,7 @@ pub extern "C" fn SzConfigTool_setValidationFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -8602,7 +8603,7 @@ pub extern "C" fn SzConfigTool_setValidationFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8613,7 +8614,7 @@ pub extern "C" fn SzConfigTool_setValidationFunction(
             set_error("attr_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(attr_code).to_str() {
@@ -8622,7 +8623,7 @@ pub extern "C" fn SzConfigTool_setValidationFunction(
                 set_error(format!("Invalid UTF-8 in attr_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8638,7 +8639,7 @@ pub extern "C" fn SzConfigTool_setValidationFunction(
                     set_error(format!("Invalid UTF-8 in validation_func: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -8651,14 +8652,14 @@ pub extern "C" fn SzConfigTool_setValidationFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -8666,7 +8667,7 @@ pub extern "C" fn SzConfigTool_setValidationFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -8688,7 +8689,7 @@ pub extern "C" fn SzConfigTool_addScoringFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -8697,7 +8698,7 @@ pub extern "C" fn SzConfigTool_addScoringFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8708,7 +8709,7 @@ pub extern "C" fn SzConfigTool_addScoringFunction(
             set_error("rtype_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(rtype_code).to_str() {
@@ -8717,7 +8718,7 @@ pub extern "C" fn SzConfigTool_addScoringFunction(
                 set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8728,7 +8729,7 @@ pub extern "C" fn SzConfigTool_addScoringFunction(
             set_error("scoring_func is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(scoring_func).to_str() {
@@ -8737,7 +8738,7 @@ pub extern "C" fn SzConfigTool_addScoringFunction(
                 set_error(format!("Invalid UTF-8 in scoring_func: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8749,14 +8750,14 @@ pub extern "C" fn SzConfigTool_addScoringFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -8764,7 +8765,7 @@ pub extern "C" fn SzConfigTool_addScoringFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -8781,7 +8782,7 @@ pub extern "C" fn SzConfigTool_deleteScoringFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -8790,7 +8791,7 @@ pub extern "C" fn SzConfigTool_deleteScoringFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8801,7 +8802,7 @@ pub extern "C" fn SzConfigTool_deleteScoringFunction(
             set_error("rtype_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(rtype_code).to_str() {
@@ -8810,7 +8811,7 @@ pub extern "C" fn SzConfigTool_deleteScoringFunction(
                 set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8822,14 +8823,14 @@ pub extern "C" fn SzConfigTool_deleteScoringFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -8837,7 +8838,7 @@ pub extern "C" fn SzConfigTool_deleteScoringFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -8854,7 +8855,7 @@ pub extern "C" fn SzConfigTool_getScoringFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -8863,7 +8864,7 @@ pub extern "C" fn SzConfigTool_getScoringFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8874,7 +8875,7 @@ pub extern "C" fn SzConfigTool_getScoringFunction(
             set_error("rtype_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(rtype_code).to_str() {
@@ -8883,7 +8884,7 @@ pub extern "C" fn SzConfigTool_getScoringFunction(
                 set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8896,14 +8897,14 @@ pub extern "C" fn SzConfigTool_getScoringFunction(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -8911,7 +8912,7 @@ pub extern "C" fn SzConfigTool_getScoringFunction(
                 set_error(format!("Failed to serialize record: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -8919,7 +8920,7 @@ pub extern "C" fn SzConfigTool_getScoringFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -8935,7 +8936,7 @@ pub extern "C" fn SzConfigTool_listScoringFunctions(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -8944,7 +8945,7 @@ pub extern "C" fn SzConfigTool_listScoringFunctions(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -8957,14 +8958,14 @@ pub extern "C" fn SzConfigTool_listScoringFunctions(
                     clear_error();
                     SzConfigTool_result {
                         response: c_str.into_raw(),
-                        return_code: 0,
+                        returnCode: 0,
                     }
                 }
                 Err(e) => {
                     set_error(format!("Failed to create C string: {}", e), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -4,
+                        returnCode: -4,
                     }
                 }
             },
@@ -8972,7 +8973,7 @@ pub extern "C" fn SzConfigTool_listScoringFunctions(
                 set_error(format!("Failed to serialize list: {}", e), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -3,
+                    returnCode: -3,
                 }
             }
         },
@@ -8980,7 +8981,7 @@ pub extern "C" fn SzConfigTool_listScoringFunctions(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
@@ -8998,7 +8999,7 @@ pub extern "C" fn SzConfigTool_setScoringFunction(
             set_error("config_json is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(config_json).to_str() {
@@ -9007,7 +9008,7 @@ pub extern "C" fn SzConfigTool_setScoringFunction(
                 set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -9018,7 +9019,7 @@ pub extern "C" fn SzConfigTool_setScoringFunction(
             set_error("rtype_code is null".to_string(), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -1,
+                returnCode: -1,
             };
         }
         match CStr::from_ptr(rtype_code).to_str() {
@@ -9027,7 +9028,7 @@ pub extern "C" fn SzConfigTool_setScoringFunction(
                 set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -2,
+                    returnCode: -2,
                 };
             }
         }
@@ -9043,7 +9044,7 @@ pub extern "C" fn SzConfigTool_setScoringFunction(
                     set_error(format!("Invalid UTF-8 in scoring_func: {}", e), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
-                        return_code: -2,
+                        returnCode: -2,
                     };
                 }
             }
@@ -9056,14 +9057,14 @@ pub extern "C" fn SzConfigTool_setScoringFunction(
                 clear_error();
                 SzConfigTool_result {
                     response: c_str.into_raw(),
-                    return_code: 0,
+                    returnCode: 0,
                 }
             }
             Err(e) => {
                 set_error(format!("Failed to create C string: {}", e), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
-                    return_code: -4,
+                    returnCode: -4,
                 }
             }
         },
@@ -9071,118 +9072,8 @@ pub extern "C" fn SzConfigTool_setScoringFunction(
             set_error(e.to_string(), -5);
             SzConfigTool_result {
                 response: std::ptr::null_mut(),
-                return_code: -5,
+                returnCode: -5,
             }
         }
     }
-}
-
-// ============================================================================
-// WRAPPER FUNCTIONS (Remove _helper suffix for clean API)
-// ============================================================================
-// These wrappers provide a clean API by removing the _helper suffix from
-// Phase 1 functions, making the C API consistent with header declarations.
-
-/// Add a data source (wrapper for addDataSource_helper)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_addDataSource(
-    config_json: *const c_char,
-    data_source_code: *const c_char,
-) -> SzConfigTool_result {
-    unsafe { SzConfigTool_addDataSource_helper(config_json, data_source_code) }
-}
-
-/// Delete a data source (wrapper for deleteDataSource_helper)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_deleteDataSource(
-    config_json: *const c_char,
-    data_source_code: *const c_char,
-) -> SzConfigTool_result {
-    unsafe { SzConfigTool_deleteDataSource_helper(config_json, data_source_code) }
-}
-
-/// List all data sources (wrapper for listDataSources_helper)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_listDataSources(config_json: *const c_char) -> SzConfigTool_result {
-    unsafe { SzConfigTool_listDataSources_helper(config_json) }
-}
-
-/// Add an attribute (wrapper for addAttribute_helper)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_addAttribute(
-    config_json: *const c_char,
-    attribute_code: *const c_char,
-    feature_code: *const c_char,
-    element_code: *const c_char,
-    attr_class: *const c_char,
-    default_value: *const c_char,
-    advanced: *const c_char,
-    internal: *const c_char,
-) -> SzConfigTool_result {
-    unsafe {
-        SzConfigTool_addAttribute_helper(
-            config_json,
-            attribute_code,
-            feature_code,
-            element_code,
-            attr_class,
-            default_value,
-            advanced,
-            internal,
-        )
-    }
-}
-
-/// Delete an attribute (wrapper for deleteAttribute_helper)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_deleteAttribute(
-    config_json: *const c_char,
-    attribute_code: *const c_char,
-) -> SzConfigTool_result {
-    unsafe { SzConfigTool_deleteAttribute_helper(config_json, attribute_code) }
-}
-
-/// Get an attribute (wrapper for getAttribute_helper)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_getAttribute(
-    config_json: *const c_char,
-    attribute_code: *const c_char,
-) -> SzConfigTool_result {
-    unsafe { SzConfigTool_getAttribute_helper(config_json, attribute_code) }
-}
-
-/// List all attributes (wrapper for listAttributes_helper)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_listAttributes(config_json: *const c_char) -> SzConfigTool_result {
-    unsafe { SzConfigTool_listAttributes_helper(config_json) }
-}
-
-/// Get a feature (wrapper for getFeature_helper)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_getFeature(
-    config_json: *const c_char,
-    feature_code: *const c_char,
-) -> SzConfigTool_result {
-    unsafe { SzConfigTool_getFeature_helper(config_json, feature_code) }
-}
-
-/// List all features (wrapper for listFeatures_helper)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_listFeatures(config_json: *const c_char) -> SzConfigTool_result {
-    unsafe { SzConfigTool_listFeatures_helper(config_json) }
-}
-
-/// Get an element (wrapper for getElement_helper)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_getElement(
-    config_json: *const c_char,
-    element_code: *const c_char,
-) -> SzConfigTool_result {
-    unsafe { SzConfigTool_getElement_helper(config_json, element_code) }
-}
-
-/// List all elements (wrapper for listElements_helper)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_listElements(config_json: *const c_char) -> SzConfigTool_result {
-    unsafe { SzConfigTool_listElements_helper(config_json) }
 }

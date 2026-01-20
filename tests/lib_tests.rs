@@ -19,27 +19,22 @@ const TEST_CONFIG: &str = r#"{
 fn test_data_source_workflow() {
     let config = TEST_CONFIG.to_string();
 
-    // Add data source
-    let dsrc_config = json!({
-        "DSRC_CODE": "TEST_SOURCE",
-        "DSRC_DESC": "Test data source"
-    });
-
-    let config = helpers::add_to_config_array(&config, "CFG_DSRC", dsrc_config)
+    // Add data source using the proper API function
+    let config = datasources::add_data_source(&config, "TEST_SOURCE", None, None, None)
         .expect("Failed to add data source");
 
-    // List data sources
+    // List data sources - returns transformed format with "id" and "dataSource" fields
     let sources = datasources::list_data_sources(&config).expect("Failed to list data sources");
     assert_eq!(sources.len(), 1);
-    assert_eq!(sources[0]["DSRC_CODE"], "TEST_SOURCE");
+    assert_eq!(sources[0]["dataSource"], "TEST_SOURCE");
 
-    // Get data source
+    // Get data source - returns raw format with DSRC_CODE
     let source =
         datasources::get_data_source(&config, "TEST_SOURCE").expect("Failed to get data source");
     assert_eq!(source["DSRC_CODE"], "TEST_SOURCE");
 
-    // Delete data source
-    let config = helpers::delete_from_config_array(&config, "CFG_DSRC", "DSRC_CODE", "TEST_SOURCE")
+    // Delete data source using the proper API function
+    let config = datasources::delete_data_source(&config, "TEST_SOURCE")
         .expect("Failed to delete data source");
 
     // Verify deleted

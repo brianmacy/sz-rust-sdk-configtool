@@ -8,8 +8,13 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * Result structure for operations that return modified configuration JSON
+ * Matches SzHelpers pattern for C compatibility
  */
 typedef struct SzConfigTool_result {
   /**
@@ -19,7 +24,7 @@ typedef struct SzConfigTool_result {
   /**
    * Return code: 0 = success, negative = error
    */
-  int64_t return_code;
+  int64_t returnCode;
 } SzConfigTool_result;
 
 /**
@@ -563,5 +568,9 @@ struct SzConfigTool_result SzConfigTool_listScoringFunctions(const char *config_
 struct SzConfigTool_result SzConfigTool_setScoringFunction(const char *config_json,
                                                            const char *rtype_code,
                                                            const char *scoring_func);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* LIBSZCONFIGTOOL_H */

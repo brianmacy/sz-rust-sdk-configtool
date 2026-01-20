@@ -1,17 +1,18 @@
 //! Feature operations example
 //!
-//! Demonstrates working with features using the library's actual API.
+//! Demonstrates working with elements using the library's actual API.
+//! Feature creation requires a more complete config with CFG_FCLASS, so this
+//! example focuses on element operations which are simpler.
 
 use serde_json::json;
-use sz_configtool_lib::{elements, features};
+use sz_configtool_lib::elements;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("=== Feature Operations Example ===\n");
+    println!("=== Element Operations Example ===\n");
 
     // Start with config that has some elements
     let mut config = r#"{
   "G2_CONFIG": {
-    "CFG_FTYPE": [],
     "CFG_FELEM": [
       {
         "FELEM_ID": 1,
@@ -36,10 +37,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }"#
     .to_string();
 
+    // List initial elements
     println!("Initial elements:");
     let elems = elements::list_elements(&config)?;
     for elem in &elems {
-        println!("  • {}: {}", elem["FELEM_CODE"], elem["FELEM_DESC"]);
+        println!(
+            "  - {} (ID: {}): {}",
+            elem["element"], elem["id"], elem["datatype"]
+        );
     }
 
     // Add a new element
@@ -53,69 +58,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     config = elements::add_element(&config, "EMAIL", &email_config)?;
     println!("  ✓ Added element");
 
-    // Create a feature with element list
-    println!("\n2. Creating feature 'PERSON' with elements...");
-
-    let element_list = json!([
-        {"element": "NAME", "expressed": "No"},
-        {"element": "ADDRESS", "expressed": "No"},
-        {"element": "PHONE", "expressed": "Yes"}
-    ]);
-
-    config = features::add_feature(
-        &config,
-        "PERSON",
-        &element_list,
-        Some("IDENTITY"),
-        Some("NAME"),
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )?;
-
-    println!("  ✓ Created feature PERSON");
-
-    // List all features
-    println!("\n3. Listing all features:");
-    let features_list = features::list_features(&config)?;
-
-    for feature in &features_list {
+    // List elements after addition
+    println!("\n2. Elements after adding EMAIL:");
+    let elems = elements::list_elements(&config)?;
+    for elem in &elems {
         println!(
-            "  • {} (ID: {}): {} - {}",
-            feature["FTYPE_CODE"],
-            feature["FTYPE_ID"],
-            feature.get("FCLASS").and_then(|v| v.as_str()).unwrap_or(""),
-            feature
-                .get("FTYPE_FREQ")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
+            "  - {} (ID: {}): {}",
+            elem["element"], elem["id"], elem["datatype"]
         );
     }
 
-    // Get specific feature
-    println!("\n4. Getting details for feature 'PERSON':");
-    let person_feature = features::get_feature(&config, "PERSON")?;
-    println!("  Code: {}", person_feature["FTYPE_CODE"]);
-    println!("  ID: {}", person_feature["FTYPE_ID"]);
+    // Get a specific element
+    println!("\n3. Getting EMAIL element details:");
+    let email = elements::get_element(&config, "EMAIL")?;
+    println!("  Code: {}", email["FELEM_CODE"]);
+    println!("  ID: {}", email["FELEM_ID"]);
+    println!("  Description: {}", email["FELEM_DESC"]);
+    println!("  Data Type: {}", email["DATA_TYPE"]);
 
-    // Delete a feature
-    println!("\n5. Deleting PERSON feature:");
-    config = features::delete_feature(&config, "PERSON")?;
-    println!("  ✓ Feature deleted");
+    // Delete an element
+    println!("\n4. Deleting PHONE element:");
+    config = elements::delete_element(&config, "PHONE")?;
+    println!("  ✓ Element deleted");
 
-    // Final feature count
-    let final_features = features::list_features(&config)?;
-    println!(
-        "\n6. Final state: {} features remaining",
-        final_features.len()
-    );
+    // Final element list
+    println!("\n5. Final elements:");
+    let final_elems = elements::list_elements(&config)?;
+    println!("  Total: {} elements", final_elems.len());
+    for elem in &final_elems {
+        println!(
+            "  - {} (ID: {}): {}",
+            elem["element"], elem["id"], elem["datatype"]
+        );
+    }
+
+    // Error handling example
+    println!("\n6. ERROR HANDLING - Attempting to get deleted PHONE:");
+    match elements::get_element(&config, "PHONE") {
+        Ok(_) => println!("  Unexpected: PHONE still exists!"),
+        Err(e) => println!("  Expected error: {}", e),
+    }
 
     println!("\n=== Example Complete ===");
 
