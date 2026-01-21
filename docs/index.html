@@ -179,9 +179,27 @@
                     <li><strong>Pure Library:</strong> No CLI code, interactive features, or display logic</li>
                     <li><strong>147 Rust Functions:</strong> Across 30 modules for complete config management</li>
                     <li><strong>121 C FFI Functions:</strong> Full C-compatible interface with proper memory management</li>
+                    <li><strong>Clean API:</strong> Parameter structs for self-documenting code</li>
                     <li><strong>Type-Safe Errors:</strong> Custom SzConfigError enum for all error conditions</li>
+                    <li><strong>Command Processing:</strong> Process .gtc upgrade scripts (27/27 commands)</li>
                     <li><strong>Zero Dependencies:</strong> Only serde, serde_json, and anyhow</li>
                 </ul>
+            </div>
+
+            <div class="doc-section">
+                <h2>✨ Modern API Design</h2>
+                <p>All functions use <strong>parameter structs</strong> for clean, self-documenting code:</p>
+                <pre style="background: #2d2d2d; color: #f8f8f2; padding: 20px; border-radius: 8px; overflow-x: auto;"><code>use sz_configtool_lib::features::{set_feature, SetFeatureParams};
+
+// ✨ Named fields - crystal clear!
+let config = set_feature(&config, SetFeatureParams {
+    feature: "NAME",
+    candidates: Some("Yes"),
+    behavior: Some("NAME"),
+    version: Some(2),
+    ..Default::default()
+})?;</code></pre>
+                <p style="margin-top: 15px;"><strong>Benefits:</strong> Self-documenting • Type-safe • Extensible • IDE-friendly</p>
             </div>
 
             <div class="doc-section">
