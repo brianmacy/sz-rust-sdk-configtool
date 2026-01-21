@@ -198,6 +198,8 @@
             </div>
 
             <h2>Example Usage</h2>
+
+            <h3>C Example</h3>
             <pre><code>#include "libSzConfigTool.h"
 #include &lt;stdio.h&gt;
 
@@ -218,6 +220,23 @@ int main(void) {
 
     return 0;
 }</code></pre>
+
+            <h3>Rust Example (Using C Library)</h3>
+            <pre><code>use sz_configtool_lib::datasources::{add_data_source, AddDataSourceParams};
+
+// Modern param struct API - only set what you need!
+let config = add_data_source(&config, AddDataSourceParams {
+    code: "MY_SOURCE",
+    ..Default::default()  // All other fields = None
+})?;
+
+// Or with specific values
+let config = add_data_source(&config, AddDataSourceParams {
+    code: "CUSTOMERS",
+    retention_level: Some("Remember"),
+    reliability: Some(2),
+    ..Default::default()  // conversational = None
+})?;</code></pre>
 
             <h2>Building and Linking</h2>
 

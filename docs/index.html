@@ -203,6 +203,43 @@ let config = set_feature(&config, SetFeatureParams {
             </div>
 
             <div class="doc-section">
+                <h2>📝 More Examples</h2>
+
+                <h3>Add a Data Source (minimal)</h3>
+                <pre style="background: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 6px;"><code>datasources::add_data_source(&config, AddDataSourceParams {
+    code: "CUSTOMERS",
+    ..Default::default()  // Use all defaults
+})?;</code></pre>
+
+                <h3>Add an Attribute</h3>
+                <pre style="background: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 6px;"><code>attributes::add_attribute(&config, AddAttributeParams {
+    attribute: "EMAIL_ADDR",
+    feature: "EMAIL",
+    element: "EMAIL_ADDRESS",
+    class: "IDENTIFIER",
+    internal: Some("No"),
+    required: Some("Yes"),
+    ..Default::default()  // default_value = None
+})?;</code></pre>
+
+                <h3>Update a Feature (set only what changes)</h3>
+                <pre style="background: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 6px;"><code>features::set_feature(&config, SetFeatureParams {
+    feature: "SEMANTIC_VALUE",
+    candidates: Some("Yes"),
+    behavior: Some("NAME"),  // Prevent generic threshold hits!
+    ..Default::default()  // Keep all other settings
+})?;</code></pre>
+
+                <h3>Process Upgrade Script</h3>
+                <pre style="background: #2d2d2d; color: #f8f8f2; padding: 15px; border-radius: 6px;"><code>use command_processor::CommandProcessor;
+
+let mut processor = CommandProcessor::new(config);
+let upgraded = processor.process_file("upgrade-10-to-11.gtc")?;
+println!("{}", processor.summary()); // "Executed 90 commands"
+</code></pre>
+            </div>
+
+            <div class="doc-section">
                 <h2>🔧 Modules</h2>
                 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 15px;">
                     <div style="padding: 10px; background: #f8f9fa; border-radius: 6px;">attributes (8)</div>
@@ -212,9 +249,9 @@ let config = set_feature(&config, SetFeatureParams {
                     <div style="padding: 10px; background: #f8f9fa; border-radius: 6px;">thresholds (6)</div>
                     <div style="padding: 10px; background: #f8f9fa; border-radius: 6px;">calls (32)</div>
                     <div style="padding: 10px; background: #f8f9fa; border-radius: 6px;">functions (28)</div>
-                    <div style="padding: 10px; background: #f8f9fa; border-radius: 6px;">fragments (8)</div>
-                    <div style="padding: 10px; background: #f8f9fa; border-radius: 6px;">rules (5)</div>
-                    <div style="padding: 10px; background: #f8f9fa; border-radius: 6px;">+ 21 more</div>
+                    <div style="padding: 10px; background: #f8f9fa; border-radius: 6px;">behavior_overrides (4)</div>
+                    <div style="padding: 10px; background: #f8f9fa; border-radius: 6px;">command_processor</div>
+                    <div style="padding: 10px; background: #f8f9fa; border-radius: 6px;">+ 20 more</div>
                 </div>
             </div>
         </div>
