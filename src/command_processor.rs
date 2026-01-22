@@ -476,20 +476,16 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
             let plausible = params.get("plausibleScore").and_then(|v| v.as_i64());
             let unlikely = params.get("unlikelyScore").and_then(|v| v.as_i64());
 
-            // Lookup function ID and feature ID
-            let cfunc_id = crate::helpers::lookup_cfunc_id(config, func)?;
-            let ftype_id = if feature.eq_ignore_ascii_case("ALL") {
-                Some(0)
-            } else {
-                Some(crate::helpers::lookup_feature_id(config, feature)?)
-            };
-
             crate::thresholds::add_comparison_threshold(
                 config,
                 crate::thresholds::AddComparisonThresholdParams {
-                    cfunc_id,
-                    cfunc_rtnval: score_name.to_string(),
-                    ftype_id,
+                    cfunc_code: Some(func),
+                    ftype_code: if feature.eq_ignore_ascii_case("ALL") {
+                        None
+                    } else {
+                        Some(feature)
+                    },
+                    cfunc_rtnval: Some(score_name),
                     exec_order: None,
                     same_score: same,
                     close_score: close,

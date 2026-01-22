@@ -61,13 +61,13 @@ impl<'a> TryFrom<&'a Value> for SetElementParams<'a> {
 }
 
 /// Parameters for setting a feature element
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct SetFeatureElementParams<'a> {
     /// Feature code (e.g., "NAME", "ADDRESS")
-    pub feature_code: &'a str,
+    pub feature_code: Option<&'a str>,
 
     /// Element code (e.g., "FIRST_NAME", "FULL_NAME")
-    pub element_code: &'a str,
+    pub element_code: Option<&'a str>,
 
     pub exec_order: Option<i64>,
     pub display_level: Option<i64>,
@@ -87,8 +87,8 @@ impl<'a> SetFeatureElementParams<'a> {
     /// ```
     pub fn new(feature_code: &'a str, element_code: &'a str) -> Self {
         Self {
-            feature_code,
-            element_code,
+            feature_code: Some(feature_code),
+            element_code: Some(element_code),
             exec_order: None,
             display_level: None,
             display_delim: None,
@@ -136,8 +136,8 @@ impl<'a> TryFrom<&'a Value> for SetFeatureElementParams<'a> {
             .ok_or_else(|| SzConfigError::MissingField("elementCode".to_string()))?;
 
         Ok(Self {
-            feature_code,
-            element_code,
+            feature_code: Some(feature_code),
+            element_code: Some(element_code),
             exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
             display_level: json.get("displayLevel").and_then(|v| v.as_i64()),
             display_delim: json.get("displayDelim").and_then(|v| v.as_str()),
@@ -358,8 +358,15 @@ pub fn set_element(config_json: &str, params: SetElementParams) -> Result<String
 /// ```
 pub fn set_feature_element(config_json: &str, params: SetFeatureElementParams) -> Result<String> {
     // Resolve codes to IDs
-    let ftype_id = helpers::lookup_feature_id(config_json, params.feature_code)?;
-    let felem_id = helpers::lookup_element_id(config_json, params.element_code)?;
+    let feature_code = params
+        .feature_code
+        .ok_or_else(|| SzConfigError::MissingField("feature_code".to_string()))?;
+    let element_code = params
+        .element_code
+        .ok_or_else(|| SzConfigError::MissingField("element_code".to_string()))?;
+
+    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
+    let felem_id = helpers::lookup_element_id(config_json, element_code)?;
 
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;

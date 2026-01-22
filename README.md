@@ -11,6 +11,17 @@ Pure Rust library for manipulating Senzing configuration JSON documents.
 
 `sz_configtool_lib` provides 147 functions across 30 modules for programmatic manipulation of Senzing configuration documents (g2config.json). The library contains only pure business logic with no display formatting, making it ideal for automation scripts, migration tools, and external integrations.
 
+### ⚠️ Important Note on Usage
+
+**This is an unofficial SDK.** Outside of basic operations like adding data sources, Senzing does not publicly document the meaning and proper usage of most configuration functions and parameters without specific education and guidance. This library enables you to programmatically accomplish configuration tasks once you've received proper guidance on their recommended use for your particular situation.
+
+**Recommendation:** Work with Senzing support or documentation to understand:
+- When and why to use specific configuration functions
+- Appropriate parameter values for your use case
+- Impact of configuration changes on entity resolution behavior
+
+This library provides the "how" (programmatic interface) - you need Senzing guidance for the "what" and "when" (proper configuration practices).
+
 ## Features
 
 - ✅ **Code-Based API** - Use intuitive string codes instead of numeric IDs (no manual lookups!)

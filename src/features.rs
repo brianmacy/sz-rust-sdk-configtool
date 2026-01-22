@@ -125,10 +125,10 @@ impl<'a> TryFrom<&'a Value> for SetFeatureParams<'a> {
 }
 
 /// Parameters for adding a feature comparison (FBOM)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AddFeatureComparisonParams<'a> {
-    pub feature_code: &'a str,
-    pub element_code: &'a str,
+    pub feature_code: Option<&'a str>,
+    pub element_code: Option<&'a str>,
     pub exec_order: Option<i64>,
     pub display_level: Option<i64>,
     pub display_delim: Option<&'a str>,
@@ -138,8 +138,8 @@ pub struct AddFeatureComparisonParams<'a> {
 impl<'a> AddFeatureComparisonParams<'a> {
     pub fn new(feature_code: &'a str, element_code: &'a str) -> Self {
         Self {
-            feature_code,
-            element_code,
+            feature_code: Some(feature_code),
+            element_code: Some(element_code),
             exec_order: None,
             display_level: None,
             display_delim: None,
@@ -183,8 +183,8 @@ impl<'a> TryFrom<&'a Value> for AddFeatureComparisonParams<'a> {
             .ok_or_else(|| SzConfigError::MissingField("elementCode".to_string()))?;
 
         Ok(Self {
-            feature_code,
-            element_code,
+            feature_code: Some(feature_code),
+            element_code: Some(element_code),
             exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
             display_level: json.get("displayLevel").and_then(|v| v.as_i64()),
             display_delim: json.get("displayDelim").and_then(|v| v.as_str()),
@@ -194,17 +194,17 @@ impl<'a> TryFrom<&'a Value> for AddFeatureComparisonParams<'a> {
 }
 
 /// Parameters for getting a feature comparison
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct GetFeatureComparisonParams<'a> {
-    pub feature_code: &'a str,
-    pub element_code: &'a str,
+    pub feature_code: Option<&'a str>,
+    pub element_code: Option<&'a str>,
 }
 
 impl<'a> GetFeatureComparisonParams<'a> {
     pub fn new(feature_code: &'a str, element_code: &'a str) -> Self {
         Self {
-            feature_code,
-            element_code,
+            feature_code: Some(feature_code),
+            element_code: Some(element_code),
         }
     }
 }
@@ -224,17 +224,17 @@ impl<'a> TryFrom<&'a Value> for GetFeatureComparisonParams<'a> {
             .ok_or_else(|| SzConfigError::MissingField("elementCode".to_string()))?;
 
         Ok(Self {
-            feature_code,
-            element_code,
+            feature_code: Some(feature_code),
+            element_code: Some(element_code),
         })
     }
 }
 
 /// Parameters for adding a feature distinct call element (CFG_DFCALL)
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AddFeatureDistinctCallElementParams<'a> {
-    pub feature_code: &'a str,
-    pub distinct_func_code: &'a str,
+    pub feature_code: Option<&'a str>,
+    pub distinct_func_code: Option<&'a str>,
     pub element_code: Option<&'a str>,
     pub exec_order: Option<i64>,
 }
@@ -242,8 +242,8 @@ pub struct AddFeatureDistinctCallElementParams<'a> {
 impl<'a> AddFeatureDistinctCallElementParams<'a> {
     pub fn new(feature_code: &'a str, distinct_func_code: &'a str) -> Self {
         Self {
-            feature_code,
-            distinct_func_code,
+            feature_code: Some(feature_code),
+            distinct_func_code: Some(distinct_func_code),
             element_code: None,
             exec_order: None,
         }
@@ -1291,8 +1291,15 @@ pub fn add_feature_comparison(
     config_json: &str,
     params: AddFeatureComparisonParams,
 ) -> Result<String> {
-    let ftype_id = helpers::lookup_feature_id(config_json, params.feature_code)?;
-    let felem_id = helpers::lookup_element_id(config_json, params.element_code)?;
+    let feature_code = params
+        .feature_code
+        .ok_or_else(|| SzConfigError::MissingField("feature_code".to_string()))?;
+    let element_code = params
+        .element_code
+        .ok_or_else(|| SzConfigError::MissingField("element_code".to_string()))?;
+
+    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
+    let felem_id = helpers::lookup_element_id(config_json, element_code)?;
 
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -1306,7 +1313,7 @@ pub fn add_feature_comparison(
         item["FTYPE_ID"].as_i64() == Some(ftype_id) && item["FELEM_ID"].as_i64() == Some(felem_id)
     }) {
         return Err(SzConfigError::AlreadyExists(format!(
-            "Feature comparison: {}+{}",
+            "Feature comparison: {:?}+{:?}",
             params.feature_code, params.element_code
         )));
     }
@@ -1388,8 +1395,15 @@ pub fn get_feature_comparison(
     config_json: &str,
     params: GetFeatureComparisonParams,
 ) -> Result<Value> {
-    let ftype_id = helpers::lookup_feature_id(config_json, params.feature_code)?;
-    let felem_id = helpers::lookup_element_id(config_json, params.element_code)?;
+    let feature_code = params
+        .feature_code
+        .ok_or_else(|| SzConfigError::MissingField("feature_code".to_string()))?;
+    let element_code = params
+        .element_code
+        .ok_or_else(|| SzConfigError::MissingField("element_code".to_string()))?;
+
+    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
+    let felem_id = helpers::lookup_element_id(config_json, element_code)?;
 
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -1407,7 +1421,7 @@ pub fn get_feature_comparison(
         .cloned()
         .ok_or_else(|| {
             SzConfigError::NotFound(format!(
-                "Feature comparison: {}+{}",
+                "Feature comparison: {:?}+{:?}",
                 params.feature_code, params.element_code
             ))
         })
@@ -1489,8 +1503,15 @@ pub fn add_feature_distinct_call_element(
     config_json: &str,
     params: AddFeatureDistinctCallElementParams,
 ) -> Result<String> {
-    let ftype_id = helpers::lookup_feature_id(config_json, params.feature_code)?;
-    let dfunc_id = helpers::lookup_dfunc_id(config_json, params.distinct_func_code)?;
+    let feature_code = params
+        .feature_code
+        .ok_or_else(|| SzConfigError::MissingField("feature_code".to_string()))?;
+    let distinct_func_code = params
+        .distinct_func_code
+        .ok_or_else(|| SzConfigError::MissingField("distinct_func_code".to_string()))?;
+
+    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
+    let dfunc_id = helpers::lookup_dfunc_id(config_json, distinct_func_code)?;
     let felem_id = if let Some(code) = params.element_code {
         helpers::lookup_element_id(config_json, code)?
     } else {
@@ -1511,7 +1532,7 @@ pub fn add_feature_distinct_call_element(
             && item["FELEM_ID"].as_i64() == Some(felem_id)
     }) {
         return Err(SzConfigError::AlreadyExists(format!(
-            "Feature distinct call element: {}+{}",
+            "Feature distinct call element: {:?}+{:?}",
             params.feature_code, params.distinct_func_code
         )));
     }

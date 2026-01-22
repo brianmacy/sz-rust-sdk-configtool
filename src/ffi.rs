@@ -4299,19 +4299,17 @@ pub extern "C" fn SzConfigTool_addComparisonThreshold(
         Some(un_likely_score)
     };
 
-    handle_result!(crate::thresholds::add_comparison_threshold(
+    handle_result!(crate::thresholds::add_comparison_threshold_by_id(
         config,
-        crate::thresholds::AddComparisonThresholdParams {
-            cfunc_id,
-            cfunc_rtnval: rtnval.to_string(),
-            ftype_id: ftype_opt,
-            exec_order: exec_opt,
-            same_score: same_opt,
-            close_score: close_opt,
-            likely_score: likely_opt,
-            plausible_score: plausible_opt,
-            un_likely_score: unlikely_opt,
-        },
+        cfunc_id,
+        ftype_opt,
+        rtnval,
+        exec_opt,
+        same_opt,
+        close_opt,
+        likely_opt,
+        plausible_opt,
+        unlikely_opt,
     ))
 }
 
@@ -4404,16 +4402,14 @@ pub extern "C" fn SzConfigTool_setComparisonThreshold(
         }
     };
 
-    handle_result!(crate::thresholds::set_comparison_threshold(
+    handle_result!(crate::thresholds::set_comparison_threshold_by_id(
         config,
-        crate::thresholds::SetComparisonThresholdParams {
-            cfrtn_id,
-            same_score: updates_value.get("sameScore").and_then(|v| v.as_i64()),
-            close_score: updates_value.get("closeScore").and_then(|v| v.as_i64()),
-            likely_score: updates_value.get("likelyScore").and_then(|v| v.as_i64()),
-            plausible_score: updates_value.get("plausibleScore").and_then(|v| v.as_i64()),
-            un_likely_score: updates_value.get("unlikelyScore").and_then(|v| v.as_i64()),
-        },
+        cfrtn_id,
+        updates_value.get("sameScore").and_then(|v| v.as_i64()),
+        updates_value.get("closeScore").and_then(|v| v.as_i64()),
+        updates_value.get("likelyScore").and_then(|v| v.as_i64()),
+        updates_value.get("plausibleScore").and_then(|v| v.as_i64()),
+        updates_value.get("unlikelyScore").and_then(|v| v.as_i64()),
     ))
 }
 
@@ -4591,11 +4587,11 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
     handle_result!(crate::thresholds::add_generic_threshold(
         config,
         crate::thresholds::AddGenericThresholdParams {
-            plan_code: plan_str,
-            behavior: behavior_str,
-            scoring_cap,
-            candidate_cap,
-            send_to_redo: redo_str,
+            plan: Some(plan_str),
+            behavior: Some(behavior_str),
+            scoring_cap: Some(scoring_cap),
+            candidate_cap: Some(candidate_cap),
+            send_to_redo: Some(redo_str),
             feature: feature_opt,
         },
     ))
@@ -4689,8 +4685,8 @@ pub extern "C" fn SzConfigTool_deleteGenericThreshold(
     handle_result!(crate::thresholds::delete_generic_threshold(
         config,
         crate::thresholds::DeleteGenericThresholdParams {
-            plan_code: "INGEST", // Note: gplan_id not provided in this FFI signature
-            behavior: behavior_str,
+            plan: Some("INGEST"), // Note: gplan_id not provided in this FFI signature
+            behavior: Some(behavior_str),
             feature: feature_opt,
         },
     ))
@@ -4790,8 +4786,8 @@ pub extern "C" fn SzConfigTool_setGenericThreshold(
     handle_result!(crate::thresholds::set_generic_threshold(
         config,
         crate::thresholds::SetGenericThresholdParams {
-            plan_code: &plan_code_str,
-            behavior: behavior_str,
+            plan: Some(&plan_code_str),
+            behavior: Some(behavior_str),
             feature: updates_value.get("feature").and_then(|v| v.as_str()),
             candidate_cap: updates_value.get("candidateCap").and_then(|v| v.as_i64()),
             scoring_cap: updates_value.get("scoringCap").and_then(|v| v.as_i64()),

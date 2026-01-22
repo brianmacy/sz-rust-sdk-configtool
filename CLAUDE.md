@@ -6,6 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 This is a pure Rust library for manipulating Senzing configuration JSON documents (g2config.json). It provides 147 functions across 30 modules for programmatic configuration management without any display logic or CLI dependencies.
 
+### ⚠️ Important Context
+
+**This is an unofficial SDK.** Senzing does not publicly document the meaning, usage, or recommended practices for most configuration functions and parameters beyond basic operations (like adding data sources). Users of this library should have received specific guidance from Senzing support or documentation about:
+- When and why to use particular configuration functions
+- Appropriate parameter values for their specific use case
+- Impact of configuration changes on entity resolution behavior
+
+This library provides the programmatic interface ("how") - proper usage requires Senzing-provided guidance on configuration best practices ("what" and "when").
+
 **Key Characteristics**:
 - **Pure Library**: No CLI code, no interactive features, no display logic
 - **JSON Manipulation**: All operations are in-memory JSON transformations

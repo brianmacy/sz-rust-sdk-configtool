@@ -6,6 +6,21 @@
 //! without any display logic, making it suitable for automation, migration
 //! scripts, and external tools.
 //!
+//! ## ⚠️ Important: Unofficial SDK - Requires Senzing Guidance
+//!
+//! **This is an unofficial SDK.** Senzing does not publicly document the meaning, usage, or
+//! recommended practices for most configuration functions and parameters beyond basic operations
+//! (like adding data sources).
+//!
+//! **Before using this library**, you should have received specific guidance from Senzing support
+//! or documentation about:
+//! - When and why to use particular configuration functions
+//! - Appropriate parameter values for your specific use case
+//! - Impact of configuration changes on entity resolution behavior
+//!
+//! This library provides the programmatic interface ("how") - proper usage requires
+//! Senzing-provided guidance on configuration best practices ("what" and "when").
+//!
 //! ## Features
 //!
 //! - Pure JSON manipulation (no SDK dependencies)
