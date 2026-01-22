@@ -4341,7 +4341,7 @@ pub extern "C" fn SzConfigTool_deleteComparisonThreshold(
         }
     };
 
-    handle_result!(crate::thresholds::delete_comparison_threshold(
+    handle_result!(crate::thresholds::delete_comparison_threshold_by_id(
         config, cfrtn_id
     ))
 }
@@ -4591,7 +4591,7 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
     handle_result!(crate::thresholds::add_generic_threshold(
         config,
         crate::thresholds::AddGenericThresholdParams {
-            plan: plan_str,
+            plan_code: plan_str,
             behavior: behavior_str,
             scoring_cap,
             candidate_cap,
@@ -4689,7 +4689,7 @@ pub extern "C" fn SzConfigTool_deleteGenericThreshold(
     handle_result!(crate::thresholds::delete_generic_threshold(
         config,
         crate::thresholds::DeleteGenericThresholdParams {
-            gplan_id: 0, // Note: gplan_id not provided in this FFI signature
+            plan_code: "INGEST", // Note: gplan_id not provided in this FFI signature
             behavior: behavior_str,
             feature: feature_opt,
         },
@@ -4775,18 +4775,27 @@ pub extern "C" fn SzConfigTool_setGenericThreshold(
         }
     };
 
+    // Lookup plan code from ID
+    let plan_code_str = match crate::helpers::lookup_gplan_code(config, gplan_id) {
+        Ok(code) => code,
+        Err(e) => {
+            set_error(e.to_string(), -4);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -4,
+            };
+        }
+    };
+
     handle_result!(crate::thresholds::set_generic_threshold(
         config,
         crate::thresholds::SetGenericThresholdParams {
-            gplan_id,
-            behavior: behavior_str.to_string(),
-            ftype_id: updates_value.get("ftypeId").and_then(|v| v.as_i64()),
+            plan_code: &plan_code_str,
+            behavior: behavior_str,
+            feature: updates_value.get("feature").and_then(|v| v.as_str()),
             candidate_cap: updates_value.get("candidateCap").and_then(|v| v.as_i64()),
             scoring_cap: updates_value.get("scoringCap").and_then(|v| v.as_i64()),
-            send_to_redo: updates_value
-                .get("sendToRedo")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
+            send_to_redo: updates_value.get("sendToRedo").and_then(|v| v.as_str()),
         },
     ))
 }

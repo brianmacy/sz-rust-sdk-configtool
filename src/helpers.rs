@@ -627,3 +627,65 @@ pub fn lookup_dfunc_id(config_json: &str, func_code: &str) -> Result<i64> {
             SzConfigError::NotFound(format!("Distinct function '{}' not found", func_code))
         })
 }
+
+/// Lookup generic plan ID by plan code
+///
+/// # Arguments
+/// * `config_json` - JSON configuration string
+/// * `plan_code` - Plan code to look up (case-insensitive, e.g., "INGEST", "SEARCH")
+///
+/// # Returns
+/// Plan ID (GPLAN_ID)
+///
+/// # Errors
+/// Returns error if plan not found or JSON is invalid
+pub fn lookup_gplan_id(config_json: &str, plan_code: &str) -> Result<i64> {
+    let config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
+    config
+        .get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_GPLAN"))
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .find(|p| {
+                    p.get("GPLAN_CODE")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.eq_ignore_ascii_case(plan_code))
+                        .unwrap_or(false)
+                })
+                .and_then(|p| p.get("GPLAN_ID"))
+                .and_then(|v| v.as_i64())
+        })
+        .ok_or_else(|| SzConfigError::NotFound(format!("Generic plan '{}' not found", plan_code)))
+}
+
+/// Internal: Lookup generic plan code by plan ID (for FFI use)
+///
+/// # Arguments
+/// * `config_json` - JSON configuration string
+/// * `gplan_id` - Plan ID to look up
+///
+/// # Returns
+/// Plan code (GPLAN_CODE)
+///
+/// # Errors
+/// Returns error if plan not found or JSON is invalid
+pub(crate) fn lookup_gplan_code(config_json: &str, gplan_id: i64) -> Result<String> {
+    let config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
+    config
+        .get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_GPLAN"))
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .find(|p| p.get("GPLAN_ID").and_then(|v| v.as_i64()) == Some(gplan_id))
+                .and_then(|p| p.get("GPLAN_CODE"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })
+        .ok_or_else(|| SzConfigError::NotFound(format!("Generic plan ID: {}", gplan_id)))
+}

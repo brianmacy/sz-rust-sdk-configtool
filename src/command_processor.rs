@@ -272,19 +272,15 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
             let feature = get_str_param(params, "feature")?;
             let element = get_str_param(params, "element")?;
 
-            // Lookup IDs
-            let ftype_id = crate::helpers::lookup_feature_id(config, feature)?;
-            let felem_id = crate::helpers::lookup_element_id(config, element)?;
-
             // Check which property to set
             if let Some(derived) = get_opt_str_param(params, "derived") {
-                crate::elements::set_feature_element_derived(config, ftype_id, felem_id, derived)
+                crate::elements::set_feature_element_derived(config, feature, element, derived)
             } else if let Some(display_level) = params.get("displayLevel").and_then(|v| v.as_i64())
             {
                 crate::elements::set_feature_element_display_level(
                     config,
-                    ftype_id,
-                    felem_id,
+                    feature,
+                    element,
                     display_level,
                 )
             } else {

@@ -13,12 +13,13 @@ Pure Rust library for manipulating Senzing configuration JSON documents.
 
 ## Features
 
+- ✅ **Code-Based API** - Use intuitive string codes instead of numeric IDs (no manual lookups!)
 - ✅ **Pure JSON Manipulation** - No SDK dependencies for core operations
 - ✅ **No Display Logic** - Zero dependencies on formatting, colors, or output libraries
 - ✅ **Type-Safe Errors** - Comprehensive error handling with `SzConfigError`
 - ✅ **Well-Documented** - All public functions have rustdoc comments
 - ✅ **Tested** - Comprehensive unit and integration tests
-- ✅ **Clean API** - Parameter structs for self-documenting code
+- ✅ **Clean API** - Parameter structs with builder pattern for self-documenting code
 - ✅ **Modern Design** - All functions use `(config, params)` pattern
 
 ## API Design
@@ -158,7 +159,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - **`elements`** (8 functions) - Element operations (CFG_FELEM)
 
 #### Configuration
-- **`thresholds`** (6 functions) - Comparison and generic thresholds
+- **`thresholds`** (8 functions) - Comparison and generic thresholds
 - **`rules`** (5 functions) - Entity resolution rules (CFG_ERRULE)
 - **`fragments`** (5 functions) - Rule fragments (CFG_ERFRAG)
 - **`generic_plans`** (4 functions) - Generic plan management (CFG_GPLAN)
@@ -274,16 +275,35 @@ let config = features::set_feature(
 )?;
 ```
 
+### Element and Feature Element Operations
+
+```rust
+use sz_configtool_lib::elements::{self, SetFeatureElementParams};
+
+// Update feature element using intuitive codes (no ID lookups needed!)
+let config = elements::set_feature_element(
+    &config,
+    SetFeatureElementParams::new("NAME", "FIRST_NAME")
+        .with_display_level(1)
+        .with_derived("No"),
+)?;
+
+// Convenience functions for common operations
+let config = elements::set_feature_element_display_level(&config, "ADDRESS", "ADDR_LINE1", 2)?;
+let config = elements::set_feature_element_derived(&config, "NAME", "FULL_NAME", "Yes")?;
+```
+
 ### Threshold Operations
 
 ```rust
 use sz_configtool_lib::thresholds::{self, AddComparisonThresholdParams, AddGenericThresholdParams};
 
-// Add comparison threshold with named parameters
+// Add comparison threshold using function and feature codes (no ID lookups!)
 let config = thresholds::add_comparison_threshold(
     &config,
     AddComparisonThresholdParams {
-        cfunc_id: 1,
+        cfunc_code: "SAME_PHONE",
+        ftype_code: "PHONE",
         cfunc_rtnval: "FULL_SCORE".to_string(),
         same_score: Some(85),
         close_score: Some(75),
@@ -294,11 +314,11 @@ let config = thresholds::add_comparison_threshold(
     },
 )?;
 
-// Add generic threshold
+// Add generic threshold using plan code (no ID lookup needed!)
 let config = thresholds::add_generic_threshold(
     &config,
     AddGenericThresholdParams {
-        plan: "SEARCH",
+        plan_code: "SEARCH",
         behavior: "NAME",
         scoring_cap: 1000,
         candidate_cap: 1000,
@@ -308,7 +328,27 @@ let config = thresholds::add_generic_threshold(
 )?;
 
 // List all generic thresholds
-let thresholds = thresholds::list_generic_thresholds(&config)?;
+let thresholds_list = thresholds::list_generic_thresholds(&config)?;
+
+// Update threshold by name (no ID lookups needed)
+use sz_configtool_lib::thresholds::SetGenericThresholdByNameParams;
+let config = thresholds::set_generic_threshold_by_name(
+    &config,
+    SetGenericThresholdByNameParams::new("INGEST", "FM")
+        .with_feature("SEMANTIC_VALUE")
+        .with_candidate_cap(20)
+        .with_scoring_cap(-1),
+)?;
+
+// Update comparison threshold by name (no ID lookups needed)
+use sz_configtool_lib::thresholds::SetComparisonThresholdByKeyParams;
+let config = thresholds::set_comparison_threshold_by_key(
+    &config,
+    SetComparisonThresholdByKeyParams::new("SEMANTIC_SIMILARITY_COMP", "FULL_SCORE")
+        .with_feature("SEMANTIC_VALUE")
+        .with_same_score(100)
+        .with_close_score(90),
+)?;
 ```
 
 ### Command Script Processing

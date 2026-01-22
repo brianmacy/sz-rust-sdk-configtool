@@ -17,11 +17,30 @@ This is a pure Rust library for manipulating Senzing configuration JSON document
 
 ### Core Design Principles
 
-1. **In-Memory JSON Operations**: All functions operate on JSON strings and return modified JSON strings
-2. **Pure Functions**: Functions are side-effect free (except for error handling)
-3. **Type-Safe Errors**: Custom `SzConfigError` enum for all error conditions
-4. **Parameter Alignment**: Function signatures match sz_configtool CLI commands for consistency
-5. **No Display Logic**: Zero dependencies on formatting, colors, tables, or output libraries
+1. **Code-Based API**: Public functions use human-readable string codes (e.g., "NAME", "PHONE") instead of numeric IDs
+2. **In-Memory JSON Operations**: All functions operate on JSON strings and return modified JSON strings
+3. **Pure Functions**: Functions are side-effect free (except for error handling)
+4. **Type-Safe Errors**: Custom `SzConfigError` enum for all error conditions
+5. **Parameter Alignment**: Function signatures match sz_configtool CLI commands for consistency
+6. **No Display Logic**: Zero dependencies on formatting, colors, tables, or output libraries
+
+### API Design Philosophy
+
+**Use Codes, Not IDs:**
+- Public APIs accept string codes (e.g., `feature_code: "NAME"`, `element_code: "FIRST_NAME"`)
+- Internal ID lookups happen automatically via `helpers::lookup_*_id()` functions
+- This eliminates the need for users to manually lookup foreign keys
+- Makes code self-documenting and easier to read
+
+**Builder Pattern:**
+- Parameter structs provide `new()` constructors and `.with_*()` builder methods
+- Example: `SetFeatureElementParams::new("NAME", "FIRST_NAME").with_display_level(1)`
+- All optional parameters use `Option<T>` types
+
+**Internal Helper Functions:**
+- Functions needing ID-based access (e.g., for FFI) should be `pub(crate)`, not `pub`
+- Example: `pub(crate) fn delete_comparison_threshold_by_id()` for FFI use only
+- Use `#[doc(hidden)]` sparingly; prefer `pub(crate)` for truly internal functions
 
 ### Module Organization
 

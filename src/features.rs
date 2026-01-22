@@ -125,33 +125,66 @@ impl<'a> TryFrom<&'a Value> for SetFeatureParams<'a> {
 }
 
 /// Parameters for adding a feature comparison (FBOM)
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct AddFeatureComparisonParams<'a> {
-    pub ftype_id: i64,
-    pub felem_id: i64,
+    pub feature_code: &'a str,
+    pub element_code: &'a str,
     pub exec_order: Option<i64>,
     pub display_level: Option<i64>,
     pub display_delim: Option<&'a str>,
     pub derived: Option<&'a str>,
 }
 
+impl<'a> AddFeatureComparisonParams<'a> {
+    pub fn new(feature_code: &'a str, element_code: &'a str) -> Self {
+        Self {
+            feature_code,
+            element_code,
+            exec_order: None,
+            display_level: None,
+            display_delim: None,
+            derived: None,
+        }
+    }
+
+    pub fn with_exec_order(mut self, order: i64) -> Self {
+        self.exec_order = Some(order);
+        self
+    }
+
+    pub fn with_display_level(mut self, level: i64) -> Self {
+        self.display_level = Some(level);
+        self
+    }
+
+    pub fn with_display_delim(mut self, delim: &'a str) -> Self {
+        self.display_delim = Some(delim);
+        self
+    }
+
+    pub fn with_derived(mut self, derived: &'a str) -> Self {
+        self.derived = Some(derived);
+        self
+    }
+}
+
 impl<'a> TryFrom<&'a Value> for AddFeatureComparisonParams<'a> {
     type Error = SzConfigError;
 
     fn try_from(json: &'a Value) -> Result<Self> {
-        let ftype_id = json
-            .get("ftypeId")
-            .and_then(|v| v.as_i64())
-            .ok_or_else(|| SzConfigError::MissingField("ftypeId".to_string()))?;
+        let feature_code = json
+            .get("featureCode")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("featureCode".to_string()))?;
 
-        let felem_id = json
-            .get("felemId")
-            .and_then(|v| v.as_i64())
-            .ok_or_else(|| SzConfigError::MissingField("felemId".to_string()))?;
+        let element_code = json
+            .get("elementCode")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("elementCode".to_string()))?;
 
         Ok(Self {
-            ftype_id,
-            felem_id,
+            feature_code,
+            element_code,
             exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
             display_level: json.get("displayLevel").and_then(|v| v.as_i64()),
             display_delim: json.get("displayDelim").and_then(|v| v.as_str()),
@@ -162,46 +195,68 @@ impl<'a> TryFrom<&'a Value> for AddFeatureComparisonParams<'a> {
 
 /// Parameters for getting a feature comparison
 #[derive(Debug, Clone)]
-pub struct GetFeatureComparisonParams {
-    pub ftype_id: i64,
-    pub felem_id: i64,
+pub struct GetFeatureComparisonParams<'a> {
+    pub feature_code: &'a str,
+    pub element_code: &'a str,
 }
 
-impl TryFrom<&Value> for GetFeatureComparisonParams {
+impl<'a> GetFeatureComparisonParams<'a> {
+    pub fn new(feature_code: &'a str, element_code: &'a str) -> Self {
+        Self {
+            feature_code,
+            element_code,
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a Value> for GetFeatureComparisonParams<'a> {
     type Error = SzConfigError;
 
-    fn try_from(json: &Value) -> Result<Self> {
-        let ftype_id = json
-            .get("ftypeId")
-            .and_then(|v| v.as_i64())
-            .ok_or_else(|| SzConfigError::MissingField("ftypeId".to_string()))?;
+    fn try_from(json: &'a Value) -> Result<Self> {
+        let feature_code = json
+            .get("featureCode")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("featureCode".to_string()))?;
 
-        let felem_id = json
-            .get("felemId")
-            .and_then(|v| v.as_i64())
-            .ok_or_else(|| SzConfigError::MissingField("felemId".to_string()))?;
+        let element_code = json
+            .get("elementCode")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("elementCode".to_string()))?;
 
-        Ok(Self { ftype_id, felem_id })
+        Ok(Self {
+            feature_code,
+            element_code,
+        })
     }
 }
 
 /// Parameters for adding a feature distinct call element (CFG_DFCALL)
-#[derive(Debug, Clone, Default)]
-pub struct AddFeatureDistinctCallElementParams {
-    pub ftype_id: i64,
-    pub dfunc_id: i64,
-    pub felem_id: Option<i64>,
+#[derive(Debug, Clone)]
+pub struct AddFeatureDistinctCallElementParams<'a> {
+    pub feature_code: &'a str,
+    pub distinct_func_code: &'a str,
+    pub element_code: Option<&'a str>,
     pub exec_order: Option<i64>,
 }
 
-impl AddFeatureDistinctCallElementParams {
-    pub fn new(ftype_id: i64, dfunc_id: i64) -> Self {
+impl<'a> AddFeatureDistinctCallElementParams<'a> {
+    pub fn new(feature_code: &'a str, distinct_func_code: &'a str) -> Self {
         Self {
-            ftype_id,
-            dfunc_id,
-            felem_id: None,
+            feature_code,
+            distinct_func_code,
+            element_code: None,
             exec_order: None,
         }
+    }
+
+    pub fn with_element_code(mut self, element_code: &'a str) -> Self {
+        self.element_code = Some(element_code);
+        self
+    }
+
+    pub fn with_exec_order(mut self, order: i64) -> Self {
+        self.exec_order = Some(order);
+        self
     }
 }
 
@@ -1236,6 +1291,9 @@ pub fn add_feature_comparison(
     config_json: &str,
     params: AddFeatureComparisonParams,
 ) -> Result<String> {
+    let ftype_id = helpers::lookup_feature_id(config_json, params.feature_code)?;
+    let felem_id = helpers::lookup_element_id(config_json, params.element_code)?;
+
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
@@ -1245,19 +1303,18 @@ pub fn add_feature_comparison(
         .ok_or_else(|| SzConfigError::MissingSection("CFG_FBOM".to_string()))?;
 
     if fbom_array.iter().any(|item| {
-        item["FTYPE_ID"].as_i64() == Some(params.ftype_id)
-            && item["FELEM_ID"].as_i64() == Some(params.felem_id)
+        item["FTYPE_ID"].as_i64() == Some(ftype_id) && item["FELEM_ID"].as_i64() == Some(felem_id)
     }) {
         return Err(SzConfigError::AlreadyExists(format!(
-            "Feature comparison: FTYPE_ID={}, FELEM_ID={}",
-            params.ftype_id, params.felem_id
+            "Feature comparison: {}+{}",
+            params.feature_code, params.element_code
         )));
     }
 
     // Build record
     let mut record = json!({
-        "FTYPE_ID": params.ftype_id,
-        "FELEM_ID": params.felem_id,
+        "FTYPE_ID": ftype_id,
+        "FELEM_ID": felem_id,
     });
 
     if let Some(order) = params.exec_order {
@@ -1287,9 +1344,12 @@ pub fn add_feature_comparison(
 /// Modified configuration JSON string
 pub fn delete_feature_comparison(
     config_json: &str,
-    ftype_id: i64,
-    felem_id: i64,
+    feature_code: &str,
+    element_code: &str,
 ) -> Result<String> {
+    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
+    let felem_id = helpers::lookup_element_id(config_json, element_code)?;
+
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
@@ -1328,6 +1388,9 @@ pub fn get_feature_comparison(
     config_json: &str,
     params: GetFeatureComparisonParams,
 ) -> Result<Value> {
+    let ftype_id = helpers::lookup_feature_id(config_json, params.feature_code)?;
+    let felem_id = helpers::lookup_element_id(config_json, params.element_code)?;
+
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
@@ -1338,14 +1401,14 @@ pub fn get_feature_comparison(
     fbom_array
         .iter()
         .find(|item| {
-            item["FTYPE_ID"].as_i64() == Some(params.ftype_id)
-                && item["FELEM_ID"].as_i64() == Some(params.felem_id)
+            item["FTYPE_ID"].as_i64() == Some(ftype_id)
+                && item["FELEM_ID"].as_i64() == Some(felem_id)
         })
         .cloned()
         .ok_or_else(|| {
             SzConfigError::NotFound(format!(
-                "Feature comparison: FTYPE_ID={}, FELEM_ID={}",
-                params.ftype_id, params.felem_id
+                "Feature comparison: {}+{}",
+                params.feature_code, params.element_code
             ))
         })
 }
@@ -1405,10 +1468,10 @@ pub fn add_feature_comparison_element(
 /// Modified configuration JSON string
 pub fn delete_feature_comparison_element(
     config_json: &str,
-    ftype_id: i64,
-    felem_id: i64,
+    feature_code: &str,
+    element_code: &str,
 ) -> Result<String> {
-    delete_feature_comparison(config_json, ftype_id, felem_id)
+    delete_feature_comparison(config_json, feature_code, element_code)
 }
 
 /// Add a feature distinct call element (CFG_DFCALL record)
@@ -1426,10 +1489,16 @@ pub fn add_feature_distinct_call_element(
     config_json: &str,
     params: AddFeatureDistinctCallElementParams,
 ) -> Result<String> {
+    let ftype_id = helpers::lookup_feature_id(config_json, params.feature_code)?;
+    let dfunc_id = helpers::lookup_dfunc_id(config_json, params.distinct_func_code)?;
+    let felem_id = if let Some(code) = params.element_code {
+        helpers::lookup_element_id(config_json, code)?
+    } else {
+        -1
+    };
+
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
-
-    let felem = params.felem_id.unwrap_or(-1);
 
     // Check if already exists
     let dfcall_array = config["G2_CONFIG"]["CFG_DFCALL"]
@@ -1437,13 +1506,13 @@ pub fn add_feature_distinct_call_element(
         .ok_or_else(|| SzConfigError::MissingSection("CFG_DFCALL".to_string()))?;
 
     if dfcall_array.iter().any(|item| {
-        item["FTYPE_ID"].as_i64() == Some(params.ftype_id)
-            && item["DFUNC_ID"].as_i64() == Some(params.dfunc_id)
-            && item["FELEM_ID"].as_i64() == Some(felem)
+        item["FTYPE_ID"].as_i64() == Some(ftype_id)
+            && item["DFUNC_ID"].as_i64() == Some(dfunc_id)
+            && item["FELEM_ID"].as_i64() == Some(felem_id)
     }) {
         return Err(SzConfigError::AlreadyExists(format!(
-            "Feature distinct call element: FTYPE_ID={}, DFUNC_ID={}, FELEM_ID={}",
-            params.ftype_id, params.dfunc_id, felem
+            "Feature distinct call element: {}+{}",
+            params.feature_code, params.distinct_func_code
         )));
     }
 
@@ -1453,9 +1522,9 @@ pub fn add_feature_distinct_call_element(
     // Build record
     let mut record = json!({
         "DFCALL_ID": dfcall_id,
-        "FTYPE_ID": params.ftype_id,
-        "DFUNC_ID": params.dfunc_id,
-        "FELEM_ID": felem,
+        "FTYPE_ID": ftype_id,
+        "DFUNC_ID": dfunc_id,
+        "FELEM_ID": felem_id,
     });
 
     if let Some(order) = params.exec_order {

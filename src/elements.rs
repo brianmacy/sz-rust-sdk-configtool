@@ -61,33 +61,83 @@ impl<'a> TryFrom<&'a Value> for SetElementParams<'a> {
 }
 
 /// Parameters for setting a feature element
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SetFeatureElementParams<'a> {
-    pub ftype_id: i64,
-    pub felem_id: i64,
+    /// Feature code (e.g., "NAME", "ADDRESS")
+    pub feature_code: &'a str,
+
+    /// Element code (e.g., "FIRST_NAME", "FULL_NAME")
+    pub element_code: &'a str,
+
     pub exec_order: Option<i64>,
     pub display_level: Option<i64>,
     pub display_delim: Option<&'a str>,
     pub derived: Option<&'a str>,
 }
 
+impl<'a> SetFeatureElementParams<'a> {
+    /// Create new params using feature and element codes
+    ///
+    /// # Example
+    /// ```no_run
+    /// use sz_configtool_lib::elements::SetFeatureElementParams;
+    ///
+    /// let params = SetFeatureElementParams::new("NAME", "FIRST_NAME")
+    ///     .with_display_level(1);
+    /// ```
+    pub fn new(feature_code: &'a str, element_code: &'a str) -> Self {
+        Self {
+            feature_code,
+            element_code,
+            exec_order: None,
+            display_level: None,
+            display_delim: None,
+            derived: None,
+        }
+    }
+
+    /// Set execution order
+    pub fn with_exec_order(mut self, order: i64) -> Self {
+        self.exec_order = Some(order);
+        self
+    }
+
+    /// Set display level
+    pub fn with_display_level(mut self, level: i64) -> Self {
+        self.display_level = Some(level);
+        self
+    }
+
+    /// Set display delimiter
+    pub fn with_display_delim(mut self, delim: &'a str) -> Self {
+        self.display_delim = Some(delim);
+        self
+    }
+
+    /// Set derived flag
+    pub fn with_derived(mut self, derived: &'a str) -> Self {
+        self.derived = Some(derived);
+        self
+    }
+}
+
 impl<'a> TryFrom<&'a Value> for SetFeatureElementParams<'a> {
     type Error = SzConfigError;
 
     fn try_from(json: &'a Value) -> Result<Self> {
-        let ftype_id = json
-            .get("ftypeId")
-            .and_then(|v| v.as_i64())
-            .ok_or_else(|| SzConfigError::MissingField("ftypeId".to_string()))?;
+        let feature_code = json
+            .get("featureCode")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("featureCode".to_string()))?;
 
-        let felem_id = json
-            .get("felemId")
-            .and_then(|v| v.as_i64())
-            .ok_or_else(|| SzConfigError::MissingField("felemId".to_string()))?;
+        let element_code = json
+            .get("elementCode")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("elementCode".to_string()))?;
 
         Ok(Self {
-            ftype_id,
-            felem_id,
+            feature_code,
+            element_code,
             exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
             display_level: json.get("displayLevel").and_then(|v| v.as_i64()),
             display_delim: json.get("displayDelim").and_then(|v| v.as_str()),
@@ -291,11 +341,26 @@ pub fn set_element(config_json: &str, params: SetElementParams) -> Result<String
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
-/// * `params` - Feature element parameters (ftype_id, felem_id required; updates optional)
+/// * `params` - Feature element parameters (feature_code and element_code required; updates optional)
 ///
 /// # Returns
 /// Modified configuration JSON string
+///
+/// # Example
+/// ```no_run
+/// use sz_configtool_lib::elements::{set_feature_element, SetFeatureElementParams};
+///
+/// let config = r#"{ ... }"#;
+/// let params = SetFeatureElementParams::new("NAME", "FIRST_NAME")
+///     .with_display_level(1);
+/// let updated = set_feature_element(&config, params)?;
+/// # Ok::<(), sz_configtool_lib::error::SzConfigError>(())
+/// ```
 pub fn set_feature_element(config_json: &str, params: SetFeatureElementParams) -> Result<String> {
+    // Resolve codes to IDs
+    let ftype_id = helpers::lookup_feature_id(config_json, params.feature_code)?;
+    let felem_id = helpers::lookup_element_id(config_json, params.element_code)?;
+
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
@@ -307,13 +372,13 @@ pub fn set_feature_element(config_json: &str, params: SetFeatureElementParams) -
     let fbom = fbom_array
         .iter_mut()
         .find(|item| {
-            item["FTYPE_ID"].as_i64() == Some(params.ftype_id)
-                && item["FELEM_ID"].as_i64() == Some(params.felem_id)
+            item["FTYPE_ID"].as_i64() == Some(ftype_id)
+                && item["FELEM_ID"].as_i64() == Some(felem_id)
         })
         .ok_or_else(|| {
             SzConfigError::NotFound(format!(
                 "Feature element mapping not found: FTYPE_ID={}, FELEM_ID={}",
-                params.ftype_id, params.felem_id
+                ftype_id, felem_id
             ))
         })?;
 
@@ -338,26 +403,30 @@ pub fn set_feature_element(config_json: &str, params: SetFeatureElementParams) -
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
-/// * `ftype_id` - Feature type ID
-/// * `felem_id` - Element ID
+/// * `feature_code` - Feature code (e.g., "NAME", "ADDRESS")
+/// * `element_code` - Element code (e.g., "FIRST_NAME", "FULL_NAME")
 /// * `display_level` - Display level value
 ///
 /// # Returns
 /// Modified configuration JSON string
+///
+/// # Example
+/// ```no_run
+/// use sz_configtool_lib::elements::set_feature_element_display_level;
+///
+/// let config = r#"{ ... }"#;
+/// let updated = set_feature_element_display_level(&config, "NAME", "FIRST_NAME", 1)?;
+/// # Ok::<(), sz_configtool_lib::error::SzConfigError>(())
+/// ```
 pub fn set_feature_element_display_level(
     config_json: &str,
-    ftype_id: i64,
-    felem_id: i64,
+    feature_code: &str,
+    element_code: &str,
     display_level: i64,
 ) -> Result<String> {
     set_feature_element(
         config_json,
-        SetFeatureElementParams {
-            ftype_id,
-            felem_id,
-            display_level: Some(display_level),
-            ..Default::default()
-        },
+        SetFeatureElementParams::new(feature_code, element_code).with_display_level(display_level),
     )
 }
 
@@ -365,25 +434,156 @@ pub fn set_feature_element_display_level(
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
-/// * `ftype_id` - Feature type ID
-/// * `felem_id` - Element ID
+/// * `feature_code` - Feature code (e.g., "NAME", "ADDRESS")
+/// * `element_code` - Element code (e.g., "FIRST_NAME", "FULL_NAME")
 /// * `derived` - Derived flag value ("Yes" or "No")
 ///
 /// # Returns
 /// Modified configuration JSON string
+///
+/// # Example
+/// ```no_run
+/// use sz_configtool_lib::elements::set_feature_element_derived;
+///
+/// let config = r#"{ ... }"#;
+/// let updated = set_feature_element_derived(&config, "NAME", "FIRST_NAME", "Yes")?;
+/// # Ok::<(), sz_configtool_lib::error::SzConfigError>(())
+/// ```
 pub fn set_feature_element_derived(
     config_json: &str,
-    ftype_id: i64,
-    felem_id: i64,
+    feature_code: &str,
+    element_code: &str,
     derived: &str,
 ) -> Result<String> {
     set_feature_element(
         config_json,
-        SetFeatureElementParams {
-            ftype_id,
-            felem_id,
-            derived: Some(derived),
-            ..Default::default()
-        },
+        SetFeatureElementParams::new(feature_code, element_code).with_derived(derived),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const TEST_CONFIG_WITH_FEATURES: &str = r#"{
+        "G2_CONFIG": {
+            "CFG_FTYPE": [
+                {"FTYPE_ID": 1, "FTYPE_CODE": "NAME"},
+                {"FTYPE_ID": 2, "FTYPE_CODE": "ADDRESS"}
+            ],
+            "CFG_FELEM": [
+                {"FELEM_ID": 1, "FELEM_CODE": "FIRST_NAME", "DATA_TYPE": "string"},
+                {"FELEM_ID": 2, "FELEM_CODE": "FULL_NAME", "DATA_TYPE": "string"},
+                {"FELEM_ID": 3, "FELEM_CODE": "ADDR_LINE1", "DATA_TYPE": "string"}
+            ],
+            "CFG_FBOM": [
+                {"FTYPE_ID": 1, "FELEM_ID": 1, "EXEC_ORDER": 1, "DISPLAY_LEVEL": 0},
+                {"FTYPE_ID": 1, "FELEM_ID": 2, "EXEC_ORDER": 2, "DISPLAY_LEVEL": 1},
+                {"FTYPE_ID": 2, "FELEM_ID": 3, "EXEC_ORDER": 1, "DISPLAY_LEVEL": 0}
+            ]
+        }
+    }"#;
+
+    #[test]
+    fn test_set_feature_element_with_codes() {
+        // Test new code-based API
+        let params = SetFeatureElementParams::new("NAME", "FIRST_NAME").with_display_level(1);
+
+        let result = set_feature_element(TEST_CONFIG_WITH_FEATURES, params);
+        assert!(result.is_ok(), "Should succeed with valid codes");
+
+        let config: Value = serde_json::from_str(&result.unwrap()).unwrap();
+        let fbom = &config["G2_CONFIG"]["CFG_FBOM"][0];
+        assert_eq!(fbom["DISPLAY_LEVEL"], 1);
+    }
+
+    #[test]
+    fn test_set_feature_element_with_codes_all_params() {
+        // Test with all optional parameters
+        let params = SetFeatureElementParams::new("NAME", "FIRST_NAME")
+            .with_display_level(2)
+            .with_exec_order(5)
+            .with_display_delim("|")
+            .with_derived("Yes");
+
+        let result = set_feature_element(TEST_CONFIG_WITH_FEATURES, params);
+        assert!(result.is_ok());
+
+        let config: Value = serde_json::from_str(&result.unwrap()).unwrap();
+        let fbom = &config["G2_CONFIG"]["CFG_FBOM"][0];
+        assert_eq!(fbom["DISPLAY_LEVEL"], 2);
+        assert_eq!(fbom["EXEC_ORDER"], 5);
+        assert_eq!(fbom["DISPLAY_DELIM"], "|");
+        assert_eq!(fbom["DERIVED"], "Yes");
+    }
+
+    #[test]
+    fn test_set_feature_element_error_invalid_code() {
+        // Test error with invalid feature code
+        let params = SetFeatureElementParams::new("INVALID_FEATURE", "FIRST_NAME");
+
+        let result = set_feature_element(TEST_CONFIG_WITH_FEATURES, params);
+        assert!(result.is_err(), "Should error with invalid feature code");
+    }
+
+    #[test]
+    fn test_set_feature_element_error_invalid_element_code() {
+        // Test error with invalid element code
+        let params = SetFeatureElementParams::new("NAME", "INVALID_ELEMENT");
+
+        let result = set_feature_element(TEST_CONFIG_WITH_FEATURES, params);
+        assert!(result.is_err(), "Should error with invalid element code");
+    }
+
+    #[test]
+    fn test_set_feature_element_error_mapping_not_found() {
+        // Test error when FBOM mapping doesn't exist
+        let params = SetFeatureElementParams::new("ADDRESS", "FIRST_NAME");
+
+        let result = set_feature_element(TEST_CONFIG_WITH_FEATURES, params);
+        assert!(
+            result.is_err(),
+            "Should error when feature-element mapping doesn't exist"
+        );
+    }
+
+    #[test]
+    fn test_set_feature_element_display_level() {
+        // Test code-based convenience function
+        let result =
+            set_feature_element_display_level(TEST_CONFIG_WITH_FEATURES, "NAME", "FIRST_NAME", 5);
+        assert!(result.is_ok());
+
+        let config: Value = serde_json::from_str(&result.unwrap()).unwrap();
+        let fbom = &config["G2_CONFIG"]["CFG_FBOM"][0];
+        assert_eq!(fbom["DISPLAY_LEVEL"], 5);
+    }
+
+    #[test]
+    fn test_set_feature_element_derived() {
+        // Test code-based convenience function
+        let result =
+            set_feature_element_derived(TEST_CONFIG_WITH_FEATURES, "NAME", "FIRST_NAME", "Yes");
+        assert!(result.is_ok());
+
+        let config: Value = serde_json::from_str(&result.unwrap()).unwrap();
+        let fbom = &config["G2_CONFIG"]["CFG_FBOM"][0];
+        assert_eq!(fbom["DERIVED"], "Yes");
+    }
+
+    #[test]
+    fn test_set_feature_element_case_insensitive() {
+        // Test that codes are case-insensitive (helpers use eq_ignore_ascii_case)
+        let params = SetFeatureElementParams::new("name", "first_name").with_display_level(9);
+
+        let result = set_feature_element(TEST_CONFIG_WITH_FEATURES, params);
+        assert!(
+            result.is_ok(),
+            "Should work with lowercase codes (case-insensitive)"
+        );
+
+        let config: Value = serde_json::from_str(&result.unwrap()).unwrap();
+        let fbom = &config["G2_CONFIG"]["CFG_FBOM"][0];
+        assert_eq!(fbom["DISPLAY_LEVEL"], 9);
+    }
 }
