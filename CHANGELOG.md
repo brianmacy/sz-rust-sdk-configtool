@@ -98,6 +98,19 @@ The library maintains 100% API compatibility with the sz_configtool CLI commands
 
 ## [Unreleased]
 
+### Planned for v0.3.0
+
+- [ ] Additional FFI functions (22 remaining for 100% coverage)
+- [ ] Python bindings (ctypes or PyO3)
+- [ ] Improved test coverage (target >80%)
+- [ ] Performance benchmarking suite
+- [ ] Config validation functions
+- [ ] Config diff and merge operations
+- [ ] Import/export utilities
+- [ ] Schema migration helpers
+
+## [0.2.0] - 2026-02-05
+
 ### Changed
 
 - **BREAKING**: Refactored API to use code-based parameters instead of numeric IDs
@@ -134,20 +147,7 @@ The library maintains 100% API compatibility with the sz_configtool CLI commands
 - Modernized API examples in documentation
 - Updated docs landing page with modern API example
 
-### Planned for v0.2.0
-
-- [ ] Additional FFI functions (22 remaining for 100% coverage)
-- [ ] Python bindings (ctypes or PyO3)
-- [ ] Improved test coverage (target >80%)
-- [ ] Performance benchmarking suite
-
-### Planned for v0.3.0
-
-- [ ] Config validation functions
-- [ ] Config diff and merge operations
-- [ ] Import/export utilities
-- [ ] Schema migration helpers
-
 ---
 
+[0.2.0]: https://github.com/brianmacy/sz-rust-sdk-configtool/releases/tag/v0.2.0
 [0.1.0]: https://github.com/brianmacy/sz-rust-sdk-configtool/releases/tag/v0.1.0
