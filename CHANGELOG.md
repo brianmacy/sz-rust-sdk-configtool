@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Core Library
+
 - Initial release of sz_configtool_lib as standalone SDK
 - 147 functions across 30 modules for Senzing configuration manipulation
 - Pure Rust implementation with no SDK dependencies for core operations
@@ -17,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive rustdoc documentation for all public functions
 
 #### Modules
+
 - **Data Management** (15 functions)
   - `datasources` - Data source CRUD operations (CFG_DSRC)
   - `attributes` - Attribute management (CFG_ATTR)
@@ -47,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `calls/distinct` - Distinct calls with BOM (CFG_DFCALL, CFG_DFBOM)
 
 #### C FFI Interface
+
 - 98 C-compatible FFI functions in `src/ffi.rs` (294KB)
 - C header file at `include/libSzConfigTool.h`
 - Thread-safe error handling for FFI calls
@@ -55,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for shared library builds (cdylib, staticlib)
 
 #### Documentation
+
 - Comprehensive README with installation, usage, and examples
 - CLAUDE.md with development guidelines and architecture
 - C FFI usage guide in README
@@ -62,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Working code examples in rustdoc
 
 #### Build Configuration
+
 - Rust 2024 edition support
 - Multi-platform build support (Linux, macOS, Windows)
 - cargo-deny configuration for security auditing
@@ -70,11 +75,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Technical Details
 
 **Dependencies**:
+
 - `serde = "1.0"` with derive feature
 - `serde_json = "1.0"` with preserve_order feature
 - `anyhow = "1.0"` for error handling
 
 **Build Targets**:
+
 - `lib` - Rust library
 - `cdylib` - C dynamic library (.so, .dylib, .dll)
 - `staticlib` - Static library
@@ -91,13 +98,51 @@ The library maintains 100% API compatibility with the sz_configtool CLI commands
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING**: Refactored API to use code-based parameters instead of numeric IDs
+  - Public functions now accept string codes (e.g., `feature_code: "NAME"`) instead of numeric IDs
+  - Internal ID lookups happen automatically via `helpers::lookup_*_id()` functions
+  - Makes code self-documenting and eliminates manual foreign key lookups
+- **BREAKING**: Refactored all multi-parameter functions to use parameter structs
+  - Functions with 3+ parameters now use dedicated parameter structs with builder pattern
+  - Example: `SetFeatureElementParams::new("NAME", "FIRST_NAME").with_display_level(1)`
+  - All optional parameters use `Option<T>` types
+
+### Added
+
+- Command script processor for `.gtc` files (batch configuration operations)
+- Behavior overrides module (`behavior_overrides`) for CFG_FBOVR operations
+- Configuration validation examples with comprehensive error reporting
+- Real upgrade script examples demonstrating practical migration workflows
+- Session summary documentation with detailed statistics
+- Support for `..Default::default()` pattern in parameter structs
+- SDK usage warnings in documentation
+- Comprehensive integration tests for command processor
+
+### Fixed
+
+- Critical gap: Added `behavior`, `class`, and `rtype_id` to `set_feature()`
+- Fixed CFG_DBOM typo in `calls/distinct.rs` (should be CFG_DFBOM)
+- Fixed GitHub Pages deployment
+- Fixed library name to use snake_case convention
+- Applied `cargo fmt` to validate_config example
+
+### Improved
+
+- Updated documentation to extensively demonstrate `..Default::default()` pattern
+- Modernized API examples in documentation
+- Updated docs landing page with modern API example
+
 ### Planned for v0.2.0
+
 - [ ] Additional FFI functions (22 remaining for 100% coverage)
 - [ ] Python bindings (ctypes or PyO3)
 - [ ] Improved test coverage (target >80%)
 - [ ] Performance benchmarking suite
 
 ### Planned for v0.3.0
+
 - [ ] Config validation functions
 - [ ] Config diff and merge operations
 - [ ] Import/export utilities

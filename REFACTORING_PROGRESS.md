@@ -1,28 +1,35 @@
 # Parameter Struct Refactoring Progress
 
 ## Rule
+
 ANY function with more than 2 total parameters (config + 1 other) must be refactored to use a parameter struct.
 
 ## Completed ✅
 
 ### 1. features.rs (Partial)
+
 - `add_feature`: 16 params → 3 params (config + feature_code + params)
 - `set_feature`: 12 params → 3 params (config + feature_code + params)
 
 ### 2. attributes.rs
+
 - `add_attribute`: 9 params → 3 params (config + code + params)
 
 ### 3. datasources.rs
+
 - `add_data_source`: 6 params → 3 params (config + code + params)
 
 ### 4. elements.rs
+
 - `set_feature_element`: 8 params → 4 params (config + felem_code + ftype_code + params)
 
 ### 5. thresholds.rs
+
 - `add_comparison_threshold`: 11 params → 4 params (config + cfunc_id + cfunc_rtnval + params)
 - `add_generic_threshold`: 7 params → 3 params (config + plan + params) ✅ FIXED
 
 ### 6. calls/expression.rs ✅ COMPLETE
+
 - `add_expression_call`: 13 params → 2 params (config + params)
 - `add_expression_call_element`: 6 params → 3 params (config + efcall_id + params)
 - `delete_expression_call_element`: 5 params → 3 params (config + efcall_id + key)
@@ -31,6 +38,7 @@ ANY function with more than 2 total parameters (config + 1 other) must be refact
 ## Remaining - Critical Priority (8+ params)
 
 ### features.rs
+
 - `add_feature_comparison`: 7 params → 4 params
   - Signature: `(config, ftype_id, felem_id, params: AddFeatureComparisonParams)`
   - Params struct needs: exec_order, display_level, display_delim, derived
@@ -41,6 +49,7 @@ ANY function with more than 2 total parameters (config + 1 other) must be refact
 ## Remaining - High Priority (6-7 params)
 
 ### functions/comparison.rs
+
 - `add_comparison_function`: 7 params → 3 params
   - Signature: `(config, cfunc_code, params)`
   - Params: cfunc_rtnval, ref_score, lib_feat_id, lib_func_id, anon_func_id
@@ -49,6 +58,7 @@ ANY function with more than 2 total parameters (config + 1 other) must be refact
   - Same param struct as add
 
 ### functions/standardize.rs
+
 - `add_standardize_function`: 6 params → 3 params
   - Signature: `(config, sfunc_code, params)`
   - Params: connect_str, language, plugin
@@ -57,6 +67,7 @@ ANY function with more than 2 total parameters (config + 1 other) must be refact
   - Same param struct as add
 
 ### functions/expression.rs
+
 - `add_expression_function`: 6 params → 3 params
   - Signature: `(config, efunc_code, params)`
   - Params: efunc_code, connect_str, language, plugin
@@ -65,6 +76,7 @@ ANY function with more than 2 total parameters (config + 1 other) must be refact
   - Same param struct as add
 
 ### functions/distinct.rs
+
 - `add_distinct_function`: 6 params → 3 params
   - Signature: `(config, dfunc_code, params)`
   - Params: connect_str, language, plugin
@@ -73,6 +85,7 @@ ANY function with more than 2 total parameters (config + 1 other) must be refact
   - Same param struct as add
 
 ### features.rs
+
 - `add_feature_distinct_call_element`: 6 params → 4 params
   - Signature: `(config, felem_code, ftype_code, params)`
   - Params: dfunc_code, exec_order
@@ -80,18 +93,21 @@ ANY function with more than 2 total parameters (config + 1 other) must be refact
 ## Remaining - Medium Priority (6 params, element operations)
 
 ### calls/comparison.rs
+
 - `add_comparison_call`: 7 params → 3 params
 - `add_comparison_call_element`: 6 params → 3 params
 - `set_comparison_call_element`: 6 params → 3 params
 - `delete_comparison_call_element`: 5 params → 3 params
 
 ### calls/distinct.rs
+
 - `add_distinct_call`: 6 params → 3 params
 - `add_distinct_call_element`: 6 params → 3 params
 - `set_distinct_call_element`: 6 params → 3 params
 - `delete_distinct_call_element`: 5 params → 3 params
 
 ### calls/standardize.rs
+
 - `add_standardize_call`: 7 params → 3 params
 - `add_standardize_call_element`: 6 params → 3 params
 - `set_standardize_call_element`: 6 params → 3 params
@@ -100,6 +116,7 @@ ANY function with more than 2 total parameters (config + 1 other) must be refact
 ## Remaining - Low Priority (5 params)
 
 ### behavior_overrides.rs
+
 - `add_behavior_override`: 5 params → 3 params
   - Signature: `(config, ftype_code, params)`
   - Params: behavior, exec_order, same_score
@@ -234,6 +251,7 @@ pub extern "C" fn SzConfigTool_addXyz(
 ## Testing After Refactoring
 
 After each module:
+
 1. `cargo build --lib` - ensure compilation
 2. `cargo test` - ensure tests pass
 3. `cargo clippy --all-targets --all-features -- -D warnings` - no warnings

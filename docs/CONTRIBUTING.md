@@ -77,6 +77,7 @@ cargo test --doc
 ### Branch Strategy
 
 - Create a feature branch from `main`:
+
   ```bash
   git checkout -b feature/your-feature-name
   ```
@@ -103,6 +104,7 @@ Explain what changed and why, not how.
 ```
 
 Example:
+
 ```
 Add support for config validation functions
 
@@ -119,6 +121,7 @@ Fixes #42
 ### Test Requirements
 
 1. **Unit Tests**: Every module should have unit tests
+
    ```rust
    #[cfg(test)]
    mod tests {
@@ -134,6 +137,7 @@ Fixes #42
    ```
 
 2. **Integration Tests**: Add tests in `tests/` directory
+
    ```rust
    // tests/integration_test.rs
    use sz_configtool_lib::datasources;
@@ -145,7 +149,7 @@ Fixes #42
    ```
 
 3. **Doc Tests**: Include working examples in documentation
-   ```rust
+   ````rust
    /// Add a data source to configuration.
    ///
    /// # Example
@@ -158,7 +162,7 @@ Fixes #42
    pub fn add_data_source(/* ... */) -> Result<String> {
        // Implementation
    }
-   ```
+   ````
 
 ### Test Coverage
 
@@ -214,6 +218,7 @@ cargo build --lib --release
 ### Before Submitting
 
 1. Sync with upstream:
+
    ```bash
    git fetch upstream
    git rebase upstream/main
@@ -235,6 +240,7 @@ cargo build --lib --release
 ### Submitting the PR
 
 1. Push your branch:
+
    ```bash
    git push origin feature/your-feature-name
    ```
@@ -246,22 +252,27 @@ cargo build --lib --release
    - Screenshots/examples if applicable
 
 3. PR description template:
+
    ```markdown
    ## Description
+
    Brief description of changes
 
    ## Type of Change
+
    - [ ] Bug fix
    - [ ] New feature
    - [ ] Breaking change
    - [ ] Documentation update
 
    ## Testing
+
    - [ ] Unit tests added/updated
    - [ ] Integration tests added/updated
    - [ ] All tests pass locally
 
    ## Checklist
+
    - [ ] Code follows project style guidelines
    - [ ] Self-review completed
    - [ ] Documentation updated
@@ -271,6 +282,7 @@ cargo build --lib --release
    - [ ] cargo deny check passes
 
    ## Related Issues
+
    Fixes #123
    ```
 
@@ -293,7 +305,7 @@ cargo build --lib --release
 
 Follow the standard pattern:
 
-```rust
+````rust
 /// Brief description of function.
 ///
 /// Detailed explanation if needed.
@@ -326,7 +338,7 @@ pub fn function_name(
 ) -> Result<String> {
     // Implementation
 }
-```
+````
 
 ### Error Handling
 
@@ -358,6 +370,7 @@ pub fn function_name(
 ### No Display Logic
 
 This is a pure library with no display formatting:
+
 - No dependencies on formatting libraries (tabled, prettytable, etc.)
 - No color output (colored, owo-colors, etc.)
 - No interactive features (rustyline, etc.)
@@ -385,6 +398,7 @@ This is a pure library with no display formatting:
 ### Updating Documentation
 
 When adding features:
+
 - Update README.md with usage examples
 - Add function to API.md reference
 - Update function counts in README

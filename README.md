@@ -16,6 +16,7 @@ Pure Rust library for manipulating Senzing configuration JSON documents.
 **This is an unofficial SDK.** Outside of basic operations like adding data sources, Senzing does not publicly document the meaning and proper usage of most configuration functions and parameters without specific education and guidance. This library enables you to programmatically accomplish configuration tasks once you've received proper guidance on their recommended use for your particular situation.
 
 **Recommendation:** Work with Senzing support or documentation to understand:
+
 - When and why to use specific configuration functions
 - Appropriate parameter values for your use case
 - Impact of configuration changes on entity resolution behavior
@@ -49,6 +50,7 @@ features::set_feature(&config, SetFeatureParams {
 ```
 
 **Benefits:**
+
 - 🔍 **Self-documenting** - No need to count parameters or check docs
 - 🛡️ **Type-safe** - Compile-time field validation
 - 📈 **Extensible** - Add fields without breaking existing code
@@ -155,21 +157,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Module Organization
 
 ### Core Infrastructure
+
 - **`error`** - Custom error types (`SzConfigError`)
 - **`helpers`** - Shared utilities (ID generation, array operations, lookups)
 
 ### Core Entities (87 functions)
 
 #### Data Management
+
 - **`datasources`** (7 functions) - Add, delete, get, list, set data sources (CFG_DSRC)
 - **`attributes`** (8 functions) - Attribute management (CFG_ATTR)
 
 #### Feature Management
+
 - **`features`** (24 functions) - Features with elements, comparisons, distinct calls
 - **`feature_types`** (5 functions) - Feature type operations (CFG_FTYPE)
 - **`elements`** (8 functions) - Element operations (CFG_FELEM)
 
 #### Configuration
+
 - **`thresholds`** (8 functions) - Comparison and generic thresholds
 - **`rules`** (5 functions) - Entity resolution rules (CFG_ERRULE)
 - **`fragments`** (5 functions) - Rule fragments (CFG_ERFRAG)
@@ -177,6 +183,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - **`hashes`** (4 functions) - Name and SSN hash management
 
 #### System Management
+
 - **`config_sections`** (6 functions) - G2_CONFIG section manipulation
 - **`system_params`** (2 functions) - System parameter operations
 - **`versioning`** (4 functions) - Version management
@@ -184,6 +191,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Functions & Calls (60 functions)
 
 #### Function Modules (28 functions)
+
 - **`functions/standardize`** (6) - Standardization functions (CFG_SFUNC)
 - **`functions/expression`** (6) - Expression functions (CFG_EFUNC)
 - **`functions/comparison`** (7) - Comparison functions (CFG_CFUNC)
@@ -194,6 +202,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - **`functions/validation`** (0) - Validation functions (stubs)
 
 #### Call Modules (32 functions)
+
 - **`calls/standardize`** (8) - Standardize calls with BOM (CFG_SFCALL, CFG_SBOM)
 - **`calls/expression`** (8) - Expression calls with BOM (CFG_EFCALL, CFG_EFBOM)
 - **`calls/comparison`** (8) - Comparison calls with BOM (CFG_CFCALL, CFG_CFBOM)
@@ -388,6 +397,7 @@ println!("✓ {}", processor.summary());
 ```
 
 **Supported commands (27 total):**
+
 - Versioning: `verifyCompatibilityVersion`, `updateCompatibilityVersion`
 - Attributes: `addAttribute`, `deleteAttribute`, `setAttribute`
 - Features: `addFeature`, `setFeature`, `addBehaviorOverride`
@@ -470,6 +480,7 @@ match datasources::add_data_source(&config, "TEST") {
 Functions follow consistent patterns:
 
 ### Modification Operations
+
 ```rust
 // Add/Set/Delete operations return modified config
 fn add_data_source(config_json: &str, code: &str) -> Result<String, SzConfigError>
@@ -477,6 +488,7 @@ fn delete_data_source(config_json: &str, code: &str) -> Result<String, SzConfigE
 ```
 
 ### Add Operations with Record Return
+
 ```rust
 // Add operations that need to return the created record
 fn add_attribute(config_json: &str, ...) -> Result<(String, Value), SzConfigError>
@@ -485,6 +497,7 @@ fn add_attribute(config_json: &str, ...) -> Result<(String, Value), SzConfigErro
 ```
 
 ### Query Operations
+
 ```rust
 // Get operations return a single record
 fn get_data_source(config_json: &str, code: &str) -> Result<Value, SzConfigError>
@@ -520,6 +533,7 @@ cargo doc --no-deps --open
 ```
 
 All public functions include comprehensive rustdoc comments with:
+
 - Function description
 - Parameter descriptions
 - Return value description
@@ -658,6 +672,7 @@ SzConfigTool_result result = SzConfigTool_setStandardizeFunctionWithJson(
 ### Available FFI Functions
 
 The FFI provides 98 functions covering:
+
 - Data source operations (7 functions)
 - Attribute management (8 functions)
 - Feature operations (24 functions)
@@ -686,6 +701,7 @@ Apache 2.0 License - See LICENSE file for details.
 ## Version History
 
 ### v0.1.0 (2025-10-02)
+
 - Initial release
 - 147 functions across 30 modules
 - Complete coverage of Senzing config operations
