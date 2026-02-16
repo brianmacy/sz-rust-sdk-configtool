@@ -96,7 +96,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n6. ERROR HANDLING - Attempting to get deleted PHONE:");
     match elements::get_element(&config, "PHONE") {
         Ok(_) => println!("  Unexpected: PHONE still exists!"),
-        Err(e) => println!("  Expected error: {}", e),
+        Err(e) => println!("  Expected error: {e}"),
     }
 
     println!("\n=== Example Complete ===");

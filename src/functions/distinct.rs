@@ -66,9 +66,15 @@ pub fn add_distinct_function(
     // Check if function already exists
     if find_in_config_array(config_json, "CFG_DFUNC", "DFUNC_CODE", &dfunc_code)?.is_some() {
         return Err(SzConfigError::validation(format!(
-            "Distinct function already exists: {}",
-            dfunc_code
+            "Distinct function already exists: {dfunc_code}"
         )));
+    }
+
+    // Validate blank CONNECTSTR (Python parity)
+    if params.connect_str.trim().is_empty() {
+        return Err(SzConfigError::validation(
+            "CONNECTSTR cannot be blank".to_string(),
+        ));
     }
 
     // Get next DFUNC_ID
@@ -119,7 +125,7 @@ pub fn delete_distinct_function(
     // Find the function
     let function = find_in_config_array(config_json, "CFG_DFUNC", "DFUNC_CODE", &dfunc_code)?
         .ok_or_else(|| {
-            SzConfigError::not_found(format!("Distinct function not found: {}", dfunc_code))
+            SzConfigError::not_found(format!("Distinct function not found: {dfunc_code}"))
         })?;
 
     // Delete from CFG_DFUNC
@@ -144,7 +150,7 @@ pub fn get_distinct_function(config_json: &str, dfunc_code: &str) -> Result<Valu
     let dfunc_code = dfunc_code.to_uppercase();
 
     find_in_config_array(config_json, "CFG_DFUNC", "DFUNC_CODE", &dfunc_code)?.ok_or_else(|| {
-        SzConfigError::not_found(format!("Distinct function not found: {}", dfunc_code))
+        SzConfigError::not_found(format!("Distinct function not found: {dfunc_code}"))
     })
 }
 
@@ -173,6 +179,7 @@ pub fn list_distinct_functions(config_json: &str) -> Result<Vec<Value>, SzConfig
                     "id": item.get("DFUNC_ID").and_then(|v| v.as_i64()).unwrap_or(0),
                     "function": item.get("DFUNC_CODE").and_then(|v| v.as_str()).unwrap_or(""),
                     "connectStr": item.get("CONNECT_STR").and_then(|v| v.as_str()).unwrap_or(""),
+                    "anonSupport": item.get("ANON_SUPPORT").and_then(|v| v.as_str()).unwrap_or(""),
                     "language": item.get("LANGUAGE").and_then(|v| v.as_str()).unwrap_or("")
                 })
             })
@@ -206,7 +213,7 @@ pub fn set_distinct_function(
     // Find existing function
     let mut function = find_in_config_array(config_json, "CFG_DFUNC", "DFUNC_CODE", &dfunc_code)?
         .ok_or_else(|| {
-        SzConfigError::not_found(format!("Distinct function not found: {}", dfunc_code))
+        SzConfigError::not_found(format!("Distinct function not found: {dfunc_code}"))
     })?;
 
     // Update fields if provided

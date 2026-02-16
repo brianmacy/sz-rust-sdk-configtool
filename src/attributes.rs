@@ -124,10 +124,49 @@ pub fn add_attribute(config_json: &str, params: AddAttributeParams) -> Result<(S
         .any(|attr| attr["ATTR_CODE"].as_str() == Some(&attribute_upper))
     {
         return Err(SzConfigError::AlreadyExists(format!(
-            "Attribute: {}",
-            attribute_upper
+            "Attribute: {attribute_upper}"
         )));
     }
+
+    // Validate feature exists (Python parity)
+    let _ftype_id = helpers::lookup_feature_id(config_json, &feature_upper)?;
+
+    // Validate element exists (Python parity)
+    let _felem_id = helpers::lookup_element_id(config_json, &element_upper)?;
+
+    // Validate REQUIRED domain (Python parity: ["Yes", "No", "Any", "Desired"])
+    let required = if let Some(req) = params.required {
+        let req_upper = req.to_uppercase();
+        match req_upper.as_str() {
+            "YES" => "Yes",
+            "NO" => "No",
+            "ANY" => "Any",
+            "DESIRED" => "Desired",
+            _ => {
+                return Err(SzConfigError::InvalidInput(format!(
+                    "Invalid REQUIRED value '{req}'. Must be one of: Yes, No, Any, Desired"
+                )));
+            }
+        }
+    } else {
+        "No"
+    };
+
+    // Validate INTERNAL domain (Python parity: ["Yes", "No"])
+    let internal = if let Some(int) = params.internal {
+        let int_upper = int.to_uppercase();
+        match int_upper.as_str() {
+            "YES" => "Yes",
+            "NO" => "No",
+            _ => {
+                return Err(SzConfigError::InvalidInput(format!(
+                    "Invalid INTERNAL value '{int}'. Must be 'Yes' or 'No'"
+                )));
+            }
+        }
+    } else {
+        "No"
+    };
 
     // Get next ATTR_ID
     let next_attr_id = helpers::get_next_id_from_array(attrs, "ATTR_ID")?;
@@ -139,9 +178,9 @@ pub fn add_attribute(config_json: &str, params: AddAttributeParams) -> Result<(S
         "ATTR_CLASS": params.class,
         "FTYPE_CODE": feature_upper,  // Use actual feature code, not Null
         "FELEM_CODE": element_upper,  // Use actual element code, not Null
-        "FELEM_REQ": params.required.unwrap_or("No"),
+        "FELEM_REQ": required,
         "DEFAULT_VALUE": params.default_value.map(|v| json!(v)).unwrap_or(Value::Null),
-        "INTERNAL": params.internal.unwrap_or("No")
+        "INTERNAL": internal
     });
 
     // Add to CFG_ATTR only (Python does not create FBOM in addAttribute)
@@ -194,7 +233,7 @@ pub fn get_attribute(config_json: &str, code: &str) -> Result<Value> {
         .iter()
         .find(|attr| attr["ATTR_CODE"].as_str() == Some(&code_upper))
         .cloned()
-        .ok_or_else(|| SzConfigError::NotFound(format!("Attribute not found: {}", code_upper)))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Attribute not found: {code_upper}")))
 }
 
 /// List all attributes
@@ -263,14 +302,38 @@ pub fn set_attribute(config_json: &str, params: SetAttributeParams) -> Result<St
     let attr = attrs
         .iter_mut()
         .find(|a| a["ATTR_CODE"].as_str() == Some(&code_upper))
-        .ok_or_else(|| SzConfigError::NotFound(format!("Attribute not found: {}", code_upper)))?;
+        .ok_or_else(|| SzConfigError::NotFound(format!("Attribute not found: {code_upper}")))?;
 
-    // Update fields if provided
+    // Update fields if provided (with domain validation)
     if let Some(val) = params.internal {
-        attr["INTERNAL"] = json!(val);
+        // Validate INTERNAL domain (Python parity: ["Yes", "No"])
+        let val_upper = val.to_uppercase();
+        let validated = match val_upper.as_str() {
+            "YES" => "Yes",
+            "NO" => "No",
+            _ => {
+                return Err(SzConfigError::InvalidInput(format!(
+                    "Invalid INTERNAL value '{val}'. Must be 'Yes' or 'No'"
+                )));
+            }
+        };
+        attr["INTERNAL"] = json!(validated);
     }
     if let Some(val) = params.required {
-        attr["FELEM_REQ"] = json!(val);
+        // Validate REQUIRED domain (Python parity: ["Yes", "No", "Any", "Desired"])
+        let val_upper = val.to_uppercase();
+        let validated = match val_upper.as_str() {
+            "YES" => "Yes",
+            "NO" => "No",
+            "ANY" => "Any",
+            "DESIRED" => "Desired",
+            _ => {
+                return Err(SzConfigError::InvalidInput(format!(
+                    "Invalid REQUIRED value '{val}'. Must be one of: Yes, No, Any, Desired"
+                )));
+            }
+        };
+        attr["FELEM_REQ"] = json!(validated);
     }
     if let Some(val) = params.default_value {
         attr["DEFAULT_VALUE"] = json!(val);

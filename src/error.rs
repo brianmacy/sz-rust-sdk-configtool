@@ -53,15 +53,15 @@ impl SzConfigError {
 impl fmt::Display for SzConfigError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::JsonParse(msg) => write!(f, "JSON parse error: {}", msg),
-            Self::NotFound(msg) => write!(f, "{}", msg),
-            Self::AlreadyExists(msg) => write!(f, "{}", msg),
-            Self::InvalidInput(msg) => write!(f, "Invalid input: {}", msg),
-            Self::MissingSection(section) => write!(f, "Missing config section: {}", section),
-            Self::InvalidStructure(msg) => write!(f, "Invalid config structure: {}", msg),
-            Self::MissingField(field) => write!(f, "Missing required field: {}", field),
-            Self::InvalidConfig(msg) => write!(f, "Invalid configuration: {}", msg),
-            Self::NotImplemented(msg) => write!(f, "Not implemented: {}", msg),
+            Self::JsonParse(msg) => write!(f, "JSON parse error: {msg}"),
+            Self::NotFound(msg) => write!(f, "{msg}"),
+            Self::AlreadyExists(msg) => write!(f, "{msg}"),
+            Self::InvalidInput(msg) => write!(f, "Invalid input: {msg}"),
+            Self::MissingSection(section) => write!(f, "Missing config section: {section}"),
+            Self::InvalidStructure(msg) => write!(f, "Invalid config structure: {msg}"),
+            Self::MissingField(field) => write!(f, "Missing required field: {field}"),
+            Self::InvalidConfig(msg) => write!(f, "Invalid configuration: {msg}"),
+            Self::NotImplemented(msg) => write!(f, "Not implemented: {msg}"),
         }
     }
 }

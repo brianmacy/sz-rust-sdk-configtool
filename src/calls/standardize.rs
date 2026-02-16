@@ -146,8 +146,7 @@ pub fn add_standardize_call(
 
         if order_taken {
             return Err(SzConfigError::AlreadyExists(format!(
-                "Execution order {} already taken for this feature/element",
-                order
+                "Execution order {order} already taken for this feature/element"
             )));
         }
         order
@@ -217,8 +216,7 @@ pub fn delete_standardize_call(config: &str, sfcall_id: i64) -> Result<String> {
 
     if !call_exists {
         return Err(SzConfigError::NotFound(format!(
-            "Standardize call ID {}",
-            sfcall_id
+            "Standardize call ID {sfcall_id}"
         )));
     }
 
@@ -243,7 +241,7 @@ pub fn delete_standardize_call(config: &str, sfcall_id: i64) -> Result<String> {
 /// - `NotFound` if call ID doesn't exist
 pub fn get_standardize_call(config: &str, sfcall_id: i64) -> Result<Value> {
     find_in_config_array(config, "CFG_SFCALL", "SFCALL_ID", &sfcall_id.to_string())?
-        .ok_or_else(|| SzConfigError::NotFound(format!("Standardize call ID {}", sfcall_id)))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Standardize call ID {sfcall_id}")))
 }
 
 /// List all standardize calls with resolved names

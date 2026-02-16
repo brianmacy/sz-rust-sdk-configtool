@@ -66,8 +66,7 @@ pub fn add_expression_function(
     // Check if function already exists
     if find_in_config_array(config_json, "CFG_EFUNC", "EFUNC_CODE", &efunc_code)?.is_some() {
         return Err(SzConfigError::validation(format!(
-            "Expression function already exists: {}",
-            efunc_code
+            "Expression function already exists: {efunc_code}"
         )));
     }
 
@@ -119,7 +118,7 @@ pub fn delete_expression_function(
     // Find the function
     let function = find_in_config_array(config_json, "CFG_EFUNC", "EFUNC_CODE", &efunc_code)?
         .ok_or_else(|| {
-            SzConfigError::not_found(format!("Expression function not found: {}", efunc_code))
+            SzConfigError::not_found(format!("Expression function not found: {efunc_code}"))
         })?;
 
     // Delete from CFG_EFUNC
@@ -147,7 +146,7 @@ pub fn get_expression_function(
     let efunc_code = efunc_code.to_uppercase();
 
     find_in_config_array(config_json, "CFG_EFUNC", "EFUNC_CODE", &efunc_code)?.ok_or_else(|| {
-        SzConfigError::not_found(format!("Expression function not found: {}", efunc_code))
+        SzConfigError::not_found(format!("Expression function not found: {efunc_code}"))
     })
 }
 
@@ -209,7 +208,7 @@ pub fn set_expression_function(
     // Find existing function
     let mut function = find_in_config_array(config_json, "CFG_EFUNC", "EFUNC_CODE", &efunc_code)?
         .ok_or_else(|| {
-        SzConfigError::not_found(format!("Expression function not found: {}", efunc_code))
+        SzConfigError::not_found(format!("Expression function not found: {efunc_code}"))
     })?;
 
     // Update fields if provided

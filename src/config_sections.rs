@@ -86,8 +86,7 @@ pub fn remove_config_section(config_json: &str, section_name: &str) -> Result<St
 
     if !removed {
         return Err(SzConfigError::NotFound(format!(
-            "Config section not found: {}",
-            section_name
+            "Config section not found: {section_name}"
         )));
     }
 
@@ -127,10 +126,7 @@ pub fn get_config_section(
         .get("G2_CONFIG")
         .and_then(|g2| g2.get(section_name))
         .ok_or_else(|| {
-            SzConfigError::NotFound(format!(
-                "Configuration section '{}' not found",
-                section_name
-            ))
+            SzConfigError::NotFound(format!("Configuration section '{section_name}' not found"))
         })?;
 
     // Handle empty section
@@ -264,8 +260,7 @@ pub fn add_config_section_field(
             }
         } else {
             return Err(SzConfigError::NotFound(format!(
-                "Section not found or not an array: {}",
-                section_name
+                "Section not found or not an array: {section_name}"
             )));
         }
     }
@@ -323,8 +318,7 @@ pub fn remove_config_section_field(
             }
         } else {
             return Err(SzConfigError::NotFound(format!(
-                "Section not found or not an array: {}",
-                section_name
+                "Section not found or not an array: {section_name}"
             )));
         }
     }

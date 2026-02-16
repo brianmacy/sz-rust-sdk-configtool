@@ -50,7 +50,7 @@ pub fn get_next_id(
     let mut current = config_data;
     for part in &parts {
         current = current.get(part).ok_or_else(|| {
-            SzConfigError::MissingSection(format!("Section path '{}' not found", section_path))
+            SzConfigError::MissingSection(format!("Section path '{section_path}' not found"))
         })?;
     }
 
@@ -134,8 +134,7 @@ pub fn get_desired_or_next_id(
         if id > 0 {
             if is_id_taken(array, id_field, id) {
                 return Err(SzConfigError::AlreadyExists(format!(
-                    "The specified ID {} is already taken",
-                    id
+                    "The specified ID {id} is already taken"
                 )));
             }
             return Ok(id);
@@ -175,12 +174,12 @@ pub fn get_desired_or_next_id_from_section(
     let mut current = config_data;
     for part in &parts {
         current = current.get(part).ok_or_else(|| {
-            SzConfigError::MissingSection(format!("Section path '{}' not found", section_path))
+            SzConfigError::MissingSection(format!("Section path '{section_path}' not found"))
         })?;
     }
 
     let array = current.as_array().ok_or_else(|| {
-        SzConfigError::MissingSection(format!("Section '{}' is not an array", section_path))
+        SzConfigError::MissingSection(format!("Section '{section_path}' is not an array"))
     })?;
 
     get_desired_or_next_id(array, id_field, desired_id, seed_value)
@@ -294,8 +293,7 @@ pub fn delete_from_config_array(
 
     if array.len() == original_len {
         return Err(SzConfigError::NotFound(format!(
-            "{} '{}' not found",
-            section, value
+            "{section} '{value}' not found"
         )));
     }
 
@@ -386,7 +384,7 @@ pub fn update_in_config_array(
         .ok_or_else(|| SzConfigError::MissingSection(section.to_string()))?;
 
     let item = find_in_array_mut(array, field, value)
-        .ok_or_else(|| SzConfigError::NotFound(format!("{} '{}' not found", section, value)))?;
+        .ok_or_else(|| SzConfigError::NotFound(format!("{section} '{value}' not found")))?;
 
     // Replace the entire item
     *item = new_item;
@@ -452,7 +450,7 @@ pub fn lookup_feature_id(config_json: &str, feature_code: &str) -> Result<i64> {
                 .and_then(|f| f.get("FTYPE_ID"))
                 .and_then(|v| v.as_i64())
         })
-        .ok_or_else(|| SzConfigError::NotFound(format!("Feature '{}' not found", feature_code)))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Feature '{feature_code}' not found")))
 }
 
 /// Lookup element ID by element code
@@ -485,7 +483,7 @@ pub fn lookup_element_id(config_json: &str, element_code: &str) -> Result<i64> {
                 .and_then(|e| e.get("FELEM_ID"))
                 .and_then(|v| v.as_i64())
         })
-        .ok_or_else(|| SzConfigError::NotFound(format!("Element '{}' not found", element_code)))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Element '{element_code}' not found")))
 }
 
 /// Lookup standardize function ID by function code
@@ -519,7 +517,7 @@ pub fn lookup_sfunc_id(config_json: &str, func_code: &str) -> Result<i64> {
                 .and_then(|v| v.as_i64())
         })
         .ok_or_else(|| {
-            SzConfigError::NotFound(format!("Standardize function '{}' not found", func_code))
+            SzConfigError::NotFound(format!("Standardize function '{func_code}' not found"))
         })
 }
 
@@ -554,7 +552,7 @@ pub fn lookup_efunc_id(config_json: &str, func_code: &str) -> Result<i64> {
                 .and_then(|v| v.as_i64())
         })
         .ok_or_else(|| {
-            SzConfigError::NotFound(format!("Expression function '{}' not found", func_code))
+            SzConfigError::NotFound(format!("Expression function '{func_code}' not found"))
         })
 }
 
@@ -589,7 +587,7 @@ pub fn lookup_cfunc_id(config_json: &str, func_code: &str) -> Result<i64> {
                 .and_then(|v| v.as_i64())
         })
         .ok_or_else(|| {
-            SzConfigError::NotFound(format!("Comparison function '{}' not found", func_code))
+            SzConfigError::NotFound(format!("Comparison function '{func_code}' not found"))
         })
 }
 
@@ -624,7 +622,7 @@ pub fn lookup_dfunc_id(config_json: &str, func_code: &str) -> Result<i64> {
                 .and_then(|v| v.as_i64())
         })
         .ok_or_else(|| {
-            SzConfigError::NotFound(format!("Distinct function '{}' not found", func_code))
+            SzConfigError::NotFound(format!("Distinct function '{func_code}' not found"))
         })
 }
 
@@ -658,7 +656,7 @@ pub fn lookup_gplan_id(config_json: &str, plan_code: &str) -> Result<i64> {
                 .and_then(|p| p.get("GPLAN_ID"))
                 .and_then(|v| v.as_i64())
         })
-        .ok_or_else(|| SzConfigError::NotFound(format!("Generic plan '{}' not found", plan_code)))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Generic plan '{plan_code}' not found")))
 }
 
 /// Internal: Lookup generic plan code by plan ID (for FFI use)
@@ -687,5 +685,5 @@ pub(crate) fn lookup_gplan_code(config_json: &str, gplan_id: i64) -> Result<Stri
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string())
         })
-        .ok_or_else(|| SzConfigError::NotFound(format!("Generic plan ID: {}", gplan_id)))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Generic plan ID: {gplan_id}")))
 }

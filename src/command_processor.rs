@@ -74,7 +74,7 @@ impl CommandProcessor {
     /// Modified configuration JSON string
     pub fn process_file<P: AsRef<Path>>(&mut self, path: P) -> Result<String> {
         let content = fs::read_to_string(path.as_ref()).map_err(|e| {
-            SzConfigError::InvalidConfig(format!("Failed to read script file: {}", e))
+            SzConfigError::InvalidConfig(format!("Failed to read script file: {e}"))
         })?;
         self.process_script(&content)
     }
@@ -167,7 +167,7 @@ fn parse_command_line(line: &str) -> Result<(String, Value)> {
 
     let params = if parts.len() > 1 {
         serde_json::from_str(parts[1])
-            .map_err(|e| SzConfigError::JsonParse(format!("Invalid JSON in '{}': {}", cmd, e)))?
+            .map_err(|e| SzConfigError::JsonParse(format!("Invalid JSON in '{cmd}': {e}")))?
     } else {
         Value::Null
     };
@@ -381,7 +381,13 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
         }
 
         // ===== Rule Commands =====
-        "addRule" => crate::rules::add_rule(config, params).map(|(cfg, _)| cfg),
+        "addRule" => {
+            let id = params
+                .get("ERRULE_ID")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            crate::rules::add_rule(config, id, params).map(|(cfg, _)| cfg)
+        }
 
         "setRule" => {
             let set_params = crate::rules::SetRuleParams::try_from(params)?;
@@ -552,8 +558,7 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 .find(|call| call["FTYPE_ID"].as_i64() == Some(ftype_id))
                 .ok_or_else(|| {
                     SzConfigError::NotFound(format!(
-                        "No comparison call found for feature {}",
-                        feature
+                        "No comparison call found for feature {feature}"
                     ))
                 })?;
 
@@ -575,8 +580,7 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 })
                 .ok_or_else(|| {
                     SzConfigError::NotFound(format!(
-                        "Element {} not found in comparison call for feature {}",
-                        element, feature
+                        "Element {element} not found in comparison call for feature {feature}"
                     ))
                 })?;
 
@@ -615,8 +619,7 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 .find(|call| call["FTYPE_ID"].as_i64() == Some(ftype_id))
                 .ok_or_else(|| {
                     SzConfigError::NotFound(format!(
-                        "No comparison call found for feature {}",
-                        feature
+                        "No comparison call found for feature {feature}"
                     ))
                 })?;
 
@@ -672,10 +675,7 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 .iter()
                 .find(|call| call["FTYPE_ID"].as_i64() == Some(ftype_id))
                 .ok_or_else(|| {
-                    SzConfigError::NotFound(format!(
-                        "No distinct call found for feature {}",
-                        feature
-                    ))
+                    SzConfigError::NotFound(format!("No distinct call found for feature {feature}"))
                 })?;
 
             let dfcall_id = dfcall["DFCALL_ID"]
@@ -696,8 +696,7 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 })
                 .ok_or_else(|| {
                     SzConfigError::NotFound(format!(
-                        "Element {} not found in distinct call for feature {}",
-                        element, feature
+                        "Element {element} not found in distinct call for feature {feature}"
                     ))
                 })?;
 
@@ -722,8 +721,7 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
 
         // ===== Unknown Command =====
         _ => Err(SzConfigError::InvalidInput(format!(
-            "Unknown command: '{}'",
-            cmd
+            "Unknown command: '{cmd}'"
         ))),
     }
 }

@@ -158,7 +158,7 @@ pub unsafe extern "C" fn SzConfigTool_addDataSource(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in configJson: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -169,7 +169,7 @@ pub unsafe extern "C" fn SzConfigTool_addDataSource(
     let ds_code = match unsafe { CStr::from_ptr(data_source_code) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in dataSourceCode: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in dataSourceCode: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -208,7 +208,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteDataSource(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in configJson: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -219,7 +219,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteDataSource(
     let ds_code = match unsafe { CStr::from_ptr(data_source_code) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in dataSourceCode: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in dataSourceCode: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -250,7 +250,7 @@ pub unsafe extern "C" fn SzConfigTool_listDataSources(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in configJson: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -300,7 +300,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in configJson: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -311,7 +311,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute(
     let attr_code = match unsafe { CStr::from_ptr(attribute_code) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in attributeCode: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in attributeCode: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -322,7 +322,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute(
     let feat_code = match unsafe { CStr::from_ptr(feature_code) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in featureCode: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in featureCode: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -333,7 +333,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute(
     let elem_code = match unsafe { CStr::from_ptr(element_code) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in elementCode: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in elementCode: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -344,7 +344,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute(
     let class = match unsafe { CStr::from_ptr(attr_class) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in attrClass: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in attrClass: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -358,7 +358,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute(
         match unsafe { CStr::from_ptr(default_value) }.to_str() {
             Ok(s) => Some(s),
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in defaultValue: {}", e), -1);
+                set_error(format!("Invalid UTF-8 in defaultValue: {e}"), -1);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -1,
@@ -373,7 +373,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute(
         match unsafe { CStr::from_ptr(internal) }.to_str() {
             Ok(s) => Some(s),
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in internal: {}", e), -1);
+                set_error(format!("Invalid UTF-8 in internal: {e}"), -1);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -1,
@@ -388,7 +388,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute(
         match unsafe { CStr::from_ptr(required) }.to_str() {
             Ok(s) => Some(s),
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in required: {}", e), -1);
+                set_error(format!("Invalid UTF-8 in required: {e}"), -1);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -1,
@@ -434,7 +434,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteAttribute(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in configJson: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -445,7 +445,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteAttribute(
     let attr_code = match unsafe { CStr::from_ptr(attribute_code) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in attributeCode: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in attributeCode: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -477,7 +477,7 @@ pub unsafe extern "C" fn SzConfigTool_getAttribute(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in configJson: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -488,7 +488,7 @@ pub unsafe extern "C" fn SzConfigTool_getAttribute(
     let attr_code = match unsafe { CStr::from_ptr(attribute_code) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in attributeCode: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in attributeCode: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -521,7 +521,7 @@ pub unsafe extern "C" fn SzConfigTool_listAttributes(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in configJson: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -556,7 +556,7 @@ pub unsafe extern "C" fn SzConfigTool_setAttribute(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in configJson: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -567,7 +567,7 @@ pub unsafe extern "C" fn SzConfigTool_setAttribute(
     let attr_code = match unsafe { CStr::from_ptr(attribute_code) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in attributeCode: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in attributeCode: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -578,7 +578,7 @@ pub unsafe extern "C" fn SzConfigTool_setAttribute(
     let updates_str = match unsafe { CStr::from_ptr(updates_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in updatesJson: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in updatesJson: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -589,7 +589,7 @@ pub unsafe extern "C" fn SzConfigTool_setAttribute(
     let updates: serde_json::Value = match serde_json::from_str(updates_str) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Invalid JSON in updatesJson: {}", e), -1);
+            set_error(format!("Invalid JSON in updatesJson: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -634,7 +634,7 @@ pub unsafe extern "C" fn SzConfigTool_getFeature(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in configJson: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -645,7 +645,7 @@ pub unsafe extern "C" fn SzConfigTool_getFeature(
     let feat_code = match unsafe { CStr::from_ptr(feature_code) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in featureCode: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in featureCode: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -678,7 +678,7 @@ pub unsafe extern "C" fn SzConfigTool_listFeatures(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in configJson: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -718,7 +718,7 @@ pub unsafe extern "C" fn SzConfigTool_getElement(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in configJson: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -729,7 +729,7 @@ pub unsafe extern "C" fn SzConfigTool_getElement(
     let elem_code = match unsafe { CStr::from_ptr(element_code) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in elementCode: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in elementCode: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -762,7 +762,7 @@ pub unsafe extern "C" fn SzConfigTool_listElements(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in configJson: {}", e), -1);
+            set_error(format!("Invalid UTF-8 in configJson: {e}"), -1);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -1,
@@ -794,7 +794,7 @@ pub unsafe extern "C" fn SzConfigTool_setFragmentWithJson(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -805,7 +805,7 @@ pub unsafe extern "C" fn SzConfigTool_setFragmentWithJson(
     let code = match unsafe { CStr::from_ptr(fragment_code) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in fragment_code: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in fragment_code: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -816,7 +816,7 @@ pub unsafe extern "C" fn SzConfigTool_setFragmentWithJson(
     let fragment_str = match unsafe { CStr::from_ptr(fragment_config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in fragment_config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in fragment_config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -827,7 +827,7 @@ pub unsafe extern "C" fn SzConfigTool_setFragmentWithJson(
     let fragment_config: serde_json::Value = match serde_json::from_str(fragment_str) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Failed to parse fragment_config_json: {}", e), -3);
+            set_error(format!("Failed to parse fragment_config_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -858,7 +858,7 @@ pub unsafe extern "C" fn SzConfigTool_cloneGenericPlan(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -869,7 +869,7 @@ pub unsafe extern "C" fn SzConfigTool_cloneGenericPlan(
     let source_code = match unsafe { CStr::from_ptr(source_gplan_code) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in source_gplan_code: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in source_gplan_code: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -880,7 +880,7 @@ pub unsafe extern "C" fn SzConfigTool_cloneGenericPlan(
     let new_code = match unsafe { CStr::from_ptr(new_gplan_code) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in new_gplan_code: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in new_gplan_code: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -894,7 +894,7 @@ pub unsafe extern "C" fn SzConfigTool_cloneGenericPlan(
         match unsafe { CStr::from_ptr(new_gplan_desc) }.to_str() {
             Ok(s) => Some(s),
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in new_gplan_desc: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in new_gplan_desc: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -913,7 +913,7 @@ pub unsafe extern "C" fn SzConfigTool_cloneGenericPlan(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -948,7 +948,7 @@ pub unsafe extern "C" fn SzConfigTool_setGenericPlan(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -959,7 +959,7 @@ pub unsafe extern "C" fn SzConfigTool_setGenericPlan(
     let code = match unsafe { CStr::from_ptr(gplan_code) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in gplan_code: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in gplan_code: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -970,7 +970,7 @@ pub unsafe extern "C" fn SzConfigTool_setGenericPlan(
     let desc = match unsafe { CStr::from_ptr(gplan_desc) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in gplan_desc: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in gplan_desc: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -988,7 +988,7 @@ pub unsafe extern "C" fn SzConfigTool_setGenericPlan(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -1022,7 +1022,7 @@ pub unsafe extern "C" fn SzConfigTool_listGenericPlans(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1036,7 +1036,7 @@ pub unsafe extern "C" fn SzConfigTool_listGenericPlans(
         match unsafe { CStr::from_ptr(filter) }.to_str() {
             Ok(s) => Some(s),
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in filter: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in filter: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -1056,7 +1056,7 @@ pub unsafe extern "C" fn SzConfigTool_listGenericPlans(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to convert result: {}", e), -4);
+                    set_error(format!("Failed to convert result: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -1064,7 +1064,7 @@ pub unsafe extern "C" fn SzConfigTool_listGenericPlans(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize result: {}", e), -3);
+                set_error(format!("Failed to serialize result: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -1098,7 +1098,7 @@ pub unsafe extern "C" fn SzConfigTool_addToSsnLast4Hash(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1109,7 +1109,7 @@ pub unsafe extern "C" fn SzConfigTool_addToSsnLast4Hash(
     let name_str = match unsafe { CStr::from_ptr(name) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in name: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in name: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1138,7 +1138,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteFromSsnLast4Hash(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1149,7 +1149,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteFromSsnLast4Hash(
     let name_str = match unsafe { CStr::from_ptr(name) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in name: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in name: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1178,7 +1178,7 @@ pub unsafe extern "C" fn SzConfigTool_getThreshold(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1197,7 +1197,7 @@ pub unsafe extern "C" fn SzConfigTool_getThreshold(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to convert result: {}", e), -4);
+                    set_error(format!("Failed to convert result: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -1205,7 +1205,7 @@ pub unsafe extern "C" fn SzConfigTool_getThreshold(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize result: {}", e), -3);
+                set_error(format!("Failed to serialize result: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -1238,7 +1238,7 @@ pub unsafe extern "C" fn SzConfigTool_listSystemParameters(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1257,7 +1257,7 @@ pub unsafe extern "C" fn SzConfigTool_listSystemParameters(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to convert result: {}", e), -4);
+                    set_error(format!("Failed to convert result: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -1265,7 +1265,7 @@ pub unsafe extern "C" fn SzConfigTool_listSystemParameters(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize result: {}", e), -3);
+                set_error(format!("Failed to serialize result: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -1300,7 +1300,7 @@ pub unsafe extern "C" fn SzConfigTool_setSystemParameterWithJson(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1311,7 +1311,7 @@ pub unsafe extern "C" fn SzConfigTool_setSystemParameterWithJson(
     let param_name = match unsafe { CStr::from_ptr(parameter_name) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in parameter_name: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in parameter_name: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1322,7 +1322,7 @@ pub unsafe extern "C" fn SzConfigTool_setSystemParameterWithJson(
     let value_str = match unsafe { CStr::from_ptr(parameter_value_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in parameter_value_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in parameter_value_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1333,7 +1333,7 @@ pub unsafe extern "C" fn SzConfigTool_setSystemParameterWithJson(
     let param_value: serde_json::Value = match serde_json::from_str(value_str) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Failed to parse parameter_value_json: {}", e), -3);
+            set_error(format!("Failed to parse parameter_value_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -1361,7 +1361,7 @@ pub unsafe extern "C" fn SzConfigTool_getVersion(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1379,7 +1379,7 @@ pub unsafe extern "C" fn SzConfigTool_getVersion(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -1412,7 +1412,7 @@ pub unsafe extern "C" fn SzConfigTool_getCompatibilityVersion(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1430,7 +1430,7 @@ pub unsafe extern "C" fn SzConfigTool_getCompatibilityVersion(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -1464,7 +1464,7 @@ pub unsafe extern "C" fn SzConfigTool_updateCompatibilityVersion(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1475,7 +1475,7 @@ pub unsafe extern "C" fn SzConfigTool_updateCompatibilityVersion(
     let version = match unsafe { CStr::from_ptr(new_version) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in new_version: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in new_version: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1504,7 +1504,7 @@ pub unsafe extern "C" fn SzConfigTool_updateFeatureVersion(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1515,7 +1515,7 @@ pub unsafe extern "C" fn SzConfigTool_updateFeatureVersion(
     let version_str = match unsafe { CStr::from_ptr(version) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in version: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in version: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1544,7 +1544,7 @@ pub unsafe extern "C" fn SzConfigTool_verifyCompatibilityVersion(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1555,7 +1555,7 @@ pub unsafe extern "C" fn SzConfigTool_verifyCompatibilityVersion(
     let version = match unsafe { CStr::from_ptr(expected_version) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in expected_version: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in expected_version: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1573,7 +1573,7 @@ pub unsafe extern "C" fn SzConfigTool_verifyCompatibilityVersion(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -1607,7 +1607,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSection(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1618,7 +1618,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSection(
     let section = match unsafe { CStr::from_ptr(section_name) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in section_name: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in section_name: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1647,7 +1647,7 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSection(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1658,7 +1658,7 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSection(
     let section = match unsafe { CStr::from_ptr(section_name) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in section_name: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in section_name: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1688,7 +1688,7 @@ pub unsafe extern "C" fn SzConfigTool_getConfigSection(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1699,7 +1699,7 @@ pub unsafe extern "C" fn SzConfigTool_getConfigSection(
     let section = match unsafe { CStr::from_ptr(section_name) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in section_name: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in section_name: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1713,7 +1713,7 @@ pub unsafe extern "C" fn SzConfigTool_getConfigSection(
         match unsafe { CStr::from_ptr(filter) }.to_str() {
             Ok(s) => Some(s),
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in filter: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in filter: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -1733,7 +1733,7 @@ pub unsafe extern "C" fn SzConfigTool_getConfigSection(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to convert result: {}", e), -4);
+                    set_error(format!("Failed to convert result: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -1741,7 +1741,7 @@ pub unsafe extern "C" fn SzConfigTool_getConfigSection(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize result: {}", e), -3);
+                set_error(format!("Failed to serialize result: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -1774,7 +1774,7 @@ pub unsafe extern "C" fn SzConfigTool_listConfigSections(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1793,7 +1793,7 @@ pub unsafe extern "C" fn SzConfigTool_listConfigSections(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to convert result: {}", e), -4);
+                    set_error(format!("Failed to convert result: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -1801,7 +1801,7 @@ pub unsafe extern "C" fn SzConfigTool_listConfigSections(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize result: {}", e), -3);
+                set_error(format!("Failed to serialize result: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -1841,7 +1841,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSectionField(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1852,7 +1852,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSectionField(
     let section = match unsafe { CStr::from_ptr(section_name) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in section_name: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in section_name: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1863,7 +1863,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSectionField(
     let field = match unsafe { CStr::from_ptr(field_name) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in field_name: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in field_name: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1874,7 +1874,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSectionField(
     let value_str = match unsafe { CStr::from_ptr(field_value_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in field_value_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in field_value_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1885,7 +1885,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSectionField(
     let field_value: serde_json::Value = match serde_json::from_str(value_str) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Failed to parse field_value_json: {}", e), -3);
+            set_error(format!("Failed to parse field_value_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -1903,7 +1903,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSectionField(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -1938,7 +1938,7 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSectionField(
     let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1949,7 +1949,7 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSectionField(
     let section = match unsafe { CStr::from_ptr(section_name) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in section_name: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in section_name: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1960,7 +1960,7 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSectionField(
     let field = match unsafe { CStr::from_ptr(field_name) }.to_str() {
         Ok(s) => s,
         Err(e) => {
-            set_error(format!("Invalid UTF-8 in field_name: {}", e), -2);
+            set_error(format!("Invalid UTF-8 in field_name: {e}"), -2);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -2,
@@ -1978,7 +1978,7 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSectionField(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -2016,7 +2016,7 @@ pub extern "C" fn SzConfigTool_addRule(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2036,7 +2036,7 @@ pub extern "C" fn SzConfigTool_addRule(
         match CStr::from_ptr(rule_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in rule_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in rule_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2048,7 +2048,7 @@ pub extern "C" fn SzConfigTool_addRule(
     let rule_value: serde_json::Value = match serde_json::from_str(rule_config) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Invalid JSON in rule_json: {}", e), -3);
+            set_error(format!("Invalid JSON in rule_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -2056,7 +2056,11 @@ pub extern "C" fn SzConfigTool_addRule(
         }
     };
 
-    match crate::rules::add_rule(config, &rule_value) {
+    let id = rule_value
+        .get("ERRULE_ID")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    match crate::rules::add_rule(config, id, &rule_value) {
         Ok((modified_config, _rule_id)) => match CString::new(modified_config) {
             Ok(c_str) => {
                 clear_error();
@@ -2066,7 +2070,7 @@ pub extern "C" fn SzConfigTool_addRule(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -2100,7 +2104,7 @@ pub extern "C" fn SzConfigTool_deleteRule(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2120,7 +2124,7 @@ pub extern "C" fn SzConfigTool_deleteRule(
         match CStr::from_ptr(rule_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in rule_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in rule_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2149,7 +2153,7 @@ pub extern "C" fn SzConfigTool_getRule(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2169,7 +2173,7 @@ pub extern "C" fn SzConfigTool_getRule(
         match CStr::from_ptr(code_or_id).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in code_or_id: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in code_or_id: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2181,7 +2185,7 @@ pub extern "C" fn SzConfigTool_getRule(
     match crate::rules::get_rule(config, identifier) {
         Ok(rule_json_value) => {
             let rule_str = serde_json::to_string(&rule_json_value)
-                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e));
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
             match CString::new(rule_str) {
                 Ok(c_str) => {
                     clear_error();
@@ -2191,7 +2195,7 @@ pub extern "C" fn SzConfigTool_getRule(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to convert result: {}", e), -4);
+                    set_error(format!("Failed to convert result: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -2223,7 +2227,7 @@ pub extern "C" fn SzConfigTool_listRules(config_json: *const c_char) -> SzConfig
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2235,7 +2239,7 @@ pub extern "C" fn SzConfigTool_listRules(config_json: *const c_char) -> SzConfig
     match crate::rules::list_rules(config) {
         Ok(rules_vec) => {
             let rules_str = serde_json::to_string(&rules_vec)
-                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e));
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
             match CString::new(rules_str) {
                 Ok(c_str) => {
                     clear_error();
@@ -2245,7 +2249,7 @@ pub extern "C" fn SzConfigTool_listRules(config_json: *const c_char) -> SzConfig
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to convert result: {}", e), -4);
+                    set_error(format!("Failed to convert result: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -2281,7 +2285,7 @@ pub extern "C" fn SzConfigTool_setRule(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2301,7 +2305,7 @@ pub extern "C" fn SzConfigTool_setRule(
         match CStr::from_ptr(rule_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in rule_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in rule_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2321,7 +2325,7 @@ pub extern "C" fn SzConfigTool_setRule(
         match CStr::from_ptr(rule_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in rule_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in rule_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2333,7 +2337,7 @@ pub extern "C" fn SzConfigTool_setRule(
     let rule_value: serde_json::Value = match serde_json::from_str(rule_config) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Invalid JSON in rule_json: {}", e), -3);
+            set_error(format!("Invalid JSON in rule_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -2356,6 +2360,9 @@ pub extern "C" fn SzConfigTool_setRule(
             .get("rtypeId")
             .and_then(|v| v.as_i64())
             .or_else(|| rule_value.get("RTYPE_ID").and_then(|v| v.as_i64())),
+        fragment: None,
+        disqualifier: None,
+        tier: None,
     };
 
     handle_result!(crate::rules::set_rule(config, params))
@@ -2385,7 +2392,7 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2405,7 +2412,7 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
         match CStr::from_ptr(sfunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in sfunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in sfunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2425,7 +2432,7 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
         match CStr::from_ptr(connect_str).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in connect_str: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2442,7 +2449,7 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in sfunc_desc: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in sfunc_desc: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -2460,7 +2467,7 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in language: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in language: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -2488,7 +2495,7 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -2522,7 +2529,7 @@ pub extern "C" fn SzConfigTool_deleteStandardizeFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2542,7 +2549,7 @@ pub extern "C" fn SzConfigTool_deleteStandardizeFunction(
         match CStr::from_ptr(sfunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in sfunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in sfunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2561,7 +2568,7 @@ pub extern "C" fn SzConfigTool_deleteStandardizeFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -2595,7 +2602,7 @@ pub extern "C" fn SzConfigTool_getStandardizeFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2615,7 +2622,7 @@ pub extern "C" fn SzConfigTool_getStandardizeFunction(
         match CStr::from_ptr(sfunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in sfunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in sfunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2627,7 +2634,7 @@ pub extern "C" fn SzConfigTool_getStandardizeFunction(
     match crate::functions::standardize::get_standardize_function(config, code) {
         Ok(value) => {
             let json_str = serde_json::to_string(&value)
-                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e));
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
             match CString::new(json_str) {
                 Ok(c_str) => {
                     clear_error();
@@ -2637,7 +2644,7 @@ pub extern "C" fn SzConfigTool_getStandardizeFunction(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to convert result: {}", e), -4);
+                    set_error(format!("Failed to convert result: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -2671,7 +2678,7 @@ pub extern "C" fn SzConfigTool_listStandardizeFunctions(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2683,7 +2690,7 @@ pub extern "C" fn SzConfigTool_listStandardizeFunctions(
     match crate::functions::standardize::list_standardize_functions(config) {
         Ok(vec) => {
             let json_str = serde_json::to_string(&vec)
-                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e));
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
             match CString::new(json_str) {
                 Ok(c_str) => {
                     clear_error();
@@ -2693,7 +2700,7 @@ pub extern "C" fn SzConfigTool_listStandardizeFunctions(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to convert result: {}", e), -4);
+                    set_error(format!("Failed to convert result: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -2731,7 +2738,7 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2751,7 +2758,7 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
         match CStr::from_ptr(sfunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in sfunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in sfunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2768,7 +2775,7 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in connect_str: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -2786,7 +2793,7 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in sfunc_desc: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in sfunc_desc: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -2804,7 +2811,7 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in language: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in language: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -2832,7 +2839,7 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -2873,7 +2880,7 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2893,7 +2900,7 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
         match CStr::from_ptr(efunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in efunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in efunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2913,7 +2920,7 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
         match CStr::from_ptr(connect_str).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in connect_str: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -2930,7 +2937,7 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in efunc_desc: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in efunc_desc: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -2948,7 +2955,7 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in language: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in language: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -2976,7 +2983,7 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -3010,7 +3017,7 @@ pub extern "C" fn SzConfigTool_deleteExpressionFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3030,7 +3037,7 @@ pub extern "C" fn SzConfigTool_deleteExpressionFunction(
         match CStr::from_ptr(efunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in efunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in efunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3049,7 +3056,7 @@ pub extern "C" fn SzConfigTool_deleteExpressionFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -3083,7 +3090,7 @@ pub extern "C" fn SzConfigTool_getExpressionFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3103,7 +3110,7 @@ pub extern "C" fn SzConfigTool_getExpressionFunction(
         match CStr::from_ptr(efunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in efunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in efunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3115,7 +3122,7 @@ pub extern "C" fn SzConfigTool_getExpressionFunction(
     match crate::functions::expression::get_expression_function(config, code) {
         Ok(value) => {
             let json_str = serde_json::to_string(&value)
-                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e));
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
             match CString::new(json_str) {
                 Ok(c_str) => {
                     clear_error();
@@ -3125,7 +3132,7 @@ pub extern "C" fn SzConfigTool_getExpressionFunction(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to convert result: {}", e), -4);
+                    set_error(format!("Failed to convert result: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -3159,7 +3166,7 @@ pub extern "C" fn SzConfigTool_listExpressionFunctions(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3171,7 +3178,7 @@ pub extern "C" fn SzConfigTool_listExpressionFunctions(
     match crate::functions::expression::list_expression_functions(config) {
         Ok(vec) => {
             let json_str = serde_json::to_string(&vec)
-                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e));
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
             match CString::new(json_str) {
                 Ok(c_str) => {
                     clear_error();
@@ -3181,7 +3188,7 @@ pub extern "C" fn SzConfigTool_listExpressionFunctions(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to convert result: {}", e), -4);
+                    set_error(format!("Failed to convert result: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -3219,7 +3226,7 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3239,7 +3246,7 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
         match CStr::from_ptr(efunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in efunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in efunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3256,7 +3263,7 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in connect_str: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -3274,7 +3281,7 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in efunc_desc: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in efunc_desc: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -3292,7 +3299,7 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in language: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in language: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -3320,7 +3327,7 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -3362,7 +3369,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3382,7 +3389,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
         match CStr::from_ptr(cfunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in cfunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in cfunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3402,7 +3409,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
         match CStr::from_ptr(connect_str).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in connect_str: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3419,7 +3426,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in cfunc_desc: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in cfunc_desc: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -3437,7 +3444,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in language: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in language: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -3455,7 +3462,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in anon_support: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in anon_support: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -3484,7 +3491,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -3518,7 +3525,7 @@ pub extern "C" fn SzConfigTool_deleteComparisonFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3538,7 +3545,7 @@ pub extern "C" fn SzConfigTool_deleteComparisonFunction(
         match CStr::from_ptr(cfunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in cfunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in cfunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3557,7 +3564,7 @@ pub extern "C" fn SzConfigTool_deleteComparisonFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -3591,7 +3598,7 @@ pub extern "C" fn SzConfigTool_getComparisonFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3611,7 +3618,7 @@ pub extern "C" fn SzConfigTool_getComparisonFunction(
         match CStr::from_ptr(cfunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in cfunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in cfunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3623,7 +3630,7 @@ pub extern "C" fn SzConfigTool_getComparisonFunction(
     match crate::functions::comparison::get_comparison_function(config, code) {
         Ok(value) => {
             let json_str = serde_json::to_string(&value)
-                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e));
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
             match CString::new(json_str) {
                 Ok(c_str) => {
                     clear_error();
@@ -3633,7 +3640,7 @@ pub extern "C" fn SzConfigTool_getComparisonFunction(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to convert result: {}", e), -4);
+                    set_error(format!("Failed to convert result: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -3667,7 +3674,7 @@ pub extern "C" fn SzConfigTool_listComparisonFunctions(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3679,7 +3686,7 @@ pub extern "C" fn SzConfigTool_listComparisonFunctions(
     match crate::functions::comparison::list_comparison_functions(config) {
         Ok(vec) => {
             let json_str = serde_json::to_string(&vec)
-                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e));
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
             match CString::new(json_str) {
                 Ok(c_str) => {
                     clear_error();
@@ -3689,7 +3696,7 @@ pub extern "C" fn SzConfigTool_listComparisonFunctions(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to convert result: {}", e), -4);
+                    set_error(format!("Failed to convert result: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -3728,7 +3735,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3748,7 +3755,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
         match CStr::from_ptr(cfunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in cfunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in cfunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3765,7 +3772,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in connect_str: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -3783,7 +3790,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in cfunc_desc: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in cfunc_desc: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -3801,7 +3808,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in language: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in language: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -3819,7 +3826,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in anon_support: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in anon_support: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -3848,7 +3855,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -3889,7 +3896,7 @@ pub extern "C" fn SzConfigTool_addStandardizeCall(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3906,7 +3913,7 @@ pub extern "C" fn SzConfigTool_addStandardizeCall(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in ftype_code: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in ftype_code: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -3924,7 +3931,7 @@ pub extern "C" fn SzConfigTool_addStandardizeCall(
                 Ok(s) if !s.is_empty() => Some(s),
                 Ok(_) => None,
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in felem_code: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in felem_code: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -3951,7 +3958,7 @@ pub extern "C" fn SzConfigTool_addStandardizeCall(
         match CStr::from_ptr(sfunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in sfunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in sfunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -3977,7 +3984,7 @@ pub extern "C" fn SzConfigTool_addStandardizeCall(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to convert result: {}", e), -4);
+                set_error(format!("Failed to convert result: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -4011,7 +4018,7 @@ pub extern "C" fn SzConfigTool_deleteStandardizeCall(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4042,7 +4049,7 @@ pub extern "C" fn SzConfigTool_getStandardizeCall(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4054,7 +4061,7 @@ pub extern "C" fn SzConfigTool_getStandardizeCall(
     match crate::calls::standardize::get_standardize_call(config, sfcall_id) {
         Ok(value) => {
             let json_str = serde_json::to_string(&value)
-                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e));
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
             match CString::new(json_str) {
                 Ok(c_str) => {
                     clear_error();
@@ -4064,7 +4071,7 @@ pub extern "C" fn SzConfigTool_getStandardizeCall(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to convert result: {}", e), -4);
+                    set_error(format!("Failed to convert result: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -4098,7 +4105,7 @@ pub extern "C" fn SzConfigTool_listStandardizeCalls(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4110,7 +4117,7 @@ pub extern "C" fn SzConfigTool_listStandardizeCalls(
     match crate::calls::standardize::list_standardize_calls(config) {
         Ok(vec) => {
             let json_str = serde_json::to_string(&vec)
-                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e));
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
             match CString::new(json_str) {
                 Ok(c_str) => {
                     clear_error();
@@ -4120,7 +4127,7 @@ pub extern "C" fn SzConfigTool_listStandardizeCalls(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to convert result: {}", e), -4);
+                    set_error(format!("Failed to convert result: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -4156,7 +4163,7 @@ pub extern "C" fn SzConfigTool_setStandardizeCall(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4176,7 +4183,7 @@ pub extern "C" fn SzConfigTool_setStandardizeCall(
         match CStr::from_ptr(updates_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in updates_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4188,7 +4195,7 @@ pub extern "C" fn SzConfigTool_setStandardizeCall(
     let updates_value: serde_json::Value = match serde_json::from_str(updates) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Invalid JSON in updates_json: {}", e), -3);
+            set_error(format!("Invalid JSON in updates_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -4237,7 +4244,7 @@ pub extern "C" fn SzConfigTool_addComparisonThreshold(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4257,7 +4264,7 @@ pub extern "C" fn SzConfigTool_addComparisonThreshold(
         match CStr::from_ptr(cfunc_rtnval).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in cfunc_rtnval: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in cfunc_rtnval: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4330,7 +4337,7 @@ pub extern "C" fn SzConfigTool_deleteComparisonThreshold(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4362,7 +4369,7 @@ pub extern "C" fn SzConfigTool_setComparisonThreshold(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4382,7 +4389,7 @@ pub extern "C" fn SzConfigTool_setComparisonThreshold(
         match CStr::from_ptr(updates_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in updates_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4394,7 +4401,7 @@ pub extern "C" fn SzConfigTool_setComparisonThreshold(
     let updates_value: serde_json::Value = match serde_json::from_str(updates) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Invalid JSON in updates_json: {}", e), -3);
+            set_error(format!("Invalid JSON in updates_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -4429,7 +4436,7 @@ pub extern "C" fn SzConfigTool_listComparisonThresholds(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4449,7 +4456,7 @@ pub extern "C" fn SzConfigTool_listComparisonThresholds(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -4457,7 +4464,7 @@ pub extern "C" fn SzConfigTool_listComparisonThresholds(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize list: {}", e), -3);
+                set_error(format!("Failed to serialize list: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -4498,7 +4505,7 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4518,7 +4525,7 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
         match CStr::from_ptr(plan).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in plan: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in plan: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4538,7 +4545,7 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
         match CStr::from_ptr(behavior).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in behavior: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in behavior: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4558,7 +4565,7 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
         match CStr::from_ptr(send_to_redo).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in send_to_redo: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in send_to_redo: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4574,7 +4581,7 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
             match CStr::from_ptr(feature).to_str() {
                 Ok(s) => Some(s),
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in feature: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in feature: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -4616,7 +4623,7 @@ pub extern "C" fn SzConfigTool_deleteGenericThreshold(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4636,7 +4643,7 @@ pub extern "C" fn SzConfigTool_deleteGenericThreshold(
         match CStr::from_ptr(plan).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in plan: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in plan: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4656,7 +4663,7 @@ pub extern "C" fn SzConfigTool_deleteGenericThreshold(
         match CStr::from_ptr(behavior).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in behavior: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in behavior: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4672,7 +4679,7 @@ pub extern "C" fn SzConfigTool_deleteGenericThreshold(
             match CStr::from_ptr(feature).to_str() {
                 Ok(s) => Some(s),
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in feature: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in feature: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -4711,7 +4718,7 @@ pub extern "C" fn SzConfigTool_setGenericThreshold(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4731,7 +4738,7 @@ pub extern "C" fn SzConfigTool_setGenericThreshold(
         match CStr::from_ptr(behavior).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in behavior: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in behavior: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4751,7 +4758,7 @@ pub extern "C" fn SzConfigTool_setGenericThreshold(
         match CStr::from_ptr(updates_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in updates_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4763,7 +4770,7 @@ pub extern "C" fn SzConfigTool_setGenericThreshold(
     let updates_value: serde_json::Value = match serde_json::from_str(updates) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Invalid JSON in updates_json: {}", e), -3);
+            set_error(format!("Invalid JSON in updates_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -4812,7 +4819,7 @@ pub extern "C" fn SzConfigTool_listGenericThresholds(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4832,7 +4839,7 @@ pub extern "C" fn SzConfigTool_listGenericThresholds(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -4840,7 +4847,7 @@ pub extern "C" fn SzConfigTool_listGenericThresholds(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize list: {}", e), -3);
+                set_error(format!("Failed to serialize list: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -4880,7 +4887,7 @@ pub extern "C" fn SzConfigTool_getFragment(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4900,7 +4907,7 @@ pub extern "C" fn SzConfigTool_getFragment(
         match CStr::from_ptr(code_or_id).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in code_or_id: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in code_or_id: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4920,7 +4927,7 @@ pub extern "C" fn SzConfigTool_getFragment(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -4928,7 +4935,7 @@ pub extern "C" fn SzConfigTool_getFragment(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize fragment: {}", e), -3);
+                set_error(format!("Failed to serialize fragment: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -4959,7 +4966,7 @@ pub extern "C" fn SzConfigTool_listFragments(config_json: *const c_char) -> SzCo
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -4979,7 +4986,7 @@ pub extern "C" fn SzConfigTool_listFragments(config_json: *const c_char) -> SzCo
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -4987,7 +4994,7 @@ pub extern "C" fn SzConfigTool_listFragments(config_json: *const c_char) -> SzCo
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize list: {}", e), -3);
+                set_error(format!("Failed to serialize list: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -5021,7 +5028,7 @@ pub extern "C" fn SzConfigTool_addFragment(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5041,7 +5048,7 @@ pub extern "C" fn SzConfigTool_addFragment(
         match CStr::from_ptr(fragment_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in fragment_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in fragment_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5053,7 +5060,7 @@ pub extern "C" fn SzConfigTool_addFragment(
     let fragment_value: serde_json::Value = match serde_json::from_str(fragment_str) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Invalid JSON in fragment_json: {}", e), -3);
+            set_error(format!("Invalid JSON in fragment_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -5071,7 +5078,7 @@ pub extern "C" fn SzConfigTool_addFragment(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -5105,7 +5112,7 @@ pub extern "C" fn SzConfigTool_deleteFragment(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5125,7 +5132,7 @@ pub extern "C" fn SzConfigTool_deleteFragment(
         match CStr::from_ptr(fragment_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in fragment_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in fragment_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5156,7 +5163,7 @@ pub extern "C" fn SzConfigTool_getDataSource(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5176,7 +5183,7 @@ pub extern "C" fn SzConfigTool_getDataSource(
         match CStr::from_ptr(code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5196,7 +5203,7 @@ pub extern "C" fn SzConfigTool_getDataSource(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -5204,7 +5211,7 @@ pub extern "C" fn SzConfigTool_getDataSource(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize data source: {}", e), -3);
+                set_error(format!("Failed to serialize data source: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -5239,7 +5246,7 @@ pub extern "C" fn SzConfigTool_setDataSource(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5259,7 +5266,7 @@ pub extern "C" fn SzConfigTool_setDataSource(
         match CStr::from_ptr(code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5279,7 +5286,7 @@ pub extern "C" fn SzConfigTool_setDataSource(
         match CStr::from_ptr(updates_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in updates_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5291,7 +5298,7 @@ pub extern "C" fn SzConfigTool_setDataSource(
     let updates_value: serde_json::Value = match serde_json::from_str(updates) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Invalid JSON in updates_json: {}", e), -3);
+            set_error(format!("Invalid JSON in updates_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -5346,7 +5353,7 @@ pub extern "C" fn SzConfigTool_addFeature(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5366,7 +5373,7 @@ pub extern "C" fn SzConfigTool_addFeature(
         match CStr::from_ptr(feature_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in feature_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in feature_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5386,7 +5393,7 @@ pub extern "C" fn SzConfigTool_addFeature(
         match CStr::from_ptr(feature_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in feature_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in feature_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5399,7 +5406,7 @@ pub extern "C" fn SzConfigTool_addFeature(
     let feature_config: serde_json::Value = match serde_json::from_str(feature_str) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Invalid JSON in feature_json: {}", e), -3);
+            set_error(format!("Invalid JSON in feature_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -5469,7 +5476,7 @@ pub extern "C" fn SzConfigTool_addFeature(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -5503,7 +5510,7 @@ pub extern "C" fn SzConfigTool_deleteFeature(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5523,7 +5530,7 @@ pub extern "C" fn SzConfigTool_deleteFeature(
         match CStr::from_ptr(feature_code_or_id).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in feature_code_or_id: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in feature_code_or_id: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5553,7 +5560,7 @@ pub extern "C" fn SzConfigTool_setFeature(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5573,7 +5580,7 @@ pub extern "C" fn SzConfigTool_setFeature(
         match CStr::from_ptr(feature_code_or_id).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in feature_code_or_id: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in feature_code_or_id: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5593,7 +5600,7 @@ pub extern "C" fn SzConfigTool_setFeature(
         match CStr::from_ptr(updates_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in updates_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5606,7 +5613,7 @@ pub extern "C" fn SzConfigTool_setFeature(
     let updates_config: serde_json::Value = match serde_json::from_str(updates) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Invalid JSON in updates_json: {}", e), -3);
+            set_error(format!("Invalid JSON in updates_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -5669,7 +5676,7 @@ pub extern "C" fn SzConfigTool_addBehaviorOverride(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5689,7 +5696,7 @@ pub extern "C" fn SzConfigTool_addBehaviorOverride(
         match CStr::from_ptr(feature_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in feature_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in feature_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5709,7 +5716,7 @@ pub extern "C" fn SzConfigTool_addBehaviorOverride(
         match CStr::from_ptr(usage_type).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in usage_type: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in usage_type: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5729,7 +5736,7 @@ pub extern "C" fn SzConfigTool_addBehaviorOverride(
         match CStr::from_ptr(behavior).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in behavior: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in behavior: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5762,7 +5769,7 @@ pub extern "C" fn SzConfigTool_deleteBehaviorOverride(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5782,7 +5789,7 @@ pub extern "C" fn SzConfigTool_deleteBehaviorOverride(
         match CStr::from_ptr(feature_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in feature_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in feature_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5802,7 +5809,7 @@ pub extern "C" fn SzConfigTool_deleteBehaviorOverride(
         match CStr::from_ptr(usage_type).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in usage_type: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in usage_type: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5832,7 +5839,7 @@ pub extern "C" fn SzConfigTool_listBehaviorOverrides(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5867,7 +5874,7 @@ pub extern "C" fn SzConfigTool_addElement(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5887,7 +5894,7 @@ pub extern "C" fn SzConfigTool_addElement(
         match CStr::from_ptr(element_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in element_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in element_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5907,7 +5914,7 @@ pub extern "C" fn SzConfigTool_addElement(
         match CStr::from_ptr(element_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in element_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in element_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5919,7 +5926,7 @@ pub extern "C" fn SzConfigTool_addElement(
     let element_config: serde_json::Value = match serde_json::from_str(element_str) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Invalid JSON in element_json: {}", e), -3);
+            set_error(format!("Invalid JSON in element_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -5964,7 +5971,7 @@ pub extern "C" fn SzConfigTool_deleteElement(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -5984,7 +5991,7 @@ pub extern "C" fn SzConfigTool_deleteElement(
         match CStr::from_ptr(element_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in element_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in element_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6014,7 +6021,7 @@ pub extern "C" fn SzConfigTool_setElement(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6034,7 +6041,7 @@ pub extern "C" fn SzConfigTool_setElement(
         match CStr::from_ptr(element_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in element_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in element_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6054,7 +6061,7 @@ pub extern "C" fn SzConfigTool_setElement(
         match CStr::from_ptr(updates_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in updates_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6066,7 +6073,7 @@ pub extern "C" fn SzConfigTool_setElement(
     let updates_config: serde_json::Value = match serde_json::from_str(updates) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Invalid JSON in updates_json: {}", e), -3);
+            set_error(format!("Invalid JSON in updates_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -6128,7 +6135,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6145,7 +6152,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
             match CStr::from_ptr(ftype_code).to_str() {
                 Ok(s) => Some(s),
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in ftype_code: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in ftype_code: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -6163,7 +6170,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
             match CStr::from_ptr(felem_code).to_str() {
                 Ok(s) => Some(s),
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in felem_code: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in felem_code: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -6184,7 +6191,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
         match CStr::from_ptr(efunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in efunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in efunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6204,7 +6211,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
         match CStr::from_ptr(element_list_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in element_list_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in element_list_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6221,7 +6228,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
             match CStr::from_ptr(expression_feature).to_str() {
                 Ok(s) => Some(s),
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in expression_feature: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in expression_feature: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -6242,7 +6249,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
         match CStr::from_ptr(is_virtual).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in is_virtual: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in is_virtual: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6255,7 +6262,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
     let elem_list_value: serde_json::Value = match serde_json::from_str(elem_list_str) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Invalid JSON in element_list_json: {}", e), -3);
+            set_error(format!("Invalid JSON in element_list_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -6336,7 +6343,7 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -6370,7 +6377,7 @@ pub extern "C" fn SzConfigTool_deleteExpressionCall(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6401,7 +6408,7 @@ pub extern "C" fn SzConfigTool_getExpressionCall(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6421,7 +6428,7 @@ pub extern "C" fn SzConfigTool_getExpressionCall(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -6429,7 +6436,7 @@ pub extern "C" fn SzConfigTool_getExpressionCall(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize record: {}", e), -3);
+                set_error(format!("Failed to serialize record: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -6462,7 +6469,7 @@ pub extern "C" fn SzConfigTool_listExpressionCalls(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6482,7 +6489,7 @@ pub extern "C" fn SzConfigTool_listExpressionCalls(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -6490,7 +6497,7 @@ pub extern "C" fn SzConfigTool_listExpressionCalls(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize list: {}", e), -3);
+                set_error(format!("Failed to serialize list: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -6525,7 +6532,7 @@ pub extern "C" fn SzConfigTool_setExpressionCall(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6545,7 +6552,7 @@ pub extern "C" fn SzConfigTool_setExpressionCall(
         match CStr::from_ptr(updates_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in updates_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6557,7 +6564,7 @@ pub extern "C" fn SzConfigTool_setExpressionCall(
     let updates_value: serde_json::Value = match serde_json::from_str(updates) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Invalid JSON in updates_json: {}", e), -3);
+            set_error(format!("Invalid JSON in updates_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -6599,7 +6606,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6619,7 +6626,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
         match CStr::from_ptr(ftype_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in ftype_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in ftype_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6639,7 +6646,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
         match CStr::from_ptr(cfunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in cfunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in cfunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6659,7 +6666,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
         match CStr::from_ptr(element_list_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in element_list_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in element_list_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6672,7 +6679,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
     let elem_list_value: serde_json::Value = match serde_json::from_str(elem_list_str) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Invalid JSON in element_list_json: {}", e), -3);
+            set_error(format!("Invalid JSON in element_list_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -6713,7 +6720,7 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -6747,7 +6754,7 @@ pub extern "C" fn SzConfigTool_deleteComparisonCall(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6778,7 +6785,7 @@ pub extern "C" fn SzConfigTool_getComparisonCall(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6798,7 +6805,7 @@ pub extern "C" fn SzConfigTool_getComparisonCall(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -6806,7 +6813,7 @@ pub extern "C" fn SzConfigTool_getComparisonCall(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize record: {}", e), -3);
+                set_error(format!("Failed to serialize record: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -6839,7 +6846,7 @@ pub extern "C" fn SzConfigTool_listComparisonCalls(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6859,7 +6866,7 @@ pub extern "C" fn SzConfigTool_listComparisonCalls(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -6867,7 +6874,7 @@ pub extern "C" fn SzConfigTool_listComparisonCalls(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize list: {}", e), -3);
+                set_error(format!("Failed to serialize list: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -6902,7 +6909,7 @@ pub extern "C" fn SzConfigTool_setComparisonCall(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6922,7 +6929,7 @@ pub extern "C" fn SzConfigTool_setComparisonCall(
         match CStr::from_ptr(updates_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in updates_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -6934,7 +6941,7 @@ pub extern "C" fn SzConfigTool_setComparisonCall(
     let updates_value: serde_json::Value = match serde_json::from_str(updates) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Invalid JSON in updates_json: {}", e), -3);
+            set_error(format!("Invalid JSON in updates_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -6990,7 +6997,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7010,7 +7017,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
         match CStr::from_ptr(ftype_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in ftype_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in ftype_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7030,7 +7037,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
         match CStr::from_ptr(dfunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in dfunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in dfunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7050,7 +7057,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
         match CStr::from_ptr(element_list_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in element_list_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in element_list_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7063,7 +7070,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
     let elem_list_value: serde_json::Value = match serde_json::from_str(elem_list_json) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Failed to parse element_list_json: {}", e), -3);
+            set_error(format!("Failed to parse element_list_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -7103,7 +7110,7 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -7147,7 +7154,7 @@ pub extern "C" fn SzConfigTool_deleteDistinctCall(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7166,7 +7173,7 @@ pub extern "C" fn SzConfigTool_deleteDistinctCall(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -7212,7 +7219,7 @@ pub extern "C" fn SzConfigTool_getDistinctCall(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7232,7 +7239,7 @@ pub extern "C" fn SzConfigTool_getDistinctCall(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -7240,7 +7247,7 @@ pub extern "C" fn SzConfigTool_getDistinctCall(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize record: {}", e), -3);
+                set_error(format!("Failed to serialize record: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -7284,7 +7291,7 @@ pub extern "C" fn SzConfigTool_listDistinctCalls(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7304,7 +7311,7 @@ pub extern "C" fn SzConfigTool_listDistinctCalls(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -7312,7 +7319,7 @@ pub extern "C" fn SzConfigTool_listDistinctCalls(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize list: {}", e), -3);
+                set_error(format!("Failed to serialize list: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -7360,7 +7367,7 @@ pub extern "C" fn SzConfigTool_setDistinctCall(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7380,7 +7387,7 @@ pub extern "C" fn SzConfigTool_setDistinctCall(
         match CStr::from_ptr(updates_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in updates_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in updates_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7392,7 +7399,7 @@ pub extern "C" fn SzConfigTool_setDistinctCall(
     let updates_value: serde_json::Value = match serde_json::from_str(updates) {
         Ok(v) => v,
         Err(e) => {
-            set_error(format!("Failed to parse updates_json: {}", e), -3);
+            set_error(format!("Failed to parse updates_json: {e}"), -3);
             return SzConfigTool_result {
                 response: std::ptr::null_mut(),
                 returnCode: -3,
@@ -7415,7 +7422,7 @@ pub extern "C" fn SzConfigTool_setDistinctCall(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -7456,7 +7463,7 @@ pub extern "C" fn SzConfigTool_addMatchingFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7476,7 +7483,7 @@ pub extern "C" fn SzConfigTool_addMatchingFunction(
         match CStr::from_ptr(rtype_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7496,7 +7503,7 @@ pub extern "C" fn SzConfigTool_addMatchingFunction(
         match CStr::from_ptr(matching_func).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in matching_func: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in matching_func: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7515,7 +7522,7 @@ pub extern "C" fn SzConfigTool_addMatchingFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -7549,7 +7556,7 @@ pub extern "C" fn SzConfigTool_deleteMatchingFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7569,7 +7576,7 @@ pub extern "C" fn SzConfigTool_deleteMatchingFunction(
         match CStr::from_ptr(rtype_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7588,7 +7595,7 @@ pub extern "C" fn SzConfigTool_deleteMatchingFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -7622,7 +7629,7 @@ pub extern "C" fn SzConfigTool_getMatchingFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7642,7 +7649,7 @@ pub extern "C" fn SzConfigTool_getMatchingFunction(
         match CStr::from_ptr(rtype_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7662,7 +7669,7 @@ pub extern "C" fn SzConfigTool_getMatchingFunction(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -7670,7 +7677,7 @@ pub extern "C" fn SzConfigTool_getMatchingFunction(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize record: {}", e), -3);
+                set_error(format!("Failed to serialize record: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -7703,7 +7710,7 @@ pub extern "C" fn SzConfigTool_listMatchingFunctions(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7723,7 +7730,7 @@ pub extern "C" fn SzConfigTool_listMatchingFunctions(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -7731,7 +7738,7 @@ pub extern "C" fn SzConfigTool_listMatchingFunctions(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize list: {}", e), -3);
+                set_error(format!("Failed to serialize list: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -7766,7 +7773,7 @@ pub extern "C" fn SzConfigTool_setMatchingFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7786,7 +7793,7 @@ pub extern "C" fn SzConfigTool_setMatchingFunction(
         match CStr::from_ptr(rtype_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7802,7 +7809,7 @@ pub extern "C" fn SzConfigTool_setMatchingFunction(
             match CStr::from_ptr(matching_func).to_str() {
                 Ok(s) => Some(s),
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in matching_func: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in matching_func: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -7822,7 +7829,7 @@ pub extern "C" fn SzConfigTool_setMatchingFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -7861,7 +7868,7 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7881,7 +7888,7 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
         match CStr::from_ptr(dfunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in dfunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in dfunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7901,7 +7908,7 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
         match CStr::from_ptr(connect_str).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in connect_str: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -7917,7 +7924,7 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
             match CStr::from_ptr(dfunc_desc).to_str() {
                 Ok(s) => Some(s),
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in dfunc_desc: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in dfunc_desc: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -7934,7 +7941,7 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
             match CStr::from_ptr(language).to_str() {
                 Ok(s) => Some(s),
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in language: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in language: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -7962,7 +7969,7 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -7996,7 +8003,7 @@ pub extern "C" fn SzConfigTool_deleteDistinctFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8016,7 +8023,7 @@ pub extern "C" fn SzConfigTool_deleteDistinctFunction(
         match CStr::from_ptr(dfunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in dfunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in dfunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8035,7 +8042,7 @@ pub extern "C" fn SzConfigTool_deleteDistinctFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -8069,7 +8076,7 @@ pub extern "C" fn SzConfigTool_getDistinctFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8089,7 +8096,7 @@ pub extern "C" fn SzConfigTool_getDistinctFunction(
         match CStr::from_ptr(dfunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in dfunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in dfunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8109,7 +8116,7 @@ pub extern "C" fn SzConfigTool_getDistinctFunction(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -8117,7 +8124,7 @@ pub extern "C" fn SzConfigTool_getDistinctFunction(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize record: {}", e), -3);
+                set_error(format!("Failed to serialize record: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -8150,7 +8157,7 @@ pub extern "C" fn SzConfigTool_listDistinctFunctions(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8170,7 +8177,7 @@ pub extern "C" fn SzConfigTool_listDistinctFunctions(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -8178,7 +8185,7 @@ pub extern "C" fn SzConfigTool_listDistinctFunctions(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize list: {}", e), -3);
+                set_error(format!("Failed to serialize list: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -8215,7 +8222,7 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8235,7 +8242,7 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
         match CStr::from_ptr(dfunc_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in dfunc_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in dfunc_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8251,7 +8258,7 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
             match CStr::from_ptr(connect_str).to_str() {
                 Ok(s) => Some(s),
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in connect_str: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -8268,7 +8275,7 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
             match CStr::from_ptr(dfunc_desc).to_str() {
                 Ok(s) => Some(s),
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in dfunc_desc: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in dfunc_desc: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -8285,7 +8292,7 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
             match CStr::from_ptr(language).to_str() {
                 Ok(s) => Some(s),
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in language: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in language: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -8313,7 +8320,7 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -8354,7 +8361,7 @@ pub extern "C" fn SzConfigTool_addCandidateFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8374,7 +8381,7 @@ pub extern "C" fn SzConfigTool_addCandidateFunction(
         match CStr::from_ptr(rtype_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8394,7 +8401,7 @@ pub extern "C" fn SzConfigTool_addCandidateFunction(
         match CStr::from_ptr(candidate_func).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in candidate_func: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in candidate_func: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8413,7 +8420,7 @@ pub extern "C" fn SzConfigTool_addCandidateFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -8447,7 +8454,7 @@ pub extern "C" fn SzConfigTool_deleteCandidateFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8467,7 +8474,7 @@ pub extern "C" fn SzConfigTool_deleteCandidateFunction(
         match CStr::from_ptr(rtype_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8486,7 +8493,7 @@ pub extern "C" fn SzConfigTool_deleteCandidateFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -8520,7 +8527,7 @@ pub extern "C" fn SzConfigTool_getCandidateFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8540,7 +8547,7 @@ pub extern "C" fn SzConfigTool_getCandidateFunction(
         match CStr::from_ptr(rtype_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8560,7 +8567,7 @@ pub extern "C" fn SzConfigTool_getCandidateFunction(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -8568,7 +8575,7 @@ pub extern "C" fn SzConfigTool_getCandidateFunction(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize record: {}", e), -3);
+                set_error(format!("Failed to serialize record: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -8601,7 +8608,7 @@ pub extern "C" fn SzConfigTool_listCandidateFunctions(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8621,7 +8628,7 @@ pub extern "C" fn SzConfigTool_listCandidateFunctions(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -8629,7 +8636,7 @@ pub extern "C" fn SzConfigTool_listCandidateFunctions(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize list: {}", e), -3);
+                set_error(format!("Failed to serialize list: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -8664,7 +8671,7 @@ pub extern "C" fn SzConfigTool_setCandidateFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8684,7 +8691,7 @@ pub extern "C" fn SzConfigTool_setCandidateFunction(
         match CStr::from_ptr(rtype_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8700,7 +8707,7 @@ pub extern "C" fn SzConfigTool_setCandidateFunction(
             match CStr::from_ptr(candidate_func).to_str() {
                 Ok(s) => Some(s),
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in candidate_func: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in candidate_func: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -8720,7 +8727,7 @@ pub extern "C" fn SzConfigTool_setCandidateFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -8757,7 +8764,7 @@ pub extern "C" fn SzConfigTool_addValidationFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8777,7 +8784,7 @@ pub extern "C" fn SzConfigTool_addValidationFunction(
         match CStr::from_ptr(attr_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in attr_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in attr_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8797,7 +8804,7 @@ pub extern "C" fn SzConfigTool_addValidationFunction(
         match CStr::from_ptr(validation_func).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in validation_func: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in validation_func: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8816,7 +8823,7 @@ pub extern "C" fn SzConfigTool_addValidationFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -8850,7 +8857,7 @@ pub extern "C" fn SzConfigTool_deleteValidationFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8870,7 +8877,7 @@ pub extern "C" fn SzConfigTool_deleteValidationFunction(
         match CStr::from_ptr(attr_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in attr_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in attr_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8889,7 +8896,7 @@ pub extern "C" fn SzConfigTool_deleteValidationFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -8923,7 +8930,7 @@ pub extern "C" fn SzConfigTool_getValidationFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8943,7 +8950,7 @@ pub extern "C" fn SzConfigTool_getValidationFunction(
         match CStr::from_ptr(attr_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in attr_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in attr_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -8963,7 +8970,7 @@ pub extern "C" fn SzConfigTool_getValidationFunction(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -8971,7 +8978,7 @@ pub extern "C" fn SzConfigTool_getValidationFunction(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize record: {}", e), -3);
+                set_error(format!("Failed to serialize record: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -9004,7 +9011,7 @@ pub extern "C" fn SzConfigTool_listValidationFunctions(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -9024,7 +9031,7 @@ pub extern "C" fn SzConfigTool_listValidationFunctions(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -9032,7 +9039,7 @@ pub extern "C" fn SzConfigTool_listValidationFunctions(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize list: {}", e), -3);
+                set_error(format!("Failed to serialize list: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -9067,7 +9074,7 @@ pub extern "C" fn SzConfigTool_setValidationFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -9087,7 +9094,7 @@ pub extern "C" fn SzConfigTool_setValidationFunction(
         match CStr::from_ptr(attr_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in attr_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in attr_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -9103,7 +9110,7 @@ pub extern "C" fn SzConfigTool_setValidationFunction(
             match CStr::from_ptr(validation_func).to_str() {
                 Ok(s) => Some(s),
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in validation_func: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in validation_func: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -9123,7 +9130,7 @@ pub extern "C" fn SzConfigTool_setValidationFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -9162,7 +9169,7 @@ pub extern "C" fn SzConfigTool_addScoringFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -9182,7 +9189,7 @@ pub extern "C" fn SzConfigTool_addScoringFunction(
         match CStr::from_ptr(rtype_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -9202,7 +9209,7 @@ pub extern "C" fn SzConfigTool_addScoringFunction(
         match CStr::from_ptr(scoring_func).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in scoring_func: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in scoring_func: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -9221,7 +9228,7 @@ pub extern "C" fn SzConfigTool_addScoringFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -9255,7 +9262,7 @@ pub extern "C" fn SzConfigTool_deleteScoringFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -9275,7 +9282,7 @@ pub extern "C" fn SzConfigTool_deleteScoringFunction(
         match CStr::from_ptr(rtype_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -9294,7 +9301,7 @@ pub extern "C" fn SzConfigTool_deleteScoringFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,
@@ -9328,7 +9335,7 @@ pub extern "C" fn SzConfigTool_getScoringFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -9348,7 +9355,7 @@ pub extern "C" fn SzConfigTool_getScoringFunction(
         match CStr::from_ptr(rtype_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -9368,7 +9375,7 @@ pub extern "C" fn SzConfigTool_getScoringFunction(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -9376,7 +9383,7 @@ pub extern "C" fn SzConfigTool_getScoringFunction(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize record: {}", e), -3);
+                set_error(format!("Failed to serialize record: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -9409,7 +9416,7 @@ pub extern "C" fn SzConfigTool_listScoringFunctions(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -9429,7 +9436,7 @@ pub extern "C" fn SzConfigTool_listScoringFunctions(
                     }
                 }
                 Err(e) => {
-                    set_error(format!("Failed to create C string: {}", e), -4);
+                    set_error(format!("Failed to create C string: {e}"), -4);
                     SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -4,
@@ -9437,7 +9444,7 @@ pub extern "C" fn SzConfigTool_listScoringFunctions(
                 }
             },
             Err(e) => {
-                set_error(format!("Failed to serialize list: {}", e), -3);
+                set_error(format!("Failed to serialize list: {e}"), -3);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -3,
@@ -9472,7 +9479,7 @@ pub extern "C" fn SzConfigTool_setScoringFunction(
         match CStr::from_ptr(config_json).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -9492,7 +9499,7 @@ pub extern "C" fn SzConfigTool_setScoringFunction(
         match CStr::from_ptr(rtype_code).to_str() {
             Ok(s) => s,
             Err(e) => {
-                set_error(format!("Invalid UTF-8 in rtype_code: {}", e), -2);
+                set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
                 return SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -9508,7 +9515,7 @@ pub extern "C" fn SzConfigTool_setScoringFunction(
             match CStr::from_ptr(scoring_func).to_str() {
                 Ok(s) => Some(s),
                 Err(e) => {
-                    set_error(format!("Invalid UTF-8 in scoring_func: {}", e), -2);
+                    set_error(format!("Invalid UTF-8 in scoring_func: {e}"), -2);
                     return SzConfigTool_result {
                         response: std::ptr::null_mut(),
                         returnCode: -2,
@@ -9528,7 +9535,7 @@ pub extern "C" fn SzConfigTool_setScoringFunction(
                 }
             }
             Err(e) => {
-                set_error(format!("Failed to create C string: {}", e), -4);
+                set_error(format!("Failed to create C string: {e}"), -4);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -4,

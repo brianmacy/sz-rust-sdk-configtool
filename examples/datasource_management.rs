@@ -83,7 +83,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n7. ERROR HANDLING - Attempting to get deleted VENDORS:");
     match datasources::get_data_source(&config, "VENDORS") {
         Ok(_) => println!("  Unexpected: VENDORS still exists!"),
-        Err(e) => println!("  Expected error: {}", e),
+        Err(e) => println!("  Expected error: {e}"),
     }
 
     println!("\n=== Example Complete ===");

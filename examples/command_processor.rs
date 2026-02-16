@@ -86,7 +86,7 @@ save
     // Show executed commands
     println!("Commands executed:");
     for cmd in processor.get_executed_commands() {
-        println!("  - {}", cmd);
+        println!("  - {cmd}");
     }
 
     // Verify results

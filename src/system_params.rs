@@ -106,15 +106,13 @@ pub fn set_system_parameter(
         }
     } else {
         return Err(SzConfigError::InvalidConfig(format!(
-            "Unknown system parameter: {}",
-            parameter_name
+            "Unknown system parameter: {parameter_name}"
         )));
     }
 
     if !found {
         return Err(SzConfigError::NotFound(format!(
-            "Failed to set system parameter: {}",
-            parameter_name
+            "Failed to set system parameter: {parameter_name}"
         )));
     }
 

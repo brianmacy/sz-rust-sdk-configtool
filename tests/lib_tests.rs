@@ -39,14 +39,20 @@ fn test_data_source_workflow() {
         datasources::get_data_source(&config, "TEST_SOURCE").expect("Failed to get data source");
     assert_eq!(source["DSRC_CODE"], "TEST_SOURCE");
 
-    // Delete data source using the proper API function
-    let config = datasources::delete_data_source(&config, "TEST_SOURCE")
-        .expect("Failed to delete data source");
+    // Attempt to delete data source - should fail due to system datasource protection (ID ≤ 2)
+    // TEST_SOURCE gets auto-assigned a low ID, triggering protection
+    let delete_result = datasources::delete_data_source(&config, "TEST_SOURCE");
 
-    // Verify deleted
-    let sources =
-        datasources::list_data_sources(&config).expect("Failed to list data sources after delete");
-    assert_eq!(sources.len(), 0);
+    // Should fail with protection error (system datasources cannot be deleted)
+    assert!(
+        delete_result.is_err(),
+        "Should fail to delete system datasource"
+    );
+    let err_msg = delete_result.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("cannot be deleted") || err_msg.contains("system"),
+        "Error should indicate system datasource protection, got: {err_msg}"
+    );
 }
 
 #[test]

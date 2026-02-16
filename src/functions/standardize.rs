@@ -66,8 +66,7 @@ pub fn add_standardize_function(
     // Check if function already exists
     if find_in_config_array(config_json, "CFG_SFUNC", "SFUNC_CODE", &sfunc_code)?.is_some() {
         return Err(SzConfigError::validation(format!(
-            "Standardize function already exists: {}",
-            sfunc_code
+            "Standardize function already exists: {sfunc_code}"
         )));
     }
 
@@ -119,7 +118,7 @@ pub fn delete_standardize_function(
     // Find the function
     let function = find_in_config_array(config_json, "CFG_SFUNC", "SFUNC_CODE", &sfunc_code)?
         .ok_or_else(|| {
-            SzConfigError::not_found(format!("Standardize function not found: {}", sfunc_code))
+            SzConfigError::not_found(format!("Standardize function not found: {sfunc_code}"))
         })?;
 
     // Delete from CFG_SFUNC
@@ -147,7 +146,7 @@ pub fn get_standardize_function(
     let sfunc_code = sfunc_code.to_uppercase();
 
     find_in_config_array(config_json, "CFG_SFUNC", "SFUNC_CODE", &sfunc_code)?.ok_or_else(|| {
-        SzConfigError::not_found(format!("Standardize function not found: {}", sfunc_code))
+        SzConfigError::not_found(format!("Standardize function not found: {sfunc_code}"))
     })
 }
 
@@ -209,7 +208,7 @@ pub fn set_standardize_function(
     // Find existing function
     let mut function = find_in_config_array(config_json, "CFG_SFUNC", "SFUNC_CODE", &sfunc_code)?
         .ok_or_else(|| {
-        SzConfigError::not_found(format!("Standardize function not found: {}", sfunc_code))
+        SzConfigError::not_found(format!("Standardize function not found: {sfunc_code}"))
     })?;
 
     // Update fields if provided

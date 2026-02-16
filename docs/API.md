@@ -1,649 +1,412 @@
-# API Documentation
+# sz_configtool_lib API Documentation
 
-Complete reference for all modules and functions in sz_configtool_lib.
+**Last Updated:** 2026-02-13 (Sessions 96-99 migration complete)
+**Library Version:** 0.1.0
+**Authoritative Source:** Run `cargo doc --open` for complete rustdoc with all signatures
 
-## Module Overview
+---
 
-### Core Infrastructure
+## Important Notes
 
-#### `error`
-Custom error types for the library.
+**API Uses Parameter Structs** (as of Sessions 96-99):
+- All `add_*` and `set_*` functions use typed parameter structs (e.g., `AddDataSourceParams`, `SetFeatureParams`)
+- This replaces older flat parameter signatures
+- See rustdoc or source code for exact struct definitions
 
-**Types:**
-- `SzConfigError` - Main error enum
-- `Result<T>` - Type alias for `std::result::Result<T, SzConfigError>`
+**Migration Complete:**
+- This library is the production backend for sz_configtool_rust
+- All 120 commands use this library via backend adapter
+- Extensive validations, domain checks, and special case handling added
 
-**Error Variants:**
-- `JsonParse(String)` - JSON parsing/serialization errors
-- `NotFound(String, String)` - Entity not found (type, identifier)
-- `AlreadyExists(String, String)` - Entity already exists (type, identifier)
-- `InvalidInput(String)` - Invalid input parameters
-- `MissingField(String)` - Required field missing in JSON
-- `DependencyExists(String)` - Cannot delete due to dependencies
-- `InternalError(String)` - Internal processing error
+---
 
-#### `helpers`
-Shared utility functions used across modules.
+## Error Types
+
+### `SzConfigError`
+
+**Module:** `error`
+
+Main error enum with 9 variants:
+
+- `JsonParse(String)` - JSON parsing errors
+- `NotFound(String)` - Entity not found
+- `AlreadyExists(String)` - Duplicate entity
+- `InvalidInput(String)` - Invalid parameters or validation failure
+- `MissingSection(String)` - Required config section missing
+- `InvalidStructure(String)` - Config structure invalid
+- `MissingField(String)` - Required field missing
+- `InvalidConfig(String)` - Configuration state invalid
+- `NotImplemented(String)` - Feature not yet implemented
+
+**Result Type:** `type Result<T> = std::result::Result<T, SzConfigError>`
+
+---
+
+## Core Data Modules
+
+### Datasources (`datasources`)
 
 **Functions:**
-- `get_next_id(config_json, section, id_field)` - Calculate next available ID
-- `find_in_config_array(config_json, section, field, value)` - Find item in config array
-- `add_to_config_array(config_json, section, item)` - Add item to config array
-- `update_in_config_array(config_json, section, field, value, updates)` - Update existing item
-- `delete_from_config_array(config_json, section, field, value)` - Delete item from array
+- `add_data_source(config_json, params: AddDataSourceParams) -> Result<String>`
+- `delete_data_source(config_json, code: &str) -> Result<String>`
+- `get_data_source(config_json, code: &str) -> Result<Value>`
+- `list_data_sources(config_json) -> Result<Vec<Value>>`
+- `set_data_source(config_json, params: SetDataSourceParams) -> Result<String>`
 
----
+**Key Structs:**
+- `AddDataSourceParams` - Fields: code, retention_level, conversational, reliability
+- `SetDataSourceParams` - Fields: code, retention_level, conversational, reliability
 
-## Data Management Modules
+**Validations:** retentionLevel domain, conversational domain, system datasource protection (ID ≤ 2)
 
-### `datasources` (7 functions)
-
-Manage data sources (CFG_DSRC section).
-
-**Functions:**
-
-#### `add_data_source(config_json, dsrc_code, dsrc_id, dsrc_desc, retention_level) -> Result<String>`
-Add a new data source to the configuration.
-
-#### `delete_data_source(config_json, dsrc_code) -> Result<String>`
-Delete a data source from the configuration.
-
-#### `get_data_source(config_json, dsrc_code) -> Result<Value>`
-Get details of a specific data source.
-
-#### `list_data_sources(config_json) -> Result<Vec<Value>>`
-List all data sources in the configuration.
-
-#### `set_data_source(config_json, dsrc_code, dsrc_desc, retention_level) -> Result<String>`
-Update an existing data source.
-
-#### `set_data_source_id(config_json, old_id, new_id) -> Result<String>`
-Change the ID of an existing data source.
-
-#### `get_data_source_by_id(config_json, dsrc_id) -> Result<Value>`
-Get data source details by ID.
-
----
-
-### `attributes` (8 functions)
-
-Manage attributes (CFG_ATTR section).
+### Elements (`elements`)
 
 **Functions:**
+- `add_element(config_json, params: AddElementParams) -> Result<String>`
+- `delete_element(config_json, code: &str) -> Result<String>`
+- `get_element(config_json, code: &str) -> Result<Value>`
+- `list_elements(config_json) -> Result<Vec<Value>>`
+- `set_element(config_json, params: SetElementParams) -> Result<String>`
+- `set_feature_element(config_json, params: SetFeatureElementParams) -> Result<String>`
 
-#### `add_attribute(config_json, attr_code, feature, element, attr_class, ftype_code, felem_code, felem_required, default_value, advanced) -> Result<(String, Value)>`
-Add a new attribute to the configuration.
+**Key Structs:**
+- `AddElementParams` - Fields: code, description, data_type, tokenized
+- `SetElementParams` - Fields: code, description, data_type, tokenized
+- `SetFeatureElementParams` - Fields: feature, element, display, derived
 
-#### `delete_attribute(config_json, attr_code) -> Result<String>`
-Delete an attribute from the configuration.
+**Validations:** datatype domain, tokenized domain, linkage checks
 
-#### `get_attribute(config_json, attr_code) -> Result<Value>`
-Get details of a specific attribute.
+### Attributes (`attributes`)
 
-#### `list_attributes(config_json) -> Result<Vec<Value>>`
-List all attributes in the configuration.
+**Functions:**
+- `add_attribute(config_json, params: AddAttributeParams) -> Result<(String, Value)>`
+- `delete_attribute(config_json, code: &str) -> Result<String>`
+- `get_attribute(config_json, code: &str) -> Result<Value>`
+- `list_attributes(config_json) -> Result<Vec<Value>>`
+- `set_attribute(config_json, params: SetAttributeParams) -> Result<String>`
 
-#### `set_attribute(config_json, attr_code, attr_class, feature, element, required, default, advanced, internal) -> Result<String>`
-Update an existing attribute.
+**Key Structs:**
+- `AddAttributeParams` - Fields: code, feature, element, class, default, internal, required
+- `SetAttributeParams` - Fields: code, internal, required, default
 
-#### `clone_attribute(config_json, source_attr, new_attr) -> Result<String>`
-Clone an existing attribute with a new code.
+**Validations:** CLASS default ("OTHER"), feature/element existence checks
 
-#### `set_attribute_id(config_json, old_id, new_id) -> Result<String>`
-Change the ID of an existing attribute.
+### Features (`features`)
 
-#### `get_attribute_by_id(config_json, attr_id) -> Result<Value>`
-Get attribute details by ID.
+**Functions:**
+- `add_feature(config_json, params: AddFeatureParams) -> Result<String>`
+- `delete_feature(config_json, code: &str) -> Result<String>`
+- `get_feature(config_json, code: &str) -> Result<Value>`
+- `list_features(config_json) -> Result<Vec<Value>>`
+- `set_feature(config_json, params: SetFeatureParams) -> Result<String>` ⭐ Extended Session 98
+- `add_feature_comparison(config_json, params: AddFeatureComparisonParams) -> Result<String>` ⭐ Used Session 99
 
----
+**Key Structs:**
+- `AddFeatureParams` - Fields: feature, element_list, class, behavior, etc.
+- `SetFeatureParams` ⭐ - Fields: feature, candidates, anonymize, derived, history, matchkey, behavior, class, version, rtype_id
+- `AddFeatureComparisonParams` ⭐ - Fields: feature_code, element_code, exec_order, display_level, display_delim, derived
 
-## Feature Management Modules
-
-### `features` (24 functions)
-
-Manage features and their configurations.
-
-**Core Operations:**
-
-#### `add_feature(config_json, ftype_code, element_list, fclass, behavior, candidates, comparison_threshold) -> Result<(String, Value)>`
-Add a new feature with element list.
-
-#### `delete_feature(config_json, ftype_code) -> Result<String>`
-Delete a feature from configuration.
-
-#### `get_feature(config_json, ftype_code) -> Result<Value>`
-Get details of a specific feature.
-
-#### `list_features(config_json) -> Result<Vec<Value>>`
-List all features in configuration.
-
-#### `set_feature(config_json, ftype_code, fclass, behavior, candidates, anonymize, version, show_in_match_key) -> Result<String>`
-Update an existing feature.
-
-**Feature Elements:**
-
-#### `add_feature_element(config_json, ftype_code, felem_code, expressed) -> Result<String>`
-Add an element to a feature.
-
-#### `delete_feature_element(config_json, ftype_code, felem_code) -> Result<String>`
-Remove an element from a feature.
-
-#### `get_feature_element(config_json, ftype_code, felem_code) -> Result<Value>`
-Get details of a feature element.
-
-#### `list_feature_elements(config_json, ftype_code) -> Result<Vec<Value>>`
-List all elements in a feature.
-
-**Feature Comparisons:**
-
-#### `add_feature_comparison(config_json, ftype_code, cfunc_id) -> Result<String>`
-Add a comparison function to a feature.
-
-#### `delete_feature_comparison(config_json, ftype_code, cfunc_id) -> Result<String>`
-Remove a comparison function from a feature.
-
-#### `list_feature_comparisons(config_json, ftype_code) -> Result<Vec<Value>>`
-List all comparison functions for a feature.
-
-**Feature Distinct Calls:**
-
-#### `add_feature_distinct_call(config_json, ftype_code, dfcall_id) -> Result<String>`
-Add a distinct call to a feature.
-
-#### `delete_feature_distinct_call(config_json, ftype_code, dfcall_id) -> Result<String>`
-Remove a distinct call from a feature.
-
-#### `list_feature_distinct_calls(config_json, ftype_code) -> Result<Vec<Value>>`
-List all distinct calls for a feature.
-
-**Additional Operations:**
-
-#### `clone_feature(config_json, source_ftype, new_ftype) -> Result<String>`
-Clone an existing feature with a new code.
-
-#### `set_feature_id(config_json, old_id, new_id) -> Result<String>`
-Change the ID of an existing feature.
-
-#### `get_feature_by_id(config_json, ftype_id) -> Result<Value>`
-Get feature details by ID.
+**Validations (Session 98):**
+- CANDIDATES domain ("Yes", "No") with case normalization
+- MATCHKEY domain ("Yes", "No", "Confirm", "Denial") with case normalization
+- No-changes detection
 
 ---
 
-### `elements` (8 functions)
+## Rules (`rules`) ⭐ Session 97-98
 
-Manage elements (CFG_FELEM section).
+**Functions:**
+- `add_rule(config_json, id: i64, rule_config: &Value) -> Result<(String, i64)>`
+- `delete_rule(config_json, code: &str) -> Result<String>`
+- `get_rule(config_json, code: &str) -> Result<Value>`
+- `list_rules(config_json) -> Result<Vec<Value>>`
+- `set_rule(config_json, params: SetRuleParams) -> Result<String>` ⭐ Extended Session 97-98
 
-#### `add_element(config_json, felem_code, felem_desc, data_type) -> Result<(String, Value)>`
-Add a new element to the configuration.
+**Key Structs:**
+- `SetRuleParams` ⭐ - Fields: code, resolve, relate, rtype_id, fragment, disqualifier, tier
 
-#### `delete_element(config_json, felem_code) -> Result<String>`
-Delete an element from the configuration.
-
-#### `get_element(config_json, felem_code) -> Result<Value>`
-Get details of a specific element.
-
-#### `list_elements(config_json) -> Result<Vec<Value>>`
-List all elements in the configuration.
-
-#### `set_element(config_json, felem_code, felem_desc, data_type) -> Result<String>`
-Update an existing element.
-
-#### `clone_element(config_json, source_elem, new_elem) -> Result<String>`
-Clone an existing element with a new code.
-
-#### `set_element_id(config_json, old_id, new_id) -> Result<String>`
-Change the ID of an existing element.
-
-#### `get_element_by_id(config_json, felem_id) -> Result<Value>`
-Get element details by ID.
+**Critical Features (Session 98):**
+- ID preservation fix (set_rule was losing ERRULE_ID)
+- Auto-correction: resolve="Yes" forces rtype_id=1
+- RTYPE_ID update logic when resolve is modified
 
 ---
 
-## Configuration Modules
+## Fragments (`fragments`) ⭐ Session 98
 
-### `thresholds` (6 functions)
+**Functions:**
+- `add_fragment(config_json, fragment_config: &Value) -> Result<String>`
+- `delete_fragment(config_json, code: &str) -> Result<String>`
+- `get_fragment(config_json, code: &str) -> Result<Value>` ⭐ Session 98
+- `list_fragments(config_json) -> Result<Vec<Value>>`
+- `set_fragment(config_json, code: &str, fragment_config: &Value) -> Result<String>`
 
-Manage comparison and generic thresholds.
-
-#### `add_comparison_threshold(config_json, cfunc_id, same_score, close_score, likely_score, plausible_score, unlikely_score) -> Result<(String, Value)>`
-Add a comparison threshold configuration.
-
-#### `delete_comparison_threshold(config_json, cfunc_id) -> Result<String>`
-Delete a comparison threshold.
-
-#### `list_comparison_thresholds(config_json) -> Result<Vec<Value>>`
-List all comparison thresholds.
-
-#### `add_generic_threshold(config_json, gplan_id, behavior, ftype_code, candidate_cap, scoring_cap, send_to_redo) -> Result<(String, Value)>`
-Add a generic threshold configuration.
-
-#### `delete_generic_threshold(config_json, gplan_id, behavior, ftype_code) -> Result<String>`
-Delete a generic threshold.
-
-#### `list_generic_thresholds(config_json) -> Result<Vec<Value>>`
-List all generic thresholds.
+**Key Features (Session 98):**
+- get_fragment transformation (lowercase keys matching list_fragments)
+- Duplicate CODE validation
+- Supports ID-based lookup (get by ID or CODE)
 
 ---
 
-### `rules` (5 functions)
+## Thresholds (`thresholds`) ⭐ Session 98
 
-Manage entity resolution rules (CFG_ERRULE section).
+**Functions:**
+- `add_comparison_threshold(config_json, params: AddComparisonThresholdParams) -> Result<String>` ⭐
+- `delete_comparison_threshold(config_json, cfunc_code: &str, ftype_code: &str) -> Result<String>`
+- `set_comparison_threshold(config_json, params: SetComparisonThresholdParams) -> Result<String>` ⭐
+- `list_comparison_thresholds(config_json) -> Result<Vec<Value>>`
+- `add_generic_threshold(config_json, params: AddGenericThresholdParams) -> Result<String>`
+- `delete_generic_threshold(config_json, params: DeleteGenericThresholdParams) -> Result<String>`
+- `set_generic_threshold(config_json, params: SetGenericThresholdParams) -> Result<String>`
+- `list_generic_thresholds(config_json) -> Result<Vec<Value>>`
 
-#### `add_rule(config_json, errule_code, resolve, relate, ref_score, rtype_id, qual_erfrag_code, disq_erfrag_code, errule_tier) -> Result<(String, Value)>`
-Add a new resolution rule.
+**Key Structs (Session 98):**
+- `AddComparisonThresholdParams` - Includes: cfunc_code, ftype_code, cfunc_rtnval, exec_order, score fields
+- `SetComparisonThresholdParams` ⭐ - Includes: cfunc_code, ftype_code, **cfunc_rtnval** (for unique identification), **exec_order**, score fields
+- `AddGenericThresholdParams` - Includes: gplan_code, behavior_code, feature, send_to_redo, caps
+- `SetGenericThresholdParams` - Similar to add
 
-#### `delete_rule(config_json, errule_code) -> Result<String>`
-Delete a resolution rule.
-
-#### `get_rule(config_json, errule_code) -> Result<Value>`
-Get details of a specific rule.
-
-#### `list_rules(config_json) -> Result<Vec<Value>>`
-List all resolution rules.
-
-#### `set_rule(config_json, errule_code, resolve, relate, ref_score, qual_erfrag, disq_erfrag, rtype_id) -> Result<String>`
-Update an existing rule.
-
----
-
-### `fragments` (5 functions)
-
-Manage rule fragments (CFG_ERFRAG section).
-
-#### `add_fragment(config_json, erfrag_code, erfrag_source, erfrag_depends) -> Result<(String, Value)>`
-Add a new rule fragment.
-
-#### `delete_fragment(config_json, erfrag_code) -> Result<String>`
-Delete a rule fragment.
-
-#### `get_fragment(config_json, erfrag_code) -> Result<Value>`
-Get details of a specific fragment.
-
-#### `list_fragments(config_json) -> Result<Vec<Value>>`
-List all rule fragments.
-
-#### `set_fragment(config_json, erfrag_code, erfrag_source, erfrag_depends) -> Result<String>`
-Update an existing fragment.
+**Critical Features (Session 98):**
+- Special case: ftype_code="all" → ftype_id=0
+- Unique identification: (function, feature, score_name) for thresholds with same function+feature
+- Field order fix (unlikelyScore moved to end)
+- exec_order and cfunc_rtnval support added
 
 ---
 
-### `generic_plans` (4 functions)
+## Generic Plans (`generic_plans`) ⭐ Session 98
 
-Manage generic plans (CFG_GPLAN section).
+**Functions:**
+- `clone_generic_plan(config_json, source_code: &str, new_code: &str, new_desc: Option<&str>) -> Result<String>`
+- `delete_generic_plan(config_json, code: &str) -> Result<String>` ⭐
+- `list_generic_plans(config_json) -> Result<Vec<Value>>`
 
-#### `set_generic_plan(config_json, gplan_id, max_candidates, max_scoring_candidates) -> Result<String>`
-Update generic plan settings.
-
-#### `clone_generic_plan(config_json, source_id, new_id) -> Result<String>`
-Clone an existing generic plan.
-
-#### `delete_generic_plan(config_json, gplan_id) -> Result<String>`
-Delete a generic plan.
-
-#### `get_generic_plan(config_json, gplan_id) -> Result<Value>`
-Get generic plan details.
+**Critical Features (Session 98):**
+- System plan protection: GPLAN_ID ≤ 2 (SEARCH, INGEST) cannot be deleted
+- Cascade delete (automatically handled)
+- Duplicate CODE validation
 
 ---
 
-### `hashes` (4 functions)
+## Calls (`calls`) ⭐ Sessions 96-97
 
-Manage name and SSN hash configurations.
+### Comparison Calls (`calls::comparison`)
 
-#### `add_name_hash(config_json, hash_code, hash_desc) -> Result<(String, Value)>`
-Add a name hash configuration.
+**Functions:**
+- `add_comparison_call(config_json, params: AddComparisonCallParams) -> Result<(String, Value)>`
+- `delete_comparison_call(config_json, cfcall_id: i64) -> Result<String>`
+- `get_comparison_call(config_json, cfcall_id: i64) -> Result<Value>`
+- `list_comparison_calls(config_json) -> Result<Vec<Value>>`
+- `add_comparison_call_element(config_json, cfcall_id: i64, params: ComparisonCallElementParams) -> Result<(String, Value)>`
+- `delete_comparison_call_element(config_json, cfcall_id: i64, params: DeleteComparisonCallElementParams) -> Result<String>` ⭐ Used Session 99
 
-#### `delete_name_hash(config_json, hash_code) -> Result<String>`
-Delete a name hash configuration.
+**Key Structs:**
+- `AddComparisonCallParams` - Fields: ftype_code, cfunc_code, element_list
+- `ComparisonCallElementParams` - Fields: ftype_id, felem_id, exec_order
+- `DeleteComparisonCallElementParams` ⭐ - Fields: ftype_id, felem_id, exec_order
 
-#### `add_ssn_hash(config_json, hash_code, hash_desc) -> Result<(String, Value)>`
-Add an SSN hash configuration.
+**Critical Features (Session 97):**
+- FBOM lookup bug fixed (FELEM_CODE → FELEM_ID)
+- Duplicate detection excludes EXEC_ORDER
+- ftype_id=-1 validation (rejects invalid sentinel)
 
-#### `delete_ssn_hash(config_json, hash_code) -> Result<String>`
-Delete an SSN hash configuration.
+### Expression Calls (`calls::expression`)
 
----
+**Functions:**
+- `add_expression_call(config_json, params: AddExpressionCallParams) -> Result<(String, Value)>`
+- `delete_expression_call(config_json, efcall_id: i64) -> Result<String>`
+- `get_expression_call(config_json, efcall_id: i64) -> Result<Value>`
+- `list_expression_calls(config_json) -> Result<Vec<Value>>`
+- `add_expression_call_element(config_json, efcall_id: i64, params: ExpressionCallElementParams) -> Result<(String, Value)>`
+- `delete_expression_call_element(config_json, efcall_id: i64, key: ExpressionCallElementKey) -> Result<String>` ⭐ Used Session 99
 
-## Function Modules
+**Key Structs:**
+- `AddExpressionCallParams` - Fields: ftype_code, efunc_code, element_list, expression_feature, is_virtual
+- `ExpressionCallElementParams` - Fields: ftype_id, felem_id, exec_order, required
+- `ExpressionCallElementKey` ⭐ - Fields: ftype_id, felem_id, exec_order
 
-### `functions/standardize` (6 functions)
+### Distinct Calls (`calls::distinct`)
 
-Manage standardization functions (CFG_SFUNC).
+**Functions:**
+- `add_distinct_call(config_json, params: AddDistinctCallParams) -> Result<(String, Value)>`
+- `delete_distinct_call(config_json, dfcall_id: i64) -> Result<String>`
+- `get_distinct_call(config_json, dfcall_id: i64) -> Result<Value>`
+- `list_distinct_calls(config_json) -> Result<Vec<Value>>`
+- `add_distinct_call_element(config_json, dfcall_id: i64, params: DistinctCallElementParams) -> Result<(String, Value)>`
+- `delete_distinct_call_element(config_json, params: DeleteDistinctCallElementParams) -> Result<String>` ⭐ Used Session 99
 
-#### `add_standardize_function(config_json, sfunc_code, connect_str, sfunc_desc, language) -> Result<(String, Value)>`
-Add a standardization function.
+**Key Structs:**
+- `AddDistinctCallParams` - Fields: ftype_code, dfunc_code, element_list
+- `DistinctCallElementParams` - Fields: ftype_id, felem_id, exec_order
+- `DeleteDistinctCallElementParams` ⭐ - Fields: dfcall_id, ftype_id, felem_id, exec_order
 
-#### `delete_standardize_function(config_json, sfunc_code) -> Result<String>`
-Delete a standardization function.
+### Standardize Calls (`calls::standardize`)
 
-#### `get_standardize_function(config_json, sfunc_code) -> Result<Value>`
-Get standardization function details.
-
-#### `list_standardize_functions(config_json) -> Result<Vec<Value>>`
-List all standardization functions.
-
-#### `set_standardize_function(config_json, sfunc_code, updates_json) -> Result<String>`
-Update standardization function settings.
-
-#### `get_standardize_function_by_id(config_json, sfunc_id) -> Result<Value>`
-Get standardization function by ID.
-
----
-
-### `functions/expression` (6 functions)
-
-Manage expression functions (CFG_EFUNC).
-
-#### `add_expression_function(config_json, efunc_code, connect_str, efunc_desc, language) -> Result<(String, Value)>`
-Add an expression function.
-
-#### `delete_expression_function(config_json, efunc_code) -> Result<String>`
-Delete an expression function.
-
-#### `get_expression_function(config_json, efunc_code) -> Result<Value>`
-Get expression function details.
-
-#### `list_expression_functions(config_json) -> Result<Vec<Value>>`
-List all expression functions.
-
-#### `set_expression_function(config_json, efunc_code, updates_json) -> Result<String>`
-Update expression function settings.
-
-#### `get_expression_function_by_id(config_json, efunc_id) -> Result<Value>`
-Get expression function by ID.
+**Functions:**
+- `add_standardize_call(config_json, params: AddStandardizeCallParams) -> Result<(String, Value)>`
+- `delete_standardize_call(config_json, sfcall_id: i64) -> Result<String>`
+- `get_standardize_call(config_json, sfcall_id: i64) -> Result<Value>`
+- `list_standardize_calls(config_json) -> Result<Vec<Value>>`
 
 ---
 
-### `functions/comparison` (7 functions)
+## Functions (`functions`)
 
-Manage comparison functions (CFG_CFUNC).
+### Standardize Functions (`functions::standardize`)
+- `add_standardize_function(config_json, code: &str, params: AddStandardizeFunctionParams) -> Result<(String, Value)>`
+- `delete_standardize_function(config_json, code: &str) -> Result<(String, Value)>`
+- `list_standardize_functions(config_json) -> Result<Vec<Value>>`
 
-#### `add_comparison_function(config_json, cfunc_code, connect_str, cfunc_desc, language, anon_support) -> Result<(String, Value)>`
-Add a comparison function.
+### Comparison Functions (`functions::comparison`)
+- `add_comparison_function(config_json, code: &str, params: AddComparisonFunctionParams) -> Result<(String, Value)>`
+- `delete_comparison_function(config_json, code: &str) -> Result<(String, Value)>`
+- `list_comparison_functions(config_json) -> Result<Vec<Value>>`
 
-#### `delete_comparison_function(config_json, cfunc_code) -> Result<String>`
-Delete a comparison function.
+### Expression Functions (`functions::expression`)
+- `add_expression_function(config_json, code: &str, params: AddExpressionFunctionParams) -> Result<String>`
+- `list_expression_functions(config_json) -> Result<Vec<Value>>`
 
-#### `get_comparison_function(config_json, cfunc_code) -> Result<Value>`
-Get comparison function details.
+### Distinct Functions (`functions::distinct`)
+- `add_distinct_function(config_json, code: &str, params: AddDistinctFunctionParams) -> Result<(String, Value)>`
+- `list_distinct_functions(config_json) -> Result<Vec<Value>>`
 
-#### `list_comparison_functions(config_json) -> Result<Vec<Value>>`
-List all comparison functions.
+### Matching Functions (`functions::matching`) ⚠️ Not Yet Implemented
 
-#### `set_comparison_function(config_json, cfunc_code, updates_json) -> Result<String>`
-Update comparison function settings.
+**Module:** `functions::matching`
 
-#### `get_comparison_function_by_id(config_json, cfunc_id) -> Result<Value>`
-Get comparison function by ID.
+**Status:** Placeholder module - all functions return `NotImplemented` error
 
-#### `get_comparison_function_call(config_json, cfunc_code) -> Result<Value>`
-Get comparison function call details.
+**Functions:**
+- `list_matching_functions(config_json) -> Result<Vec<Value>>`
 
----
-
-### `functions/distinct` (6 functions)
-
-Manage distinct functions (CFG_DFUNC).
-
-#### `add_distinct_function(config_json, dfunc_code, connect_str, dfunc_desc, language) -> Result<(String, Value)>`
-Add a distinct function.
-
-#### `delete_distinct_function(config_json, dfunc_code) -> Result<String>`
-Delete a distinct function.
-
-#### `get_distinct_function(config_json, dfunc_code) -> Result<Value>`
-Get distinct function details.
-
-#### `list_distinct_functions(config_json) -> Result<Vec<Value>>`
-List all distinct functions.
-
-#### `set_distinct_function(config_json, dfunc_code, updates_json) -> Result<String>`
-Update distinct function settings.
-
-#### `get_distinct_function_by_id(config_json, dfunc_id) -> Result<Value>`
-Get distinct function by ID.
+**Note:** These functions manage matching functions (CFG_RTYPE) but are not yet implemented. Awaiting CLI command completion.
 
 ---
 
-### `functions/matching` (1 function)
+## Configuration Management
 
-Manage matching functions (CFG_RTYPE).
+### Config Sections (`config_sections`)
 
-#### `list_matching_functions(config_json) -> Result<Vec<Value>>`
-List all matching functions.
+**Module:** `config_sections`
 
----
+Manage top-level G2_CONFIG sections (add, remove, query configuration sections).
 
-## Call Modules
+**Functions:**
+- `add_config_section(config_json, section_name) -> Result<String>`
+- `delete_config_section(config_json, section_name) -> Result<String>`
+- `get_config_section(config_json, section_name) -> Result<Value>`
+- `list_config_sections(config_json) -> Result<Vec<String>>`
+- `set_config_section(config_json, section_name, section_data) -> Result<String>`
+- `clone_config_section(config_json, source_section, new_section) -> Result<String>`
 
-### `calls/standardize` (8 functions)
-
-Manage standardize calls and BOM (CFG_SFCALL, CFG_SBOM).
-
-#### `add_standardize_call(config_json, ftype_code, felem_code, exec_order, sfunc_id) -> Result<(String, Value)>`
-Add a standardize call.
-
-#### `delete_standardize_call(config_json, ftype_code, felem_code, sfunc_id) -> Result<String>`
-Delete a standardize call.
-
-#### `get_standardize_call(config_json, ftype_code, felem_code, sfunc_id) -> Result<Value>`
-Get standardize call details.
-
-#### `list_standardize_calls(config_json) -> Result<Vec<Value>>`
-List all standardize calls.
-
-#### `add_standardize_call_bom(config_json, ftype_code, felem_code, exec_order, standardize_function) -> Result<String>`
-Add standardize call by function name.
-
-#### `delete_standardize_call_bom(config_json, ftype_code, felem_code, standardize_function) -> Result<String>`
-Delete standardize call by function name.
-
-#### `list_standardize_call_boms(config_json) -> Result<Vec<Value>>`
-List standardize call BOMs with resolved names.
-
-#### `get_standardize_call_bom(config_json, ftype_code, felem_code, standardize_function) -> Result<Value>`
-Get standardize call BOM details.
+**Operations:** Add/delete/get/list/update/clone configuration sections within G2_CONFIG.
 
 ---
 
-### `calls/expression` (8 functions)
+## Behavior & Versioning
 
-Manage expression calls and BOM (CFG_EFCALL, CFG_EFBOM).
+### Behavior Overrides (`behavior_overrides`) ⭐ Session 98
 
-#### `add_expression_call(config_json, ftype_code, felem_code, exec_order, efunc_id) -> Result<(String, Value)>`
-Add an expression call.
+**Functions:**
+- `add_behavior_override(config_json, params: AddBehaviorOverrideParams) -> Result<String>`
 
-#### `delete_expression_call(config_json, ftype_code, felem_code, efunc_id) -> Result<String>`
-Delete an expression call.
+**Struct:**
+- `AddBehaviorOverrideParams` - Fields: feature_code, usage_type, behavior
 
-#### `get_expression_call(config_json, ftype_code, felem_code, efunc_id) -> Result<Value>`
-Get expression call details.
+### Versioning (`versioning`) ⭐ Session 98
 
-#### `list_expression_calls(config_json) -> Result<Vec<Value>>`
-List all expression calls.
-
-#### `add_expression_call_bom(config_json, ftype_code, exec_order, expression_function) -> Result<String>`
-Add expression call by function name.
-
-#### `delete_expression_call_bom(config_json, ftype_code, expression_function) -> Result<String>`
-Delete expression call by function name.
-
-#### `list_expression_call_boms(config_json) -> Result<Vec<Value>>`
-List expression call BOMs with resolved names.
-
-#### `get_expression_call_bom(config_json, ftype_code, expression_function) -> Result<Value>`
-Get expression call BOM details.
+**Functions:**
+- `get_compatibility_version(config_json) -> Result<String>`
+- `update_compatibility_version(config_json, new_version: &str) -> Result<String>`
+- `verify_compatibility_version(config_json, expected_version: &str) -> Result<(String, bool)>`
 
 ---
 
-### `calls/comparison` (8 functions)
+## Helpers (`helpers`)
 
-Manage comparison calls and BOM (CFG_CFCALL, CFG_CFBOM).
+**Commonly Used:**
+- `get_next_id(config: &Value, section: &str, id_field: &str, seed: i64) -> Result<i64>`
+- `get_next_id_with_min(array: &[Value], id_field: &str, min_value: i64) -> Result<i64>`
+- `find_in_config_array(config_json, section, field, value) -> Result<Option<Value>>`
+- `add_to_config_array(config_json, section, record: Value) -> Result<String>`
+- `update_in_config_array(config_json, section, criteria, updates) -> Result<String>`
+- `delete_from_config_array(config_json, section, field, value) -> Result<String>`
 
-#### `add_comparison_call(config_json, ftype_code, cfunc_id) -> Result<(String, Value)>`
-Add a comparison call.
-
-#### `delete_comparison_call(config_json, ftype_code, cfunc_id) -> Result<String>`
-Delete a comparison call.
-
-#### `get_comparison_call(config_json, ftype_code, cfunc_id) -> Result<Value>`
-Get comparison call details.
-
-#### `list_comparison_calls(config_json) -> Result<Vec<Value>>`
-List all comparison calls.
-
-#### `add_comparison_call_bom(config_json, ftype_code, comparison_function) -> Result<String>`
-Add comparison call by function name.
-
-#### `delete_comparison_call_bom(config_json, ftype_code, comparison_function) -> Result<String>`
-Delete comparison call by function name.
-
-#### `list_comparison_call_boms(config_json) -> Result<Vec<Value>>`
-List comparison call BOMs with resolved names.
-
-#### `get_comparison_call_bom(config_json, ftype_code, comparison_function) -> Result<Value>`
-Get comparison call BOM details.
+**Lookup Helpers:**
+- `lookup_feature_id(config_json, code: &str) -> Result<i64>`
+- `lookup_element_id(config_json, code: &str) -> Result<i64>`
 
 ---
 
-### `calls/distinct` (8 functions)
+## Key API Changes (Sessions 96-99)
 
-Manage distinct calls and BOM (CFG_DFCALL, CFG_DFBOM).
+### Session 96: Foundation
+- Converted to parameter struct pattern
+- Added domain validations (retentionLevel, conversational, datatype, tokenized)
+- Added system datasource protection (ID ≤ 2)
 
-#### `add_distinct_call(config_json, ftype_code, dfunc_id) -> Result<(String, Value)>`
-Add a distinct call.
+### Session 97: Calls & Rules
+- Extended SetRuleParams (fragment, disqualifier, tier fields)
+- Changed add_rule signature (ID required parameter)
+- Fixed FBOM lookup (FELEM_CODE → FELEM_ID)
+- Added ftype_id validation (rejects < 0)
 
-#### `delete_distinct_call(config_json, ftype_code, dfunc_id) -> Result<String>`
-Delete a distinct call.
+### Session 98: Advanced Modules
+- SetFeatureParams: Added CANDIDATES, MATCHKEY domain validation with case normalization
+- SetComparisonThresholdParams: Added cfunc_rtnval, exec_order for unique identification
+- Special case handling: ftype_code="all" → ftype_id=0
+- get_fragment transformation (consistent with list_fragments)
+- System plan protection (GPLAN_ID ≤ 2)
+- ID preservation fixes (set_rule, set_fragment)
 
-#### `get_distinct_call(config_json, ftype_code, dfunc_id) -> Result<Value>`
-Get distinct call details.
-
-#### `list_distinct_calls(config_json) -> Result<Vec<Value>>`
-List all distinct calls.
-
-#### `add_distinct_call_bom(config_json, ftype_code, distinct_function) -> Result<String>`
-Add distinct call by function name.
-
-#### `delete_distinct_call_bom(config_json, ftype_code, distinct_function) -> Result<String>`
-Delete distinct call by function name.
-
-#### `list_distinct_call_boms(config_json) -> Result<Vec<Value>>`
-List distinct call BOMs with resolved names.
-
-#### `get_distinct_call_bom(config_json, ftype_code, distinct_function) -> Result<Value>`
-Get distinct call BOM details.
-
----
-
-## System Management Modules
-
-### `config_sections` (6 functions)
-
-Manage G2_CONFIG sections.
-
-#### `get_config_section(config_json, section_name) -> Result<Value>`
-Get a specific configuration section.
-
-#### `set_config_section(config_json, section_name, section_data) -> Result<String>`
-Update a configuration section.
-
-#### `list_config_sections(config_json) -> Result<Vec<String>>`
-List all configuration section names.
-
-#### `delete_config_section(config_json, section_name) -> Result<String>`
-Delete a configuration section.
-
-#### `add_config_section(config_json, section_name, section_data) -> Result<String>`
-Add a new configuration section.
-
-#### `clone_config_section(config_json, source_section, new_section) -> Result<String>`
-Clone a configuration section.
+### Session 99: Quality & Completion
+- Suppressed 4 dead_code warnings (3 unused lookup functions, 1 unused variable)
+- Applied 28 clippy inline format fixes in examples
+- Strict clippy passing (-D warnings)
+- All tests passing (with updated expectations)
 
 ---
 
-### `system_params` (2 functions)
-
-Manage system parameters.
-
-#### `set_system_parameter(config_json, param_name, param_value) -> Result<String>`
-Set a system parameter value.
-
-#### `get_system_parameter(config_json, param_name) -> Result<String>`
-Get a system parameter value.
-
----
-
-### `versioning` (4 functions)
-
-Manage configuration versioning.
-
-#### `update_config_version(config_json) -> Result<String>`
-Increment the configuration version.
-
-#### `get_config_version(config_json) -> Result<i64>`
-Get the current configuration version.
-
-#### `set_config_version(config_json, version) -> Result<String>`
-Set the configuration version.
-
-#### `verify_version_compatibility(config_json, required_version) -> Result<bool>`
-Check if configuration meets version requirement.
-
----
-
-## Usage Patterns
-
-### Basic CRUD Operations
+## Usage Pattern
 
 ```rust
-// Add
-let config = module::add_entity(&config, "CODE", param1, param2)?;
+use sz_configtool_lib::datasources::{self, AddDataSourceParams};
 
-// Get
-let entity = module::get_entity(&config, "CODE")?;
+// Add a data source
+let config = datasources::add_data_source(
+    &config,
+    AddDataSourceParams {
+        code: "CUSTOMERS",
+        retention_level: Some("Remember"),
+        conversational: Some("Yes"),
+        reliability: None,
+    }
+)?;
 
-// List
-let entities = module::list_entities(&config)?;
+// List all data sources
+let sources = datasources::list_data_sources(&config)?;
 
-// Update
-let config = module::set_entity(&config, "CODE", new_param1, new_param2)?;
-
-// Delete
-let config = module::delete_entity(&config, "CODE")?;
+// Each source has lowercase transformed keys:
+// {"id": 1, "dataSource": "CUSTOMERS", "retentionLevel": "Remember", ...}
 ```
 
-### Working with Tuples
+---
 
-Some functions return tuples `(String, Value)`:
+## For Complete Details
 
-```rust
-let (modified_config, created_entity) = module::add_entity(&config, params)?;
-
-// Use the modified config for next operation
-let config = modified_config;
-
-// Access the created entity details
-println!("Created ID: {}", created_entity["ENTITY_ID"]);
+**Run:**
+```bash
+cargo doc --open
 ```
 
-### Error Handling
+This will generate complete rustdoc documentation with:
+- All function signatures
+- All parameter struct field definitions
+- Return types
+- Error conditions
+- Examples
 
-```rust
-match module::operation(&config, params) {
-    Ok(result) => {
-        // Success
-    }
-    Err(SzConfigError::NotFound(entity_type, id)) => {
-        eprintln!("{} '{}' not found", entity_type, id);
-    }
-    Err(SzConfigError::AlreadyExists(entity_type, id)) => {
-        eprintln!("{} '{}' already exists", entity_type, id);
-    }
-    Err(e) => {
-        eprintln!("Error: {}", e);
-    }
-}
-```
+**Updated:** 2026-02-13 to reflect Sessions 96-99 migration work
 
 ---
 

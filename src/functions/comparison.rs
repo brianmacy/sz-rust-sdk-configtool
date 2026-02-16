@@ -69,10 +69,25 @@ pub fn add_comparison_function(
     // Check if function already exists
     if find_in_config_array(config_json, "CFG_CFUNC", "CFUNC_CODE", &cfunc_code)?.is_some() {
         return Err(SzConfigError::validation(format!(
-            "Comparison function already exists: {}",
-            cfunc_code
+            "Comparison function already exists: {cfunc_code}"
         )));
     }
+
+    // Validate ANON_SUPPORT domain (Python parity: ["Yes", "No"], default "No")
+    let anon_support = if let Some(val) = params.anon_support {
+        let val_upper = val.to_uppercase();
+        match val_upper.as_str() {
+            "YES" => "Yes",
+            "NO" => "No",
+            _ => {
+                return Err(SzConfigError::validation(format!(
+                    "Invalid ANON_SUPPORT value '{val}'. Must be 'Yes' or 'No'"
+                )));
+            }
+        }
+    } else {
+        "No"
+    };
 
     // Get next CFUNC_ID
     let config_data: Value =
@@ -84,6 +99,7 @@ pub fn add_comparison_function(
         "CFUNC_ID": cfunc_id,
         "CFUNC_CODE": cfunc_code,
         "CONNECT_STR": params.connect_str,
+        "ANON_SUPPORT": anon_support,
     });
 
     // Add optional fields
@@ -93,9 +109,6 @@ pub fn add_comparison_function(
         }
         if let Some(lang) = params.language {
             obj.insert("LANGUAGE".to_string(), json!(lang));
-        }
-        if let Some(anon) = params.anon_support {
-            obj.insert("ANON_SUPPORT".to_string(), json!(anon));
         }
     }
 
@@ -125,7 +138,7 @@ pub fn delete_comparison_function(
     // Find the function
     let function = find_in_config_array(config_json, "CFG_CFUNC", "CFUNC_CODE", &cfunc_code)?
         .ok_or_else(|| {
-            SzConfigError::not_found(format!("Comparison function not found: {}", cfunc_code))
+            SzConfigError::not_found(format!("Comparison function not found: {cfunc_code}"))
         })?;
 
     // Delete from CFG_CFUNC
@@ -153,7 +166,7 @@ pub fn get_comparison_function(
     let cfunc_code = cfunc_code.to_uppercase();
 
     find_in_config_array(config_json, "CFG_CFUNC", "CFUNC_CODE", &cfunc_code)?.ok_or_else(|| {
-        SzConfigError::not_found(format!("Comparison function not found: {}", cfunc_code))
+        SzConfigError::not_found(format!("Comparison function not found: {cfunc_code}"))
     })
 }
 
@@ -216,7 +229,7 @@ pub fn set_comparison_function(
     // Find existing function
     let mut function = find_in_config_array(config_json, "CFG_CFUNC", "CFUNC_CODE", &cfunc_code)?
         .ok_or_else(|| {
-        SzConfigError::not_found(format!("Comparison function not found: {}", cfunc_code))
+        SzConfigError::not_found(format!("Comparison function not found: {cfunc_code}"))
     })?;
 
     // Update fields if provided
@@ -270,7 +283,7 @@ pub fn add_comparison_func_return_code(
 
     let cfunc = find_in_config_array(config_json, "CFG_CFUNC", "CFUNC_CODE", &cfunc_code)?
         .ok_or_else(|| {
-            SzConfigError::not_found(format!("Comparison function not found: {}", cfunc_code))
+            SzConfigError::not_found(format!("Comparison function not found: {cfunc_code}"))
         })?;
 
     let cfunc_id = cfunc
@@ -288,8 +301,7 @@ pub fn add_comparison_func_return_code(
         })
     {
         return Err(SzConfigError::validation(format!(
-            "Return code {} already exists for function {}",
-            cfrtn_code, cfunc_code
+            "Return code {cfrtn_code} already exists for function {cfunc_code}"
         )));
     }
 

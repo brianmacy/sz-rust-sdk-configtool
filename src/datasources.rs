@@ -90,16 +90,45 @@ pub fn add_data_source(config_json: &str, params: AddDataSourceParams) -> Result
         .any(|d| d["DSRC_CODE"].as_str() == Some(&code_upper))
     {
         return Err(SzConfigError::AlreadyExists(format!(
-            "Data source already exists: {}",
-            code_upper
+            "Data source already exists: {code_upper}"
         )));
     }
 
     let next_id = helpers::get_next_id_from_array(dsrcs, "DSRC_ID")?;
 
-    // Use parameters or defaults (matching Python behavior)
-    let retention = params.retention_level.unwrap_or("Remember");
-    let conversational_flag = params.conversational.unwrap_or("No");
+    // Validate and use parameters or defaults (case-insensitive with normalization)
+    let retention = if let Some(level) = params.retention_level {
+        // Validate retentionLevel domain (case-insensitive)
+        let level_upper = level.to_uppercase();
+        match level_upper.as_str() {
+            "REMEMBER" => "Remember",
+            "FORGET" => "Forget",
+            _ => {
+                return Err(SzConfigError::InvalidInput(format!(
+                    "Invalid RETENTIONLEVEL value '{level}'. Must be 'Remember' or 'Forget'"
+                )));
+            }
+        }
+    } else {
+        "Remember"
+    };
+
+    let conversational_flag = if let Some(conv) = params.conversational {
+        // Validate conversational domain (case-insensitive)
+        let conv_upper = conv.to_uppercase();
+        match conv_upper.as_str() {
+            "YES" => "Yes",
+            "NO" => "No",
+            _ => {
+                return Err(SzConfigError::InvalidInput(format!(
+                    "Invalid CONVERSATIONAL value '{conv}'. Must be 'Yes' or 'No'"
+                )));
+            }
+        }
+    } else {
+        "No"
+    };
+
     let reliability_score = params.reliability.unwrap_or(1);
 
     dsrcs.push(json!({
@@ -125,6 +154,7 @@ pub fn add_data_source(config_json: &str, params: AddDataSourceParams) -> Result
 ///
 /// # Errors
 /// - `NotFound` if data source doesn't exist
+/// - `InvalidInput` if attempting to delete system datasource (ID <= 2)
 /// - `JsonParse` if config_json is invalid
 /// - `MissingSection` if CFG_DSRC section doesn't exist
 pub fn delete_data_source(config_json: &str, code: &str) -> Result<String> {
@@ -138,13 +168,29 @@ pub fn delete_data_source(config_json: &str, code: &str) -> Result<String> {
         .ok_or_else(|| SzConfigError::MissingSection("CFG_DSRC".to_string()))?;
 
     let code_upper = code.to_uppercase();
+
+    // Check if datasource exists and get its ID for protection check
+    let dsrc_to_delete = dsrcs
+        .iter()
+        .find(|d| d["DSRC_CODE"].as_str() == Some(&code_upper))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Data source not found: {code_upper}")))?;
+
+    // Protect system datasources (Python parity: if dsrc_record["DSRC_ID"] <= 2)
+    if let Some(dsrc_id) = dsrc_to_delete.get("DSRC_ID").and_then(|v| v.as_i64()) {
+        if dsrc_id <= 2 {
+            return Err(SzConfigError::InvalidInput(format!(
+                "The {code_upper} data source cannot be deleted"
+            )));
+        }
+    }
+
+    // Safe to delete
     let original_len = dsrcs.len();
     dsrcs.retain(|d| d["DSRC_CODE"].as_str() != Some(&code_upper));
 
     if dsrcs.len() == original_len {
         return Err(SzConfigError::NotFound(format!(
-            "Data source not found: {}",
-            code_upper
+            "Data source not found: {code_upper}"
         )));
     }
 
@@ -177,7 +223,7 @@ pub fn get_data_source(config_json: &str, code: &str) -> Result<Value> {
         .iter()
         .find(|d| d["DSRC_CODE"].as_str() == Some(&code_upper))
         .cloned()
-        .ok_or_else(|| SzConfigError::NotFound(format!("Data source not found: {}", code_upper)))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Data source not found: {code_upper}")))
 }
 
 /// List all data sources
@@ -240,7 +286,7 @@ pub fn set_data_source(config_json: &str, params: SetDataSourceParams) -> Result
     let dsrc = dsrcs
         .iter_mut()
         .find(|d| d["DSRC_CODE"].as_str() == Some(&code_upper))
-        .ok_or_else(|| SzConfigError::NotFound(format!("Data source not found: {}", code_upper)))?;
+        .ok_or_else(|| SzConfigError::NotFound(format!("Data source not found: {code_upper}")))?;
 
     // Update fields if provided
     if let Some(dsrc_obj) = dsrc.as_object_mut() {

@@ -99,6 +99,8 @@ impl<'a> TryFrom<&'a Value> for AddGenericThresholdParams<'a> {
 pub struct SetComparisonThresholdParams<'a> {
     pub cfunc_code: Option<&'a str>,
     pub ftype_code: Option<&'a str>,
+    pub cfunc_rtnval: Option<&'a str>,
+    pub exec_order: Option<i64>,
     pub same_score: Option<i64>,
     pub close_score: Option<i64>,
     pub likely_score: Option<i64>,
@@ -113,6 +115,8 @@ impl<'a> TryFrom<&'a Value> for SetComparisonThresholdParams<'a> {
         Ok(Self {
             cfunc_code: json.get("cfuncCode").and_then(|v| v.as_str()),
             ftype_code: json.get("ftypeCode").and_then(|v| v.as_str()),
+            cfunc_rtnval: json.get("cfuncRtnval").and_then(|v| v.as_str()),
+            exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
             same_score: json.get("sameScore").and_then(|v| v.as_i64()),
             close_score: json.get("closeScore").and_then(|v| v.as_i64()),
             likely_score: json.get("likelyScore").and_then(|v| v.as_i64()),
@@ -214,9 +218,13 @@ pub fn add_comparison_threshold(
         .cfunc_rtnval
         .ok_or_else(|| SzConfigError::MissingField("cfunc_rtnval".to_string()))?;
 
-    // Lookup IDs from codes
+    // Lookup IDs from codes (special case: "all" = ftype_id 0)
     let cfunc_id = helpers::lookup_cfunc_id(config_json, cfunc_code)?;
-    let ftype_id = helpers::lookup_feature_id(config_json, ftype_code)?;
+    let ftype_id = if ftype_code.eq_ignore_ascii_case("all") {
+        0 // Special case: "all" means ftype_id=0 (all features)
+    } else {
+        helpers::lookup_feature_id(config_json, ftype_code)?
+    };
 
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -234,8 +242,7 @@ pub fn add_comparison_threshold(
             && item["CFUNC_RTNVAL"].as_str() == Some(rtnval_upper.as_str())
     }) {
         return Err(SzConfigError::AlreadyExists(format!(
-            "Comparison threshold: {}+{}+{}",
-            cfunc_code, ftype_code, rtnval_upper
+            "Comparison threshold: {cfunc_code}+{ftype_code}+{rtnval_upper}"
         )));
     }
 
@@ -360,7 +367,7 @@ pub(crate) fn set_comparison_threshold_by_id(
     let cfrtn = cfrtn_array
         .iter_mut()
         .find(|item| item["CFRTN_ID"].as_i64() == Some(cfrtn_id))
-        .ok_or_else(|| SzConfigError::NotFound(format!("Comparison threshold ID: {}", cfrtn_id)))?;
+        .ok_or_else(|| SzConfigError::NotFound(format!("Comparison threshold ID: {cfrtn_id}")))?;
 
     // Update fields from params
     if let Some(dest_obj) = cfrtn.as_object_mut() {
@@ -410,8 +417,7 @@ pub(crate) fn delete_comparison_threshold_by_id(
 
     if !found {
         return Err(SzConfigError::NotFound(format!(
-            "Comparison threshold ID: {}",
-            cfrtn_id
+            "Comparison threshold ID: {cfrtn_id}"
         )));
     }
 
@@ -443,8 +449,7 @@ pub fn delete_comparison_threshold(
         .and_then(|item| item["CFRTN_ID"].as_i64())
         .ok_or_else(|| {
             SzConfigError::NotFound(format!(
-                "Comparison threshold for cfunc='{}', ftype='{}'",
-                cfunc_code, ftype_code
+                "Comparison threshold for cfunc='{cfunc_code}', ftype='{ftype_code}'"
             ))
         })?;
 
@@ -465,8 +470,7 @@ pub fn delete_comparison_threshold(
 
     if !found {
         return Err(SzConfigError::NotFound(format!(
-            "Comparison threshold: {}",
-            cfrtn_id
+            "Comparison threshold: {cfrtn_id}"
         )));
     }
 
@@ -492,10 +496,17 @@ pub fn set_comparison_threshold(
     let ftype_code = params
         .ftype_code
         .ok_or_else(|| SzConfigError::MissingField("ftype_code".to_string()))?;
+    let cfunc_rtnval = params
+        .cfunc_rtnval
+        .ok_or_else(|| SzConfigError::MissingField("cfunc_rtnval".to_string()))?;
 
-    // Lookup IDs from codes
+    // Lookup IDs from codes (special case: "all" = ftype_id 0)
     let cfunc_id = helpers::lookup_cfunc_id(config_json, cfunc_code)?;
-    let ftype_id = helpers::lookup_feature_id(config_json, ftype_code)?;
+    let ftype_id = if ftype_code.eq_ignore_ascii_case("all") {
+        0 // Special case: "all" means ftype_id=0 (all features)
+    } else {
+        helpers::lookup_feature_id(config_json, ftype_code)?
+    };
 
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -504,21 +515,28 @@ pub fn set_comparison_threshold(
         .as_array_mut()
         .ok_or_else(|| SzConfigError::MissingSection("CFG_CFRTN".to_string()))?;
 
+    // Find threshold by (CFUNC_ID, FTYPE_ID, CFUNC_RTNVAL) - all 3 needed for uniqueness
     let cfrtn = cfrtn_array
         .iter_mut()
         .find(|item| {
             item["CFUNC_ID"].as_i64() == Some(cfunc_id)
                 && item["FTYPE_ID"].as_i64() == Some(ftype_id)
+                && item["CFUNC_RTNVAL"]
+                    .as_str()
+                    .map(|s| s.eq_ignore_ascii_case(cfunc_rtnval))
+                    .unwrap_or(false)
         })
         .ok_or_else(|| {
             SzConfigError::NotFound(format!(
-                "Comparison threshold: {}+{}",
-                cfunc_code, ftype_code
+                "Comparison threshold: {cfunc_code}+{ftype_code}+{cfunc_rtnval}"
             ))
         })?;
 
     // Update fields from params
     if let Some(dest_obj) = cfrtn.as_object_mut() {
+        if let Some(order) = params.exec_order {
+            dest_obj.insert("EXEC_ORDER".to_string(), json!(order));
+        }
         if let Some(score) = params.same_score {
             dest_obj.insert("SAME_SCORE".to_string(), json!(score));
         }
@@ -613,14 +631,26 @@ pub fn list_comparison_thresholds(config_json: &str) -> Result<Vec<Value>> {
         )
     });
 
-    // Remove cfunc_id from output (it was only for sorting)
-    for item in &mut result {
-        if let Some(obj) = item.as_object_mut() {
-            obj.remove("cfunc_id");
-        }
-    }
+    // Rebuild output with correct field order (remove cfunc_id and ensure proper order)
+    let final_result: Vec<Value> = result
+        .iter()
+        .map(|item| {
+            json!({
+                "id": item["id"],
+                "function": item["function"],
+                "returnOrder": item["returnOrder"],
+                "scoreName": item["scoreName"],
+                "feature": item["feature"],
+                "sameScore": item["sameScore"],
+                "closeScore": item["closeScore"],
+                "likelyScore": item["likelyScore"],
+                "plausibleScore": item["plausibleScore"],
+                "unlikelyScore": item["unlikelyScore"]
+            })
+        })
+        .collect();
 
-    Ok(result)
+    Ok(final_result)
 }
 
 // ===== Generic Thresholds (CFG_GENERIC_THRESHOLD) =====
@@ -665,8 +695,7 @@ pub fn add_generic_threshold(
     // Validate sendToRedo
     if redo_upper != "YES" && redo_upper != "NO" {
         return Err(SzConfigError::InvalidInput(format!(
-            "Invalid sendToRedo value '{}'. Must be 'Yes' or 'No'",
-            send_to_redo
+            "Invalid sendToRedo value '{send_to_redo}'. Must be 'Yes' or 'No'"
         )));
     }
 
@@ -707,8 +736,7 @@ pub fn add_generic_threshold(
             && record["FTYPE_ID"].as_i64() == Some(ftype_id)
     }) {
         return Err(SzConfigError::AlreadyExists(format!(
-            "Generic threshold: plan={}, behavior={}, feature={}",
-            plan_upper, behavior_upper, feature_upper
+            "Generic threshold: plan={plan_upper}, behavior={behavior_upper}, feature={feature_upper}"
         )));
     }
 
@@ -788,8 +816,7 @@ pub fn delete_generic_threshold(
 
     if !found {
         return Err(SzConfigError::NotFound(format!(
-            "Generic threshold not found: GPLAN_ID={}, behavior={}, feature={}",
-            gplan_id, behavior_upper, feature_upper
+            "Generic threshold not found: GPLAN_ID={gplan_id}, behavior={behavior_upper}, feature={feature_upper}"
         )));
     }
 
@@ -835,8 +862,7 @@ pub fn set_generic_threshold(
         })
         .ok_or_else(|| {
             SzConfigError::NotFound(format!(
-                "Generic threshold not found: plan={:?}, behavior={}",
-                params.plan, behavior_upper
+                "Generic threshold not found: GPLAN_ID={gplan_id}, BEHAVIOR={behavior_upper}"
             ))
         })?;
 

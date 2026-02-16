@@ -164,8 +164,7 @@ pub fn add_expression_call(
 
         if order_taken {
             return Err(SzConfigError::AlreadyExists(format!(
-                "Execution order {} already taken for this feature/element",
-                order
+                "Execution order {order} already taken for this feature/element"
             )));
         }
         order
@@ -204,6 +203,9 @@ pub fn add_expression_call(
     for (element_code, required, feature_opt) in params.element_list {
         bom_exec_order += 1;
 
+        // Keep feature name for error messages (clone before consuming)
+        let _bom_feature_name_for_errors = feature_opt.clone();
+
         // Determine BOM FTYPE_ID
         let bom_ftype_id =
             if let Some(bom_feature) = feature_opt.filter(|f| !f.eq_ignore_ascii_case("PARENT")) {
@@ -216,32 +218,8 @@ pub fn add_expression_call(
                 -1
             };
 
-        // Lookup element ID
-        let bom_felem_id = if bom_ftype_id > 0 {
-            // Lookup element within specific feature
-            config_data["G2_CONFIG"]["CFG_FBOM"]
-                .as_array()
-                .and_then(|arr| {
-                    arr.iter()
-                        .find(|fbom| {
-                            fbom["FTYPE_ID"].as_i64() == Some(bom_ftype_id)
-                                && fbom["FELEM_CODE"]
-                                    .as_str()
-                                    .map(|s| s.eq_ignore_ascii_case(&element_code))
-                                    .unwrap_or(false)
-                        })
-                        .and_then(|fbom| fbom["FELEM_ID"].as_i64())
-                })
-                .ok_or_else(|| {
-                    SzConfigError::NotFound(format!(
-                        "Element '{}' not found in feature",
-                        element_code
-                    ))
-                })?
-        } else {
-            // Lookup element globally
-            lookup_element_id(config, &element_code)?
-        };
+        // Lookup element ID (always global lookup - feature field is just metadata for EFBOM)
+        let bom_felem_id = lookup_element_id(config, &element_code)?;
 
         // Create EFBOM record
         efbom_records.push(json!({
@@ -311,8 +289,7 @@ pub fn delete_expression_call(config: &str, efcall_id: i64) -> Result<String> {
 
     if !call_exists {
         return Err(SzConfigError::NotFound(format!(
-            "Expression call ID {}",
-            efcall_id
+            "Expression call ID {efcall_id} does not exist"
         )));
     }
 
@@ -341,8 +318,9 @@ pub fn delete_expression_call(config: &str, efcall_id: i64) -> Result<String> {
 /// # Errors
 /// - `NotFound` if call ID doesn't exist
 pub fn get_expression_call(config: &str, efcall_id: i64) -> Result<Value> {
-    find_in_config_array(config, "CFG_EFCALL", "EFCALL_ID", &efcall_id.to_string())?
-        .ok_or_else(|| SzConfigError::NotFound(format!("Expression call ID {}", efcall_id)))
+    find_in_config_array(config, "CFG_EFCALL", "EFCALL_ID", &efcall_id.to_string())?.ok_or_else(
+        || SzConfigError::NotFound(format!("Expression call ID {efcall_id} does not exist")),
+    )
 }
 
 /// List all expression calls with resolved names
@@ -479,7 +457,17 @@ pub fn add_expression_call_element(
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
+    // Validate ftype_id is a valid feature ID (not -1 sentinel value)
+    if params.ftype_id < 0 {
+        return Err(SzConfigError::InvalidInput(format!(
+            "{} is not a valid feature ID",
+            params.ftype_id
+        )));
+    }
+
     // Check if element already exists
+    // Python duplicate check (line 2941): checks [call_id_field, "FTYPE_ID", "FELEM_ID"] - 3 fields only
+    // EXEC_ORDER excluded from check because same element at different positions is still a duplicate
     if let Some(ebom_array) = config_data
         .get("G2_CONFIG")
         .and_then(|g| g.get("CFG_EFBOM"))
@@ -489,16 +477,18 @@ pub fn add_expression_call_element(
             if item.get("EFCALL_ID").and_then(|v| v.as_i64()) == Some(efcall_id)
                 && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
                 && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(params.felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order)
+            // && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order)
+            // ↑ Commented out: Python excludes EXEC_ORDER from duplicate check (sz_configtool line 2941)
+            // Reason: Same element in same call is duplicate regardless of position/order
             {
                 return Err(SzConfigError::AlreadyExists(
-                    "Expression call element already exists".to_string(),
+                    "Feature/element already exists for call".to_string(),
                 ));
             }
         }
     }
 
-    // Create new EBOM record
+    // Create new EBOM record (use params.exec_order directly - no auto-assignment)
     let new_record = json!({
         "EFCALL_ID": efcall_id,
         "FTYPE_ID": params.ftype_id,

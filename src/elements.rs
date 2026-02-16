@@ -170,18 +170,54 @@ pub fn add_element(config_json: &str, params: AddElementParams) -> Result<String
         .any(|e| e["FELEM_CODE"].as_str() == Some(code_upper.as_str()))
     {
         return Err(SzConfigError::AlreadyExists(format!(
-            "Element already exists: {}",
-            code_upper
+            "Element already exists: {code_upper}"
         )));
     }
 
     // Get next ID
     let felem_id = helpers::get_next_id_with_min(felem_array, "FELEM_ID", 1000)?;
 
-    // Build record from params
+    // Validate and normalize datatype (Python lines 1974-1981)
+    let data_type = if let Some(dt) = params.data_type {
+        let dt_lower = dt.to_lowercase();
+        match dt_lower.as_str() {
+            "string" => "string",
+            "number" => "number",
+            "date" => "date",
+            "datetime" => "datetime",
+            "json" => "json",
+            _ => {
+                return Err(SzConfigError::InvalidInput(format!(
+                    "Invalid DATATYPE value '{dt}'. Must be one of: string, number, date, datetime, json"
+                )));
+            }
+        }
+    } else {
+        "string" // Default
+    };
+
+    // Validate and normalize tokenized (Python lines 1983-1986)
+    let tokenized = if let Some(tok) = params.tokenized {
+        let tok_upper = tok.to_uppercase();
+        match tok_upper.as_str() {
+            "YES" => "Yes",
+            "NO" => "No",
+            _ => {
+                return Err(SzConfigError::InvalidInput(format!(
+                    "Invalid TOKENIZED value '{tok}'. Must be 'Yes' or 'No'"
+                )));
+            }
+        }
+    } else {
+        "No" // Default
+    };
+
+    // Build record from params (Python parity: TOKENIZE not TOKENIZED)
     let mut new_record = json!({
         "FELEM_ID": felem_id,
         "FELEM_CODE": code_upper.clone(),
+        "DATA_TYPE": data_type,
+        "TOKENIZE": tokenized,
     });
 
     if let Some(obj) = new_record.as_object_mut() {
@@ -189,12 +225,6 @@ pub fn add_element(config_json: &str, params: AddElementParams) -> Result<String
             obj.insert("FELEM_DESC".to_string(), json!(desc));
         } else {
             obj.insert("FELEM_DESC".to_string(), json!(code_upper));
-        }
-        if let Some(dt) = params.data_type {
-            obj.insert("DATA_TYPE".to_string(), json!(dt));
-        }
-        if let Some(tok) = params.tokenized {
-            obj.insert("TOKENIZED".to_string(), json!(tok));
         }
     }
 
@@ -209,24 +239,66 @@ pub fn add_element(config_json: &str, params: AddElementParams) -> Result<String
 ///
 /// # Returns
 /// Modified configuration JSON string
+///
+/// # Errors
+/// - `NotFound` if element doesn't exist
+/// - `InvalidInput` if element is linked to features (Python parity: linkage check)
 pub fn delete_element(config_json: &str, felem_code: &str) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
     let code_upper = felem_code.to_uppercase();
 
-    // Verify exists
+    // Find element to get its ID for linkage check
     let felem_array = config["G2_CONFIG"]["CFG_FELEM"]
         .as_array()
         .ok_or_else(|| SzConfigError::MissingSection("CFG_FELEM".to_string()))?;
 
-    if !felem_array
+    let element_record = felem_array
+        .iter()
+        .find(|e| e["FELEM_CODE"].as_str() == Some(code_upper.as_str()))
+        .ok_or_else(|| SzConfigError::NotFound("Element does not exist".to_string()))?;
+
+    let felem_id = element_record["FELEM_ID"]
+        .as_i64()
+        .ok_or_else(|| SzConfigError::MissingField("FELEM_ID".to_string()))?;
+
+    // Check linkage - prevent deletion if element is used in any features (Python line 2068-2074)
+    let fbom_array = config["G2_CONFIG"]["CFG_FBOM"]
+        .as_array()
+        .ok_or_else(|| SzConfigError::MissingSection("CFG_FBOM".to_string()))?;
+
+    let linked_features: Vec<String> = fbom_array
+        .iter()
+        .filter(|fbom| fbom["FELEM_ID"].as_i64() == Some(felem_id))
+        .filter_map(|fbom| {
+            let ftype_id = fbom["FTYPE_ID"].as_i64()?;
+            let ftype_array = config["G2_CONFIG"]["CFG_FTYPE"].as_array()?;
+            let ftype = ftype_array
+                .iter()
+                .find(|f| f["FTYPE_ID"].as_i64() == Some(ftype_id))?;
+            ftype["FTYPE_CODE"].as_str().map(|s| s.to_string())
+        })
+        .collect();
+
+    if !linked_features.is_empty() {
+        return Err(SzConfigError::InvalidInput(format!(
+            "Element linked to the following feature(s): {}",
+            linked_features.join(",")
+        )));
+    }
+
+    // Safe to delete - get mutable array
+    let felem_array_mut = config["G2_CONFIG"]["CFG_FELEM"]
+        .as_array_mut()
+        .ok_or_else(|| SzConfigError::MissingSection("CFG_FELEM".to_string()))?;
+
+    if !felem_array_mut
         .iter()
         .any(|e| e["FELEM_CODE"].as_str() == Some(code_upper.as_str()))
     {
         return Err(SzConfigError::NotFound(format!(
-            "Element not found: {}",
-            code_upper
+            "Element not found: {code_upper}"
         )));
     }
 
@@ -256,11 +328,17 @@ pub fn get_element(config_json: &str, felem_code: &str) -> Result<Value> {
         .as_array()
         .ok_or_else(|| SzConfigError::MissingSection("CFG_FELEM".to_string()))?;
 
-    felem_array
+    let element = felem_array
         .iter()
         .find(|e| e["FELEM_CODE"].as_str() == Some(code_upper.as_str()))
-        .cloned()
-        .ok_or_else(|| SzConfigError::NotFound(format!("Element not found: {}", code_upper)))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Element not found: {code_upper}")))?;
+
+    // Format to display format with lowercase fields (matching list_elements and Python parity)
+    Ok(json!({
+        "id": element["FELEM_ID"].as_i64().unwrap_or(0),
+        "element": element["FELEM_CODE"].as_str().unwrap_or(""),
+        "datatype": element["DATA_TYPE"].as_str().unwrap_or("")
+    }))
 }
 
 /// List all elements
@@ -384,12 +462,11 @@ pub fn set_feature_element(config_json: &str, params: SetFeatureElementParams) -
         })
         .ok_or_else(|| {
             SzConfigError::NotFound(format!(
-                "Feature element mapping not found: FTYPE_ID={}, FELEM_ID={}",
-                ftype_id, felem_id
+                "Feature element mapping not found: FTYPE_ID={ftype_id}, FELEM_ID={felem_id}"
             ))
         })?;
 
-    // Update fields if provided
+    // Update fields if provided (with validation for Python parity)
     if let Some(order) = params.exec_order {
         fbom["EXEC_ORDER"] = json!(order);
     }
@@ -400,7 +477,18 @@ pub fn set_feature_element(config_json: &str, params: SetFeatureElementParams) -
         fbom["DISPLAY_DELIM"] = json!(delim);
     }
     if let Some(der) = params.derived {
-        fbom["DERIVED"] = json!(der);
+        // Validate derived domain (Python lines 2192-2198)
+        let der_upper = der.to_uppercase();
+        let validated_derived = match der_upper.as_str() {
+            "YES" => "Yes",
+            "NO" => "No",
+            _ => {
+                return Err(SzConfigError::InvalidInput(format!(
+                    "Invalid DERIVED value '{der}'. Must be 'Yes' or 'No'"
+                )));
+            }
+        };
+        fbom["DERIVED"] = json!(validated_derived);
     }
 
     serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))

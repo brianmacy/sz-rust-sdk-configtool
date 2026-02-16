@@ -137,8 +137,7 @@ pub fn delete_behavior_override(
 
     if fbovr_array.len() == original_len {
         return Err(SzConfigError::NotFound(format!(
-            "Behavior override not found for feature {} with usage type {}",
-            feature_code, utype_upper
+            "Behavior override not found for feature {feature_code} with usage type {utype_upper}"
         )));
     }
 
@@ -178,8 +177,7 @@ pub fn get_behavior_override(
         .cloned()
         .ok_or_else(|| {
             SzConfigError::NotFound(format!(
-                "Behavior override not found for feature {} with usage type {}",
-                feature_code, utype_upper
+                "Behavior override not found for feature {feature_code} with usage type {utype_upper}"
             ))
         })
 }
@@ -251,8 +249,7 @@ fn parse_behavior_code(behavior: &str) -> Result<(&'static str, &'static str, &'
         "NAME" => "NAME",
         _ => {
             return Err(SzConfigError::InvalidInput(format!(
-                "Invalid behavior code '{}'. Valid codes: A1, F1, FF, FM, FVM, NONE, NAME (with optional E/S suffixes)",
-                behavior
+                "Invalid behavior code '{behavior}'. Valid codes: A1, F1, FF, FM, FVM, NONE, NAME (with optional E/S suffixes)"
             )));
         }
     };

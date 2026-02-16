@@ -171,37 +171,30 @@ pub fn add_comparison_call(
     // Lookup function ID
     let cfunc_id = lookup_cfunc_id(config, &params.cfunc_code)?;
 
+    // Validate element list is not empty
+    if params.element_list.is_empty() {
+        return Err(SzConfigError::InvalidInput(
+            "No elements were found in the elementList".to_string(),
+        ));
+    }
+
     // Process element list and create CFBOM records
     let mut cfbom_records = Vec::new();
     let mut exec_order = 0;
 
-    for element_code in params.element_list {
+    for (idx, element_code) in params.element_list.iter().enumerate() {
         exec_order += 1;
 
-        // Lookup element ID (must belong to the feature)
-        let bom_felem_id = config_data["G2_CONFIG"]["CFG_FBOM"]
-            .as_array()
-            .and_then(|arr| {
-                arr.iter()
-                    .find(|fbom| {
-                        fbom["FTYPE_ID"].as_i64() == Some(ftype_id)
-                            && fbom["FELEM_CODE"]
-                                .as_str()
-                                .map(|s| s.eq_ignore_ascii_case(&element_code))
-                                .unwrap_or(false)
-                    })
-                    .and_then(|fbom| fbom["FELEM_ID"].as_i64())
-            })
-            .or_else(|| {
-                // Fallback: lookup element globally
-                lookup_element_id(config, &element_code).ok()
-            })
-            .ok_or_else(|| {
-                SzConfigError::NotFound(format!(
-                    "Element '{}' not found in feature '{}'",
-                    element_code, params.ftype_code
-                ))
-            })?;
+        // Validate element is not blank
+        if element_code.trim().is_empty() {
+            return Err(SzConfigError::InvalidInput(format!(
+                "Element cannot be blank in item {} on the element list",
+                idx + 1
+            )));
+        }
+
+        // Lookup element ID (global lookup - Python allows any element in call)
+        let bom_felem_id = lookup_element_id(config, element_code)?;
 
         // Create CFBOM record
         cfbom_records.push(json!({
@@ -266,8 +259,7 @@ pub fn delete_comparison_call(config: &str, cfcall_id: i64) -> Result<String> {
 
     if !call_exists {
         return Err(SzConfigError::NotFound(format!(
-            "Comparison call ID {}",
-            cfcall_id
+            "Comparison call ID {cfcall_id} does not exist"
         )));
     }
 
@@ -297,7 +289,7 @@ pub fn delete_comparison_call(config: &str, cfcall_id: i64) -> Result<String> {
 /// - `NotFound` if call ID doesn't exist
 pub fn get_comparison_call(config: &str, cfcall_id: i64) -> Result<Value> {
     find_in_config_array(config, "CFG_CFCALL", "CFCALL_ID", &cfcall_id.to_string())?
-        .ok_or_else(|| SzConfigError::NotFound(format!("Comparison call ID {}", cfcall_id)))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Comparison call ID {cfcall_id}")))
 }
 
 /// List all comparison calls with resolved names
@@ -401,7 +393,17 @@ pub fn add_comparison_call_element(
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
+    // Validate ftype_id is a valid feature ID (not -1 sentinel value)
+    if params.ftype_id < 0 {
+        return Err(SzConfigError::InvalidInput(format!(
+            "{} is not a valid feature ID",
+            params.ftype_id
+        )));
+    }
+
     // Check if element already exists
+    // Python duplicate check (line 2941): checks [call_id_field, "FTYPE_ID", "FELEM_ID"] - 3 fields only
+    // EXEC_ORDER excluded from check because same element at different positions is still a duplicate
     if let Some(cbom_array) = config_data
         .get("G2_CONFIG")
         .and_then(|g| g.get("CFG_CFBOM"))
@@ -411,16 +413,18 @@ pub fn add_comparison_call_element(
             if item.get("CFCALL_ID").and_then(|v| v.as_i64()) == Some(params.cfcall_id)
                 && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
                 && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(params.felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order)
+            // && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order)
+            // ↑ Commented out: Python excludes EXEC_ORDER from duplicate check (sz_configtool line 2941)
+            // Reason: Same element in same call is duplicate regardless of position/order
             {
                 return Err(SzConfigError::AlreadyExists(
-                    "Comparison call element already exists".to_string(),
+                    "Feature/element already exists for call".to_string(),
                 ));
             }
         }
     }
 
-    // Create new CBOM record
+    // Create new CBOM record (use params.exec_order directly - no auto-assignment)
     let new_record = json!({
         "CFCALL_ID": params.cfcall_id,
         "FTYPE_ID": params.ftype_id,

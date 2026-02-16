@@ -31,9 +31,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or("g2config_v11.json");
 
     println!("Configuration:");
-    println!("  Input:  {}", config_path);
-    println!("  Script: {}", script_path);
-    println!("  Output: {}\n", output_path);
+    println!("  Input:  {config_path}");
+    println!("  Script: {script_path}");
+    println!("  Output: {output_path}\n");
 
     // Load configuration
     println!("Loading configuration...");
@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             c
         }
         Err(e) => {
-            eprintln!("  ✗ Failed to load config: {}", e);
+            eprintln!("  ✗ Failed to load config: {e}");
             eprintln!(
                 "\nUsage: {} [config.json] [upgrade.gtc] [output.json]",
                 args[0]
@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         config_val["G2_CONFIG"]["CONFIG_BASE_VERSION"]["COMPATIBILITY_VERSION"]["CONFIG_VERSION"]
             .as_str()
             .unwrap_or("unknown");
-    println!("  Starting version: {}\n", start_version);
+    println!("  Starting version: {start_version}\n");
 
     // Load upgrade script
     println!("Loading upgrade script...");
@@ -72,16 +72,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     !trimmed.is_empty() && !trimmed.starts_with('#') && trimmed != "save"
                 })
                 .count();
-            println!(
-                "  ✓ Loaded {} lines ({} commands)",
-                line_count, command_count
-            );
+            println!("  ✓ Loaded {line_count} lines ({command_count} commands)");
             s
         }
         Err(e) => {
-            eprintln!("  ✗ Failed to load script: {}", e);
+            eprintln!("  ✗ Failed to load script: {e}");
             eprintln!("\nUpgrade script not found. This example requires:");
-            eprintln!("  {}", script_path);
+            eprintln!("  {script_path}");
             std::process::exit(1);
         }
     };
@@ -96,10 +93,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             cfg
         }
         Err(e) => {
-            eprintln!("  ✗ Error: {}", e);
+            eprintln!("  ✗ Error: {e}");
             eprintln!("\nCommands executed before error:");
             for cmd in processor.get_executed_commands() {
-                eprintln!("    {}", cmd);
+                eprintln!("    {cmd}");
             }
             std::process::exit(1);
         }
@@ -111,12 +108,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         upgraded_val["G2_CONFIG"]["CONFIG_BASE_VERSION"]["COMPATIBILITY_VERSION"]["CONFIG_VERSION"]
             .as_str()
             .unwrap_or("unknown");
-    println!("  Ending version: {}\n", end_version);
+    println!("  Ending version: {end_version}\n");
 
     // Show sample of executed commands
     println!("Sample of executed commands:");
     for cmd in processor.get_executed_commands().iter().take(10) {
-        println!("  - {}", cmd);
+        println!("  - {cmd}");
     }
     if processor.get_executed_commands().len() > 10 {
         println!(
@@ -129,20 +126,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\nSaving upgraded configuration...");
     match std::fs::write(output_path, &upgraded_config) {
         Ok(_) => {
-            println!("  ✓ Saved to {}", output_path);
+            println!("  ✓ Saved to {output_path}");
             println!("  Size: {} bytes", upgraded_config.len());
         }
         Err(e) => {
-            eprintln!("  ✗ Failed to save: {}", e);
+            eprintln!("  ✗ Failed to save: {e}");
             std::process::exit(1);
         }
     }
 
     println!("\n=== Upgrade Complete! ===");
-    println!(
-        "Configuration successfully upgraded from v{} to v{}",
-        start_version, end_version
-    );
+    println!("Configuration successfully upgraded from v{start_version} to v{end_version}");
 
     Ok(())
 }

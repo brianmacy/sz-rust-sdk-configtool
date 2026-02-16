@@ -42,7 +42,7 @@ pub fn clone_generic_plan(
     let source_plan =
         helpers::find_in_config_array(config_json, "CFG_GPLAN", "GPLAN_CODE", &source_code)?
             .ok_or_else(|| {
-                SzConfigError::NotFound(format!("Source generic plan not found: {}", source_code))
+                SzConfigError::NotFound(format!("Source generic plan not found: {source_code}"))
             })?;
 
     let source_gplan_id = source_plan
@@ -55,8 +55,7 @@ pub fn clone_generic_plan(
     // Check if new plan already exists
     if helpers::find_in_config_array(config_json, "CFG_GPLAN", "GPLAN_CODE", &new_code)?.is_some() {
         return Err(SzConfigError::AlreadyExists(format!(
-            "Generic plan already exists: {}",
-            new_code
+            "Generic plan already exists: {new_code}"
         )));
     }
 
@@ -129,22 +128,28 @@ pub fn clone_generic_plan(
 /// ```
 /// use sz_configtool_lib::generic_plans;
 ///
-/// let config = r#"{"G2_CONFIG": {"CFG_GPLAN": [{"GPLAN_ID": 1, "GPLAN_CODE": "TEST"}], "CFG_GENERIC_THRESHOLD": []}}"#;
-/// let modified = generic_plans::delete_generic_plan(config, "TEST").unwrap();
+/// // System plans (ID ≤ 2) cannot be deleted, use ID > 2 for user plans
+/// let config = r#"{"G2_CONFIG": {"CFG_GPLAN": [{"GPLAN_ID": 3, "GPLAN_CODE": "CUSTOM_PLAN"}], "CFG_GENERIC_THRESHOLD": []}}"#;
+/// let modified = generic_plans::delete_generic_plan(config, "CUSTOM_PLAN").unwrap();
 /// ```
 pub fn delete_generic_plan(config_json: &str, gplan_code: &str) -> Result<String> {
     let gplan_code = gplan_code.to_uppercase();
 
     // Find the plan
     let plan = helpers::find_in_config_array(config_json, "CFG_GPLAN", "GPLAN_CODE", &gplan_code)?
-        .ok_or_else(|| {
-            SzConfigError::NotFound(format!("Generic plan not found: {}", gplan_code))
-        })?;
+        .ok_or_else(|| SzConfigError::NotFound(format!("Generic plan not found: {gplan_code}")))?;
 
     let gplan_id = plan
         .get("GPLAN_ID")
         .and_then(|v| v.as_i64())
         .ok_or_else(|| SzConfigError::InvalidConfig("Invalid GPLAN_ID".to_string()))?;
+
+    // System plan protection: Plans with ID <= 2 cannot be deleted (Python line 4206-4208)
+    if gplan_id <= 2 {
+        return Err(SzConfigError::InvalidInput(format!(
+            "The {gplan_code} plan cannot be deleted"
+        )));
+    }
 
     // Parse and modify config
     let mut config_data: Value = serde_json::from_str(config_json)?;

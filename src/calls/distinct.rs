@@ -120,6 +120,23 @@ pub fn add_distinct_call(config: &str, params: AddDistinctCallParams) -> Result<
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
+    // Validate element list is not empty
+    if params.element_list.is_empty() {
+        return Err(SzConfigError::InvalidInput(
+            "No elements were found in the elementList".to_string(),
+        ));
+    }
+
+    // Validate each element is not blank
+    for (idx, element_code) in params.element_list.iter().enumerate() {
+        if element_code.trim().is_empty() {
+            return Err(SzConfigError::InvalidInput(format!(
+                "Element cannot be blank in item {} on the element list",
+                idx + 1
+            )));
+        }
+    }
+
     // Get next DFCALL_ID (seed at 1000 for user-created calls)
     let dfcall_id = get_next_id(&config_data, "G2_CONFIG.CFG_DFCALL", "DFCALL_ID", 1000)?;
 
@@ -149,33 +166,19 @@ pub fn add_distinct_call(config: &str, params: AddDistinctCallParams) -> Result<
     let mut dfbom_records = Vec::new();
     let mut exec_order = 0;
 
-    for element_code in params.element_list {
+    for (idx, element_code) in params.element_list.iter().enumerate() {
         exec_order += 1;
 
-        // Lookup element ID (must belong to the feature)
-        let bom_felem_id = config_data["G2_CONFIG"]["CFG_FBOM"]
-            .as_array()
-            .and_then(|arr| {
-                arr.iter()
-                    .find(|fbom| {
-                        fbom["FTYPE_ID"].as_i64() == Some(ftype_id)
-                            && fbom["FELEM_CODE"]
-                                .as_str()
-                                .map(|s| s.eq_ignore_ascii_case(&element_code))
-                                .unwrap_or(false)
-                    })
-                    .and_then(|fbom| fbom["FELEM_ID"].as_i64())
-            })
-            .or_else(|| {
-                // Fallback: lookup element globally
-                lookup_element_id(config, &element_code).ok()
-            })
-            .ok_or_else(|| {
-                SzConfigError::NotFound(format!(
-                    "Element '{}' not found in feature '{}'",
-                    element_code, params.ftype_code
-                ))
-            })?;
+        // Validate element is not blank (already checked in add_distinct_call, defensive)
+        if element_code.trim().is_empty() {
+            return Err(SzConfigError::InvalidInput(format!(
+                "Element cannot be blank in item {} on the element list",
+                idx + 1
+            )));
+        }
+
+        // Lookup element ID (global lookup - Python allows any element in call)
+        let bom_felem_id = lookup_element_id(config, element_code)?;
 
         // Create DFBOM record
         dfbom_records.push(json!({
@@ -241,8 +244,7 @@ pub fn delete_distinct_call(config: &str, dfcall_id: i64) -> Result<String> {
 
     if !call_exists {
         return Err(SzConfigError::NotFound(format!(
-            "Distinct call ID {}",
-            dfcall_id
+            "Distinct call ID {dfcall_id} does not exist"
         )));
     }
 
@@ -271,8 +273,9 @@ pub fn delete_distinct_call(config: &str, dfcall_id: i64) -> Result<String> {
 /// # Errors
 /// - `NotFound` if call ID doesn't exist
 pub fn get_distinct_call(config: &str, dfcall_id: i64) -> Result<Value> {
-    find_in_config_array(config, "CFG_DFCALL", "DFCALL_ID", &dfcall_id.to_string())?
-        .ok_or_else(|| SzConfigError::NotFound(format!("Distinct call ID {}", dfcall_id)))
+    find_in_config_array(config, "CFG_DFCALL", "DFCALL_ID", &dfcall_id.to_string())?.ok_or_else(
+        || SzConfigError::NotFound(format!("Distinct call ID {dfcall_id} does not exist")),
+    )
 }
 
 /// List all distinct calls with resolved names

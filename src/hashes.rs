@@ -38,8 +38,7 @@ pub fn add_to_name_hash(config_json: &str, name: &str) -> Result<String> {
                     // Check if already exists
                     if name_hash_arr.iter().any(|v| v.as_str() == Some(name)) {
                         return Err(SzConfigError::AlreadyExists(format!(
-                            "Name already in hash: {}",
-                            name
+                            "Name already in hash: {name}"
                         )));
                     }
 
@@ -100,8 +99,7 @@ pub fn delete_from_name_hash(config_json: &str, name: &str) -> Result<String> {
 
     if !found {
         return Err(SzConfigError::NotFound(format!(
-            "Name not found in hash: {}",
-            name
+            "Name not found in hash: {name}"
         )));
     }
 
@@ -140,8 +138,7 @@ pub fn add_to_ssn_last4_hash(config_json: &str, name: &str) -> Result<String> {
                     // Check if already exists
                     if ssn_last4_hash_arr.iter().any(|v| v.as_str() == Some(name)) {
                         return Err(SzConfigError::AlreadyExists(format!(
-                            "Name already in SSN_LAST4_HASH: {}",
-                            name
+                            "Name already in SSN_LAST4_HASH: {name}"
                         )));
                     }
 
@@ -219,8 +216,7 @@ pub fn delete_from_ssn_last4_hash(config_json: &str, name: &str) -> Result<Strin
 
     if !removed {
         return Err(SzConfigError::NotFound(format!(
-            "Name not found in SSN_LAST4_HASH: {}",
-            name
+            "Name not found in SSN_LAST4_HASH: {name}"
         )));
     }
 

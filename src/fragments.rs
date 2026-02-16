@@ -34,7 +34,7 @@ use serde_json::{Value, json};
 fn validate_fragment_source(config_json: &str, source_string: &str) -> (Vec<String>, String) {
     // Validate JSON parses correctly
     if let Err(e) = serde_json::from_str::<Value>(config_json) {
-        return (vec![], format!("Invalid JSON: {}", e));
+        return (vec![], format!("Invalid JSON: {e}"));
     }
 
     let mut dependency_list = Vec::new();
@@ -72,13 +72,13 @@ fn validate_fragment_source(config_json: &str, source_string: &str) -> (Vec<Stri
                             Ok(None) => {
                                 return (
                                     vec![],
-                                    format!("Invalid fragment reference: {}", current_frag),
+                                    format!("Invalid fragment reference: {current_frag}"),
                                 );
                             }
                             Err(_) => {
                                 return (
                                     vec![],
-                                    format!("Invalid fragment reference: {}", current_frag),
+                                    format!("Invalid fragment reference: {current_frag}"),
                                 );
                             }
                         }
@@ -106,13 +106,13 @@ fn validate_fragment_source(config_json: &str, source_string: &str) -> (Vec<Stri
                                 Ok(None) => {
                                     return (
                                         vec![],
-                                        format!("Invalid fragment reference: {}", current_frag),
+                                        format!("Invalid fragment reference: {current_frag}"),
                                     );
                                 }
                                 Err(_) => {
                                     return (
                                         vec![],
-                                        format!("Invalid fragment reference: {}", current_frag),
+                                        format!("Invalid fragment reference: {current_frag}"),
                                     );
                                 }
                             }
@@ -173,6 +173,16 @@ pub fn add_fragment(config_json: &str, fragment_config: &Value) -> Result<(Strin
         .get("ERFRAG_SOURCE")
         .and_then(|v| v.as_str())
         .ok_or_else(|| SzConfigError::MissingField("ERFRAG_SOURCE".to_string()))?;
+
+    // Check if fragment already exists (Python line 4520-4522)
+    let code_upper = code.to_uppercase();
+    if helpers::find_in_config_array(config_json, "CFG_ERFRAG", "ERFRAG_CODE", &code_upper)?
+        .is_some()
+    {
+        return Err(SzConfigError::AlreadyExists(
+            "Fragment already exists".to_string(),
+        ));
+    }
 
     // Validate source and compute dependencies
     let (dependency_list, error_message) = validate_fragment_source(config_json, source);
@@ -248,7 +258,7 @@ pub fn delete_fragment(config_json: &str, fragment_code: &str) -> Result<String>
 
     // Verify fragment exists before deletion
     let _ = helpers::find_in_config_array(config_json, "CFG_ERFRAG", "ERFRAG_CODE", &frag_code)?
-        .ok_or_else(|| SzConfigError::NotFound(format!("Fragment not found: {}", frag_code)))?;
+        .ok_or_else(|| SzConfigError::NotFound(format!("Fragment not found: {frag_code}")))?;
 
     // Remove from config
     helpers::remove_from_config_array(config_json, "CFG_ERFRAG", "ERFRAG_CODE", &frag_code)
@@ -277,20 +287,27 @@ pub fn get_fragment(config_json: &str, code_or_id: &str) -> Result<Value> {
     let search_value = code_or_id.to_uppercase();
 
     // Try to find by CODE first, then by ID
-    if let Some(item) =
+    let item = if let Some(item) =
         helpers::find_in_config_array(config_json, "CFG_ERFRAG", "ERFRAG_CODE", &search_value)?
     {
-        Ok(item)
+        item
     } else if let Some(item) =
         helpers::find_in_config_array(config_json, "CFG_ERFRAG", "ERFRAG_ID", &search_value)?
     {
-        Ok(item)
+        item
     } else {
-        Err(SzConfigError::NotFound(format!(
-            "Fragment not found: {}",
-            search_value
-        )))
-    }
+        return Err(SzConfigError::NotFound(format!(
+            "Fragment not found: {search_value}"
+        )));
+    };
+
+    // Transform to lowercase format (matching list_fragments for consistency)
+    Ok(json!({
+        "id": item.get("ERFRAG_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+        "fragment": item.get("ERFRAG_CODE").and_then(|v| v.as_str()).unwrap_or(""),
+        "source": item.get("ERFRAG_SOURCE").and_then(|v| v.as_str()).unwrap_or(""),
+        "depends": item.get("ERFRAG_DEPENDS").and_then(|v| v.as_str()).unwrap_or("")
+    }))
 }
 
 /// List all fragments in the configuration

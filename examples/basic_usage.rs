@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }"#;
 
     println!("Initial configuration:");
-    println!("{}\n", config);
+    println!("{config}\n");
 
     // Add a data source using the library's add_data_source API
     println!("Adding data source 'CUSTOMERS'...");
@@ -45,7 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Description: {}", customer["DSRC_DESC"]);
 
     println!("\nFinal configuration:");
-    println!("{}", config);
+    println!("{config}");
 
     println!("\n=== Example Complete ===");
 

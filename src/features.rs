@@ -319,8 +319,7 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
         .any(|f| f["FTYPE_CODE"].as_str() == Some(&feature_upper))
     {
         return Err(SzConfigError::AlreadyExists(format!(
-            "Feature already exists: {}",
-            feature_upper
+            "Feature already exists: {feature_upper}"
         )));
     }
 
@@ -336,20 +335,96 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
         ));
     }
 
-    // Get defaults from params
+    // Validate and normalize domain values (Python parity lines 1432-1461)
     let class = params.class.unwrap_or("OTHER");
     let behavior = params.behavior.unwrap_or("FM");
-    let candidates_val = params.candidates.unwrap_or("No");
-    let anonymize_val = params.anonymize.unwrap_or("No");
-    let derived_val = params.derived.unwrap_or("No");
-    let history_val = params.history.unwrap_or("Yes");
 
-    // matchkey default depends on whether comparison is specified
-    let matchkey_val = params.matchkey.unwrap_or(if params.comparison.is_some() {
+    // Validate CANDIDATES domain (Python lines 1432-1437)
+    let candidates_val = if let Some(val) = params.candidates {
+        let val_upper = val.to_uppercase();
+        match val_upper.as_str() {
+            "YES" => "Yes",
+            "NO" => "No",
+            _ => {
+                return Err(SzConfigError::InvalidInput(format!(
+                    "Invalid CANDIDATES value '{val}'. Must be 'Yes' or 'No'"
+                )));
+            }
+        }
+    } else {
+        "No"
+    };
+
+    // Validate ANONYMIZE domain (Python lines 1439-1444)
+    let anonymize_val = if let Some(val) = params.anonymize {
+        let val_upper = val.to_uppercase();
+        match val_upper.as_str() {
+            "YES" => "Yes",
+            "NO" => "No",
+            _ => {
+                return Err(SzConfigError::InvalidInput(format!(
+                    "Invalid ANONYMIZE value '{val}'. Must be 'Yes' or 'No'"
+                )));
+            }
+        }
+    } else {
+        "No"
+    };
+
+    // Validate DERIVED domain (Python lines 1446-1449)
+    let derived_val = if let Some(val) = params.derived {
+        let val_upper = val.to_uppercase();
+        match val_upper.as_str() {
+            "YES" => "Yes",
+            "NO" => "No",
+            _ => {
+                return Err(SzConfigError::InvalidInput(format!(
+                    "Invalid DERIVED value '{val}'. Must be 'Yes' or 'No'"
+                )));
+            }
+        }
+    } else {
+        "No"
+    };
+
+    // Validate HISTORY domain (Python lines 1451-1454)
+    let history_val = if let Some(val) = params.history {
+        let val_upper = val.to_uppercase();
+        match val_upper.as_str() {
+            "YES" => "Yes",
+            "NO" => "No",
+            _ => {
+                return Err(SzConfigError::InvalidInput(format!(
+                    "Invalid HISTORY value '{val}'. Must be 'Yes' or 'No'"
+                )));
+            }
+        }
+    } else {
+        "Yes"
+    };
+
+    // Validate MATCHKEY domain (Python lines 1456-1461)
+    let matchkey_default = if params.comparison.is_some() {
         "Yes"
     } else {
         "No"
-    });
+    };
+    let matchkey_val = if let Some(val) = params.matchkey {
+        let val_upper = val.to_uppercase();
+        match val_upper.as_str() {
+            "YES" => "Yes",
+            "NO" => "No",
+            "CONFIRM" => "Confirm",
+            "DENIAL" => "Denial",
+            _ => {
+                return Err(SzConfigError::InvalidInput(format!(
+                    "Invalid MATCHKEY value '{val}'. Must be one of: Yes, No, Confirm, Denial"
+                )));
+            }
+        }
+    } else {
+        matchkey_default
+    };
 
     // Get next FTYPE_ID (seed at 1000 for user-created features)
     let ftype_id = helpers::get_next_id_with_min(ftypes, "FTYPE_ID", 1000)?;
@@ -375,23 +450,23 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
                 .unwrap_or(false)
         })
         .and_then(|c| c["FCLASS_ID"].as_i64())
-        .ok_or_else(|| SzConfigError::NotFound(format!("Feature class: {}", class)))?;
+        .ok_or_else(|| SzConfigError::NotFound(format!("Feature class: {class}")))?;
 
-    // Lookup optional functions
+    // Lookup optional functions (validate they exist if provided)
     let sfunc_id = if let Some(func_code) = params.standardize {
-        lookup_sfunc_id(&config, func_code).unwrap_or(0)
+        helpers::lookup_sfunc_id(config_json, func_code)?
     } else {
         0
     };
 
     let efunc_id = if let Some(func_code) = params.expression {
-        lookup_efunc_id(&config, func_code).unwrap_or(0)
+        helpers::lookup_efunc_id(config_json, func_code)?
     } else {
         0
     };
 
     let cfunc_id = if let Some(func_code) = params.comparison {
-        lookup_cfunc_id(&config, func_code).unwrap_or(0)
+        helpers::lookup_cfunc_id(config_json, func_code)?
     } else {
         0
     };
@@ -542,8 +617,7 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| {
                         SzConfigError::InvalidInput(format!(
-                            "Missing element code in elementList item {}",
-                            fbom_order
+                            "Missing element code in elementList item {fbom_order}"
                         ))
                     })?
                     .to_uppercase();
@@ -606,8 +680,7 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
                 (code, expr, comp, disp_level, disp_delim, elem_deriv)
             } else {
                 return Err(SzConfigError::InvalidInput(format!(
-                    "Invalid element in elementList item {}",
-                    fbom_order
+                    "Invalid element in elementList item {fbom_order}"
                 )));
             };
 
@@ -711,7 +784,7 @@ pub fn delete_feature(config_json: &str, feature_code_or_id: &str) -> Result<Str
             .ok_or_else(|| SzConfigError::MissingSection("CFG_FTYPE".to_string()))?;
 
         if !ftypes.iter().any(|f| f["FTYPE_ID"].as_i64() == Some(id)) {
-            return Err(SzConfigError::NotFound(format!("Feature: {}", id)));
+            return Err(SzConfigError::NotFound(format!("Feature: {id}")));
         }
         id
     } else {
@@ -726,7 +799,7 @@ pub fn delete_feature(config_json: &str, feature_code_or_id: &str) -> Result<Str
                 .find(|f| f["FTYPE_ID"].as_i64() == Some(ftype_id))
                 .and_then(|f| f["FTYPE_CODE"].as_str())
         })
-        .ok_or_else(|| SzConfigError::NotFound(format!("Feature: {}", ftype_id)))?
+        .ok_or_else(|| SzConfigError::NotFound(format!("Feature: {ftype_id}")))?
         .to_string();
 
     // Check if feature is locked
@@ -735,8 +808,7 @@ pub fn delete_feature(config_json: &str, feature_code_or_id: &str) -> Result<Str
         .any(|&locked| locked.eq_ignore_ascii_case(&feature_code))
     {
         return Err(SzConfigError::InvalidInput(format!(
-            "The feature {} cannot be deleted (it is a protected system feature)",
-            feature_code
+            "The feature {feature_code} cannot be deleted (it is a protected system feature)"
         )));
     }
 
@@ -857,7 +929,7 @@ pub fn get_feature(config_json: &str, feature_code_or_id: &str) -> Result<Value>
         config["G2_CONFIG"]["CFG_FTYPE"]
             .as_array()
             .and_then(|arr| arr.iter().find(|f| f["FTYPE_ID"].as_i64() == Some(id)))
-            .ok_or_else(|| SzConfigError::NotFound(format!("Feature: {}", id)))?
+            .ok_or_else(|| SzConfigError::NotFound(format!("Feature: {id}")))?
     } else {
         let code_upper = feature_code_or_id.to_uppercase();
         config["G2_CONFIG"]["CFG_FTYPE"]
@@ -866,7 +938,7 @@ pub fn get_feature(config_json: &str, feature_code_or_id: &str) -> Result<Value>
                 arr.iter()
                     .find(|f| f["FTYPE_CODE"].as_str() == Some(code_upper.as_str()))
             })
-            .ok_or_else(|| SzConfigError::NotFound(format!("Feature: {}", code_upper)))?
+            .ok_or_else(|| SzConfigError::NotFound(format!("Feature: {code_upper}")))?
     };
 
     build_feature_json(&config, ftype)
@@ -939,37 +1011,72 @@ pub fn set_feature(config_json: &str, params: SetFeatureParams) -> Result<String
     let ftype = ftypes
         .iter_mut()
         .find(|f| f["FTYPE_ID"].as_i64() == Some(ftype_id))
-        .ok_or_else(|| SzConfigError::NotFound(format!("Feature: {}", ftype_id)))?;
+        .ok_or_else(|| SzConfigError::NotFound("Feature not found".to_string()))?;
 
-    // Update fields if provided
+    // Track if any changes made (for "No changes detected")
+    let mut changes_made = false;
+
+    // Update fields if provided with validation and normalization
     if let Some(val) = params.candidates {
-        ftype["USED_FOR_CAND"] = json!(val);
+        // Validate and normalize CANDIDATES domain (Python line 1702-1707)
+        let normalized = validate_and_normalize_domain(val, &["Yes", "No"], "CANDIDATES")?;
+        if ftype["USED_FOR_CAND"].as_str() != Some(normalized.as_str()) {
+            ftype["USED_FOR_CAND"] = json!(normalized);
+            changes_made = true;
+        }
     }
     if let Some(val) = params.anonymize {
-        ftype["ANONYMIZE"] = json!(val);
+        if ftype["ANONYMIZE"].as_str() != Some(val) {
+            ftype["ANONYMIZE"] = json!(val);
+            changes_made = true;
+        }
     }
     if let Some(val) = params.derived {
-        ftype["DERIVED"] = json!(val);
+        if ftype["DERIVED"].as_str() != Some(val) {
+            ftype["DERIVED"] = json!(val);
+            changes_made = true;
+        }
     }
     if let Some(val) = params.history {
-        ftype["PERSIST_HISTORY"] = json!(val);
+        if ftype["PERSIST_HISTORY"].as_str() != Some(val) {
+            ftype["PERSIST_HISTORY"] = json!(val);
+            changes_made = true;
+        }
     }
     if let Some(val) = params.matchkey {
-        ftype["SHOW_IN_MATCH_KEY"] = json!(val);
+        // Validate and normalize MATCHKEY domain (Python line 1754-1758)
+        let normalized =
+            validate_and_normalize_domain(val, &["Yes", "No", "Confirm", "Denial"], "MATCHKEY")?;
+        if ftype["SHOW_IN_MATCH_KEY"].as_str() != Some(normalized.as_str()) {
+            ftype["SHOW_IN_MATCH_KEY"] = json!(normalized);
+            changes_made = true;
+        }
     }
     if let Some(val) = params.version {
-        ftype["VERSION"] = json!(val);
+        if ftype["VERSION"].as_i64() != Some(val) {
+            ftype["VERSION"] = json!(val);
+            changes_made = true;
+        }
     }
     if let Some(val) = params.rtype_id {
-        ftype["RTYPE_ID"] = json!(val);
+        if ftype["RTYPE_ID"].as_i64() != Some(val) {
+            ftype["RTYPE_ID"] = json!(val);
+            changes_made = true;
+        }
     }
 
     // Parse and set behavior (FTYPE_FREQ, FTYPE_EXCL, FTYPE_STAB)
     if let Some(behavior_code) = params.behavior {
         let (frequency, exclusivity, stability) = parse_behavior_code(behavior_code)?;
-        ftype["FTYPE_FREQ"] = json!(frequency);
-        ftype["FTYPE_EXCL"] = json!(exclusivity);
-        ftype["FTYPE_STAB"] = json!(stability);
+        let freq_changed = ftype["FTYPE_FREQ"].as_str() != Some(frequency);
+        let excl_changed = ftype["FTYPE_EXCL"].as_str() != Some(exclusivity);
+        let stab_changed = ftype["FTYPE_STAB"].as_str() != Some(stability);
+        if freq_changed || excl_changed || stab_changed {
+            ftype["FTYPE_FREQ"] = json!(frequency);
+            ftype["FTYPE_EXCL"] = json!(exclusivity);
+            ftype["FTYPE_STAB"] = json!(stability);
+            changes_made = true;
+        }
     }
 
     // Lookup and set class (FCLASS_ID) - must do before modifying ftype
@@ -991,12 +1098,35 @@ pub fn set_feature(config_json: &str, params: SetFeatureParams) -> Result<String
                     .unwrap_or(false)
             })
             .and_then(|c| c["FCLASS_ID"].as_i64())
-            .ok_or_else(|| SzConfigError::NotFound(format!("Feature class: {}", class_name)))?;
+            .ok_or_else(|| SzConfigError::NotFound(format!("Feature class: {class_name}")))?;
 
-        ftype["FCLASS_ID"] = json!(fclass_id);
+        if ftype["FCLASS_ID"].as_i64() != Some(fclass_id) {
+            ftype["FCLASS_ID"] = json!(fclass_id);
+            changes_made = true;
+        }
+    }
+
+    // Check if any changes were made (Python lines 1824-1825)
+    if !changes_made {
+        return Err(SzConfigError::InvalidInput(
+            "No changes detected".to_string(),
+        ));
     }
 
     serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+}
+
+/// Validate value is in domain and normalize to proper case
+fn validate_and_normalize_domain(value: &str, domain: &[&str], field_name: &str) -> Result<String> {
+    let value_upper = value.to_uppercase();
+    for valid_value in domain {
+        if valid_value.to_uppercase() == value_upper {
+            return Ok(valid_value.to_string());
+        }
+    }
+    Err(SzConfigError::InvalidInput(format!(
+        "{field_name} value must be in {domain:?}"
+    )))
 }
 
 // Helper functions
@@ -1207,8 +1337,7 @@ fn parse_behavior_code(behavior: &str) -> Result<(&'static str, &'static str, &'
         "NAME" => "NAME",
         _ => {
             return Err(SzConfigError::InvalidInput(format!(
-                "Invalid behavior code '{}'. Valid codes: A1, F1, FF, FM, FVM, NONE, NAME (with optional E/S suffixes)",
-                behavior
+                "Invalid behavior code '{behavior}'. Valid codes: A1, F1, FF, FM, FVM, NONE, NAME (with optional E/S suffixes)"
             )));
         }
     };
@@ -1240,9 +1369,10 @@ fn lookup_feature_id(config: &Value, feature_code: &str) -> Result<i64> {
                 .find(|f| f["FTYPE_CODE"].as_str() == Some(code_upper.as_str()))
         })
         .and_then(|f| f["FTYPE_ID"].as_i64())
-        .ok_or_else(|| SzConfigError::NotFound(format!("Feature: {}", code_upper)))
+        .ok_or_else(|| SzConfigError::NotFound("Feature not found".to_string()))
 }
 
+#[allow(dead_code)]
 fn lookup_sfunc_id(config: &Value, func_code: &str) -> Result<i64> {
     let code_upper = func_code.to_uppercase();
     config["G2_CONFIG"]["CFG_SFUNC"]
@@ -1252,9 +1382,10 @@ fn lookup_sfunc_id(config: &Value, func_code: &str) -> Result<i64> {
                 .find(|f| f["SFUNC_CODE"].as_str() == Some(code_upper.as_str()))
         })
         .and_then(|f| f["SFUNC_ID"].as_i64())
-        .ok_or_else(|| SzConfigError::NotFound(format!("Standardize function: {}", code_upper)))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Standardize function: {code_upper}")))
 }
 
+#[allow(dead_code)]
 fn lookup_efunc_id(config: &Value, func_code: &str) -> Result<i64> {
     let code_upper = func_code.to_uppercase();
     config["G2_CONFIG"]["CFG_EFUNC"]
@@ -1264,9 +1395,10 @@ fn lookup_efunc_id(config: &Value, func_code: &str) -> Result<i64> {
                 .find(|f| f["EFUNC_CODE"].as_str() == Some(code_upper.as_str()))
         })
         .and_then(|f| f["EFUNC_ID"].as_i64())
-        .ok_or_else(|| SzConfigError::NotFound(format!("Expression function: {}", code_upper)))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Expression function: {code_upper}")))
 }
 
+#[allow(dead_code)]
 fn lookup_cfunc_id(config: &Value, func_code: &str) -> Result<i64> {
     let code_upper = func_code.to_uppercase();
     config["G2_CONFIG"]["CFG_CFUNC"]
@@ -1276,7 +1408,7 @@ fn lookup_cfunc_id(config: &Value, func_code: &str) -> Result<i64> {
                 .find(|f| f["CFUNC_CODE"].as_str() == Some(code_upper.as_str()))
         })
         .and_then(|f| f["CFUNC_ID"].as_i64())
-        .ok_or_else(|| SzConfigError::NotFound(format!("Comparison function: {}", code_upper)))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Comparison function: {code_upper}")))
 }
 
 /// Add a feature comparison element (FBOM record)
@@ -1375,8 +1507,7 @@ pub fn delete_feature_comparison(
 
     if !found {
         return Err(SzConfigError::NotFound(format!(
-            "Feature comparison: FTYPE_ID={}, FELEM_ID={}",
-            ftype_id, felem_id
+            "Feature comparison: FTYPE_ID={ftype_id}, FELEM_ID={felem_id}"
         )));
     }
 
@@ -1600,7 +1731,7 @@ pub fn get_feature_class(config_json: &str, fclass_id_or_code: &str) -> Result<V
             .iter()
             .find(|item| item["FCLASS_ID"].as_i64() == Some(id))
             .cloned()
-            .ok_or_else(|| SzConfigError::NotFound(format!("Feature class: {}", id)))
+            .ok_or_else(|| SzConfigError::NotFound(format!("Feature class: {id}")))
     } else {
         // Try as code
         let code_upper = fclass_id_or_code.to_uppercase();
@@ -1608,7 +1739,7 @@ pub fn get_feature_class(config_json: &str, fclass_id_or_code: &str) -> Result<V
             .iter()
             .find(|item| item["FCLASS_CODE"].as_str() == Some(code_upper.as_str()))
             .cloned()
-            .ok_or_else(|| SzConfigError::NotFound(format!("Feature class: {}", code_upper)))
+            .ok_or_else(|| SzConfigError::NotFound(format!("Feature class: {code_upper}")))
     }
 }
 
