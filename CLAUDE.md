@@ -9,6 +9,7 @@ This is a pure Rust library for manipulating Senzing configuration JSON document
 ### ⚠️ Important Context
 
 **This is an unofficial SDK.** Senzing does not publicly document the meaning, usage, or recommended practices for most configuration functions and parameters beyond basic operations (like adding data sources). Users of this library should have received specific guidance from Senzing support or documentation about:
+
 - When and why to use particular configuration functions
 - Appropriate parameter values for their specific use case
 - Impact of configuration changes on entity resolution behavior
@@ -16,6 +17,7 @@ This is a pure Rust library for manipulating Senzing configuration JSON document
 This library provides the programmatic interface ("how") - proper usage requires Senzing-provided guidance on configuration best practices ("what" and "when").
 
 **Key Characteristics**:
+
 - **Pure Library**: No CLI code, no interactive features, no display logic
 - **JSON Manipulation**: All operations are in-memory JSON transformations
 - **No SDK Dependencies**: Does not depend on sz-rust-sdk for core operations
@@ -36,17 +38,20 @@ This library provides the programmatic interface ("how") - proper usage requires
 ### API Design Philosophy
 
 **Use Codes, Not IDs:**
+
 - Public APIs accept string codes (e.g., `feature_code: "NAME"`, `element_code: "FIRST_NAME"`)
 - Internal ID lookups happen automatically via `helpers::lookup_*_id()` functions
 - This eliminates the need for users to manually lookup foreign keys
 - Makes code self-documenting and easier to read
 
 **Builder Pattern:**
+
 - Parameter structs provide `new()` constructors and `.with_*()` builder methods
 - Example: `SetFeatureElementParams::new("NAME", "FIRST_NAME").with_display_level(1)`
 - All optional parameters use `Option<T>` types
 
 **Internal Helper Functions:**
+
 - Functions needing ID-based access (e.g., for FFI) should be `pub(crate)`, not `pub`
 - Example: `pub(crate) fn delete_comparison_threshold_by_id()` for FFI use only
 - Use `#[doc(hidden)]` sparingly; prefer `pub(crate)` for truly internal functions
@@ -104,7 +109,7 @@ src/
 
 All public functions follow this pattern:
 
-```rust
+````rust
 /// Brief description of what the function does.
 ///
 /// # Arguments
@@ -129,7 +134,7 @@ pub fn function_name(
 ) -> Result<String> {
     // Implementation
 }
-```
+````
 
 ### Error Handling
 
@@ -150,6 +155,7 @@ pub enum SzConfigError {
 ### Testing Requirements
 
 1. **Unit Tests**: Each module should have inline unit tests
+
    ```rust
    #[cfg(test)]
    mod tests {
@@ -175,6 +181,7 @@ The FFI layer (`src/ffi.rs`) provides C-compatible wrappers for library function
 ### FFI Design Patterns
 
 1. **Return Structure**: All FFI functions return `SzConfigTool_result`:
+
    ```rust
    #[repr(C)]
    pub struct SzConfigTool_result {
@@ -207,6 +214,7 @@ The FFI layer (`src/ffi.rs`) provides C-compatible wrappers for library function
 ### FFI Implementation Checklist
 
 When adding new FFI functions:
+
 - [ ] Verify Rust function signature first
 - [ ] Use correct return type (String vs tuple)
 - [ ] Handle NULL pointers for optional parameters
@@ -269,6 +277,7 @@ cargo doc --no-deps --open
 ## Relationship to CLI Tool
 
 This library is used by the [sz_configtool](https://github.com/brianmacy/sz_configtool_rust) CLI tool. The CLI tool:
+
 - Adds interactive shell features (rustyline)
 - Adds display formatting (tables, JSON, JSONL)
 - Adds output paging (less, minus)
@@ -276,12 +285,14 @@ This library is used by the [sz_configtool](https://github.com/brianmacy/sz_conf
 - Provides user-facing command interface
 
 **Separation of Concerns**:
+
 - **Library**: Pure business logic, JSON manipulation
 - **CLI**: User interface, display, interactivity
 
 ## Dependencies
 
 ### Production Dependencies
+
 ```toml
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
@@ -289,6 +300,7 @@ anyhow = "1.0"
 ```
 
 ### Development Dependencies
+
 ```toml
 tempfile = "3.24"  # For temporary files in tests
 ```

@@ -5,6 +5,7 @@
 **Goal:** Process Senzing `.gtc` command scripts using this SDK to transform configuration JSON.
 
 **Use Cases:**
+
 - Configuration version upgrades (e.g., v10 → v11)
 - Batch configuration modifications
 - Configuration initialization from templates
@@ -20,48 +21,50 @@
 ### ✅ Fully Implemented (27 of 27 commands)
 
 **Note:** 3 commands require complex call record lookups and return NotImplemented:
+
 - `deleteComparisonCallElement` - Requires finding CFCALL_ID from feature
 - `addComparisonCallElement` - Requires finding CFCALL_ID from feature
 - `deleteDistinctCallElement` - Requires finding DFCALL_ID from feature
 
 These can be worked around by using the lower-level SDK functions directly.
 
-| Upgrade Script Command | SDK Function | Status |
-|------------------------|--------------|--------|
-| `verifyCompatibilityVersion` | `versioning::verify_compatibility_version()` | ✅ |
-| `updateCompatibilityVersion` | `versioning::update_compatibility_version()` | ✅ |
-| `removeConfigSection` | `config_sections::remove_config_section()` | ✅ |
-| `removeConfigSectionField` | `config_sections::remove_config_section_field()` | ✅ |
-| `deleteFragment` | `fragments::delete_fragment()` | ✅ |
-| `setFragment` | `fragments::set_fragment()` | ✅ |
-| `addAttribute` | `attributes::add_attribute()` | ✅ |
-| `deleteAttribute` | `attributes::delete_attribute()` | ✅ |
-| `setAttribute` | `attributes::set_attribute()` | ✅ |
-| `addElement` | `elements::add_element()` | ✅ |
-| `addFeature` | `features::add_feature()` | ✅ |
-| `setFeature` | `features::set_feature()` | ✅ |
-| `setFeatureElement` | `elements::set_feature_element_*()` | ✅ |
-| `addRule` | `rules::add_rule()` | ✅ |
-| `setSetting` | `system_params::set_system_parameter()` | ✅ |
-| `removeStandardizeFunction` | `functions::standardize::delete_standardize_function()` | ✅ |
-| `removeComparisonFunction` | `functions::comparison::delete_comparison_function()` | ✅ |
-| `addExpressionFunction` | `functions::expression::add_expression_function()` | ✅ |
-| `addComparisonFunction` | `functions::comparison::add_comparison_function()` | ✅ |
-| `addComparisonThreshold` | `thresholds::add_comparison_threshold()` | ✅ |
-| `addGenericThreshold` | `thresholds::add_generic_threshold()` | ✅ |
-| `addExpressionCall` | `calls::expression::add_expression_call()` | ✅ |
-| `deleteComparisonCallElement` | `calls::comparison::delete_comparison_call_element()` | ✅ |
-| `deleteDistinctCallElement` | `calls::distinct::delete_distinct_call_element()` | ✅ |
-| `addComparisonCallElement` | `calls::comparison::add_comparison_call_element()` | ✅ |
-| `save` | (no-op or write to file) | ✅ |
+| Upgrade Script Command        | SDK Function                                            | Status |
+| ----------------------------- | ------------------------------------------------------- | ------ |
+| `verifyCompatibilityVersion`  | `versioning::verify_compatibility_version()`            | ✅     |
+| `updateCompatibilityVersion`  | `versioning::update_compatibility_version()`            | ✅     |
+| `removeConfigSection`         | `config_sections::remove_config_section()`              | ✅     |
+| `removeConfigSectionField`    | `config_sections::remove_config_section_field()`        | ✅     |
+| `deleteFragment`              | `fragments::delete_fragment()`                          | ✅     |
+| `setFragment`                 | `fragments::set_fragment()`                             | ✅     |
+| `addAttribute`                | `attributes::add_attribute()`                           | ✅     |
+| `deleteAttribute`             | `attributes::delete_attribute()`                        | ✅     |
+| `setAttribute`                | `attributes::set_attribute()`                           | ✅     |
+| `addElement`                  | `elements::add_element()`                               | ✅     |
+| `addFeature`                  | `features::add_feature()`                               | ✅     |
+| `setFeature`                  | `features::set_feature()`                               | ✅     |
+| `setFeatureElement`           | `elements::set_feature_element_*()`                     | ✅     |
+| `addRule`                     | `rules::add_rule()`                                     | ✅     |
+| `setSetting`                  | `system_params::set_system_parameter()`                 | ✅     |
+| `removeStandardizeFunction`   | `functions::standardize::delete_standardize_function()` | ✅     |
+| `removeComparisonFunction`    | `functions::comparison::delete_comparison_function()`   | ✅     |
+| `addExpressionFunction`       | `functions::expression::add_expression_function()`      | ✅     |
+| `addComparisonFunction`       | `functions::comparison::add_comparison_function()`      | ✅     |
+| `addComparisonThreshold`      | `thresholds::add_comparison_threshold()`                | ✅     |
+| `addGenericThreshold`         | `thresholds::add_generic_threshold()`                   | ✅     |
+| `addExpressionCall`           | `calls::expression::add_expression_call()`              | ✅     |
+| `deleteComparisonCallElement` | `calls::comparison::delete_comparison_call_element()`   | ✅     |
+| `deleteDistinctCallElement`   | `calls::distinct::delete_distinct_call_element()`       | ✅     |
+| `addComparisonCallElement`    | `calls::comparison::add_comparison_call_element()`      | ✅     |
+| `save`                        | (no-op or write to file)                                | ✅     |
 
 ### ❌ Missing (1 command)
 
-| Upgrade Script Command | Required SDK Function | Status |
-|------------------------|----------------------|--------|
-| `addBehaviorOverride` | `features::add_behavior_override()` | ❌ Missing |
+| Upgrade Script Command | Required SDK Function               | Status     |
+| ---------------------- | ----------------------------------- | ---------- |
+| `addBehaviorOverride`  | `features::add_behavior_override()` | ❌ Missing |
 
 **CFG_FBOVR Structure:**
+
 ```json
 {
   "FTYPE_ID": 5,
@@ -73,6 +76,7 @@ These can be worked around by using the lower-level SDK functions directly.
 ```
 
 **Script Usage:**
+
 ```
 addBehaviorOverride {"feature": "PLACEKEY", "usageType": "BUSINESS", "behavior": "F1E"}
 ```
@@ -612,6 +616,7 @@ match processor.process_file("upgrade-10-to-11.gtc") {
 ## Implementation Checklist
 
 ### Phase 1: Add Missing Function
+
 - [ ] Create `src/behavior_overrides.rs`
 - [ ] Implement `add_behavior_override()`
 - [ ] Implement `delete_behavior_override()`
@@ -621,6 +626,7 @@ match processor.process_file("upgrade-10-to-11.gtc") {
 - [ ] Add tests
 
 ### Phase 2: Core Processor
+
 - [ ] Create `src/upgrade_processor.rs`
 - [ ] Implement `UpgradeProcessor` struct
 - [ ] Implement `parse_command_line()`
@@ -629,12 +635,14 @@ match processor.process_file("upgrade-10-to-11.gtc") {
 - [ ] Add tests for parser
 
 ### Phase 3: Command Implementations
+
 - [ ] Map all 27 commands to SDK functions
 - [ ] Handle parameter transformations
 - [ ] Add error handling for each command
 - [ ] Test each command type
 
 ### Phase 4: Testing
+
 - [ ] Unit tests for command parser
 - [ ] Integration test with full upgrade-10-to-11.gtc
 - [ ] Validate output matches expected v11 config
@@ -642,6 +650,7 @@ match processor.process_file("upgrade-10-to-11.gtc") {
 - [ ] Test dry-run mode
 
 ### Phase 5: CLI Integration (Optional)
+
 - [ ] Add `upgrade` subcommand to CLI tool
 - [ ] Add options: `-i input.json`, `-s script.gtc`, `-o output.json`
 - [ ] Add `--dry-run` flag
@@ -658,25 +667,25 @@ match processor.process_file("upgrade-10-to-11.gtc") {
 
 ## Estimated Effort
 
-| Phase | Estimated Time |
-|-------|----------------|
-| Phase 1: Behavior Override | 2-3 hours |
-| Phase 2: Core Processor | 2-3 hours |
-| Phase 3: Command Mapping | 1-2 hours |
-| Phase 4: Testing | 3-4 hours |
-| Phase 5: CLI Integration | 2-3 hours |
-| **Total** | **10-15 hours** |
+| Phase                      | Estimated Time  |
+| -------------------------- | --------------- |
+| Phase 1: Behavior Override | 2-3 hours       |
+| Phase 2: Core Processor    | 2-3 hours       |
+| Phase 3: Command Mapping   | 1-2 hours       |
+| Phase 4: Testing           | 3-4 hours       |
+| Phase 5: CLI Integration   | 2-3 hours       |
+| **Total**                  | **10-15 hours** |
 
 ## Risk Assessment
 
-| Risk | Mitigation |
-|------|------------|
-| Missing SDK functions | ✅ Only 1 missing (addBehaviorOverride) |
-| Complex parameter parsing | ✅ JSON parsing handles this |
-| Script format changes | Version script format in processor |
-| Upgrade failures mid-script | Add transaction/rollback support |
+| Risk                        | Mitigation                              |
+| --------------------------- | --------------------------------------- |
+| Missing SDK functions       | ✅ Only 1 missing (addBehaviorOverride) |
+| Complex parameter parsing   | ✅ JSON parsing handles this            |
+| Script format changes       | Version script format in processor      |
+| Upgrade failures mid-script | Add transaction/rollback support        |
 
 ---
 
-*Analysis Date: 2026-01-20*
-*SDK Coverage: 95% (26/27 commands)*
+_Analysis Date: 2026-01-20_
+_SDK Coverage: 95% (26/27 commands)_

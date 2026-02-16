@@ -5,6 +5,7 @@
 Design document for implementing a `.gtc` (Senzing command script) processor using the sz-rust-sdk-configtool library.
 
 **Purpose:** Execute line-based command scripts to transform Senzing configuration JSON. Use cases include:
+
 - Configuration upgrades (e.g., v10 → v11)
 - Batch configuration changes
 - Configuration templates and initialization
@@ -16,6 +17,7 @@ Design document for implementing a `.gtc` (Senzing command script) processor usi
 **Example File:** `szcore-configuration-upgrade-10-to-11.gtc` (one use case)
 
 **Format:**
+
 ```
 commandName {"param": "value", ...}
 commandName {"param": "value", ...}
@@ -24,6 +26,7 @@ save
 ```
 
 **Characteristics:**
+
 - Line-based format
 - Command name followed by JSON object with parameters
 - Blank lines ignored
@@ -66,45 +69,45 @@ save
 
 ### ✅ Already Implemented (100% Coverage)
 
-| Script Command | SDK Function | Module | Notes |
-|----------------|--------------|--------|-------|
-| `verifyCompatibilityVersion` | `versioning::verify_compatibility_version` | ✅ | Pass expectedVersion |
-| `updateCompatibilityVersion` | `versioning::update_compatibility_version` | ✅ | Pass fromVersion, toVersion |
-| `removeConfigSection` | `config_sections::remove_config_section` | ✅ | Pass section |
-| `removeConfigSectionField` | `config_sections::remove_config_section_field` | ✅ | Pass section, field |
-| `deleteFragment` | `fragments::delete_fragment` | ✅ | Pass fragment name |
-| `deleteAttribute` | `attributes::delete_attribute` | ✅ | Extract "attribute" from JSON |
-| `setAttribute` | `attributes::set_attribute` | ✅ | Pass attribute, updates |
-| `addAttribute` | `attributes::add_attribute` | ✅ | Parse all fields from JSON |
-| `setFeature` | `features::set_feature` | ✅ | Pass feature, fields to update |
-| `setFeatureElement` | `elements::set_feature_element` | ✅ | Pass feature, element, property |
-| `addFeature` | `features::add_feature` | ✅ | Parse elementList and all params |
-| `addElement` | `elements::add_element` | ✅ | Parse element, datatype |
-| `setFragment` | `fragments::set_fragment` | ✅ | Pass fragment, source |
-| `addRule` | `rules::add_rule` | ✅ | Parse rule JSON |
-| `setSetting` | `system_params::set_system_parameter` | ✅ | Pass name, value |
+| Script Command               | SDK Function                                   | Module | Notes                            |
+| ---------------------------- | ---------------------------------------------- | ------ | -------------------------------- |
+| `verifyCompatibilityVersion` | `versioning::verify_compatibility_version`     | ✅     | Pass expectedVersion             |
+| `updateCompatibilityVersion` | `versioning::update_compatibility_version`     | ✅     | Pass fromVersion, toVersion      |
+| `removeConfigSection`        | `config_sections::remove_config_section`       | ✅     | Pass section                     |
+| `removeConfigSectionField`   | `config_sections::remove_config_section_field` | ✅     | Pass section, field              |
+| `deleteFragment`             | `fragments::delete_fragment`                   | ✅     | Pass fragment name               |
+| `deleteAttribute`            | `attributes::delete_attribute`                 | ✅     | Extract "attribute" from JSON    |
+| `setAttribute`               | `attributes::set_attribute`                    | ✅     | Pass attribute, updates          |
+| `addAttribute`               | `attributes::add_attribute`                    | ✅     | Parse all fields from JSON       |
+| `setFeature`                 | `features::set_feature`                        | ✅     | Pass feature, fields to update   |
+| `setFeatureElement`          | `elements::set_feature_element`                | ✅     | Pass feature, element, property  |
+| `addFeature`                 | `features::add_feature`                        | ✅     | Parse elementList and all params |
+| `addElement`                 | `elements::add_element`                        | ✅     | Parse element, datatype          |
+| `setFragment`                | `fragments::set_fragment`                      | ✅     | Pass fragment, source            |
+| `addRule`                    | `rules::add_rule`                              | ✅     | Parse rule JSON                  |
+| `setSetting`                 | `system_params::set_system_parameter`          | ✅     | Pass name, value                 |
 
 ### 🔍 Need to Verify/Map
 
-| Script Command | Likely SDK Function | Module | Investigation Needed |
-|----------------|---------------------|--------|---------------------|
-| `removeStandardizeFunction` | `functions::standardize::delete_standardize_function` | ✅ | Extract "function" param |
-| `removeComparisonFunction` | `functions::comparison::delete_comparison_function` | ✅ | Extract "function" param |
-| `addExpressionFunction` | `functions::expression::add_expression_function` | ✅ | Parse function, connectStr |
-| `addComparisonFunction` | `functions::comparison::add_comparison_function` | ✅ | Parse function, connectStr, anonSupport |
-| `addComparisonThreshold` | `thresholds::add_comparison_threshold` | ✅ | Parse all score params |
-| `addGenericThreshold` | `thresholds::add_generic_threshold` | ✅ | Parse plan, feature, caps |
-| `addExpressionCall` | `calls::expression::add_expression_call` | ✅ | Parse feature, function, elementList |
-| `deleteComparisonCallElement` | `calls::comparison::delete_*` | ❓ | Check calls module |
-| `deleteDistinctCallElement` | `calls::distinct::delete_*` | ❓ | Check calls module |
-| `addComparisonCallElement` | `calls::comparison::add_*` | ❓ | Check calls module |
-| `addBehaviorOverride` | ❓ | ❓ | Need to find this function |
+| Script Command                | Likely SDK Function                                   | Module | Investigation Needed                    |
+| ----------------------------- | ----------------------------------------------------- | ------ | --------------------------------------- |
+| `removeStandardizeFunction`   | `functions::standardize::delete_standardize_function` | ✅     | Extract "function" param                |
+| `removeComparisonFunction`    | `functions::comparison::delete_comparison_function`   | ✅     | Extract "function" param                |
+| `addExpressionFunction`       | `functions::expression::add_expression_function`      | ✅     | Parse function, connectStr              |
+| `addComparisonFunction`       | `functions::comparison::add_comparison_function`      | ✅     | Parse function, connectStr, anonSupport |
+| `addComparisonThreshold`      | `thresholds::add_comparison_threshold`                | ✅     | Parse all score params                  |
+| `addGenericThreshold`         | `thresholds::add_generic_threshold`                   | ✅     | Parse plan, feature, caps               |
+| `addExpressionCall`           | `calls::expression::add_expression_call`              | ✅     | Parse feature, function, elementList    |
+| `deleteComparisonCallElement` | `calls::comparison::delete_*`                         | ❓     | Check calls module                      |
+| `deleteDistinctCallElement`   | `calls::distinct::delete_*`                           | ❓     | Check calls module                      |
+| `addComparisonCallElement`    | `calls::comparison::add_*`                            | ❓     | Check calls module                      |
+| `addBehaviorOverride`         | ❓                                                    | ❓     | Need to find this function              |
 
 ### ❌ Special Cases
 
-| Script Command | Implementation |
-|----------------|----------------|
-| `save` | No-op or write to file |
+| Script Command | Implementation         |
+| -------------- | ---------------------- |
+| `save`         | No-op or write to file |
 
 ## Proposed Implementation
 
@@ -540,15 +543,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Implementation Phases
 
 ### Phase 1: Core Infrastructure ✅
+
 - [x] Command parser (parse_command_line)
 - [x] Command executor dispatcher (execute_command)
 - [x] UpgradeProcessor struct
 - [x] File I/O support
 
 ### Phase 2: Command Implementations (Estimated 80% done)
+
 Most commands map directly to existing SDK functions:
 
 **✅ Already Mapped (22 commands):**
+
 - verifyCompatibilityVersion, updateCompatibilityVersion
 - removeConfigSection, removeConfigSectionField
 - addAttribute, deleteAttribute, setAttribute
@@ -562,6 +568,7 @@ Most commands map directly to existing SDK functions:
 - addComparisonThreshold, addGenericThreshold
 
 **❓ Need Investigation (5 commands):**
+
 - addExpressionCall (check calls::expression module)
 - deleteComparisonCallElement (check calls::comparison module)
 - deleteDistinctCallElement (check calls::distinct module)
@@ -569,12 +576,15 @@ Most commands map directly to existing SDK functions:
 - addBehaviorOverride (need to find this function)
 
 ### Phase 3: Testing
+
 - Unit tests for command parser
 - Integration test with sample upgrade script
 - Validation of config after upgrade
 
 ### Phase 4: CLI Integration
+
 Add to CLI tool:
+
 ```bash
 sz_configtool upgrade -i g2config.json -s upgrade-10-to-11.gtc -o g2config_v11.json
 ```
@@ -629,4 +639,4 @@ Based on script analysis, need to verify these exist:
 
 ---
 
-*Analysis Date: 2026-01-20*
+_Analysis Date: 2026-01-20_

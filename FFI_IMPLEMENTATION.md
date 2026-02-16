@@ -5,6 +5,7 @@ This document summarizes the implementation of the C shared library FFI for sz-r
 ## Recent Updates (2026-01-20)
 
 **Phase 2 Completion:**
+
 - ✅ Added `SzConfigTool_setAttribute` function (completes attribute CRUD operations)
 - ✅ Verified all datasource, element, feature, and threshold functions are implemented
 - ✅ Cleaned up duplicate function definitions
@@ -16,6 +17,7 @@ This document summarizes the implementation of the C shared library FFI for sz-r
 ### Phase 1: Infrastructure Fixes ✅
 
 #### 1. Result Struct Field Naming
+
 **Changed:** `return_code` → `returnCode`
 **Location:** `src/ffi.rs:43`, `include/libSzConfigTool.h:27`
 **Reason:** Match SzHelpers C convention (camelCase)
@@ -28,6 +30,7 @@ typedef struct SzConfigTool_result {
 ```
 
 #### 2. C++ Compatibility Guards
+
 **Added:** `extern "C"` guards to header
 **Location:** `include/libSzConfigTool.h:11-13, 572-574`
 **Benefit:** Allows C++ code to link against C library
@@ -43,11 +46,13 @@ extern "C" {
 ```
 
 #### 3. Function Naming Consistency
+
 **Removed:** `_helper` suffix from 11 functions
 **Location:** `src/ffi.rs` (throughout)
 **Result:** Consistent naming across all 131 FFI functions
 
 **Functions Updated:**
+
 - `SzConfigTool_addDataSource_helper` → `SzConfigTool_addDataSource`
 - `SzConfigTool_deleteDataSource_helper` → `SzConfigTool_deleteDataSource`
 - `SzConfigTool_listDataSources_helper` → `SzConfigTool_listDataSources`
@@ -61,6 +66,7 @@ extern "C" {
 - `SzConfigTool_listElements_helper` → `SzConfigTool_listElements`
 
 #### 4. Removed Duplicate Wrapper Functions
+
 **Deleted:** Lines 9080-9188 in `src/ffi.rs`
 **Reason:** Redundant wrappers after removing `_helper` suffix
 **Result:** Cleaner codebase, no function duplication
@@ -68,6 +74,7 @@ extern "C" {
 ### Phase 3: Library Building & Testing ✅
 
 #### 1. Library Configuration
+
 **File:** `Cargo.toml`
 **Changed:** Removed `staticlib` from `crate-type` (per user request)
 
@@ -77,15 +84,18 @@ crate-type = ["lib", "cdylib"]
 ```
 
 **Output Files:**
+
 - **Rust library:** `libsz_configtool_lib.rlib` (for Rust projects)
 - **C shared library:** `libsz_configtool_lib.dylib` (macOS) / `.so` (Linux)
 
 #### 2. Senzing-Style Naming
+
 **Script:** `create_senzing_lib.sh`
 **Purpose:** Create `libSzConfigTool.dylib` symlink from `libsz_configtool_lib.dylib`
 **Usage:** `./create_senzing_lib.sh release`
 
 **Result:**
+
 ```bash
 target/release/
 ├── libsz_configtool_lib.dylib  # Built by Cargo
@@ -93,9 +103,11 @@ target/release/
 ```
 
 #### 3. C Test Suite
+
 **Location:** `tests/c/`
 **Build System:** CMake (as requested)
 **Test Coverage:**
+
 - Library linkage verification
 - Result struct field access (`returnCode`)
 - Memory management (`SzConfigTool_free`)
@@ -103,11 +115,13 @@ target/release/
 - Error handling (`getLastError`, `clearLastError`)
 
 **Files:**
+
 - `tests/c/test_basic.c` - Test implementation (100 lines)
 - `tests/c/CMakeLists.txt` - CMake configuration
 - `tests/c/Makefile` - Legacy Makefile (deprecated, use CMake)
 
 **Running Tests:**
+
 ```bash
 cd tests/c
 mkdir build && cd build
@@ -117,6 +131,7 @@ ctest --output-on-failure
 ```
 
 **Test Output:**
+
 ```
 === libSzConfigTool C Test ===
 
@@ -145,17 +160,20 @@ ctest --output-on-failure
 ## FFI Function Inventory
 
 ### Infrastructure (4 functions)
+
 - `SzConfigTool_free` - Memory deallocation
 - `SzConfigTool_getLastError` - Error message retrieval
 - `SzConfigTool_getLastErrorCode` - Error code retrieval
 - `SzConfigTool_clearLastError` - Error state reset
 
 ### Data Sources (3 functions)
+
 - `SzConfigTool_addDataSource`
 - `SzConfigTool_deleteDataSource`
 - `SzConfigTool_listDataSources`
 
 ### Attributes (5 functions)
+
 - `SzConfigTool_addAttribute`
 - `SzConfigTool_deleteAttribute`
 - `SzConfigTool_getAttribute`
@@ -163,14 +181,17 @@ ctest --output-on-failure
 - `SzConfigTool_setAttribute` ⭐ NEW
 
 ### Features (2 functions)
+
 - `SzConfigTool_getFeature`
 - `SzConfigTool_listFeatures`
 
 ### Elements (2 functions)
+
 - `SzConfigTool_getElement`
 - `SzConfigTool_listElements`
 
 ### Additional Functions (116+ functions)
+
 - Config sections, fragments, rules, thresholds
 - Standardize/expression/comparison/distinct functions
 - Call management (CFG_SFCALL, CFG_EFCALL, etc.)
@@ -182,18 +203,21 @@ ctest --output-on-failure
 ## Build Process
 
 ### Development Build
+
 ```bash
 cargo build --lib
 ./create_senzing_lib.sh debug
 ```
 
 ### Release Build
+
 ```bash
 cargo build --lib --release
 ./create_senzing_lib.sh release
 ```
 
 ### Testing
+
 ```bash
 # Rust tests
 cargo test
@@ -205,23 +229,23 @@ cmake .. && cmake --build . && ctest
 
 ## Platform Support
 
-| Platform | Shared Library | Tested |
-|----------|---------------|--------|
-| macOS    | `libSzConfigTool.dylib` | ✅ |
-| Linux    | `libSzConfigTool.so` | ⚠️ Not tested |
-| Windows  | `SzConfigTool.dll` | ❌ Not implemented |
+| Platform | Shared Library          | Tested             |
+| -------- | ----------------------- | ------------------ |
+| macOS    | `libSzConfigTool.dylib` | ✅                 |
+| Linux    | `libSzConfigTool.so`    | ⚠️ Not tested      |
+| Windows  | `SzConfigTool.dll`      | ❌ Not implemented |
 
 ## Comparison with SzHelpers
 
-| Aspect | SzHelpers | This Implementation | Status |
-|--------|-----------|---------------------|--------|
-| **Result Struct** | `returnCode` (camelCase) | `returnCode` | ✅ Match |
-| **C++ Guards** | `extern "C"` | `extern "C"` | ✅ Match |
-| **Export Macro** | `_DLEXPORT` macro | Not used | ⚠️ Different |
-| **Function Naming** | All use `_helper` | None use `_helper` | ⚠️ Different |
-| **Error Storage** | Thread-local | Thread-local (Mutex) | ✅ Compatible |
-| **Memory Management** | Caller frees | Caller frees | ✅ Match |
-| **Field Order** | response, returnCode | response, returnCode | ✅ Match |
+| Aspect                | SzHelpers                | This Implementation  | Status        |
+| --------------------- | ------------------------ | -------------------- | ------------- |
+| **Result Struct**     | `returnCode` (camelCase) | `returnCode`         | ✅ Match      |
+| **C++ Guards**        | `extern "C"`             | `extern "C"`         | ✅ Match      |
+| **Export Macro**      | `_DLEXPORT` macro        | Not used             | ⚠️ Different  |
+| **Function Naming**   | All use `_helper`        | None use `_helper`   | ⚠️ Different  |
+| **Error Storage**     | Thread-local             | Thread-local (Mutex) | ✅ Compatible |
+| **Memory Management** | Caller frees             | Caller frees         | ✅ Match      |
+| **Field Order**       | response, returnCode     | response, returnCode | ✅ Match      |
 
 ### Naming Convention Decision
 
@@ -258,6 +282,7 @@ int main(void) {
 ## Future Enhancements
 
 ### Completed ✅
+
 - [x] Result struct field naming (returnCode)
 - [x] C++ compatibility guards
 - [x] Consistent function naming
@@ -267,6 +292,7 @@ int main(void) {
 - [x] Error handling validation
 
 ### Potential ❓
+
 - [ ] Windows DLL support
 - [ ] Linux testing and validation
 - [ ] Python bindings (ctypes or PyO3)
@@ -283,24 +309,25 @@ int main(void) {
 
 ## Validation Status
 
-| Check | Status |
-|-------|--------|
-| **Cargo build** | ✅ Pass (no warnings) |
-| **Cargo test** | ✅ Pass (47 tests) |
-| **Cargo clippy** | ✅ Pass (strict mode) |
-| **C compilation** | ✅ Pass (gcc/clang) |
-| **C test execution** | ✅ Pass (all assertions) |
-| **Memory management** | ✅ Verified (no leaks) |
-| **CMake build** | ✅ Pass |
-| **CTest** | ✅ Pass (1/1 tests) |
+| Check                 | Status                   |
+| --------------------- | ------------------------ |
+| **Cargo build**       | ✅ Pass (no warnings)    |
+| **Cargo test**        | ✅ Pass (47 tests)       |
+| **Cargo clippy**      | ✅ Pass (strict mode)    |
+| **C compilation**     | ✅ Pass (gcc/clang)      |
+| **C test execution**  | ✅ Pass (all assertions) |
+| **Memory management** | ✅ Verified (no leaks)   |
+| **CMake build**       | ✅ Pass                  |
+| **CTest**             | ✅ Pass (1/1 tests)      |
 
 ## Contact
 
 For questions or issues related to the C FFI implementation:
+
 - **Repository:** https://github.com/brianmacy/sz-rust-sdk-configtool
 - **Author:** Brian Macy <bmacy@senzing.com>
 
 ---
 
 \*Last Updated: 2026-01-20 (Phase 2 Complete)\*
-*Implementation Version: 0.1.0*
+_Implementation Version: 0.1.0_

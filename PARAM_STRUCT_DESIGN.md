@@ -22,6 +22,7 @@ features::set_feature(
 ```
 
 **Current worst offenders:**
+
 - `features::add_feature()` - 15 parameters (10 optional)
 - `features::set_feature()` - 11 parameters (10 optional)
 - `attributes::add_attribute()` - 8 parameters (4 optional)
@@ -81,6 +82,7 @@ pub fn set_feature(
 ```
 
 **Usage:**
+
 ```rust
 // Named fields - clear and explicit!
 features::set_feature(config, "NAME", SetFeatureParams {
@@ -123,6 +125,7 @@ pub fn add_attribute(
 ```
 
 **Usage:**
+
 ```rust
 attributes::add_attribute(config, AddAttributeParams {
     attribute: "TEST_ATTR",
@@ -155,6 +158,7 @@ impl<'a> TryFrom<&'a Value> for SetFeatureParams<'a> {
 ```
 
 **Command processor usage:**
+
 ```rust
 "setFeature" => {
     let feature = get_str_param(params, "feature")?;
@@ -218,16 +222,14 @@ After one minor version, consider removing old API in next major version.
 ## Recommended Functions to Refactor
 
 **High Priority (10+ params):**
+
 1. `features::add_feature()` - 15 params → `AddFeatureParams`
 2. `features::set_feature()` - 11 params → `SetFeatureParams`
 
-**Medium Priority (6-9 params):**
-3. `attributes::add_attribute()` - 8 params → `AddAttributeParams`
-4. `calls::expression::add_expression_call()` - 8 params → `AddExpressionCallParams`
-5. `thresholds::add_comparison_threshold()` - 11 params → `AddComparisonThresholdParams`
-6. `functions::comparison::add_comparison_function()` - 6 params → `AddComparisonFunctionParams`
+**Medium Priority (6-9 params):** 3. `attributes::add_attribute()` - 8 params → `AddAttributeParams` 4. `calls::expression::add_expression_call()` - 8 params → `AddExpressionCallParams` 5. `thresholds::add_comparison_threshold()` - 11 params → `AddComparisonThresholdParams` 6. `functions::comparison::add_comparison_function()` - 6 params → `AddComparisonFunctionParams`
 
 **Low Priority (3-5 params):**
+
 - Most other functions are fine with positional params
 
 ## Example: Complete Refactored API
@@ -329,6 +331,7 @@ pub fn set_feature(
 ## Comparison: Before vs After
 
 ### Before (Current)
+
 ```rust
 // Unreadable - need to count params and check docs
 features::set_feature(
@@ -339,6 +342,7 @@ features::set_feature(
 ```
 
 ### After (With Param Struct)
+
 ```rust
 // Self-documenting!
 features::set_feature(config, "NAME", SetFeatureParams {
@@ -354,6 +358,7 @@ features::set_feature(config, "NAME", SetFeatureParams {
 ## Implementation Effort
 
 **Per function:**
+
 - Define param struct: 10 minutes
 - Add `Default` derive: included
 - Add `TryFrom<&Value>`: 10 minutes

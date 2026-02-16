@@ -72,6 +72,7 @@ typedef struct {
 ### Memory Management
 
 **Critical Rules**:
+
 1. All strings returned by FFI functions are owned by Rust
 2. You MUST call `SzConfigTool_free()` on every `response` string
 3. Never call `free()` or `delete` on FFI-returned strings - use `SzConfigTool_free()`
