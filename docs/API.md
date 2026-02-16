@@ -1,7 +1,7 @@
 # sz_configtool_lib API Documentation
 
-**Last Updated:** 2026-02-13 (Sessions 96-99 migration complete)
-**Library Version:** 0.1.0
+**Last Updated:** 2026-02-16 (v0.3.0 release)
+**Library Version:** 0.3.0
 **Authoritative Source:** Run `cargo doc --open` for complete rustdoc with all signatures
 
 ---

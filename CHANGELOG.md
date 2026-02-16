@@ -98,7 +98,7 @@ The library maintains 100% API compatibility with the sz_configtool CLI commands
 
 ## [Unreleased]
 
-### Planned for v0.3.0
+### Planned
 
 - [ ] Additional FFI functions (22 remaining for 100% coverage)
 - [ ] Python bindings (ctypes or PyO3)
@@ -108,6 +108,29 @@ The library maintains 100% API compatibility with the sz_configtool CLI commands
 - [ ] Config diff and merge operations
 - [ ] Import/export utilities
 - [ ] Schema migration helpers
+
+## [0.3.0] - 2026-02-16
+
+### Added
+
+- Complete API.md rewrite with parameter struct documentation
+- Missing module documentation: `functions::matching`, `config_sections`
+- "See Also" cross-references section for improved navigation
+- Session history tracking in API.md (Sessions 96-99)
+
+### Changed
+
+- Applied inline format args modernization (clippy compliance)
+- Added domain validation with automatic case normalization (Yes/No/Any/Desired)
+- Improved element list validation (empty list checks)
+- Fixed all doctests for new parameter struct API
+- Updated to reflect v0.2.0 breaking changes in documentation
+
+### Fixed
+
+- Suppressed appropriate dead code warnings (#[allow(dead_code)])
+- 100% clippy compliance with modern Rust idioms
+- Enhanced Python parity in validation logic
 
 ## [0.2.0] - 2026-02-05
 
@@ -149,5 +172,6 @@ The library maintains 100% API compatibility with the sz_configtool CLI commands
 
 ---
 
+[0.3.0]: https://github.com/brianmacy/sz-rust-sdk-configtool/releases/tag/v0.3.0
 [0.2.0]: https://github.com/brianmacy/sz-rust-sdk-configtool/releases/tag/v0.2.0
 [0.1.0]: https://github.com/brianmacy/sz-rust-sdk-configtool/releases/tag/v0.1.0
