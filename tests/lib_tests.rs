@@ -3,8 +3,8 @@
 //! These tests verify the library functions work correctly with real
 //! configuration JSON documents.
 
-use serde_json::json;
-use sz_configtool_lib::{datasources, elements, helpers};
+use serde_json::{Value, json};
+use sz_configtool_lib::{datasources, elements, features, helpers};
 
 const TEST_CONFIG: &str = r#"{
   "G2_CONFIG": {
@@ -133,4 +133,119 @@ fn test_chained_operations() {
     let sources =
         datasources::list_data_sources(&config).expect("Failed to list data sources after delete");
     assert_eq!(sources.len(), 2);
+}
+
+/// Config with all sections needed by add_feature
+const FEATURE_TEST_CONFIG: &str = r#"{
+  "G2_CONFIG": {
+    "CFG_FTYPE": [],
+    "CFG_FELEM": [],
+    "CFG_FCLASS": [
+      {"FCLASS_ID": 1, "FCLASS_CODE": "OTHER"}
+    ],
+    "CFG_FBOM": [],
+    "CFG_SFCALL": [],
+    "CFG_EFCALL": [],
+    "CFG_CFCALL": [],
+    "CFG_EFBOM": [],
+    "CFG_CFBOM": [],
+    "CFG_ATTR": [],
+    "CFG_DSRC": []
+  }
+}"#;
+
+#[test]
+fn test_add_feature_fbom_display_delim_present_when_none() {
+    // Regression: add_feature must always include DISPLAY_DELIM in CFG_FBOM,
+    // even when no display_delim is provided. Senzing engine requires the field
+    // to exist (as null) rather than be omitted entirely.
+    let elements = json!([{"element": "ELEM1"}]);
+    let config = features::add_feature(
+        FEATURE_TEST_CONFIG,
+        features::AddFeatureParams {
+            feature: "TEST_FEAT",
+            element_list: &elements,
+            ..Default::default()
+        },
+    )
+    .expect("Failed to add feature");
+
+    let parsed: Value = serde_json::from_str(&config).unwrap();
+    let fbom_array = parsed["G2_CONFIG"]["CFG_FBOM"]
+        .as_array()
+        .expect("CFG_FBOM should be an array");
+    assert_eq!(fbom_array.len(), 1);
+
+    let fbom = &fbom_array[0];
+    // The field must exist (not be absent from the object)
+    assert!(
+        fbom.as_object().unwrap().contains_key("DISPLAY_DELIM"),
+        "DISPLAY_DELIM field must be present in CFG_FBOM even when not specified"
+    );
+    // When not specified, it should be null
+    assert!(
+        fbom["DISPLAY_DELIM"].is_null(),
+        "DISPLAY_DELIM should be null when not specified, got: {}",
+        fbom["DISPLAY_DELIM"]
+    );
+}
+
+#[test]
+fn test_add_feature_fbom_display_delim_present_when_set() {
+    // Verify DISPLAY_DELIM is set correctly when explicitly provided
+    let elements = json!([{"element": "ELEM1", "display_delim": " "}]);
+    let config = features::add_feature(
+        FEATURE_TEST_CONFIG,
+        features::AddFeatureParams {
+            feature: "TEST_FEAT",
+            element_list: &elements,
+            ..Default::default()
+        },
+    )
+    .expect("Failed to add feature");
+
+    let parsed: Value = serde_json::from_str(&config).unwrap();
+    let fbom = &parsed["G2_CONFIG"]["CFG_FBOM"][0];
+    assert_eq!(
+        fbom["DISPLAY_DELIM"], " ",
+        "DISPLAY_DELIM should be the provided value"
+    );
+}
+
+#[test]
+fn test_add_feature_fbom_display_delim_multiple_elements() {
+    // Test with multiple elements: one with display_delim, one without
+    let elements = json!([
+        {"element": "FIRST_NAME", "display_delim": " "},
+        {"element": "LAST_NAME"}
+    ]);
+    let config = features::add_feature(
+        FEATURE_TEST_CONFIG,
+        features::AddFeatureParams {
+            feature: "FULL_NAME",
+            element_list: &elements,
+            ..Default::default()
+        },
+    )
+    .expect("Failed to add feature");
+
+    let parsed: Value = serde_json::from_str(&config).unwrap();
+    let fbom_array = parsed["G2_CONFIG"]["CFG_FBOM"]
+        .as_array()
+        .expect("CFG_FBOM should be an array");
+    assert_eq!(fbom_array.len(), 2);
+
+    // First element: has explicit display_delim
+    assert_eq!(fbom_array[0]["DISPLAY_DELIM"], " ");
+
+    // Second element: no display_delim provided - must still have the field as null
+    let second = fbom_array[1].as_object().unwrap();
+    assert!(
+        second.contains_key("DISPLAY_DELIM"),
+        "DISPLAY_DELIM must be present for all FBOM records"
+    );
+    assert!(
+        fbom_array[1]["DISPLAY_DELIM"].is_null(),
+        "DISPLAY_DELIM should be null for element without display_delim"
+    );
 }

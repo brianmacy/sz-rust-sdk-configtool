@@ -257,24 +257,30 @@ pub fn add_comparison_threshold(
         "CFUNC_RTNVAL": rtnval_upper,
     });
 
-    if let Some(order) = params.exec_order {
-        record["EXEC_ORDER"] = json!(order);
-    }
-    if let Some(score) = params.same_score {
-        record["SAME_SCORE"] = json!(score);
-    }
-    if let Some(score) = params.close_score {
-        record["CLOSE_SCORE"] = json!(score);
-    }
-    if let Some(score) = params.likely_score {
-        record["LIKELY_SCORE"] = json!(score);
-    }
-    if let Some(score) = params.plausible_score {
-        record["PLAUSIBLE_SCORE"] = json!(score);
-    }
-    if let Some(score) = params.un_likely_score {
-        record["UN_LIKELY_SCORE"] = json!(score);
-    }
+    record["EXEC_ORDER"] = match params.exec_order {
+        Some(order) => json!(order),
+        None => Value::Null,
+    };
+    record["SAME_SCORE"] = match params.same_score {
+        Some(score) => json!(score),
+        None => Value::Null,
+    };
+    record["CLOSE_SCORE"] = match params.close_score {
+        Some(score) => json!(score),
+        None => Value::Null,
+    };
+    record["LIKELY_SCORE"] = match params.likely_score {
+        Some(score) => json!(score),
+        None => Value::Null,
+    };
+    record["PLAUSIBLE_SCORE"] = match params.plausible_score {
+        Some(score) => json!(score),
+        None => Value::Null,
+    };
+    record["UN_LIKELY_SCORE"] = match params.un_likely_score {
+        Some(score) => json!(score),
+        None => Value::Null,
+    };
 
     helpers::add_to_config_array(config_json, "CFG_CFRTN", record)
 }
@@ -325,24 +331,30 @@ pub(crate) fn add_comparison_threshold_by_id(
         "CFUNC_RTNVAL": rtnval_upper,
     });
 
-    if let Some(order) = exec_order {
-        record["EXEC_ORDER"] = json!(order);
-    }
-    if let Some(score) = same_score {
-        record["SAME_SCORE"] = json!(score);
-    }
-    if let Some(score) = close_score {
-        record["CLOSE_SCORE"] = json!(score);
-    }
-    if let Some(score) = likely_score {
-        record["LIKELY_SCORE"] = json!(score);
-    }
-    if let Some(score) = plausible_score {
-        record["PLAUSIBLE_SCORE"] = json!(score);
-    }
-    if let Some(score) = un_likely_score {
-        record["UN_LIKELY_SCORE"] = json!(score);
-    }
+    record["EXEC_ORDER"] = match exec_order {
+        Some(order) => json!(order),
+        None => Value::Null,
+    };
+    record["SAME_SCORE"] = match same_score {
+        Some(score) => json!(score),
+        None => Value::Null,
+    };
+    record["CLOSE_SCORE"] = match close_score {
+        Some(score) => json!(score),
+        None => Value::Null,
+    };
+    record["LIKELY_SCORE"] = match likely_score {
+        Some(score) => json!(score),
+        None => Value::Null,
+    };
+    record["PLAUSIBLE_SCORE"] = match plausible_score {
+        Some(score) => json!(score),
+        None => Value::Null,
+    };
+    record["UN_LIKELY_SCORE"] = match un_likely_score {
+        Some(score) => json!(score),
+        None => Value::Null,
+    };
 
     crate::helpers::add_to_config_array(config_json, "CFG_CFRTN", record)
 }

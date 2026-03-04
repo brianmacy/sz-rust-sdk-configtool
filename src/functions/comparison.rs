@@ -102,15 +102,15 @@ pub fn add_comparison_function(
         "ANON_SUPPORT": anon_support,
     });
 
-    // Add optional fields
-    if let Some(obj) = new_record.as_object_mut() {
-        if let Some(desc) = params.description {
-            obj.insert("CFUNC_DESC".to_string(), json!(desc));
-        }
-        if let Some(lang) = params.language {
-            obj.insert("LANGUAGE".to_string(), json!(lang));
-        }
-    }
+    // Add optional fields (always present, null when not specified)
+    new_record["CFUNC_DESC"] = match params.description {
+        Some(desc) => json!(desc),
+        None => Value::Null,
+    };
+    new_record["LANGUAGE"] = match params.language {
+        Some(lang) => json!(lang),
+        None => Value::Null,
+    };
 
     // Add to CFG_CFUNC
     let modified_json = add_to_config_array(config_json, "CFG_CFUNC", new_record.clone())?;
@@ -315,12 +315,11 @@ pub fn add_comparison_func_return_code(
         "CFRTN_CODE": cfrtn_code,
     });
 
-    // Add optional description
-    if let Some(desc) = cfrtn_desc {
-        if let Some(obj) = new_record.as_object_mut() {
-            obj.insert("CFRTN_DESC".to_string(), json!(desc));
-        }
-    }
+    // Add optional description (always present, null when not specified)
+    new_record["CFRTN_DESC"] = match cfrtn_desc {
+        Some(desc) => json!(desc),
+        None => Value::Null,
+    };
 
     // Add to CFG_CFRTN
     let modified_json = add_to_config_array(config_json, "CFG_CFRTN", new_record.clone())?;

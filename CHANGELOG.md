@@ -98,6 +98,24 @@ The library maintains 100% API compatibility with the sz_configtool CLI commands
 
 ## [Unreleased]
 
+### Fixed
+
+- Optional fields in `add_*` functions now always include the field as null instead of omitting it when None
+  - `add_feature`: DISPLAY_DELIM in CFG_FBOM (reported by SzCompare: "CONFIG information for DISPLAY_DELIM not found in CFG_FBOM!")
+  - `add_feature_comparison`: EXEC_ORDER, DISPLAY_LEVEL, DISPLAY_DELIM, DERIVED
+  - `add_feature_distinct_call_element`: EXEC_ORDER
+  - `add_comparison_threshold` / `add_comparison_threshold_by_id`: EXEC_ORDER, SAME_SCORE, CLOSE_SCORE, LIKELY_SCORE, PLAUSIBLE_SCORE, UN_LIKELY_SCORE
+  - `add_standardize_function`: SFUNC_DESC, LANGUAGE
+  - `add_expression_function`: EFUNC_DESC, LANGUAGE
+  - `add_comparison_function`: CFUNC_DESC, LANGUAGE
+  - `add_comparison_func_return_code`: CFRTN_DESC
+  - `add_distinct_function`: DFUNC_DESC, LANGUAGE
+  - `add_standardize_call_element`: EXEC_ORDER
+
+### Added
+
+- Integration tests for DISPLAY_DELIM field presence in CFG_FBOM records
+
 ### Planned
 
 - [ ] Additional FFI functions (22 remaining for 100% coverage)

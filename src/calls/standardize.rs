@@ -403,12 +403,11 @@ pub fn add_standardize_call_element(
         "SFUNC_ID": params.sfunc_id,
     });
 
-    // Add optional exec_order if provided
-    if let Some(order) = params.exec_order {
-        if let Some(obj) = new_record.as_object_mut() {
-            obj.insert("EXEC_ORDER".to_string(), json!(order));
-        }
-    }
+    // Add exec_order (always present, null when not specified)
+    new_record["EXEC_ORDER"] = match params.exec_order {
+        Some(order) => json!(order),
+        None => Value::Null,
+    };
 
     // Add to CFG_SFCALL
     if let Some(sfcall_array) = config_data["G2_CONFIG"]["CFG_SFCALL"].as_array_mut() {

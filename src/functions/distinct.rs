@@ -89,15 +89,15 @@ pub fn add_distinct_function(
         "CONNECT_STR": params.connect_str,
     });
 
-    // Add optional fields
-    if let Some(obj) = new_record.as_object_mut() {
-        if let Some(desc) = params.description {
-            obj.insert("DFUNC_DESC".to_string(), json!(desc));
-        }
-        if let Some(lang) = params.language {
-            obj.insert("LANGUAGE".to_string(), json!(lang));
-        }
-    }
+    // Add optional fields (always present, null when not specified)
+    new_record["DFUNC_DESC"] = match params.description {
+        Some(desc) => json!(desc),
+        None => Value::Null,
+    };
+    new_record["LANGUAGE"] = match params.language {
+        Some(lang) => json!(lang),
+        None => Value::Null,
+    };
 
     // Add to CFG_DFUNC
     let modified_json = add_to_config_array(config_json, "CFG_DFUNC", new_record.clone())?;

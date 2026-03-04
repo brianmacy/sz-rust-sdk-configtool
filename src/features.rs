@@ -748,9 +748,10 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
             "DERIVED": elem_derived
         });
 
-        if let Some(delim) = display_delim {
-            fbom_record["DISPLAY_DELIM"] = json!(delim);
-        }
+        fbom_record["DISPLAY_DELIM"] = match display_delim {
+            Some(delim) => json!(delim),
+            None => Value::Null,
+        };
 
         if let Some(array) = config["G2_CONFIG"]["CFG_FBOM"].as_array_mut() {
             array.push(fbom_record);
@@ -1456,18 +1457,22 @@ pub fn add_feature_comparison(
         "FELEM_ID": felem_id,
     });
 
-    if let Some(order) = params.exec_order {
-        record["EXEC_ORDER"] = json!(order);
-    }
-    if let Some(level) = params.display_level {
-        record["DISPLAY_LEVEL"] = json!(level);
-    }
-    if let Some(delim) = params.display_delim {
-        record["DISPLAY_DELIM"] = json!(delim);
-    }
-    if let Some(der) = params.derived {
-        record["DERIVED"] = json!(der);
-    }
+    record["EXEC_ORDER"] = match params.exec_order {
+        Some(order) => json!(order),
+        None => Value::Null,
+    };
+    record["DISPLAY_LEVEL"] = match params.display_level {
+        Some(level) => json!(level),
+        None => Value::Null,
+    };
+    record["DISPLAY_DELIM"] = match params.display_delim {
+        Some(delim) => json!(delim),
+        None => Value::Null,
+    };
+    record["DERIVED"] = match params.derived {
+        Some(der) => json!(der),
+        None => Value::Null,
+    };
 
     helpers::add_to_config_array(config_json, "CFG_FBOM", record)
 }
@@ -1679,9 +1684,10 @@ pub fn add_feature_distinct_call_element(
         "FELEM_ID": felem_id,
     });
 
-    if let Some(order) = params.exec_order {
-        record["EXEC_ORDER"] = json!(order);
-    }
+    record["EXEC_ORDER"] = match params.exec_order {
+        Some(order) => json!(order),
+        None => Value::Null,
+    };
 
     helpers::add_to_config_array(config_json, "CFG_DFCALL", record)
 }
