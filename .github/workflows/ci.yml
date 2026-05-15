@@ -59,6 +59,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable
         with:
+          toolchain: stable
           components: rustfmt
 
       - name: Check formatting
@@ -73,6 +74,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable
         with:
+          toolchain: stable
           components: clippy
 
       - name: Run clippy
@@ -89,6 +91,8 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable
+        with:
+          toolchain: stable
 
       - name: Build debug
         run: cargo build --lib --verbose
@@ -107,6 +111,8 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable
+        with:
+          toolchain: stable
 
       - name: Build documentation
         run: cargo doc --no-deps --verbose
