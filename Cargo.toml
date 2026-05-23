@@ -2,7 +2,7 @@
 name = "sz_configtool_lib"
 version = "0.3.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 authors = ["Brian Macy <bmacy@senzing.com>"]
 description = "Pure Rust library for manipulating Senzing configuration JSON documents"
 license = "Apache-2.0"
