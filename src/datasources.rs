@@ -176,13 +176,12 @@ pub fn delete_data_source(config_json: &str, code: &str) -> Result<String> {
         .ok_or_else(|| SzConfigError::NotFound(format!("Data source not found: {code_upper}")))?;
 
     // Protect system datasources (Python parity: if dsrc_record["DSRC_ID"] <= 2)
-    if let Some(dsrc_id) = dsrc_to_delete.get("DSRC_ID").and_then(|v| v.as_i64()) {
-        if dsrc_id <= 2 {
+    if let Some(dsrc_id) = dsrc_to_delete.get("DSRC_ID").and_then(|v| v.as_i64())
+        && dsrc_id <= 2 {
             return Err(SzConfigError::InvalidInput(format!(
                 "The {code_upper} data source cannot be deleted"
             )));
         }
-    }
 
     // Safe to delete
     let original_len = dsrcs.len();

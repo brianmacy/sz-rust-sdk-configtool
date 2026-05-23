@@ -102,8 +102,7 @@ pub fn add_rule(config_json: &str, id: i64, rule_config: &Value) -> Result<(Stri
         .get("G2_CONFIG")
         .and_then(|g| g.get("CFG_ERRULE"))
         .and_then(|v| v.as_array())
-    {
-        if errule_array
+        && errule_array
             .iter()
             .any(|item| item.get("ERRULE_ID").and_then(|v| v.as_i64()) == Some(id))
         {
@@ -111,7 +110,6 @@ pub fn add_rule(config_json: &str, id: i64, rule_config: &Value) -> Result<(Stri
                 "The specified ID is already taken".to_string(),
             ));
         }
-    }
 
     // Create new item with provided config plus ID
     let mut new_item = rule_config.clone();

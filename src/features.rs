@@ -1026,24 +1026,21 @@ pub fn set_feature(config_json: &str, params: SetFeatureParams) -> Result<String
             changes_made = true;
         }
     }
-    if let Some(val) = params.anonymize {
-        if ftype["ANONYMIZE"].as_str() != Some(val) {
+    if let Some(val) = params.anonymize
+        && ftype["ANONYMIZE"].as_str() != Some(val) {
             ftype["ANONYMIZE"] = json!(val);
             changes_made = true;
         }
-    }
-    if let Some(val) = params.derived {
-        if ftype["DERIVED"].as_str() != Some(val) {
+    if let Some(val) = params.derived
+        && ftype["DERIVED"].as_str() != Some(val) {
             ftype["DERIVED"] = json!(val);
             changes_made = true;
         }
-    }
-    if let Some(val) = params.history {
-        if ftype["PERSIST_HISTORY"].as_str() != Some(val) {
+    if let Some(val) = params.history
+        && ftype["PERSIST_HISTORY"].as_str() != Some(val) {
             ftype["PERSIST_HISTORY"] = json!(val);
             changes_made = true;
         }
-    }
     if let Some(val) = params.matchkey {
         // Validate and normalize MATCHKEY domain (Python line 1754-1758)
         let normalized =
@@ -1053,18 +1050,16 @@ pub fn set_feature(config_json: &str, params: SetFeatureParams) -> Result<String
             changes_made = true;
         }
     }
-    if let Some(val) = params.version {
-        if ftype["VERSION"].as_i64() != Some(val) {
+    if let Some(val) = params.version
+        && ftype["VERSION"].as_i64() != Some(val) {
             ftype["VERSION"] = json!(val);
             changes_made = true;
         }
-    }
-    if let Some(val) = params.rtype_id {
-        if ftype["RTYPE_ID"].as_i64() != Some(val) {
+    if let Some(val) = params.rtype_id
+        && ftype["RTYPE_ID"].as_i64() != Some(val) {
             ftype["RTYPE_ID"] = json!(val);
             changes_made = true;
         }
-    }
 
     // Parse and set behavior (FTYPE_FREQ, FTYPE_EXCL, FTYPE_STAB)
     if let Some(behavior_code) = params.behavior {

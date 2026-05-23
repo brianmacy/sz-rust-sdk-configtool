@@ -83,19 +83,15 @@ pub fn delete_from_name_hash(config_json: &str, name: &str) -> Result<String> {
     let mut config_data: Value = serde_json::from_str(config_json)?;
     let mut found = false;
 
-    if let Some(g2_config) = config_data.get_mut("G2_CONFIG") {
-        if let Some(sys_oom) = g2_config.get_mut("SYS_OOM") {
-            if let Some(sys_oom_obj) = sys_oom.as_object_mut() {
-                if let Some(name_hash) = sys_oom_obj.get_mut("NAME_HASH") {
-                    if let Some(name_hash_arr) = name_hash.as_array_mut() {
+    if let Some(g2_config) = config_data.get_mut("G2_CONFIG")
+        && let Some(sys_oom) = g2_config.get_mut("SYS_OOM")
+            && let Some(sys_oom_obj) = sys_oom.as_object_mut()
+                && let Some(name_hash) = sys_oom_obj.get_mut("NAME_HASH")
+                    && let Some(name_hash_arr) = name_hash.as_array_mut() {
                         let before_len = name_hash_arr.len();
                         name_hash_arr.retain(|v| v.as_str() != Some(name));
                         found = name_hash_arr.len() < before_len;
                     }
-                }
-            }
-        }
-    }
 
     if !found {
         return Err(SzConfigError::NotFound(format!(

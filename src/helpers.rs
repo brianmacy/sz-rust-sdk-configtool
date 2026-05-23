@@ -130,8 +130,8 @@ pub fn get_desired_or_next_id(
     desired_id: Option<i64>,
     min_value: i64,
 ) -> Result<i64> {
-    if let Some(id) = desired_id {
-        if id > 0 {
+    if let Some(id) = desired_id
+        && id > 0 {
             if is_id_taken(array, id_field, id) {
                 return Err(SzConfigError::AlreadyExists(format!(
                     "The specified ID {id} is already taken"
@@ -139,7 +139,6 @@ pub fn get_desired_or_next_id(
             }
             return Ok(id);
         }
-    }
 
     // No desired ID or invalid, get next available
     get_next_id_with_min(array, id_field, min_value)
