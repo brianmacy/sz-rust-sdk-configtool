@@ -31,11 +31,12 @@ pub fn add_config_section(config_json: &str, section_name: &str) -> Result<Strin
 
     // Check if section already exists
     if let Some(g2_config) = config_data.get("G2_CONFIG")
-        && g2_config.get(&section_name).is_some() {
-            return Err(SzConfigError::AlreadyExists(
-                "Configuration section already exists".to_string(),
-            ));
-        }
+        && g2_config.get(&section_name).is_some()
+    {
+        return Err(SzConfigError::AlreadyExists(
+            "Configuration section already exists".to_string(),
+        ));
+    }
 
     // Add new section as empty array
     if let Some(g2_config) = config_data.get_mut("G2_CONFIG") {
@@ -77,9 +78,10 @@ pub fn remove_config_section(config_json: &str, section_name: &str) -> Result<St
 
     if let Some(g2_config) = config_data.get_mut("G2_CONFIG")
         && let Some(g2_config_obj) = g2_config.as_object_mut()
-            && g2_config_obj.remove(&section_name).is_some() {
-                removed = true;
-            }
+        && g2_config_obj.remove(&section_name).is_some()
+    {
+        removed = true;
+    }
 
     if !removed {
         return Err(SzConfigError::NotFound(format!(
@@ -308,9 +310,10 @@ pub fn remove_config_section_field(
         {
             for item in section_array.iter_mut() {
                 if let Some(item_obj) = item.as_object_mut()
-                    && item_obj.remove(&field_name).is_some() {
-                        item_count += 1;
-                    }
+                    && item_obj.remove(&field_name).is_some()
+                {
+                    item_count += 1;
+                }
             }
         } else {
             return Err(SzConfigError::NotFound(format!(

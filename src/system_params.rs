@@ -32,20 +32,22 @@ pub fn list_system_parameters(config_json: &str) -> Result<HashMap<String, Strin
 
     // Find RCLASS_ID == 2 in CFG_RTYPE to get BREAK_RES value
     if let Some(g2_config) = config_data.get("G2_CONFIG")
-        && let Some(rtype_array) = g2_config.get("CFG_RTYPE").and_then(|v| v.as_array()) {
-            for rtype in rtype_array {
-                if let Some(rclass_id) = rtype.get("RCLASS_ID").and_then(|v| v.as_i64())
-                    && rclass_id == 2 {
-                        if let Some(break_res) = rtype.get("BREAK_RES").and_then(|v| v.as_i64()) {
-                            params.insert(
-                                "relationshipsBreakMatches".to_string(),
-                                break_res.to_string(),
-                            );
-                        }
-                        break;
-                    }
+        && let Some(rtype_array) = g2_config.get("CFG_RTYPE").and_then(|v| v.as_array())
+    {
+        for rtype in rtype_array {
+            if let Some(rclass_id) = rtype.get("RCLASS_ID").and_then(|v| v.as_i64())
+                && rclass_id == 2
+            {
+                if let Some(break_res) = rtype.get("BREAK_RES").and_then(|v| v.as_i64()) {
+                    params.insert(
+                        "relationshipsBreakMatches".to_string(),
+                        break_res.to_string(),
+                    );
+                }
+                break;
             }
         }
+    }
 
     Ok(params)
 }
@@ -88,18 +90,19 @@ pub fn set_system_parameter(
             && let Some(rtype_array) = g2_config
                 .get_mut("CFG_RTYPE")
                 .and_then(|v| v.as_array_mut())
-            {
-                for rtype in rtype_array.iter_mut() {
-                    if let Some(rclass_id) = rtype.get("RCLASS_ID").and_then(|v| v.as_i64())
-                        && rclass_id == 2 {
-                            if let Some(rtype_obj) = rtype.as_object_mut() {
-                                rtype_obj.insert("BREAK_RES".to_string(), parameter_value.clone());
-                                found = true;
-                            }
-                            break;
-                        }
+        {
+            for rtype in rtype_array.iter_mut() {
+                if let Some(rclass_id) = rtype.get("RCLASS_ID").and_then(|v| v.as_i64())
+                    && rclass_id == 2
+                {
+                    if let Some(rtype_obj) = rtype.as_object_mut() {
+                        rtype_obj.insert("BREAK_RES".to_string(), parameter_value.clone());
+                        found = true;
+                    }
+                    break;
                 }
             }
+        }
     } else {
         return Err(SzConfigError::InvalidConfig(format!(
             "Unknown system parameter: {parameter_name}"
