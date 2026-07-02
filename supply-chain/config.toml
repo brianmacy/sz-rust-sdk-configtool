@@ -5,7 +5,7 @@
 version = "0.10"
 
 [[exemptions.anyhow]]
-version = "1.0.102"
+version = "1.0.103"
 criteria = "safe-to-deploy"
 
 [[exemptions.bitflags]]
