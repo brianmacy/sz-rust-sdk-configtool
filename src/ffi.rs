@@ -5310,8 +5310,6 @@ pub extern "C" fn SzConfigTool_setDataSource(
     let params = crate::datasources::SetDataSourceParams {
         code: ds_code,
         retention_level: updates_value.get("retentionLevel").and_then(|v| v.as_str()),
-        conversational: updates_value.get("conversational").and_then(|v| v.as_str()),
-        reliability: updates_value.get("reliability").and_then(|v| v.as_i64()),
     };
 
     handle_result!(crate::datasources::set_data_source(config, params))

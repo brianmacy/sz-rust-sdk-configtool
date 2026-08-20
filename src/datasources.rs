@@ -11,8 +11,6 @@ use serde_json::{Value, json};
 pub struct AddDataSourceParams<'a> {
     pub code: &'a str,
     pub retention_level: Option<&'a str>,
-    pub conversational: Option<&'a str>,
-    pub reliability: Option<i64>,
 }
 
 /// Parameters for setting (updating) a data source
@@ -20,8 +18,6 @@ pub struct AddDataSourceParams<'a> {
 pub struct SetDataSourceParams<'a> {
     pub code: &'a str,
     pub retention_level: Option<&'a str>,
-    pub conversational: Option<&'a str>,
-    pub reliability: Option<i64>,
 }
 
 impl<'a> TryFrom<&'a Value> for AddDataSourceParams<'a> {
@@ -36,8 +32,6 @@ impl<'a> TryFrom<&'a Value> for AddDataSourceParams<'a> {
         Ok(Self {
             code,
             retention_level: json.get("retentionLevel").and_then(|v| v.as_str()),
-            conversational: json.get("conversational").and_then(|v| v.as_str()),
-            reliability: json.get("reliability").and_then(|v| v.as_i64()),
         })
     }
 }
@@ -54,8 +48,6 @@ impl<'a> TryFrom<&'a Value> for SetDataSourceParams<'a> {
         Ok(Self {
             code,
             retention_level: json.get("retentionLevel").and_then(|v| v.as_str()),
-            conversational: json.get("conversational").and_then(|v| v.as_str()),
-            reliability: json.get("reliability").and_then(|v| v.as_i64()),
         })
     }
 }
@@ -113,31 +105,11 @@ pub fn add_data_source(config_json: &str, params: AddDataSourceParams) -> Result
         "Remember"
     };
 
-    let conversational_flag = if let Some(conv) = params.conversational {
-        // Validate conversational domain (case-insensitive)
-        let conv_upper = conv.to_uppercase();
-        match conv_upper.as_str() {
-            "YES" => "Yes",
-            "NO" => "No",
-            _ => {
-                return Err(SzConfigError::InvalidInput(format!(
-                    "Invalid CONVERSATIONAL value '{conv}'. Must be 'Yes' or 'No'"
-                )));
-            }
-        }
-    } else {
-        "No"
-    };
-
-    let reliability_score = params.reliability.unwrap_or(1);
-
     dsrcs.push(json!({
         "DSRC_ID": next_id,
         "DSRC_CODE": code_upper.clone(),
         "DSRC_DESC": code_upper,  // Python uses code as description, not formatted string
-        "DSRC_RELY": reliability_score,
         "RETENTION_LEVEL": retention,
-        "CONVERSATIONAL": conversational_flag,
     }));
 
     serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
@@ -289,16 +261,10 @@ pub fn set_data_source(config_json: &str, params: SetDataSourceParams) -> Result
         .ok_or_else(|| SzConfigError::NotFound(format!("Data source not found: {code_upper}")))?;
 
     // Update fields if provided
-    if let Some(dsrc_obj) = dsrc.as_object_mut() {
-        if let Some(retention) = params.retention_level {
-            dsrc_obj.insert("RETENTION_LEVEL".to_string(), json!(retention));
-        }
-        if let Some(conversational) = params.conversational {
-            dsrc_obj.insert("CONVERSATIONAL".to_string(), json!(conversational));
-        }
-        if let Some(reliability) = params.reliability {
-            dsrc_obj.insert("DSRC_RELY".to_string(), json!(reliability));
-        }
+    if let Some(dsrc_obj) = dsrc.as_object_mut()
+        && let Some(retention) = params.retention_level
+    {
+        dsrc_obj.insert("RETENTION_LEVEL".to_string(), json!(retention));
     }
 
     serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))

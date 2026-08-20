@@ -54,10 +54,10 @@ Main error enum with 9 variants:
 - `set_data_source(config_json, params: SetDataSourceParams) -> Result<String>`
 
 **Key Structs:**
-- `AddDataSourceParams` - Fields: code, retention_level, conversational, reliability
-- `SetDataSourceParams` - Fields: code, retention_level, conversational, reliability
+- `AddDataSourceParams` - Fields: code, retention_level
+- `SetDataSourceParams` - Fields: code, retention_level
 
-**Validations:** retentionLevel domain, conversational domain, system datasource protection (ID ≤ 2)
+**Validations:** retentionLevel domain, system datasource protection (ID ≤ 2)
 
 ### Elements (`elements`)
 
@@ -378,8 +378,6 @@ let config = datasources::add_data_source(
     AddDataSourceParams {
         code: "CUSTOMERS",
         retention_level: Some("Remember"),
-        conversational: Some("Yes"),
-        reliability: None,
     }
 )?;
 

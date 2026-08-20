@@ -221,8 +221,6 @@ let config = datasources::add_data_source(
     AddDataSourceParams {
         code: "CUSTOMERS",
         retention_level: Some("Remember"),
-        reliability: Some(2),
-        ..Default::default()
     },
 )?;
 
@@ -241,8 +239,6 @@ let config = datasources::set_data_source(
     SetDataSourceParams {
         code: "CUSTOMERS",
         retention_level: Some("Forget"),
-        reliability: Some(3),
-        ..Default::default()
     },
 )?;
 
