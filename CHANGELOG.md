@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-20
+
+### Removed
+
+- **BREAKING:** Removed the deprecated `conversational` and `reliability` fields from
+  `AddDataSourceParams` and `SetDataSourceParams`. These are no longer part of the Senzing data
+  source schema. They may still appear in older configs, where they are now ignored, and they are
+  never written. `add_data_source` no longer emits `DSRC_RELY` or `CONVERSATIONAL`, and the FFI
+  `SzConfigTool_setDataSource` no longer reads them from its `updates_json`.
+
+### Changed
+
+- Bumped dependencies: `serde` 1.0.229, `serde_json` 1.0.151, `anyhow` 1.0.104.
+- Bumped GitHub Actions: `actions/checkout`, `dtolnay/rust-toolchain`, and
+  `softprops/action-gh-release` (v3.0.2).
+
 ## [0.3.2] - 2026-07-02
 
 ### Security

@@ -52,18 +52,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Description: {}", vendor_source["DSRC_DESC"]);
 
     // UPDATE: Modify data source
-    println!("\n4. UPDATE - Updating CUSTOMERS reliability:");
+    println!("\n4. UPDATE - Updating CUSTOMERS retention level:");
     config = datasources::set_data_source(
         &config,
         datasources::SetDataSourceParams {
             code: "CUSTOMERS",
-            reliability: Some(10),
-            ..Default::default()
+            retention_level: Some("Forget"),
         },
     )?;
 
     let updated_source = datasources::get_data_source(&config, "CUSTOMERS")?;
-    println!("  New reliability: {}", updated_source["DSRC_RELY"]);
+    println!(
+        "  New retention level: {}",
+        updated_source["RETENTION_LEVEL"]
+    );
 
     // DELETE: Remove a data source
     println!("\n5. DELETE - Removing VENDORS:");
