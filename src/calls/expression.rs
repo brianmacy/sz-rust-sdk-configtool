@@ -3,6 +3,7 @@
 //! Functions for managing CFG_EFCALL (expression calls) and CFG_EFBOM
 //! (expression bill of materials) configuration sections.
 
+use crate::config_rows::{EfbomRow, EfcallRow};
 use crate::error::{Result, SzConfigError};
 use crate::helpers::{
     find_in_config_array, get_next_id, lookup_efunc_id, lookup_element_id, lookup_feature_id,
@@ -198,10 +199,11 @@ pub fn add_expression_call(
 
     // Process element list and create EFBOM records
     let mut efbom_records = Vec::new();
-    let mut bom_exec_order = 0;
 
-    for (element_code, required, feature_opt) in params.element_list {
-        bom_exec_order += 1;
+    for (idx, (element_code, required, feature_opt)) in params.element_list.into_iter().enumerate()
+    {
+        // EXEC_ORDER is 1-based over the element list.
+        let bom_exec_order = idx as i64 + 1;
 
         // Keep feature name for error messages (clone before consuming)
         let _bom_feature_name_for_errors = feature_opt.clone();
@@ -221,26 +223,28 @@ pub fn add_expression_call(
         // Lookup element ID (always global lookup - feature field is just metadata for EFBOM)
         let bom_felem_id = lookup_element_id(config, &element_code)?;
 
-        // Create EFBOM record
-        efbom_records.push(json!({
-            "EFCALL_ID": efcall_id,
-            "FTYPE_ID": bom_ftype_id,
-            "FELEM_ID": bom_felem_id,
-            "EXEC_ORDER": bom_exec_order,
-            "FELEM_REQ": required
-        }));
+        // Create EFBOM record via EfbomRow so every key is always present.
+        let bom_row = EfbomRow {
+            efcall_id,
+            ftype_id: bom_ftype_id,
+            felem_id: bom_felem_id,
+            exec_order: bom_exec_order,
+            felem_req: required,
+        };
+        efbom_records.push(serde_json::to_value(&bom_row)?);
     }
 
-    // Create new CFG_EFCALL record
-    let new_record = json!({
-        "EFCALL_ID": efcall_id,
-        "FTYPE_ID": ftype_id,
-        "FELEM_ID": felem_id,
-        "EFUNC_ID": efunc_id,
-        "EXEC_ORDER": final_exec_order,
-        "EFEAT_FTYPE_ID": efeat_ftype_id,
-        "IS_VIRTUAL": params.is_virtual
-    });
+    // Create new CFG_EFCALL record via EfcallRow so every key is always present.
+    let efcall_row = EfcallRow {
+        efcall_id,
+        ftype_id,
+        felem_id,
+        efunc_id,
+        exec_order: final_exec_order,
+        efeat_ftype_id,
+        is_virtual: params.is_virtual.to_string(),
+    };
+    let new_record = serde_json::to_value(&efcall_row)?;
 
     // Add to config
     if let Some(efcall_array) = config_data["G2_CONFIG"]["CFG_EFCALL"].as_array_mut() {
@@ -488,14 +492,16 @@ pub fn add_expression_call_element(
         }
     }
 
-    // Create new EBOM record (use params.exec_order directly - no auto-assignment)
-    let new_record = json!({
-        "EFCALL_ID": efcall_id,
-        "FTYPE_ID": params.ftype_id,
-        "FELEM_ID": params.felem_id,
-        "EXEC_ORDER": params.exec_order,
-        "FELEM_REQ": params.felem_req
-    });
+    // Create new EBOM record via EfbomRow (use params.exec_order directly - no
+    // auto-assignment) so every key is always present.
+    let row = EfbomRow {
+        efcall_id,
+        ftype_id: params.ftype_id,
+        felem_id: params.felem_id,
+        exec_order: params.exec_order,
+        felem_req: params.felem_req,
+    };
+    let new_record = serde_json::to_value(&row)?;
 
     // Add to CFG_EFBOM
     if let Some(ebom_array) = config_data["G2_CONFIG"]["CFG_EFBOM"].as_array_mut() {
@@ -573,4 +579,92 @@ pub fn set_expression_call_element(
 ) -> Result<String> {
     // This is a stub - not commonly used
     Ok(config.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const EFCALL_KEYS: [&str; 7] = [
+        "EFCALL_ID",
+        "FTYPE_ID",
+        "FELEM_ID",
+        "EFUNC_ID",
+        "EXEC_ORDER",
+        "EFEAT_FTYPE_ID",
+        "IS_VIRTUAL",
+    ];
+    const EFBOM_KEYS: [&str; 5] = [
+        "EFCALL_ID",
+        "FTYPE_ID",
+        "FELEM_ID",
+        "EXEC_ORDER",
+        "FELEM_REQ",
+    ];
+
+    fn assert_all_keys(obj: &Value, keys: &[&str]) {
+        let map = obj.as_object().unwrap();
+        for key in keys {
+            assert!(map.contains_key(*key), "{key} key must be present");
+        }
+    }
+
+    fn base_config() -> String {
+        r#"{"G2_CONFIG": {
+            "CFG_EFCALL": [],
+            "CFG_EFBOM": [],
+            "CFG_FTYPE": [{"FTYPE_ID": 5, "FTYPE_CODE": "NAME"}],
+            "CFG_EFUNC": [{"EFUNC_ID": 7, "EFUNC_CODE": "EXPRESS_BOM"}],
+            "CFG_FELEM": [{"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"}]
+        }}"#
+        .to_string()
+    }
+
+    #[test]
+    fn test_add_expression_call_emits_all_keys() {
+        let config = base_config();
+        let params = AddExpressionCallParams::new(
+            "EXPRESS_BOM",
+            vec![("FIRST_NAME".to_string(), "No".to_string(), None)],
+        );
+        let params = AddExpressionCallParams {
+            ftype_code: Some("NAME"),
+            ..params
+        };
+
+        let (modified, new_record) = add_expression_call(&config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+
+        // CFG_EFCALL row: all 7 keys.
+        let efcall = &value["G2_CONFIG"]["CFG_EFCALL"][0];
+        assert_all_keys(efcall, &EFCALL_KEYS);
+        assert_all_keys(&new_record, &EFCALL_KEYS);
+        assert_eq!(efcall["FTYPE_ID"], json!(5));
+        assert_eq!(efcall["EFUNC_ID"], json!(7));
+        assert_eq!(efcall["FELEM_ID"], json!(-1));
+        assert_eq!(efcall["EFEAT_FTYPE_ID"], json!(-1));
+        assert_eq!(efcall["IS_VIRTUAL"], json!("No"));
+
+        // CFG_EFBOM row: all 5 keys.
+        let efbom = &value["G2_CONFIG"]["CFG_EFBOM"][0];
+        assert_all_keys(efbom, &EFBOM_KEYS);
+        assert_eq!(efbom["FELEM_ID"], json!(11));
+        assert_eq!(efbom["FELEM_REQ"], json!("No"));
+        assert_eq!(efbom["EXEC_ORDER"], json!(1));
+    }
+
+    #[test]
+    fn test_add_expression_call_element_emits_all_keys() {
+        let config = base_config();
+        let params = ExpressionCallElementParams::new(5, 11, 2, "Yes".to_string());
+
+        let (modified, new_record) = add_expression_call_element(&config, 1000, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let efbom = &value["G2_CONFIG"]["CFG_EFBOM"][0];
+
+        assert_all_keys(efbom, &EFBOM_KEYS);
+        assert_all_keys(&new_record, &EFBOM_KEYS);
+        assert_eq!(efbom["FELEM_REQ"], json!("Yes"));
+        assert_eq!(efbom["EXEC_ORDER"], json!(2));
+    }
 }

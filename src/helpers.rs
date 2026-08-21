@@ -1,6 +1,15 @@
 use crate::error::{Result, SzConfigError};
 use serde_json::Value;
 
+/// Extract a string field from a config row as an owned `Option<String>`.
+///
+/// Returns `None` when the key is absent or its value is not a JSON string
+/// (including explicit `null`). Used by row builders to carry an existing
+/// field value forward when an update does not supply a new one.
+pub(crate) fn field_as_string(item: &Value, key: &str) -> Option<String> {
+    item.get(key).and_then(|v| v.as_str()).map(String::from)
+}
+
 /// Get the next available ID for a config array
 ///
 /// Finds the maximum value of the specified ID field and returns max + 1

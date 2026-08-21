@@ -1,13 +1,41 @@
 //! Comparison function operations for Senzing configuration
 //!
 //! This module provides functions for managing comparison functions (CFG_CFUNC)
-//! and comparison function return codes (CFG_CFRTN) in the Senzing configuration JSON.
+//! in the Senzing configuration JSON. CFG_CFRTN (comparison function return
+//! codes / score rows) is owned by `thresholds.rs`.
 
 use crate::error::SzConfigError;
 use crate::helpers::{
     add_to_config_array, delete_from_config_array, find_in_config_array, get_next_id,
 };
+use serde::Serialize;
 use serde_json::{Value, json};
+
+// ============================================================================
+// Row Structs
+// ============================================================================
+
+/// Complete CFG_CFUNC row.
+///
+/// Derives `Serialize` with no `skip_serializing_if`, so every key is always
+/// emitted (optional fields serialize as JSON `null`). The Senzing engine's
+/// config loader requires every key to be present, so partial rows must never
+/// be written.
+#[derive(Debug, Clone, Serialize)]
+struct CfuncRow {
+    #[serde(rename = "CFUNC_ID")]
+    cfunc_id: i64,
+    #[serde(rename = "CFUNC_CODE")]
+    cfunc_code: String,
+    #[serde(rename = "CONNECT_STR")]
+    connect_str: String,
+    #[serde(rename = "ANON_SUPPORT")]
+    anon_support: String,
+    #[serde(rename = "CFUNC_DESC")]
+    cfunc_desc: Option<String>,
+    #[serde(rename = "LANGUAGE")]
+    language: Option<String>,
+}
 
 // ============================================================================
 // Parameter Structs
@@ -94,23 +122,17 @@ pub fn add_comparison_function(
         serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
     let cfunc_id = get_next_id(&config_data, "G2_CONFIG.CFG_CFUNC", "CFUNC_ID", 1)?;
 
-    // Create new function record
-    let mut new_record = json!({
-        "CFUNC_ID": cfunc_id,
-        "CFUNC_CODE": cfunc_code,
-        "CONNECT_STR": params.connect_str,
-        "ANON_SUPPORT": anon_support,
-    });
-
-    // Add optional fields (always present, null when not specified)
-    new_record["CFUNC_DESC"] = match params.description {
-        Some(desc) => json!(desc),
-        None => Value::Null,
+    // Build a complete row via CfuncRow so every CFG_CFUNC key is present
+    // (optional fields serialize as null) regardless of what the caller passed.
+    let row = CfuncRow {
+        cfunc_id,
+        cfunc_code,
+        connect_str: params.connect_str.to_string(),
+        anon_support: anon_support.to_string(),
+        cfunc_desc: params.description.map(str::to_string),
+        language: params.language.map(str::to_string),
     };
-    new_record["LANGUAGE"] = match params.language {
-        Some(lang) => json!(lang),
-        None => Value::Null,
-    };
+    let new_record = serde_json::to_value(&row)?;
 
     // Add to CFG_CFUNC
     let modified_json = add_to_config_array(config_json, "CFG_CFUNC", new_record.clone())?;
@@ -232,6 +254,7 @@ pub fn set_comparison_function(
         SzConfigError::not_found(format!("Comparison function not found: {cfunc_code}"))
     })?;
 
+    // In-place update of a complete existing row; all keys preserved.
     // Update fields if provided
     if let Some(obj) = function.as_object_mut() {
         if let Some(conn) = params.connect_str {
@@ -253,78 +276,6 @@ pub fn set_comparison_function(
     let modified_json = add_to_config_array(&temp_json, "CFG_CFUNC", function.clone())?;
 
     Ok((modified_json, function))
-}
-
-/// Add a comparison function return code
-///
-/// # Arguments
-/// * `config_json` - The configuration JSON string
-/// * `cfunc_code` - Function code (will be uppercased)
-/// * `cfrtn_code` - Return code (will be uppercased)
-/// * `cfrtn_desc` - Optional description
-///
-/// # Returns
-/// Result with modified JSON string and the new return code record
-///
-/// # Errors
-/// Returns error if function not found, return code exists, or JSON is invalid
-pub fn add_comparison_func_return_code(
-    config_json: &str,
-    cfunc_code: &str,
-    cfrtn_code: &str,
-    cfrtn_desc: Option<&str>,
-) -> Result<(String, Value), SzConfigError> {
-    let cfunc_code = cfunc_code.to_uppercase();
-    let cfrtn_code = cfrtn_code.to_uppercase();
-
-    // Find the function
-    let config_data: Value =
-        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
-
-    let cfunc = find_in_config_array(config_json, "CFG_CFUNC", "CFUNC_CODE", &cfunc_code)?
-        .ok_or_else(|| {
-            SzConfigError::not_found(format!("Comparison function not found: {cfunc_code}"))
-        })?;
-
-    let cfunc_id = cfunc
-        .get("CFUNC_ID")
-        .and_then(|v| v.as_i64())
-        .ok_or_else(|| SzConfigError::validation("CFUNC_ID not found"))?;
-
-    // Check if return code already exists for this function
-    if let Some(g2_config) = config_data.get("G2_CONFIG")
-        && let Some(array) = g2_config.get("CFG_CFRTN")
-        && let Some(items) = array.as_array()
-        && items.iter().any(|item| {
-            item.get("CFUNC_ID").and_then(|v| v.as_i64()) == Some(cfunc_id)
-                && item.get("CFRTN_CODE").and_then(|v| v.as_str()) == Some(&cfrtn_code)
-        })
-    {
-        return Err(SzConfigError::validation(format!(
-            "Return code {cfrtn_code} already exists for function {cfunc_code}"
-        )));
-    }
-
-    // Get next CFRTN_ID
-    let cfrtn_id = get_next_id(&config_data, "G2_CONFIG.CFG_CFRTN", "CFRTN_ID", 1)?;
-
-    // Create new return code record
-    let mut new_record = json!({
-        "CFRTN_ID": cfrtn_id,
-        "CFUNC_ID": cfunc_id,
-        "CFRTN_CODE": cfrtn_code,
-    });
-
-    // Add optional description (always present, null when not specified)
-    new_record["CFRTN_DESC"] = match cfrtn_desc {
-        Some(desc) => json!(desc),
-        None => Value::Null,
-    };
-
-    // Add to CFG_CFRTN
-    let modified_json = add_to_config_array(config_json, "CFG_CFRTN", new_record.clone())?;
-
-    Ok((modified_json, new_record))
 }
 
 #[cfg(test)]
@@ -375,5 +326,44 @@ mod tests {
         let items = result.unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0]["function"], "CMP_NAME");
+    }
+
+    /// add_comparison_function must write a complete CFG_CFUNC row even when the
+    /// caller omits optionals — they become null, never dropped. ANON_SUPPORT
+    /// defaults to "No".
+    #[test]
+    fn test_add_comparison_function_emits_all_keys() {
+        let config = get_test_config();
+        let (modified, record) = add_comparison_function(
+            &config,
+            "custom_cmp",
+            AddComparisonFunctionParams {
+                connect_str: "g2CustomCmp",
+                description: None,
+                language: None,
+                anon_support: None,
+            },
+        )
+        .unwrap();
+
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let arr = value["G2_CONFIG"]["CFG_CFUNC"].as_array().unwrap();
+        let obj = arr.last().unwrap().as_object().unwrap();
+        for key in [
+            "CFUNC_ID",
+            "CFUNC_CODE",
+            "CONNECT_STR",
+            "ANON_SUPPORT",
+            "CFUNC_DESC",
+            "LANGUAGE",
+        ] {
+            assert!(obj.contains_key(key), "{key} key must be present");
+        }
+        assert_eq!(obj["CFUNC_CODE"], json!("CUSTOM_CMP"));
+        assert_eq!(obj["CONNECT_STR"], json!("g2CustomCmp"));
+        assert_eq!(obj["ANON_SUPPORT"], json!("No"));
+        assert_eq!(obj["CFUNC_DESC"], Value::Null);
+        assert_eq!(obj["LANGUAGE"], Value::Null);
+        assert_eq!(record["ANON_SUPPORT"], json!("No"));
     }
 }

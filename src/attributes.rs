@@ -1,6 +1,37 @@
 use crate::error::{Result, SzConfigError};
 use crate::helpers;
+use serde::Serialize;
 use serde_json::{Value, json};
+
+// ============================================================================
+// Row Structs
+// ============================================================================
+
+/// Complete CFG_ATTR row.
+///
+/// Derives `Serialize` with no `skip_serializing_if`, so every key is always
+/// emitted (the nullable `DEFAULT_VALUE` serializes as JSON `null` rather than
+/// being dropped). The Senzing engine's config loader requires every key to be
+/// present, so partial rows must never be written.
+#[derive(Debug, Clone, Serialize)]
+struct AttrRow {
+    #[serde(rename = "ATTR_ID")]
+    attr_id: i64,
+    #[serde(rename = "ATTR_CODE")]
+    attr_code: String,
+    #[serde(rename = "ATTR_CLASS")]
+    attr_class: String,
+    #[serde(rename = "FTYPE_CODE")]
+    ftype_code: String,
+    #[serde(rename = "FELEM_CODE")]
+    felem_code: String,
+    #[serde(rename = "FELEM_REQ")]
+    felem_req: String,
+    #[serde(rename = "DEFAULT_VALUE")]
+    default_value: Option<String>,
+    #[serde(rename = "INTERNAL")]
+    internal: String,
+}
 
 // ============================================================================
 // Parameter Structs
@@ -171,17 +202,20 @@ pub fn add_attribute(config_json: &str, params: AddAttributeParams) -> Result<(S
     // Get next ATTR_ID
     let next_attr_id = helpers::get_next_id_from_array(attrs, "ATTR_ID")?;
 
-    // Create CFG_ATTR entry (matching Python lines 2342-2350)
-    let new_attribute = json!({
-        "ATTR_ID": next_attr_id,
-        "ATTR_CODE": attribute_upper.clone(),
-        "ATTR_CLASS": params.class,
-        "FTYPE_CODE": feature_upper,  // Use actual feature code, not Null
-        "FELEM_CODE": element_upper,  // Use actual element code, not Null
-        "FELEM_REQ": required,
-        "DEFAULT_VALUE": params.default_value.map(|v| json!(v)).unwrap_or(Value::Null),
-        "INTERNAL": internal
-    });
+    // Build a complete row via AttrRow so every CFG_ATTR key is present
+    // (the nullable DEFAULT_VALUE serializes as null) matching Python lines
+    // 2342-2350. FTYPE_CODE/FELEM_CODE use the actual codes, not Null.
+    let row = AttrRow {
+        attr_id: next_attr_id,
+        attr_code: attribute_upper.clone(),
+        attr_class: params.class.to_string(),
+        ftype_code: feature_upper,
+        felem_code: element_upper,
+        felem_req: required.to_string(),
+        default_value: params.default_value.map(str::to_string),
+        internal: internal.to_string(),
+    };
+    let new_attribute = serde_json::to_value(&row)?;
 
     // Add to CFG_ATTR only (Python does not create FBOM in addAttribute)
     let modified_json =
@@ -289,6 +323,7 @@ pub fn list_attributes(config_json: &str) -> Result<Vec<Value>> {
 /// - `JsonParse` if config_json is invalid
 /// - `MissingSection` if CFG_ATTR section doesn't exist
 pub fn set_attribute(config_json: &str, params: SetAttributeParams) -> Result<String> {
+    // In-place update of a complete existing row; all keys preserved.
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
@@ -340,4 +375,87 @@ pub fn set_attribute(config_json: &str, params: SetAttributeParams) -> Result<St
     }
 
     serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ATTR_KEYS: [&str; 8] = [
+        "ATTR_ID",
+        "ATTR_CODE",
+        "ATTR_CLASS",
+        "FTYPE_CODE",
+        "FELEM_CODE",
+        "FELEM_REQ",
+        "DEFAULT_VALUE",
+        "INTERNAL",
+    ];
+
+    const TEST_CONFIG: &str = r#"{
+        "G2_CONFIG": {
+            "CFG_ATTR": [],
+            "CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}],
+            "CFG_FELEM": [{"FELEM_ID": 1, "FELEM_CODE": "FULL_NAME"}]
+        }
+    }"#;
+
+    fn assert_all_keys(attr: &Value) {
+        let obj = attr.as_object().unwrap();
+        for key in ATTR_KEYS {
+            assert!(obj.contains_key(key), "{key} key must be present");
+        }
+    }
+
+    #[test]
+    fn test_add_attribute_emits_all_keys() {
+        let params = AddAttributeParams {
+            attribute: "my_attr",
+            feature: "NAME",
+            element: "FULL_NAME",
+            class: "NAME",
+            default_value: None,
+            internal: None,
+            required: None,
+        };
+
+        let (modified, returned) = add_attribute(TEST_CONFIG, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let attr = &value["G2_CONFIG"]["CFG_ATTR"][0];
+
+        assert_all_keys(attr);
+        // The returned Value must carry every key too (used for display).
+        assert_all_keys(&returned);
+
+        assert_eq!(attr["ATTR_CODE"], json!("MY_ATTR"));
+        assert_eq!(attr["ATTR_CLASS"], json!("NAME"));
+        assert_eq!(attr["FTYPE_CODE"], json!("NAME"));
+        assert_eq!(attr["FELEM_CODE"], json!("FULL_NAME"));
+        assert_eq!(attr["FELEM_REQ"], json!("No"));
+        assert_eq!(attr["INTERNAL"], json!("No"));
+        // Nullable default surfaces as null (present, not dropped).
+        assert_eq!(attr["DEFAULT_VALUE"], Value::Null);
+    }
+
+    #[test]
+    fn test_add_attribute_with_default_value() {
+        let params = AddAttributeParams {
+            attribute: "my_attr",
+            feature: "NAME",
+            element: "FULL_NAME",
+            class: "NAME",
+            default_value: Some("DFLT"),
+            internal: Some("Yes"),
+            required: Some("Desired"),
+        };
+
+        let (modified, _returned) = add_attribute(TEST_CONFIG, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let attr = &value["G2_CONFIG"]["CFG_ATTR"][0];
+
+        assert_all_keys(attr);
+        assert_eq!(attr["DEFAULT_VALUE"], json!("DFLT"));
+        assert_eq!(attr["INTERNAL"], json!("Yes"));
+        assert_eq!(attr["FELEM_REQ"], json!("Desired"));
+    }
 }

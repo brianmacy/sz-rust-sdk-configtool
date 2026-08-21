@@ -7,7 +7,32 @@ use crate::error::SzConfigError;
 use crate::helpers::{
     add_to_config_array, delete_from_config_array, find_in_config_array, get_next_id,
 };
+use serde::Serialize;
 use serde_json::{Value, json};
+
+// ============================================================================
+// Row Structs
+// ============================================================================
+
+/// Complete CFG_SFUNC row.
+///
+/// Derives `Serialize` with no `skip_serializing_if`, so every key is always
+/// emitted (optional fields serialize as JSON `null`). The Senzing engine's
+/// config loader requires every key to be present, so partial rows must never
+/// be written.
+#[derive(Debug, Clone, Serialize)]
+struct SfuncRow {
+    #[serde(rename = "SFUNC_ID")]
+    sfunc_id: i64,
+    #[serde(rename = "SFUNC_CODE")]
+    sfunc_code: String,
+    #[serde(rename = "CONNECT_STR")]
+    connect_str: String,
+    #[serde(rename = "SFUNC_DESC")]
+    sfunc_desc: Option<String>,
+    #[serde(rename = "LANGUAGE")]
+    language: Option<String>,
+}
 
 // ============================================================================
 // Parameter Structs
@@ -75,22 +100,16 @@ pub fn add_standardize_function(
         serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
     let sfunc_id = get_next_id(&config_data, "G2_CONFIG.CFG_SFUNC", "SFUNC_ID", 1)?;
 
-    // Create new function record
-    let mut new_record = json!({
-        "SFUNC_ID": sfunc_id,
-        "SFUNC_CODE": sfunc_code,
-        "CONNECT_STR": params.connect_str,
-    });
-
-    // Add optional fields (always present, null when not specified)
-    new_record["SFUNC_DESC"] = match params.description {
-        Some(desc) => json!(desc),
-        None => Value::Null,
+    // Build a complete row via SfuncRow so every CFG_SFUNC key is present
+    // (optional fields serialize as null) regardless of what the caller passed.
+    let row = SfuncRow {
+        sfunc_id,
+        sfunc_code,
+        connect_str: params.connect_str.to_string(),
+        sfunc_desc: params.description.map(str::to_string),
+        language: params.language.map(str::to_string),
     };
-    new_record["LANGUAGE"] = match params.language {
-        Some(lang) => json!(lang),
-        None => Value::Null,
-    };
+    let new_record = serde_json::to_value(&row)?;
 
     // Add to CFG_SFUNC
     let modified_json = add_to_config_array(config_json, "CFG_SFUNC", new_record.clone())?;
@@ -211,6 +230,7 @@ pub fn set_standardize_function(
         SzConfigError::not_found(format!("Standardize function not found: {sfunc_code}"))
     })?;
 
+    // In-place update of a complete existing row; all keys preserved.
     // Update fields if provided
     if let Some(obj) = function.as_object_mut() {
         if let Some(conn) = params.connect_str {
@@ -295,5 +315,40 @@ mod tests {
         assert!(result.is_ok());
         let (modified, _) = result.unwrap();
         assert!(!modified.contains("PARSE_NAME"));
+    }
+
+    /// add_standardize_function must write a complete CFG_SFUNC row even when the
+    /// caller omits optionals — they become null, never dropped.
+    #[test]
+    fn test_add_standardize_function_emits_all_keys() {
+        let config = get_test_config();
+        let (modified, record) = add_standardize_function(
+            &config,
+            "custom_parse",
+            AddStandardizeFunctionParams {
+                connect_str: "g2CustomParse",
+                description: None,
+                language: None,
+            },
+        )
+        .unwrap();
+
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let arr = value["G2_CONFIG"]["CFG_SFUNC"].as_array().unwrap();
+        let obj = arr.last().unwrap().as_object().unwrap();
+        for key in [
+            "SFUNC_ID",
+            "SFUNC_CODE",
+            "CONNECT_STR",
+            "SFUNC_DESC",
+            "LANGUAGE",
+        ] {
+            assert!(obj.contains_key(key), "{key} key must be present");
+        }
+        assert_eq!(obj["SFUNC_CODE"], json!("CUSTOM_PARSE"));
+        assert_eq!(obj["CONNECT_STR"], json!("g2CustomParse"));
+        assert_eq!(obj["SFUNC_DESC"], Value::Null);
+        assert_eq!(obj["LANGUAGE"], Value::Null);
+        assert_eq!(record["SFUNC_DESC"], Value::Null);
     }
 }

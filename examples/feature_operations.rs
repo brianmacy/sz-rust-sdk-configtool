@@ -52,7 +52,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         code: "EMAIL",
         description: Some("Email Address"),
         data_type: Some("string"),
-        tokenized: None,
     };
 
     config = elements::add_element(&config, add_params)?;

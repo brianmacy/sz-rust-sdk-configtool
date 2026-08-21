@@ -3,6 +3,7 @@
 //! Functions for managing CFG_DFCALL (distinct calls) and CFG_DFBOM
 //! (distinct bill of materials) configuration sections.
 
+use crate::config_rows::{DfbomRow, DfcallRow};
 use crate::error::{Result, SzConfigError};
 use crate::helpers::{
     find_in_config_array, get_next_id, lookup_dfunc_id, lookup_element_id, lookup_feature_id,
@@ -164,11 +165,8 @@ pub fn add_distinct_call(config: &str, params: AddDistinctCallParams) -> Result<
 
     // Process element list and create DFBOM records
     let mut dfbom_records = Vec::new();
-    let mut exec_order = 0;
 
     for (idx, element_code) in params.element_list.iter().enumerate() {
-        exec_order += 1;
-
         // Validate element is not blank (already checked in add_distinct_call, defensive)
         if element_code.trim().is_empty() {
             return Err(SzConfigError::InvalidInput(format!(
@@ -180,22 +178,26 @@ pub fn add_distinct_call(config: &str, params: AddDistinctCallParams) -> Result<
         // Lookup element ID (global lookup - Python allows any element in call)
         let bom_felem_id = lookup_element_id(config, element_code)?;
 
-        // Create DFBOM record
-        dfbom_records.push(json!({
-            "DFCALL_ID": dfcall_id,
-            "FTYPE_ID": ftype_id,
-            "FELEM_ID": bom_felem_id,
-            "EXEC_ORDER": exec_order
-        }));
+        // Create DFBOM record via DfbomRow so every key is always present.
+        // EXEC_ORDER is 1-based over the element list.
+        let bom_row = DfbomRow {
+            dfcall_id,
+            ftype_id,
+            felem_id: bom_felem_id,
+            exec_order: idx as i64 + 1,
+        };
+        dfbom_records.push(serde_json::to_value(&bom_row)?);
     }
 
-    // Create new CFG_DFCALL record (EXEC_ORDER is always 1 for distinct calls)
-    let new_record = json!({
-        "DFCALL_ID": dfcall_id,
-        "FTYPE_ID": ftype_id,
-        "DFUNC_ID": dfunc_id,
-        "EXEC_ORDER": 1
-    });
+    // Create new CFG_DFCALL record via DfcallRow. CFG_DFCALL is exactly
+    // DFCALL_ID, FTYPE_ID, DFUNC_ID per the authoritative Senzing v4 schema;
+    // FELEM_ID and EXEC_ORDER live on the CFG_DFBOM rows built above.
+    let dfcall_row = DfcallRow {
+        dfcall_id,
+        ftype_id,
+        dfunc_id,
+    };
+    let new_record = serde_json::to_value(&dfcall_row)?;
 
     // Add to config
     if let Some(dfcall_array) = config_data["G2_CONFIG"]["CFG_DFCALL"].as_array_mut() {
@@ -399,13 +401,14 @@ pub fn add_distinct_call_element(
         }
     }
 
-    // Create new DBOM record
-    let new_record = json!({
-        "DFCALL_ID": params.dfcall_id,
-        "FTYPE_ID": params.ftype_id,
-        "FELEM_ID": params.felem_id,
-        "EXEC_ORDER": params.exec_order
-    });
+    // Create new DBOM record via DfbomRow so every key is always present.
+    let row = DfbomRow {
+        dfcall_id: params.dfcall_id,
+        ftype_id: params.ftype_id,
+        felem_id: params.felem_id,
+        exec_order: params.exec_order,
+    };
+    let new_record = serde_json::to_value(&row)?;
 
     // Add to CFG_DFBOM
     if let Some(dbom_array) = config_data["G2_CONFIG"]["CFG_DFBOM"].as_array_mut() {
@@ -481,4 +484,84 @@ pub fn set_distinct_call_element(
 ) -> Result<String> {
     // This is a stub - not commonly used
     Ok(config.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // CFG_DFCALL is exactly DFCALL_ID, FTYPE_ID, DFUNC_ID per the Senzing v4
+    // schema; FELEM_ID and EXEC_ORDER belong to CFG_DFBOM.
+    const DFCALL_KEYS: [&str; 3] = ["DFCALL_ID", "FTYPE_ID", "DFUNC_ID"];
+    const DFBOM_KEYS: [&str; 4] = ["DFCALL_ID", "FTYPE_ID", "FELEM_ID", "EXEC_ORDER"];
+
+    fn assert_all_keys(obj: &Value, keys: &[&str]) {
+        let map = obj.as_object().unwrap();
+        for key in keys {
+            assert!(map.contains_key(*key), "{key} key must be present");
+        }
+    }
+
+    fn base_config() -> String {
+        r#"{"G2_CONFIG": {
+            "CFG_DFCALL": [],
+            "CFG_DFBOM": [],
+            "CFG_FTYPE": [{"FTYPE_ID": 5, "FTYPE_CODE": "NAME"}],
+            "CFG_DFUNC": [{"DFUNC_ID": 7, "DFUNC_CODE": "FELEM_EXP"}],
+            "CFG_FELEM": [{"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"}]
+        }}"#
+        .to_string()
+    }
+
+    #[test]
+    fn test_add_distinct_call_emits_all_keys() {
+        let config = base_config();
+        let params = AddDistinctCallParams {
+            ftype_code: "NAME".to_string(),
+            dfunc_code: "FELEM_EXP".to_string(),
+            element_list: vec!["FIRST_NAME".to_string()],
+        };
+
+        let (modified, new_record) = add_distinct_call(&config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+
+        // CFG_DFCALL row: exactly 3 keys (no FELEM_ID, no EXEC_ORDER).
+        let dfcall = &value["G2_CONFIG"]["CFG_DFCALL"][0];
+        assert_all_keys(dfcall, &DFCALL_KEYS);
+        assert_eq!(
+            dfcall.as_object().unwrap().len(),
+            3,
+            "DFCALL is exactly 3 columns"
+        );
+        assert!(!dfcall.as_object().unwrap().contains_key("FELEM_ID"));
+        assert!(!dfcall.as_object().unwrap().contains_key("EXEC_ORDER"));
+        assert_eq!(dfcall["FTYPE_ID"], json!(5));
+        assert_eq!(dfcall["DFUNC_ID"], json!(7));
+        assert_all_keys(&new_record, &DFCALL_KEYS);
+
+        // CFG_DFBOM row: all 4 keys.
+        let dfbom = &value["G2_CONFIG"]["CFG_DFBOM"][0];
+        assert_all_keys(dfbom, &DFBOM_KEYS);
+        assert_eq!(dfbom["FELEM_ID"], json!(11));
+        assert_eq!(dfbom["EXEC_ORDER"], json!(1));
+    }
+
+    #[test]
+    fn test_add_distinct_call_element_emits_all_keys() {
+        let config = base_config();
+        let params = AddDistinctCallElementParams {
+            dfcall_id: 1000,
+            ftype_id: 5,
+            felem_id: 11,
+            exec_order: 3,
+        };
+
+        let (modified, new_record) = add_distinct_call_element(&config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let dfbom = &value["G2_CONFIG"]["CFG_DFBOM"][0];
+
+        assert_all_keys(dfbom, &DFBOM_KEYS);
+        assert_all_keys(&new_record, &DFBOM_KEYS);
+        assert_eq!(dfbom["EXEC_ORDER"], json!(3));
+    }
 }

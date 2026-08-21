@@ -4,7 +4,7 @@
 //! Senzing configuration JSON, including:
 //! - Standardize functions (CFG_SFUNC)
 //! - Expression functions (CFG_EFUNC)
-//! - Comparison functions (CFG_CFUNC) and return codes (CFG_CFRTN)
+//! - Comparison functions (CFG_CFUNC)
 //! - Distinct functions (CFG_DFUNC)
 //! - Matching functions (CFG_RTYPE - placeholder)
 //! - Scoring functions (CFG_RTYPE - placeholder)
@@ -32,8 +32,8 @@ pub use expression::{
 };
 
 pub use comparison::{
-    add_comparison_func_return_code, add_comparison_function, delete_comparison_function,
-    get_comparison_function, list_comparison_functions, set_comparison_function,
+    add_comparison_function, delete_comparison_function, get_comparison_function,
+    list_comparison_functions, set_comparison_function,
 };
 
 pub use distinct::{

@@ -262,7 +262,6 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 code: element,
                 description: None, // Will default to code
                 data_type: datatype,
-                tokenized: None,
             };
 
             crate::elements::add_element(config, add_params)

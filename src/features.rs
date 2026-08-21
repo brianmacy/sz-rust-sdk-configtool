@@ -1,3 +1,6 @@
+use crate::config_rows::{
+    CfbomRow, CfcallRow, DfcallRow, EfbomRow, EfcallRow, FbomRow, FelemRow, FtypeRow, SfcallRow,
+};
 use crate::error::{Result, SzConfigError};
 use crate::helpers;
 use serde_json::{Value, json};
@@ -511,23 +514,24 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
         }
     }
 
-    // Create CFG_FTYPE record
-    let ftype_record = json!({
-        "FTYPE_ID": ftype_id,
-        "FTYPE_CODE": feature_upper.clone(),
-        "FTYPE_DESC": feature_upper.clone(),
-        "FCLASS_ID": fclass_id,
-        "FTYPE_FREQ": frequency,
-        "FTYPE_EXCL": exclusivity,
-        "FTYPE_STAB": stability,
-        "ANONYMIZE": anonymize_val,
-        "DERIVED": derived_val,
-        "USED_FOR_CAND": candidates_val,
-        "SHOW_IN_MATCH_KEY": matchkey_val,
-        "PERSIST_HISTORY": history_val,
-        "VERSION": params.version.unwrap_or(1),
-        "RTYPE_ID": params.rtype_id.unwrap_or(0)
-    });
+    // Create CFG_FTYPE record via FtypeRow so every key is always present.
+    let ftype_row = FtypeRow {
+        ftype_id,
+        ftype_code: feature_upper.clone(),
+        ftype_desc: feature_upper.clone(),
+        fclass_id,
+        ftype_freq: frequency.to_string(),
+        ftype_excl: exclusivity.to_string(),
+        ftype_stab: stability.to_string(),
+        anonymize: anonymize_val.to_string(),
+        derived: derived_val.to_string(),
+        used_for_cand: candidates_val.to_string(),
+        show_in_match_key: matchkey_val.to_string(),
+        persist_history: history_val.to_string(),
+        version: params.version.unwrap_or(1),
+        rtype_id: params.rtype_id.unwrap_or(0),
+    };
+    let ftype_record = serde_json::to_value(&ftype_row)?;
 
     // Add to CFG_FTYPE
     if let Some(ftype_array) = config["G2_CONFIG"]["CFG_FTYPE"].as_array_mut() {
@@ -540,13 +544,13 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
             .as_array()
             .ok_or_else(|| SzConfigError::MissingSection("CFG_SFCALL".to_string()))?;
         let id = helpers::get_next_id_with_min(sfcall_array, "SFCALL_ID", 1000)?;
-        let record = json!({
-            "SFCALL_ID": id,
-            "SFUNC_ID": sfunc_id,
-            "EXEC_ORDER": 1,
-            "FTYPE_ID": ftype_id,
-            "FELEM_ID": -1
-        });
+        let record = serde_json::to_value(&SfcallRow {
+            sfcall_id: id,
+            sfunc_id,
+            exec_order: Some(1),
+            ftype_id,
+            felem_id: -1,
+        })?;
         if let Some(array) = config["G2_CONFIG"]["CFG_SFCALL"].as_array_mut() {
             array.push(record);
         }
@@ -558,15 +562,15 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
             .as_array()
             .ok_or_else(|| SzConfigError::MissingSection("CFG_EFCALL".to_string()))?;
         let id = helpers::get_next_id_with_min(efcall_array, "EFCALL_ID", 1000)?;
-        let record = json!({
-            "EFCALL_ID": id,
-            "EFUNC_ID": efunc_id,
-            "EXEC_ORDER": 1,
-            "FTYPE_ID": ftype_id,
-            "FELEM_ID": -1,
-            "EFEAT_FTYPE_ID": -1,
-            "IS_VIRTUAL": "No"
-        });
+        let record = serde_json::to_value(&EfcallRow {
+            efcall_id: id,
+            efunc_id,
+            exec_order: 1,
+            ftype_id,
+            felem_id: -1,
+            efeat_ftype_id: -1,
+            is_virtual: "No".to_string(),
+        })?;
         if let Some(array) = config["G2_CONFIG"]["CFG_EFCALL"].as_array_mut() {
             array.push(record);
         }
@@ -581,11 +585,12 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
             .as_array()
             .ok_or_else(|| SzConfigError::MissingSection("CFG_CFCALL".to_string()))?;
         let id = helpers::get_next_id_with_min(cfcall_array, "CFCALL_ID", 1000)?;
-        let record = json!({
-            "CFCALL_ID": id,
-            "CFUNC_ID": cfunc_id,
-            "FTYPE_ID": ftype_id
-        });
+        // CFG_CFCALL is exactly CFCALL_ID, FTYPE_ID, CFUNC_ID (no EXEC_ORDER column).
+        let record = serde_json::to_value(&CfcallRow {
+            cfcall_id: id,
+            cfunc_id,
+            ftype_id,
+        })?;
         if let Some(array) = config["G2_CONFIG"]["CFG_CFCALL"].as_array_mut() {
             array.push(record);
         }
@@ -699,13 +704,12 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
         } else {
             // Create new element
             let new_id = helpers::get_next_id_with_min(felem_array, "FELEM_ID", 1000)?;
-            let new_element = json!({
-                "FELEM_ID": new_id,
-                "FELEM_CODE": element_code.clone(),
-                "FELEM_DESC": element_code.clone(),
-                "DATA_TYPE": "string",
-                "TOKENIZE": "No"
-            });
+            let new_element = serde_json::to_value(&FelemRow {
+                felem_id: new_id,
+                felem_code: element_code.clone(),
+                felem_desc: element_code.clone(),
+                data_type: "string".to_string(),
+            })?;
             if let Some(array) = config["G2_CONFIG"]["CFG_FELEM"].as_array_mut() {
                 array.push(new_element);
             }
@@ -714,13 +718,13 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
 
         // Add to EFBOM if expressed
         if efcall_id > 0 && expressed.eq_ignore_ascii_case("yes") {
-            let record = json!({
-                "EFCALL_ID": efcall_id,
-                "EXEC_ORDER": fbom_order,
-                "FTYPE_ID": ftype_id,
-                "FELEM_ID": felem_id,
-                "FELEM_REQ": "Yes"
-            });
+            let record = serde_json::to_value(&EfbomRow {
+                efcall_id,
+                exec_order: fbom_order,
+                ftype_id,
+                felem_id,
+                felem_req: "Yes".to_string(),
+            })?;
             if let Some(array) = config["G2_CONFIG"]["CFG_EFBOM"].as_array_mut() {
                 array.push(record);
             }
@@ -728,30 +732,26 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
 
         // Add to CFBOM if compared
         if cfcall_id > 0 && compared.eq_ignore_ascii_case("yes") {
-            let record = json!({
-                "CFCALL_ID": cfcall_id,
-                "EXEC_ORDER": fbom_order,
-                "FTYPE_ID": ftype_id,
-                "FELEM_ID": felem_id
-            });
+            let record = serde_json::to_value(&CfbomRow {
+                cfcall_id,
+                exec_order: fbom_order,
+                ftype_id,
+                felem_id,
+            })?;
             if let Some(array) = config["G2_CONFIG"]["CFG_CFBOM"].as_array_mut() {
                 array.push(record);
             }
         }
 
-        // Add to FBOM (always)
-        let mut fbom_record = json!({
-            "FTYPE_ID": ftype_id,
-            "FELEM_ID": felem_id,
-            "EXEC_ORDER": fbom_order,
-            "DISPLAY_LEVEL": display_level,
-            "DERIVED": elem_derived
-        });
-
-        fbom_record["DISPLAY_DELIM"] = match display_delim {
-            Some(delim) => json!(delim),
-            None => Value::Null,
-        };
+        // Add to FBOM (always). DISPLAY_DELIM is nullable (seed-then-null).
+        let fbom_record = serde_json::to_value(&FbomRow {
+            ftype_id,
+            felem_id,
+            exec_order: Some(fbom_order),
+            display_level: Some(display_level),
+            display_delim,
+            derived: Some(elem_derived),
+        })?;
 
         if let Some(array) = config["G2_CONFIG"]["CFG_FBOM"].as_array_mut() {
             array.push(fbom_record);
@@ -1014,6 +1014,8 @@ pub fn set_feature(config_json: &str, params: SetFeatureParams) -> Result<String
         .find(|f| f["FTYPE_ID"].as_i64() == Some(ftype_id))
         .ok_or_else(|| SzConfigError::NotFound("Feature not found".to_string()))?;
 
+    // In-place update of a complete existing CFG_FTYPE row; all keys preserved.
+    // Not routed through FtypeRow (which would require reconstructing every field).
     // Track if any changes made (for "No changes detected")
     let mut changes_made = false;
 
@@ -1451,28 +1453,16 @@ pub fn add_feature_comparison(
         )));
     }
 
-    // Build record
-    let mut record = json!({
-        "FTYPE_ID": ftype_id,
-        "FELEM_ID": felem_id,
-    });
-
-    record["EXEC_ORDER"] = match params.exec_order {
-        Some(order) => json!(order),
-        None => Value::Null,
-    };
-    record["DISPLAY_LEVEL"] = match params.display_level {
-        Some(level) => json!(level),
-        None => Value::Null,
-    };
-    record["DISPLAY_DELIM"] = match params.display_delim {
-        Some(delim) => json!(delim),
-        None => Value::Null,
-    };
-    record["DERIVED"] = match params.derived {
-        Some(der) => json!(der),
-        None => Value::Null,
-    };
+    // Build record via FbomRow so every CFG_FBOM key is present; unset optional
+    // fields serialize as null (seed-then-null preserved).
+    let record = serde_json::to_value(&FbomRow {
+        ftype_id,
+        felem_id,
+        exec_order: params.exec_order,
+        display_level: params.display_level,
+        display_delim: params.display_delim.map(str::to_string),
+        derived: params.derived.map(str::to_string),
+    })?;
 
     helpers::add_to_config_array(config_json, "CFG_FBOM", record)
 }
@@ -1648,24 +1638,22 @@ pub fn add_feature_distinct_call_element(
 
     let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
     let dfunc_id = helpers::lookup_dfunc_id(config_json, distinct_func_code)?;
-    let felem_id = if let Some(code) = params.element_code {
-        helpers::lookup_element_id(config_json, code)?
-    } else {
-        -1
-    };
+    // Validate the element code if supplied (a DFCALL identifies a feature/function
+    // pair; per the authoritative schema its row carries no FELEM_ID or EXEC_ORDER).
+    if let Some(code) = params.element_code {
+        helpers::lookup_element_id(config_json, code)?;
+    }
 
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    // Check if already exists
+    // Check if already exists (identity is FTYPE_ID + DFUNC_ID)
     let dfcall_array = config["G2_CONFIG"]["CFG_DFCALL"]
         .as_array()
         .ok_or_else(|| SzConfigError::MissingSection("CFG_DFCALL".to_string()))?;
 
     if dfcall_array.iter().any(|item| {
-        item["FTYPE_ID"].as_i64() == Some(ftype_id)
-            && item["DFUNC_ID"].as_i64() == Some(dfunc_id)
-            && item["FELEM_ID"].as_i64() == Some(felem_id)
+        item["FTYPE_ID"].as_i64() == Some(ftype_id) && item["DFUNC_ID"].as_i64() == Some(dfunc_id)
     }) {
         return Err(SzConfigError::AlreadyExists(format!(
             "Feature distinct call element: {:?}+{:?}",
@@ -1676,18 +1664,13 @@ pub fn add_feature_distinct_call_element(
     // Get next DFCALL_ID
     let dfcall_id = helpers::get_next_id_with_min(dfcall_array, "DFCALL_ID", 1000)?;
 
-    // Build record
-    let mut record = json!({
-        "DFCALL_ID": dfcall_id,
-        "FTYPE_ID": ftype_id,
-        "DFUNC_ID": dfunc_id,
-        "FELEM_ID": felem_id,
-    });
-
-    record["EXEC_ORDER"] = match params.exec_order {
-        Some(order) => json!(order),
-        None => Value::Null,
-    };
+    // Build record via DfcallRow. CFG_DFCALL is exactly DFCALL_ID, FTYPE_ID,
+    // DFUNC_ID per the authoritative Senzing v4 schema.
+    let record = serde_json::to_value(&DfcallRow {
+        dfcall_id,
+        ftype_id,
+        dfunc_id,
+    })?;
 
     helpers::add_to_config_array(config_json, "CFG_DFCALL", record)
 }
@@ -1761,6 +1744,8 @@ pub fn update_feature_version(config_json: &str, version: &str) -> Result<String
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
+    // In-place update of a single scalar field (not a CFG_* section row builder);
+    // all other keys preserved. Left as-is per spec.
     // Navigate to COMPATIBILITY_VERSION
     let compat_version = config["G2_CONFIG"]["CONFIG_BASE_VERSION"]["COMPATIBILITY_VERSION"]
         .as_object_mut()
@@ -1769,4 +1754,224 @@ pub fn update_feature_version(config_json: &str, version: &str) -> Result<String
     compat_version.insert("FEATURE_VERSION".to_string(), json!(version));
 
     serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const FTYPE_KEYS: [&str; 14] = [
+        "FTYPE_ID",
+        "FTYPE_CODE",
+        "FTYPE_DESC",
+        "FCLASS_ID",
+        "FTYPE_FREQ",
+        "FTYPE_EXCL",
+        "FTYPE_STAB",
+        "ANONYMIZE",
+        "DERIVED",
+        "USED_FOR_CAND",
+        "SHOW_IN_MATCH_KEY",
+        "PERSIST_HISTORY",
+        "VERSION",
+        "RTYPE_ID",
+    ];
+    const FBOM_KEYS: [&str; 6] = [
+        "FTYPE_ID",
+        "FELEM_ID",
+        "EXEC_ORDER",
+        "DISPLAY_LEVEL",
+        "DISPLAY_DELIM",
+        "DERIVED",
+    ];
+    const FELEM_KEYS: [&str; 4] = ["FELEM_ID", "FELEM_CODE", "FELEM_DESC", "DATA_TYPE"];
+
+    fn assert_all_keys(obj: &Value, keys: &[&str]) {
+        let map = obj.as_object().unwrap();
+        for key in keys {
+            assert!(map.contains_key(*key), "{key} key must be present");
+        }
+    }
+
+    /// add_feature must write a complete CFG_FTYPE row, a complete CFG_FELEM row
+    /// for the newly-created element, and a complete CFG_FBOM row.
+    #[test]
+    fn test_add_feature_emits_all_keys() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [],
+            "CFG_FCLASS": [{"FCLASS_ID": 1, "FCLASS_CODE": "OTHER"}],
+            "CFG_FELEM": [],
+            "CFG_FBOM": []
+        }}"#;
+
+        let elements = json!([{"element": "MYELEM"}]);
+        let params = AddFeatureParams {
+            feature: "MYFEAT",
+            element_list: &elements,
+            ..Default::default()
+        };
+        let modified = add_feature(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let g2 = &value["G2_CONFIG"];
+
+        let ftype = &g2["CFG_FTYPE"][0];
+        assert_all_keys(ftype, &FTYPE_KEYS);
+        assert_eq!(ftype["FTYPE_CODE"], json!("MYFEAT"));
+        assert_eq!(ftype["FTYPE_FREQ"], json!("FM")); // default behavior
+        assert_eq!(ftype["PERSIST_HISTORY"], json!("Yes")); // default history
+        assert_eq!(ftype["VERSION"], json!(1));
+        assert_eq!(ftype["RTYPE_ID"], json!(0));
+
+        // A new element was created for MYELEM.
+        let felem = &g2["CFG_FELEM"][0];
+        assert_all_keys(felem, &FELEM_KEYS);
+        assert_eq!(felem["FELEM_CODE"], json!("MYELEM"));
+        assert_eq!(felem["DATA_TYPE"], json!("string"));
+        // CFG_FELEM has no TOKENIZE column in the Senzing v4 schema.
+        assert!(
+            !felem.as_object().unwrap().contains_key("TOKENIZE"),
+            "CFG_FELEM must not carry a TOKENIZE key"
+        );
+
+        // FBOM row: DISPLAY_DELIM present as null (not supplied).
+        let fbom = &g2["CFG_FBOM"][0];
+        assert_all_keys(fbom, &FBOM_KEYS);
+        assert_eq!(fbom["DISPLAY_DELIM"], Value::Null);
+        assert_eq!(fbom["EXEC_ORDER"], json!(1));
+        assert_eq!(fbom["DISPLAY_LEVEL"], json!(1));
+        assert_eq!(fbom["DERIVED"], json!("No"));
+    }
+
+    /// add_feature with standardize/expression/comparison functions must write
+    /// complete CFG_SFCALL, CFG_EFCALL, CFG_CFCALL, CFG_EFBOM and CFG_CFBOM rows.
+    /// CFG_CFCALL has no EXEC_ORDER column in the Senzing v4 schema.
+    #[test]
+    fn test_add_feature_calls_emit_all_keys() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [],
+            "CFG_FCLASS": [{"FCLASS_ID": 1, "FCLASS_CODE": "OTHER"}],
+            "CFG_FELEM": [],
+            "CFG_FBOM": [],
+            "CFG_SFCALL": [],
+            "CFG_EFCALL": [],
+            "CFG_CFCALL": [],
+            "CFG_EFBOM": [],
+            "CFG_CFBOM": [],
+            "CFG_SFUNC": [{"SFUNC_ID": 1, "SFUNC_CODE": "MYSTD"}],
+            "CFG_EFUNC": [{"EFUNC_ID": 1, "EFUNC_CODE": "MYEXP"}],
+            "CFG_CFUNC": [{"CFUNC_ID": 1, "CFUNC_CODE": "MYCMP"}]
+        }}"#;
+
+        let elements = json!([{"element": "MYELEM", "expressed": "Yes", "compared": "Yes"}]);
+        let params = AddFeatureParams {
+            feature: "MYFEAT",
+            element_list: &elements,
+            standardize: Some("MYSTD"),
+            expression: Some("MYEXP"),
+            comparison: Some("MYCMP"),
+            ..Default::default()
+        };
+        let modified = add_feature(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let g2 = &value["G2_CONFIG"];
+
+        assert_all_keys(
+            &g2["CFG_SFCALL"][0],
+            &[
+                "SFCALL_ID",
+                "SFUNC_ID",
+                "EXEC_ORDER",
+                "FTYPE_ID",
+                "FELEM_ID",
+            ],
+        );
+        assert_all_keys(
+            &g2["CFG_EFCALL"][0],
+            &[
+                "EFCALL_ID",
+                "EFUNC_ID",
+                "EXEC_ORDER",
+                "FTYPE_ID",
+                "FELEM_ID",
+                "EFEAT_FTYPE_ID",
+                "IS_VIRTUAL",
+            ],
+        );
+
+        // CFG_CFCALL has no EXEC_ORDER column in the schema.
+        let cfcall = &g2["CFG_CFCALL"][0];
+        assert_all_keys(cfcall, &["CFCALL_ID", "CFUNC_ID", "FTYPE_ID"]);
+        assert!(
+            !cfcall.as_object().unwrap().contains_key("EXEC_ORDER"),
+            "CFG_CFCALL must NOT carry EXEC_ORDER"
+        );
+
+        assert_all_keys(
+            &g2["CFG_EFBOM"][0],
+            &[
+                "EFCALL_ID",
+                "EXEC_ORDER",
+                "FTYPE_ID",
+                "FELEM_ID",
+                "FELEM_REQ",
+            ],
+        );
+        assert_all_keys(
+            &g2["CFG_CFBOM"][0],
+            &["CFCALL_ID", "EXEC_ORDER", "FTYPE_ID", "FELEM_ID"],
+        );
+    }
+
+    /// add_feature_comparison must write a complete CFG_FBOM row with all keys
+    /// present as null when the optional params are not supplied.
+    #[test]
+    fn test_add_feature_comparison_emits_all_keys() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "PERSON"}],
+            "CFG_FELEM": [{"FELEM_ID": 5, "FELEM_CODE": "MYELEM"}],
+            "CFG_FBOM": []
+        }}"#;
+
+        let params = AddFeatureComparisonParams::new("PERSON", "MYELEM");
+        let modified = add_feature_comparison(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let fbom = &value["G2_CONFIG"]["CFG_FBOM"][0];
+
+        assert_all_keys(fbom, &FBOM_KEYS);
+        assert_eq!(fbom["FTYPE_ID"], json!(1));
+        assert_eq!(fbom["FELEM_ID"], json!(5));
+        // Optionals not supplied -> present as null.
+        assert_eq!(fbom["EXEC_ORDER"], Value::Null);
+        assert_eq!(fbom["DISPLAY_LEVEL"], Value::Null);
+        assert_eq!(fbom["DISPLAY_DELIM"], Value::Null);
+        assert_eq!(fbom["DERIVED"], Value::Null);
+    }
+
+    /// add_feature_distinct_call_element must write a CFG_DFCALL row with exactly
+    /// the three authoritative columns: DFCALL_ID, FTYPE_ID, DFUNC_ID. FELEM_ID
+    /// and EXEC_ORDER belong to CFG_DFBOM, not the DFCALL header row.
+    #[test]
+    fn test_add_feature_distinct_call_emits_all_keys() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "PERSON"}],
+            "CFG_DFUNC": [{"DFUNC_ID": 2, "DFUNC_CODE": "MYDIST"}],
+            "CFG_DFCALL": []
+        }}"#;
+
+        let params = AddFeatureDistinctCallElementParams::new("PERSON", "MYDIST");
+        let modified = add_feature_distinct_call_element(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let dfcall = &value["G2_CONFIG"]["CFG_DFCALL"][0];
+
+        assert_all_keys(dfcall, &["DFCALL_ID", "FTYPE_ID", "DFUNC_ID"]);
+        assert_eq!(
+            dfcall.as_object().unwrap().len(),
+            3,
+            "DFCALL is exactly 3 columns"
+        );
+        assert_eq!(dfcall["FTYPE_ID"], json!(1));
+        assert_eq!(dfcall["DFUNC_ID"], json!(2));
+        assert!(!dfcall.as_object().unwrap().contains_key("FELEM_ID"));
+        assert!(!dfcall.as_object().unwrap().contains_key("EXEC_ORDER"));
+    }
 }

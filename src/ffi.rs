@@ -5943,10 +5943,6 @@ pub extern "C" fn SzConfigTool_addElement(
             .get("dataType")
             .and_then(|v| v.as_str())
             .or_else(|| element_config.get("DATA_TYPE").and_then(|v| v.as_str())),
-        tokenized: element_config
-            .get("tokenized")
-            .and_then(|v| v.as_str())
-            .or_else(|| element_config.get("TOKENIZED").and_then(|v| v.as_str())),
     };
 
     handle_result!(crate::elements::add_element(config, params))
@@ -6090,10 +6086,6 @@ pub extern "C" fn SzConfigTool_setElement(
             .get("dataType")
             .and_then(|v| v.as_str())
             .or_else(|| updates_config.get("DATA_TYPE").and_then(|v| v.as_str())),
-        tokenized: updates_config
-            .get("tokenized")
-            .and_then(|v| v.as_str())
-            .or_else(|| updates_config.get("TOKENIZED").and_then(|v| v.as_str())),
     };
 
     handle_result!(crate::elements::set_element(config, params))
@@ -7956,6 +7948,7 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
             connect_str: connect,
             description: desc_opt,
             language: lang_opt,
+            anon_support: None,
         },
     ) {
         Ok((modified_config, _record)) => match CString::new(modified_config) {
@@ -8307,6 +8300,7 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
             connect_str: connect_opt,
             description: desc_opt,
             language: lang_opt,
+            anon_support: None,
         },
     ) {
         Ok((modified_config, _record)) => match CString::new(modified_config) {
