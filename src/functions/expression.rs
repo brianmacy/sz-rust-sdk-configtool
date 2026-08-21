@@ -7,7 +7,32 @@ use crate::error::SzConfigError;
 use crate::helpers::{
     add_to_config_array, delete_from_config_array, find_in_config_array, get_next_id,
 };
+use serde::Serialize;
 use serde_json::{Value, json};
+
+// ============================================================================
+// Row Structs
+// ============================================================================
+
+/// Complete CFG_EFUNC row.
+///
+/// Derives `Serialize` with no `skip_serializing_if`, so every key is always
+/// emitted (optional fields serialize as JSON `null`). The Senzing engine's
+/// config loader requires every key to be present, so partial rows must never
+/// be written.
+#[derive(Debug, Clone, Serialize)]
+struct EfuncRow {
+    #[serde(rename = "EFUNC_ID")]
+    efunc_id: i64,
+    #[serde(rename = "EFUNC_CODE")]
+    efunc_code: String,
+    #[serde(rename = "CONNECT_STR")]
+    connect_str: String,
+    #[serde(rename = "EFUNC_DESC")]
+    efunc_desc: Option<String>,
+    #[serde(rename = "LANGUAGE")]
+    language: Option<String>,
+}
 
 // ============================================================================
 // Parameter Structs
@@ -75,22 +100,16 @@ pub fn add_expression_function(
         serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
     let efunc_id = get_next_id(&config_data, "G2_CONFIG.CFG_EFUNC", "EFUNC_ID", 1)?;
 
-    // Create new function record
-    let mut new_record = json!({
-        "EFUNC_ID": efunc_id,
-        "EFUNC_CODE": efunc_code,
-        "CONNECT_STR": params.connect_str,
-    });
-
-    // Add optional fields (always present, null when not specified)
-    new_record["EFUNC_DESC"] = match params.description {
-        Some(desc) => json!(desc),
-        None => Value::Null,
+    // Build a complete row via EfuncRow so every CFG_EFUNC key is present
+    // (optional fields serialize as null) regardless of what the caller passed.
+    let row = EfuncRow {
+        efunc_id,
+        efunc_code,
+        connect_str: params.connect_str.to_string(),
+        efunc_desc: params.description.map(str::to_string),
+        language: params.language.map(str::to_string),
     };
-    new_record["LANGUAGE"] = match params.language {
-        Some(lang) => json!(lang),
-        None => Value::Null,
-    };
+    let new_record = serde_json::to_value(&row)?;
 
     // Add to CFG_EFUNC
     let modified_json = add_to_config_array(config_json, "CFG_EFUNC", new_record.clone())?;
@@ -211,6 +230,7 @@ pub fn set_expression_function(
         SzConfigError::not_found(format!("Expression function not found: {efunc_code}"))
     })?;
 
+    // In-place update of a complete existing row; all keys preserved.
     // Update fields if provided
     if let Some(obj) = function.as_object_mut() {
         if let Some(conn) = params.connect_str {
@@ -277,5 +297,41 @@ mod tests {
         let items = result.unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0]["function"], "EXPR_FEAT");
+    }
+
+    /// add_expression_function must write a complete CFG_EFUNC row even when the
+    /// caller omits optionals — they become null, never dropped.
+    #[test]
+    fn test_add_expression_function_emits_all_keys() {
+        let config = get_test_config();
+        let (modified, record) = add_expression_function(
+            &config,
+            "custom_expr",
+            AddExpressionFunctionParams {
+                connect_str: "g2CustomExpr",
+                description: None,
+                language: None,
+            },
+        )
+        .unwrap();
+
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let arr = value["G2_CONFIG"]["CFG_EFUNC"].as_array().unwrap();
+        let obj = arr.last().unwrap().as_object().unwrap();
+        for key in [
+            "EFUNC_ID",
+            "EFUNC_CODE",
+            "CONNECT_STR",
+            "EFUNC_DESC",
+            "LANGUAGE",
+        ] {
+            assert!(obj.contains_key(key), "{key} key must be present");
+        }
+        assert_eq!(obj["EFUNC_CODE"], json!("CUSTOM_EXPR"));
+        assert_eq!(obj["CONNECT_STR"], json!("g2CustomExpr"));
+        assert_eq!(obj["EFUNC_DESC"], Value::Null);
+        assert_eq!(obj["LANGUAGE"], Value::Null);
+        // Returned record mirrors the written row.
+        assert_eq!(record["EFUNC_DESC"], Value::Null);
     }
 }

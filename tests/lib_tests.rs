@@ -64,7 +64,6 @@ fn test_element_workflow() {
         code: "TEST_ELEM",
         description: Some("Test Element"),
         data_type: Some("string"),
-        tokenized: None,
     };
 
     let config = elements::add_element(&config, add_params).expect("Failed to add element");

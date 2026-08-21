@@ -3,6 +3,7 @@
 //! Functions for managing CFG_CFCALL (comparison calls) and CFG_CFBOM
 //! (comparison bill of materials) configuration sections.
 
+use crate::config_rows::{CfbomRow, CfcallRow};
 use crate::error::{Result, SzConfigError};
 use crate::helpers::{
     find_in_config_array, get_next_id, lookup_cfunc_id, lookup_element_id, lookup_feature_id,
@@ -180,11 +181,8 @@ pub fn add_comparison_call(
 
     // Process element list and create CFBOM records
     let mut cfbom_records = Vec::new();
-    let mut exec_order = 0;
 
     for (idx, element_code) in params.element_list.iter().enumerate() {
-        exec_order += 1;
-
         // Validate element is not blank
         if element_code.trim().is_empty() {
             return Err(SzConfigError::InvalidInput(format!(
@@ -196,21 +194,24 @@ pub fn add_comparison_call(
         // Lookup element ID (global lookup - Python allows any element in call)
         let bom_felem_id = lookup_element_id(config, element_code)?;
 
-        // Create CFBOM record
-        cfbom_records.push(json!({
-            "CFCALL_ID": cfcall_id,
-            "FTYPE_ID": ftype_id,
-            "FELEM_ID": bom_felem_id,
-            "EXEC_ORDER": exec_order
-        }));
+        // Create CFBOM record via CfbomRow so every key is always present.
+        // EXEC_ORDER is 1-based over the element list.
+        let bom_row = CfbomRow {
+            cfcall_id,
+            ftype_id,
+            felem_id: bom_felem_id,
+            exec_order: idx as i64 + 1,
+        };
+        cfbom_records.push(serde_json::to_value(&bom_row)?);
     }
 
-    // Create new CFG_CFCALL record
-    let new_record = json!({
-        "CFCALL_ID": cfcall_id,
-        "FTYPE_ID": ftype_id,
-        "CFUNC_ID": cfunc_id
-    });
+    // Create new CFG_CFCALL record via CfcallRow so every key is always present.
+    let cfcall_row = CfcallRow {
+        cfcall_id,
+        ftype_id,
+        cfunc_id,
+    };
+    let new_record = serde_json::to_value(&cfcall_row)?;
 
     // Add to config
     if let Some(cfcall_array) = config_data["G2_CONFIG"]["CFG_CFCALL"].as_array_mut() {
@@ -424,13 +425,15 @@ pub fn add_comparison_call_element(
         }
     }
 
-    // Create new CBOM record (use params.exec_order directly - no auto-assignment)
-    let new_record = json!({
-        "CFCALL_ID": params.cfcall_id,
-        "FTYPE_ID": params.ftype_id,
-        "FELEM_ID": params.felem_id,
-        "EXEC_ORDER": params.exec_order
-    });
+    // Create new CBOM record via CfbomRow (use params.exec_order directly - no
+    // auto-assignment) so every key is always present.
+    let row = CfbomRow {
+        cfcall_id: params.cfcall_id,
+        ftype_id: params.ftype_id,
+        felem_id: params.felem_id,
+        exec_order: params.exec_order,
+    };
+    let new_record = serde_json::to_value(&row)?;
 
     // Add to CFG_CFBOM
     if let Some(cbom_array) = config_data["G2_CONFIG"]["CFG_CFBOM"].as_array_mut() {
@@ -510,4 +513,76 @@ pub fn set_comparison_call_element(
 ) -> Result<String> {
     // This is a stub - not commonly used
     Ok(config.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CFCALL_KEYS: [&str; 3] = ["CFCALL_ID", "FTYPE_ID", "CFUNC_ID"];
+    const CFBOM_KEYS: [&str; 4] = ["CFCALL_ID", "FTYPE_ID", "FELEM_ID", "EXEC_ORDER"];
+
+    fn assert_all_keys(obj: &Value, keys: &[&str]) {
+        let map = obj.as_object().unwrap();
+        for key in keys {
+            assert!(map.contains_key(*key), "{key} key must be present");
+        }
+    }
+
+    fn base_config() -> String {
+        r#"{"G2_CONFIG": {
+            "CFG_CFCALL": [],
+            "CFG_CFBOM": [],
+            "CFG_FTYPE": [{"FTYPE_ID": 5, "FTYPE_CODE": "NAME"}],
+            "CFG_CFUNC": [{"CFUNC_ID": 7, "CFUNC_CODE": "GNR_COMP"}],
+            "CFG_FELEM": [{"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"}]
+        }}"#
+        .to_string()
+    }
+
+    #[test]
+    fn test_add_comparison_call_emits_all_keys() {
+        let config = base_config();
+        let params = AddComparisonCallParams {
+            ftype_code: "NAME".to_string(),
+            cfunc_code: "GNR_COMP".to_string(),
+            element_list: vec!["FIRST_NAME".to_string()],
+        };
+
+        let (modified, new_record) = add_comparison_call(&config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+
+        // CFG_CFCALL row: exactly the 3 keys, no EXEC_ORDER (flagged discrepancy).
+        let cfcall = &value["G2_CONFIG"]["CFG_CFCALL"][0];
+        assert_all_keys(cfcall, &CFCALL_KEYS);
+        assert!(!cfcall.as_object().unwrap().contains_key("EXEC_ORDER"));
+        assert_eq!(cfcall["FTYPE_ID"], json!(5));
+        assert_eq!(cfcall["CFUNC_ID"], json!(7));
+        assert_all_keys(&new_record, &CFCALL_KEYS);
+
+        // CFG_CFBOM row: all 4 keys.
+        let cfbom = &value["G2_CONFIG"]["CFG_CFBOM"][0];
+        assert_all_keys(cfbom, &CFBOM_KEYS);
+        assert_eq!(cfbom["FELEM_ID"], json!(11));
+        assert_eq!(cfbom["EXEC_ORDER"], json!(1));
+    }
+
+    #[test]
+    fn test_add_comparison_call_element_emits_all_keys() {
+        let config = base_config();
+        let params = AddComparisonCallElementParams {
+            cfcall_id: 1000,
+            ftype_id: 5,
+            felem_id: 11,
+            exec_order: 2,
+        };
+
+        let (modified, new_record) = add_comparison_call_element(&config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let cfbom = &value["G2_CONFIG"]["CFG_CFBOM"][0];
+
+        assert_all_keys(cfbom, &CFBOM_KEYS);
+        assert_all_keys(&new_record, &CFBOM_KEYS);
+        assert_eq!(cfbom["EXEC_ORDER"], json!(2));
+    }
 }

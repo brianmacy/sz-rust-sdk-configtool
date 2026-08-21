@@ -1,3 +1,4 @@
+use crate::config_rows::FelemRow;
 use crate::error::{Result, SzConfigError};
 use crate::helpers;
 use serde_json::{Value, json};
@@ -12,7 +13,6 @@ pub struct AddElementParams<'a> {
     pub code: &'a str,
     pub description: Option<&'a str>,
     pub data_type: Option<&'a str>,
-    pub tokenized: Option<&'a str>,
 }
 
 impl<'a> TryFrom<&'a Value> for AddElementParams<'a> {
@@ -28,7 +28,6 @@ impl<'a> TryFrom<&'a Value> for AddElementParams<'a> {
             code,
             description: json.get("description").and_then(|v| v.as_str()),
             data_type: json.get("dataType").and_then(|v| v.as_str()),
-            tokenized: json.get("tokenized").and_then(|v| v.as_str()),
         })
     }
 }
@@ -39,7 +38,6 @@ pub struct SetElementParams<'a> {
     pub code: &'a str,
     pub description: Option<&'a str>,
     pub data_type: Option<&'a str>,
-    pub tokenized: Option<&'a str>,
 }
 
 impl<'a> TryFrom<&'a Value> for SetElementParams<'a> {
@@ -55,7 +53,6 @@ impl<'a> TryFrom<&'a Value> for SetElementParams<'a> {
             code,
             description: json.get("description").and_then(|v| v.as_str()),
             data_type: json.get("dataType").and_then(|v| v.as_str()),
-            tokenized: json.get("tokenized").and_then(|v| v.as_str()),
         })
     }
 }
@@ -196,37 +193,18 @@ pub fn add_element(config_json: &str, params: AddElementParams) -> Result<String
         "string" // Default
     };
 
-    // Validate and normalize tokenized (Python lines 1983-1986)
-    let tokenized = if let Some(tok) = params.tokenized {
-        let tok_upper = tok.to_uppercase();
-        match tok_upper.as_str() {
-            "YES" => "Yes",
-            "NO" => "No",
-            _ => {
-                return Err(SzConfigError::InvalidInput(format!(
-                    "Invalid TOKENIZED value '{tok}'. Must be 'Yes' or 'No'"
-                )));
-            }
-        }
-    } else {
-        "No" // Default
+    // Build a complete row via FelemRow so every CFG_FELEM key is present.
+    // FELEM_DESC uses the supplied description or falls back to the code.
+    let row = FelemRow {
+        felem_id,
+        felem_code: code_upper.clone(),
+        data_type: data_type.to_string(),
+        felem_desc: params
+            .description
+            .map(str::to_string)
+            .unwrap_or_else(|| code_upper.clone()),
     };
-
-    // Build record from params (Python parity: TOKENIZE not TOKENIZED)
-    let mut new_record = json!({
-        "FELEM_ID": felem_id,
-        "FELEM_CODE": code_upper.clone(),
-        "DATA_TYPE": data_type,
-        "TOKENIZE": tokenized,
-    });
-
-    if let Some(obj) = new_record.as_object_mut() {
-        if let Some(desc) = params.description {
-            obj.insert("FELEM_DESC".to_string(), json!(desc));
-        } else {
-            obj.insert("FELEM_DESC".to_string(), json!(code_upper));
-        }
-    }
+    let new_record = serde_json::to_value(&row)?;
 
     helpers::add_to_config_array(config_json, "CFG_FELEM", new_record)
 }
@@ -382,6 +360,7 @@ pub fn list_elements(config_json: &str) -> Result<Vec<Value>> {
 /// # Returns
 /// Modified configuration JSON string
 pub fn set_element(config_json: &str, params: SetElementParams) -> Result<String> {
+    // In-place update of a complete existing row; all keys preserved.
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
@@ -404,9 +383,6 @@ pub fn set_element(config_json: &str, params: SetElementParams) -> Result<String
         }
         if let Some(dt) = params.data_type {
             dest_obj.insert("DATA_TYPE".to_string(), json!(dt));
-        }
-        if let Some(tok) = params.tokenized {
-            dest_obj.insert("TOKENIZED".to_string(), json!(tok));
         }
     }
 
@@ -435,6 +411,7 @@ pub fn set_element(config_json: &str, params: SetElementParams) -> Result<String
 /// # Ok::<(), sz_configtool_lib::error::SzConfigError>(())
 /// ```
 pub fn set_feature_element(config_json: &str, params: SetFeatureElementParams) -> Result<String> {
+    // In-place update of a complete existing CFG_FBOM row; all keys preserved.
     // Resolve codes to IDs
     let feature_code = params
         .feature_code
@@ -519,6 +496,7 @@ pub fn set_feature_element_display_level(
     element_code: &str,
     display_level: i64,
 ) -> Result<String> {
+    // Delegates to set_feature_element: in-place CFG_FBOM update, all keys preserved.
     set_feature_element(
         config_json,
         SetFeatureElementParams::new(feature_code, element_code).with_display_level(display_level),
@@ -550,6 +528,7 @@ pub fn set_feature_element_derived(
     element_code: &str,
     derived: &str,
 ) -> Result<String> {
+    // Delegates to set_feature_element: in-place CFG_FBOM update, all keys preserved.
     set_feature_element(
         config_json,
         SetFeatureElementParams::new(feature_code, element_code).with_derived(derived),
@@ -664,6 +643,57 @@ mod tests {
         let config: Value = serde_json::from_str(&result.unwrap()).unwrap();
         let fbom = &config["G2_CONFIG"]["CFG_FBOM"][0];
         assert_eq!(fbom["DERIVED"], "Yes");
+    }
+
+    const FELEM_KEYS: [&str; 4] = ["FELEM_ID", "FELEM_CODE", "DATA_TYPE", "FELEM_DESC"];
+
+    #[test]
+    fn test_add_element_emits_all_keys() {
+        let config = r#"{"G2_CONFIG": {"CFG_FELEM": []}}"#;
+        let params = AddElementParams {
+            code: "my_elem",
+            description: None,
+            data_type: None,
+        };
+
+        let modified = add_element(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let felem = &value["G2_CONFIG"]["CFG_FELEM"][0];
+        let obj = felem.as_object().unwrap();
+
+        assert_eq!(obj.len(), 4, "CFG_FELEM is exactly 4 columns");
+        for key in FELEM_KEYS {
+            assert!(obj.contains_key(key), "{key} key must be present");
+        }
+        assert_eq!(felem["FELEM_CODE"], json!("MY_ELEM"));
+        assert_eq!(felem["DATA_TYPE"], json!("string"));
+        // CFG_FELEM has no TOKENIZE/TOKENIZED column in the Senzing v4 schema.
+        assert!(!obj.contains_key("TOKENIZE"));
+        assert!(!obj.contains_key("TOKENIZED"));
+        // FELEM_DESC falls back to the code when no description is supplied.
+        assert_eq!(felem["FELEM_DESC"], json!("MY_ELEM"));
+    }
+
+    #[test]
+    fn test_add_element_with_all_fields() {
+        let config = r#"{"G2_CONFIG": {"CFG_FELEM": []}}"#;
+        let params = AddElementParams {
+            code: "my_elem",
+            description: Some("My element"),
+            data_type: Some("number"),
+        };
+
+        let modified = add_element(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let felem = &value["G2_CONFIG"]["CFG_FELEM"][0];
+        let obj = felem.as_object().unwrap();
+
+        for key in FELEM_KEYS {
+            assert!(obj.contains_key(key), "{key} key must be present");
+        }
+        assert!(!obj.contains_key("TOKENIZE"));
+        assert_eq!(felem["DATA_TYPE"], json!("number"));
+        assert_eq!(felem["FELEM_DESC"], json!("My element"));
     }
 
     #[test]

@@ -5,7 +5,28 @@
 
 use crate::error::{Result, SzConfigError};
 use crate::helpers;
+use serde::Serialize;
 use serde_json::{Value, json};
+
+// ============================================================================
+// Row Structs
+// ============================================================================
+
+/// Complete CFG_GPLAN row.
+///
+/// Derives `Serialize` with no `skip_serializing_if`, so every key is always
+/// emitted. The Senzing engine's config loader requires every key to be
+/// present, so partial rows must never be written. All three CFG_GPLAN fields
+/// are always populated by the builders, so none are optional.
+#[derive(Debug, Clone, Serialize)]
+struct GplanRow {
+    #[serde(rename = "GPLAN_ID")]
+    gplan_id: i64,
+    #[serde(rename = "GPLAN_CODE")]
+    gplan_code: String,
+    #[serde(rename = "GPLAN_DESC")]
+    gplan_desc: String,
+}
 
 /// Clone a generic plan with all its thresholds
 ///
@@ -75,12 +96,13 @@ pub fn clone_generic_plan(
 
     let new_gplan_id = max_gplan_id + 1;
 
-    // Create new plan
-    let new_plan = json!({
-        "GPLAN_ID": new_gplan_id,
-        "GPLAN_CODE": new_code,
-        "GPLAN_DESC": new_desc
-    });
+    // Build a complete row via GplanRow so every CFG_GPLAN key is present.
+    let row = GplanRow {
+        gplan_id: new_gplan_id,
+        gplan_code: new_code.clone(),
+        gplan_desc: new_desc.to_string(),
+    };
+    let new_plan = serde_json::to_value(&row)?;
 
     let mut modified_json = helpers::add_to_config_array(config_json, "CFG_GPLAN", new_plan)?;
 
@@ -265,6 +287,11 @@ pub fn set_generic_plan(
             .get("GPLAN_ID")
             .and_then(|v| v.as_i64())
             .unwrap_or(0);
+        // In-place update of a complete existing row; all keys preserved.
+        // Clones the full existing record and overwrites only GPLAN_DESC, so no
+        // key is dropped. Left as-is rather than routed through GplanRow to stay
+        // behavior-identical (a struct with a fixed field set could drop any
+        // extra key an existing record happens to carry).
         let mut updated = existing.clone();
         if let Some(obj) = updated.as_object_mut() {
             obj.insert("GPLAN_DESC".to_string(), json!(gplan_desc));
@@ -293,13 +320,75 @@ pub fn set_generic_plan(
             .unwrap_or(0);
 
         let new_id = max_id + 1;
-        let new_plan = json!({
-            "GPLAN_ID": new_id,
-            "GPLAN_CODE": code,
-            "GPLAN_DESC": gplan_desc
-        });
+        // Build a complete row via GplanRow so every CFG_GPLAN key is present.
+        let row = GplanRow {
+            gplan_id: new_id,
+            gplan_code: code.clone(),
+            gplan_desc: gplan_desc.to_string(),
+        };
+        let new_plan = serde_json::to_value(&row)?;
 
         let modified = helpers::add_to_config_array(config_json, "CFG_GPLAN", new_plan)?;
         Ok((modified, new_id, true))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const GPLAN_KEYS: [&str; 3] = ["GPLAN_ID", "GPLAN_CODE", "GPLAN_DESC"];
+
+    fn assert_all_keys(plan: &Value) {
+        let obj = plan.as_object().unwrap();
+        for key in GPLAN_KEYS {
+            assert!(obj.contains_key(key), "{key} key must be present");
+        }
+    }
+
+    #[test]
+    fn test_clone_generic_plan_emits_all_keys() {
+        let config = r#"{"G2_CONFIG": {"CFG_GPLAN": [{"GPLAN_ID": 1, "GPLAN_CODE": "INGEST", "GPLAN_DESC": "Ingest"}], "CFG_GENERIC_THRESHOLD": []}}"#;
+        let (modified, _id) = clone_generic_plan(config, "INGEST", "CUSTOM", None).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let plans = value["G2_CONFIG"]["CFG_GPLAN"].as_array().unwrap();
+        let new_plan = plans
+            .iter()
+            .find(|p| p["GPLAN_CODE"].as_str() == Some("CUSTOM"))
+            .unwrap();
+
+        assert_all_keys(new_plan);
+        assert_eq!(new_plan["GPLAN_CODE"], json!("CUSTOM"));
+        // Description defaults to the (uppercased) new code when None supplied.
+        assert_eq!(new_plan["GPLAN_DESC"], json!("CUSTOM"));
+    }
+
+    #[test]
+    fn test_set_generic_plan_create_emits_all_keys() {
+        let config = r#"{"G2_CONFIG": {"CFG_GPLAN": []}}"#;
+        let (modified, _id, was_created) =
+            set_generic_plan(config, "CUSTOM", "Custom Plan").unwrap();
+        assert!(was_created);
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let plan = &value["G2_CONFIG"]["CFG_GPLAN"][0];
+
+        assert_all_keys(plan);
+        assert_eq!(plan["GPLAN_CODE"], json!("CUSTOM"));
+        assert_eq!(plan["GPLAN_DESC"], json!("Custom Plan"));
+    }
+
+    #[test]
+    fn test_set_generic_plan_update_preserves_all_keys() {
+        let config = r#"{"G2_CONFIG": {"CFG_GPLAN": [{"GPLAN_ID": 3, "GPLAN_CODE": "CUSTOM", "GPLAN_DESC": "Old"}]}}"#;
+        let (modified, plan_id, was_created) =
+            set_generic_plan(config, "CUSTOM", "New Desc").unwrap();
+        assert!(!was_created);
+        assert_eq!(plan_id, 3);
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let plan = &value["G2_CONFIG"]["CFG_GPLAN"][0];
+
+        assert_all_keys(plan);
+        assert_eq!(plan["GPLAN_ID"], json!(3));
+        assert_eq!(plan["GPLAN_DESC"], json!("New Desc"));
     }
 }

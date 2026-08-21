@@ -6,7 +6,31 @@
 
 use crate::error::{Result, SzConfigError};
 use crate::helpers;
-use serde_json::{Value, json};
+use serde::Serialize;
+use serde_json::Value;
+
+// ============================================================================
+// Row Structs
+// ============================================================================
+
+/// Complete CFG_FBOVR row.
+///
+/// Derives `Serialize` with no `skip_serializing_if`, so every key is always
+/// emitted. The Senzing engine's config loader requires every key to be
+/// present, so partial rows must never be written.
+#[derive(Debug, Clone, Serialize)]
+struct FbovrRow {
+    #[serde(rename = "FTYPE_ID")]
+    ftype_id: i64,
+    #[serde(rename = "UTYPE_CODE")]
+    utype_code: String,
+    #[serde(rename = "FTYPE_FREQ")]
+    ftype_freq: String,
+    #[serde(rename = "FTYPE_EXCL")]
+    ftype_excl: String,
+    #[serde(rename = "FTYPE_STAB")]
+    ftype_stab: String,
+}
 
 // ============================================================================
 // Parameter Structs
@@ -86,14 +110,15 @@ pub fn add_behavior_override(
         )));
     }
 
-    // Create override record
-    let override_record = json!({
-        "FTYPE_ID": ftype_id,
-        "UTYPE_CODE": utype_upper,
-        "FTYPE_FREQ": frequency,
-        "FTYPE_EXCL": exclusivity,
-        "FTYPE_STAB": stability
-    });
+    // Build a complete row via FbovrRow so every CFG_FBOVR key is present.
+    let row = FbovrRow {
+        ftype_id,
+        utype_code: utype_upper,
+        ftype_freq: frequency.to_string(),
+        ftype_excl: exclusivity.to_string(),
+        ftype_stab: stability.to_string(),
+    };
+    let override_record = serde_json::to_value(&row)?;
 
     // Add to CFG_FBOVR
     helpers::add_to_config_array(config_json, "CFG_FBOVR", override_record)
@@ -260,6 +285,7 @@ fn parse_behavior_code(behavior: &str) -> Result<(&'static str, &'static str, &'
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     const TEST_CONFIG: &str = r#"{
   "G2_CONFIG": {
@@ -273,6 +299,36 @@ mod tests {
     "CFG_FBOVR": []
   }
 }"#;
+
+    const FBOVR_KEYS: [&str; 5] = [
+        "FTYPE_ID",
+        "UTYPE_CODE",
+        "FTYPE_FREQ",
+        "FTYPE_EXCL",
+        "FTYPE_STAB",
+    ];
+
+    #[test]
+    fn test_add_behavior_override_emits_all_keys() {
+        let config = add_behavior_override(
+            TEST_CONFIG,
+            AddBehaviorOverrideParams::new("TEST_FEATURE", "BUSINESS", "F1E"),
+        )
+        .expect("Failed to add behavior override");
+
+        let config_val: Value = serde_json::from_str(&config).unwrap();
+        let override_rec = &config_val["G2_CONFIG"]["CFG_FBOVR"][0];
+        let obj = override_rec.as_object().unwrap();
+
+        for key in FBOVR_KEYS {
+            assert!(obj.contains_key(key), "{key} key must be present");
+        }
+        assert_eq!(override_rec["FTYPE_ID"], json!(1));
+        assert_eq!(override_rec["UTYPE_CODE"], json!("BUSINESS"));
+        assert_eq!(override_rec["FTYPE_FREQ"], json!("F1"));
+        assert_eq!(override_rec["FTYPE_EXCL"], json!("Yes"));
+        assert_eq!(override_rec["FTYPE_STAB"], json!("No"));
+    }
 
     #[test]
     fn test_add_behavior_override() {

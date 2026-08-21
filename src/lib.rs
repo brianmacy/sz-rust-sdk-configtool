@@ -70,6 +70,9 @@
 pub mod error;
 pub mod helpers;
 
+// Shared crate-internal row structs (one per CFG_* section).
+pub(crate) mod config_rows;
+
 // Core entity modules
 pub mod attributes;
 pub mod behavior_overrides;

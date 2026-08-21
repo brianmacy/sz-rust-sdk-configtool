@@ -5,6 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-08-21
+
+### Fixed
+
+- **Config rows are now always written with every key present.** `set_rule` dropped a
+  null `DISQ_ERFRAG_CODE` when updating a rule, producing a `CFG_ERRULE` row missing that
+  key; the Senzing engine's config loader then rejected the saved config with
+  `SENZ9117 (CONFIG information for DISQ_ERFRAG_CODE not found in CFG_ERRULE)`. Fixed here
+  and generalized across the crate.
+- **Schema conformance** against the authoritative Senzing v4 column set for each
+  `CFG_*` section (from `config/engine/*.data`, confirmed against a real engine template):
+  - `CFG_DFUNC` now always includes `ANON_SUPPORT` (default `"No"`), which
+    `add_distinct_function` previously omitted. `list_distinct_functions` already read it.
+  - `CFG_DFCALL` is now written with exactly its three authoritative columns
+    (`DFCALL_ID, FTYPE_ID, DFUNC_ID`). Both builders previously added spurious `FELEM_ID`
+    and/or `EXEC_ORDER` keys to the header row; those belong to `CFG_DFBOM`, which is
+    unchanged. Distinct-call identity is now `(FTYPE_ID, DFUNC_ID)`.
+
+### Changed
+
+- Config-section rows are now built from typed serde row structs. The row structs for
+  the eight sections that previously had **two** independent definitions (one in
+  `features.rs`, one in a `calls/*` or `elements` module) — `FelemRow`, `SfcallRow`,
+  `EfcallRow`, `CfcallRow`, `EfbomRow`, `CfbomRow`, `DfcallRow`, `DfbomRow`, plus the
+  single-definition `FtypeRow`/`FbomRow` — are now consolidated into one crate-internal
+  `src/config_rows.rs` module (one `pub(crate)` struct per section). The remaining
+  per-module row structs (`ErruleRow`, `ErfragRow`, `AttrRow`, `DsrcRow`, `FbovrRow`,
+  `GplanRow`, `CfrtnRow`, and the function rows) are unchanged. All structs derive
+  `Serialize` with no `skip_serializing_if`, so optional fields serialize as JSON `null`
+  instead of being omitted — every section key is always present in the emitted JSON.
+- `fragments::set_fragment` now carries `ERFRAG_ID` and `ERFRAG_DESC` (and
+  `ERFRAG_SOURCE`/`ERFRAG_DEPENDS` when the source is not being updated) forward from the
+  existing row rather than dropping them.
+
+### Removed
+
+- **BREAKING:** `CFG_FELEM` no longer carries a `TOKENIZE`/`TOKENIZED` field — it is not a
+  column in the Senzing v4 schema. Following the v0.4.0 approach for the deprecated
+  data-source fields, the `tokenized` parameter has been removed from `AddElementParams`
+  and `SetElementParams` (and their `TryFrom<&Value>` impls), `add_element` no longer
+  emits `TOKENIZE`, `set_element` no longer writes `TOKENIZED`, and the FFI element
+  wrappers no longer read `tokenized`/`TOKENIZED`.
+- **BREAKING:** Removed `functions::comparison::add_comparison_func_return_code` (and its
+  re-export). It wrote a non-existent `CFG_CFRTN` shape (`{CFRTN_ID, CFUNC_ID, CFRTN_CODE,
+  CFRTN_DESC}`). `CFG_CFRTN` is the 10-column score row owned by `thresholds.rs`, which is
+  unchanged.
+
+### Added
+
+- `src/config_rows.rs`: one crate-internal serde row struct per consolidated `CFG_*`
+  section (see Changed), eliminating the duplicate/divergent struct definitions.
+- `helpers::field_as_string` (crate-internal) to carry an existing string/nullable field
+  forward during updates.
+- Per-module "all keys present" unit tests and a `tests/roundtrip_completeness.rs`
+  integration test. The real-config round-trip now runs by **default** against the
+  committed engine template `tests/fixtures/g2config_template.json` (resolved via
+  `CARGO_MANIFEST_DIR`), running every `CFG_ERRULE` row through `set_rule` and every
+  `CFG_ERFRAG` row through `set_fragment` and asserting no row loses a key.
+  `SZ_CONFIG_FIXTURE=/path/to/g2config.json` overrides the fixture with your own config
+  (optionally `SZ_CONFIG_OUT=/path` to write the round-tripped result).
+
 ## [0.4.0] - 2026-08-20
 
 ### Removed

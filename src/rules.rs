@@ -5,7 +5,66 @@
 
 use crate::error::{Result, SzConfigError};
 use crate::helpers;
+use serde::Serialize;
 use serde_json::{Value, json};
+
+// ============================================================================
+// Row Structs
+// ============================================================================
+
+/// Complete CFG_ERRULE row.
+///
+/// This struct is the single source of truth for the on-disk shape of a rule.
+/// It derives `Serialize` with no `skip_serializing_if`, so every key is always
+/// emitted — optional fields serialize as JSON `null` rather than being dropped.
+/// The Senzing engine's config loader requires every key to be present (a
+/// missing key yields SENZ9117), so partial rows must never be written.
+#[derive(Debug, Clone, Serialize)]
+struct ErruleRow {
+    #[serde(rename = "ERRULE_ID")]
+    errule_id: i64,
+    #[serde(rename = "ERRULE_CODE")]
+    errule_code: String,
+    #[serde(rename = "RESOLVE")]
+    resolve: String,
+    #[serde(rename = "RELATE")]
+    relate: String,
+    #[serde(rename = "RTYPE_ID")]
+    rtype_id: i64,
+    #[serde(rename = "QUAL_ERFRAG_CODE")]
+    qual_erfrag_code: Option<String>,
+    #[serde(rename = "DISQ_ERFRAG_CODE")]
+    disq_erfrag_code: Option<String>,
+    #[serde(rename = "ERRULE_TIER")]
+    errule_tier: Option<i64>,
+}
+
+impl ErruleRow {
+    /// Build a complete row from a caller-provided JSON object plus a resolved
+    /// id and code. Missing scalar fields fall back to Senzing defaults and
+    /// missing optional fields become `None` (serialized as `null`), so the
+    /// resulting row always carries every CFG_ERRULE key.
+    fn from_config(id: i64, code: String, cfg: &Value) -> Self {
+        Self {
+            errule_id: id,
+            errule_code: code,
+            resolve: cfg
+                .get("RESOLVE")
+                .and_then(|v| v.as_str())
+                .unwrap_or("No")
+                .to_string(),
+            relate: cfg
+                .get("RELATE")
+                .and_then(|v| v.as_str())
+                .unwrap_or("No")
+                .to_string(),
+            rtype_id: cfg.get("RTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(1),
+            qual_erfrag_code: helpers::field_as_string(cfg, "QUAL_ERFRAG_CODE"),
+            disq_erfrag_code: helpers::field_as_string(cfg, "DISQ_ERFRAG_CODE"),
+            errule_tier: cfg.get("ERRULE_TIER").and_then(|v| v.as_i64()),
+        }
+    }
+}
 
 // ============================================================================
 // Parameter Structs
@@ -111,12 +170,10 @@ pub fn add_rule(config_json: &str, id: i64, rule_config: &Value) -> Result<(Stri
         ));
     }
 
-    // Create new item with provided config plus ID
-    let mut new_item = rule_config.clone();
-    if let Some(obj) = new_item.as_object_mut() {
-        obj.insert("ERRULE_ID".to_string(), json!(id));
-        obj.insert("ERRULE_CODE".to_string(), json!(code.to_uppercase()));
-    }
+    // Build a complete row via ErruleRow so every CFG_ERRULE key is present
+    // (optional fields serialize as null) regardless of what the caller passed.
+    let row = ErruleRow::from_config(id, code.to_uppercase(), rule_config);
+    let new_item = serde_json::to_value(&row)?;
 
     // Add to config
     let modified_json = helpers::add_to_config_array(config_json, "CFG_ERRULE", new_item)?;
@@ -381,33 +438,29 @@ pub fn set_rule(config_json: &str, params: SetRuleParams) -> Result<String> {
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
 
-    // Build update object from params with validated values
-    let mut updated_item = json!({
-        "ERRULE_ID": errule_id,
-        "ERRULE_CODE": code.clone()
-    });
-
-    if let Some(obj) = updated_item.as_object_mut() {
-        if params.resolve.is_some() {
-            obj.insert("RESOLVE".to_string(), json!(final_resolve));
-        }
-        if params.relate.is_some() {
-            obj.insert("RELATE".to_string(), json!(final_relate));
-        }
-        // Insert RTYPE_ID if explicitly provided OR if resolve was updated (auto-correction may have occurred)
-        if params.rtype_id.is_some() || params.resolve.is_some() {
-            obj.insert("RTYPE_ID".to_string(), json!(final_rtype_id));
-        }
-        if let Some(frag) = params.fragment {
-            obj.insert("QUAL_ERFRAG_CODE".to_string(), json!(frag.to_uppercase()));
-        }
-        if let Some(disq) = params.disqualifier {
-            obj.insert("DISQ_ERFRAG_CODE".to_string(), json!(disq.to_uppercase()));
-        }
-        if let Some(tier) = params.tier {
-            obj.insert("ERRULE_TIER".to_string(), json!(tier));
-        }
-    }
+    // Build the complete row. Optional fields not supplied in `params` fall back
+    // to the existing value (which may itself be null). Because ErruleRow always
+    // serializes every key (None -> null), the resulting object can never be
+    // missing a key the engine config loader requires.
+    let row = ErruleRow {
+        errule_id,
+        errule_code: code.clone(),
+        resolve: final_resolve.to_string(),
+        relate: final_relate.to_string(),
+        rtype_id: final_rtype_id,
+        qual_erfrag_code: params
+            .fragment
+            .map(str::to_uppercase)
+            .or_else(|| helpers::field_as_string(&existing_rule, "QUAL_ERFRAG_CODE")),
+        disq_erfrag_code: params
+            .disqualifier
+            .map(str::to_uppercase)
+            .or_else(|| helpers::field_as_string(&existing_rule, "DISQ_ERFRAG_CODE")),
+        errule_tier: params
+            .tier
+            .or_else(|| existing_rule.get("ERRULE_TIER").and_then(|v| v.as_i64())),
+    };
+    let updated_item = serde_json::to_value(&row)?;
 
     // Update the item in the config
     helpers::update_in_config_array(
@@ -417,4 +470,133 @@ pub fn set_rule(config_json: &str, params: SetRuleParams) -> Result<String> {
         &code,
         updated_item,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression: updating a rule must preserve all existing keys, including
+    /// null-valued ones like DISQ_ERFRAG_CODE. The engine config loader rejects
+    /// a CFG_ERRULE row missing that key (SENZ9117), so set_rule must never drop
+    /// it when the disqualifier is not part of the update.
+    #[test]
+    fn test_set_rule_preserves_null_disqualifier() {
+        let config = r#"{"G2_CONFIG": {"CFG_ERRULE": [
+            {"ERRULE_ID": 100, "ERRULE_CODE": "SAME_A1", "RESOLVE": "Yes",
+             "RELATE": "No", "RTYPE_ID": 1, "QUAL_ERFRAG_CODE": "SAME_A1",
+             "DISQ_ERFRAG_CODE": null, "ERRULE_TIER": 10}
+        ], "CFG_ERFRAG": []}}"#;
+
+        let params = SetRuleParams {
+            code: "SAME_A1",
+            resolve: Some("No"),
+            relate: None,
+            rtype_id: None,
+            fragment: None,
+            disqualifier: None,
+            tier: None,
+        };
+
+        let modified = set_rule(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let rule = &value["G2_CONFIG"]["CFG_ERRULE"][0];
+        let obj = rule.as_object().unwrap();
+
+        // Every CFG_ERRULE key must always be present, even when null.
+        for key in [
+            "ERRULE_ID",
+            "ERRULE_CODE",
+            "RESOLVE",
+            "RELATE",
+            "RTYPE_ID",
+            "QUAL_ERFRAG_CODE",
+            "DISQ_ERFRAG_CODE",
+            "ERRULE_TIER",
+        ] {
+            assert!(obj.contains_key(key), "{key} key must be present");
+        }
+
+        // The updated field applied; unprovided fields preserved (incl. null).
+        assert_eq!(rule["RESOLVE"], json!("No"));
+        assert_eq!(rule["DISQ_ERFRAG_CODE"], Value::Null);
+        assert_eq!(rule["RELATE"], json!("No"));
+        assert_eq!(rule["QUAL_ERFRAG_CODE"], json!("SAME_A1"));
+        assert_eq!(rule["ERRULE_TIER"], json!(10));
+    }
+
+    /// A brand-new-style update that provides no optional fields at all must
+    /// still emit every key (as null where nothing exists), so the engine
+    /// config loader never sees a missing CFG_ERRULE key.
+    #[test]
+    fn test_set_rule_emits_all_keys_when_optionals_absent() {
+        let config = r#"{"G2_CONFIG": {"CFG_ERRULE": [
+            {"ERRULE_ID": 42, "ERRULE_CODE": "MINIMAL", "RESOLVE": "No"}
+        ], "CFG_ERFRAG": []}}"#;
+
+        let params = SetRuleParams {
+            code: "MINIMAL",
+            resolve: Some("Yes"),
+            relate: None,
+            rtype_id: None,
+            fragment: None,
+            disqualifier: None,
+            tier: None,
+        };
+
+        let modified = set_rule(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let obj = value["G2_CONFIG"]["CFG_ERRULE"][0].as_object().unwrap();
+
+        for key in [
+            "ERRULE_ID",
+            "ERRULE_CODE",
+            "RESOLVE",
+            "RELATE",
+            "RTYPE_ID",
+            "QUAL_ERFRAG_CODE",
+            "DISQ_ERFRAG_CODE",
+            "ERRULE_TIER",
+        ] {
+            assert!(obj.contains_key(key), "{key} key must be present");
+        }
+        // Nothing existed for these optionals, so they surface as null.
+        assert_eq!(obj["QUAL_ERFRAG_CODE"], Value::Null);
+        assert_eq!(obj["DISQ_ERFRAG_CODE"], Value::Null);
+        assert_eq!(obj["ERRULE_TIER"], Value::Null);
+    }
+
+    /// add_rule must write a complete row even when the caller supplies only a
+    /// subset of fields — the omitted optionals become null, never dropped.
+    #[test]
+    fn test_add_rule_emits_all_keys() {
+        let config = r#"{"G2_CONFIG": {"CFG_ERRULE": []}}"#;
+        let rule_config = json!({
+            "ERRULE_CODE": "custom_rule",
+            "RESOLVE": "Yes",
+            "RELATE": "No",
+            "RTYPE_ID": 1
+        });
+
+        let (modified, _id) = add_rule(config, 0, &rule_config).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let obj = value["G2_CONFIG"]["CFG_ERRULE"][0].as_object().unwrap();
+
+        for key in [
+            "ERRULE_ID",
+            "ERRULE_CODE",
+            "RESOLVE",
+            "RELATE",
+            "RTYPE_ID",
+            "QUAL_ERFRAG_CODE",
+            "DISQ_ERFRAG_CODE",
+            "ERRULE_TIER",
+        ] {
+            assert!(obj.contains_key(key), "{key} key must be present");
+        }
+        assert_eq!(obj["ERRULE_CODE"], json!("CUSTOM_RULE"));
+        assert_eq!(obj["QUAL_ERFRAG_CODE"], Value::Null);
+        assert_eq!(obj["DISQ_ERFRAG_CODE"], Value::Null);
+        assert_eq!(obj["ERRULE_TIER"], Value::Null);
+    }
 }

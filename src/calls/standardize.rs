@@ -3,6 +3,7 @@
 //! Functions for managing CFG_SFCALL (standardize calls) and CFG_SBOM
 //! (standardize bill of materials) configuration sections.
 
+use crate::config_rows::SfcallRow;
 use crate::error::{Result, SzConfigError};
 use crate::helpers::{
     find_in_config_array, get_next_id, lookup_element_id, lookup_feature_id, lookup_sfunc_id,
@@ -168,14 +169,15 @@ pub fn add_standardize_call(
             .unwrap_or(1)
     };
 
-    // Create new CFG_SFCALL record
-    let new_record = json!({
-        "SFCALL_ID": sfcall_id,
-        "FTYPE_ID": ftype_id,
-        "FELEM_ID": felem_id,
-        "SFUNC_ID": sfunc_id,
-        "EXEC_ORDER": final_exec_order
-    });
+    // Create new CFG_SFCALL record via SfcallRow so every key is always present.
+    let row = SfcallRow {
+        sfcall_id,
+        ftype_id,
+        felem_id,
+        sfunc_id,
+        exec_order: Some(final_exec_order),
+    };
+    let new_record = serde_json::to_value(&row)?;
 
     // Add to config
     if let Some(sfcall_array) = config_data["G2_CONFIG"]["CFG_SFCALL"].as_array_mut() {
@@ -395,19 +397,16 @@ pub fn add_standardize_call_element(
     // Get next SFCALL_ID
     let sfcall_id = get_next_id(&config_data, "G2_CONFIG.CFG_SFCALL", "SFCALL_ID", 1000)?;
 
-    // Create new call element record
-    let mut new_record = json!({
-        "SFCALL_ID": sfcall_id,
-        "FTYPE_ID": params.ftype_id,
-        "FELEM_ID": final_felem_id,
-        "SFUNC_ID": params.sfunc_id,
-    });
-
-    // Add exec_order (always present, null when not specified)
-    new_record["EXEC_ORDER"] = match params.exec_order {
-        Some(order) => json!(order),
-        None => Value::Null,
+    // Create new call element record via SfcallRow so every key is always
+    // present (EXEC_ORDER null when not specified - seed-then-null pattern).
+    let row = SfcallRow {
+        sfcall_id,
+        ftype_id: params.ftype_id,
+        felem_id: final_felem_id,
+        sfunc_id: params.sfunc_id,
+        exec_order: params.exec_order,
     };
+    let new_record = serde_json::to_value(&row)?;
 
     // Add to CFG_SFCALL
     if let Some(sfcall_array) = config_data["G2_CONFIG"]["CFG_SFCALL"].as_array_mut() {
@@ -483,4 +482,97 @@ pub fn set_standardize_call_element(
 ) -> Result<String> {
     // This is a stub - not commonly used
     Ok(config.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SFCALL_KEYS: [&str; 5] = [
+        "SFCALL_ID",
+        "FTYPE_ID",
+        "FELEM_ID",
+        "SFUNC_ID",
+        "EXEC_ORDER",
+    ];
+
+    fn assert_all_keys(obj: &Value, keys: &[&str]) {
+        let map = obj.as_object().unwrap();
+        for key in keys {
+            assert!(map.contains_key(*key), "{key} key must be present");
+        }
+    }
+
+    fn base_config() -> String {
+        r#"{"G2_CONFIG": {
+            "CFG_SFCALL": [],
+            "CFG_FTYPE": [{"FTYPE_ID": 5, "FTYPE_CODE": "NAME"}],
+            "CFG_SFUNC": [{"SFUNC_ID": 7, "SFUNC_CODE": "PARSE_NAME"}],
+            "CFG_FELEM": [{"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"}]
+        }}"#
+        .to_string()
+    }
+
+    #[test]
+    fn test_add_standardize_call_emits_all_keys() {
+        let config = base_config();
+        let params = AddStandardizeCallParams {
+            ftype_code: Some("NAME"),
+            felem_code: None,
+            exec_order: None,
+            sfunc_code: "PARSE_NAME",
+        };
+
+        let (modified, new_record) = add_standardize_call(&config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let sfcall = &value["G2_CONFIG"]["CFG_SFCALL"][0];
+
+        assert_all_keys(sfcall, &SFCALL_KEYS);
+        assert_all_keys(&new_record, &SFCALL_KEYS);
+        assert_eq!(sfcall["FTYPE_ID"], json!(5));
+        assert_eq!(sfcall["SFUNC_ID"], json!(7));
+        assert_eq!(sfcall["FELEM_ID"], json!(-1));
+        // add_standardize_call always assigns a concrete EXEC_ORDER.
+        assert_eq!(sfcall["EXEC_ORDER"], json!(1));
+    }
+
+    #[test]
+    fn test_add_standardize_call_element_emits_all_keys_exec_order_present() {
+        let config = base_config();
+        let params = AddStandardizeCallElementParams {
+            ftype_id: 5,
+            sfunc_id: 7,
+            felem_id: Some(11),
+            exec_order: Some(4),
+        };
+
+        let (modified, new_record) = add_standardize_call_element(&config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let sfcall = &value["G2_CONFIG"]["CFG_SFCALL"][0];
+
+        assert_all_keys(sfcall, &SFCALL_KEYS);
+        assert_all_keys(&new_record, &SFCALL_KEYS);
+        assert_eq!(sfcall["FELEM_ID"], json!(11));
+        assert_eq!(sfcall["EXEC_ORDER"], json!(4));
+    }
+
+    #[test]
+    fn test_add_standardize_call_element_emits_exec_order_null_when_absent() {
+        let config = base_config();
+        let params = AddStandardizeCallElementParams {
+            ftype_id: 5,
+            sfunc_id: 7,
+            felem_id: None,
+            exec_order: None,
+        };
+
+        let (modified, _new_record) = add_standardize_call_element(&config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let sfcall = &value["G2_CONFIG"]["CFG_SFCALL"][0];
+
+        // EXEC_ORDER key present but null (seed-then-null preserved); FELEM_ID -1.
+        assert_all_keys(sfcall, &SFCALL_KEYS);
+        assert_eq!(sfcall["EXEC_ORDER"], Value::Null);
+        assert_eq!(sfcall["FELEM_ID"], json!(-1));
+    }
 }

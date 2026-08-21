@@ -1,6 +1,28 @@
 use crate::error::{Result, SzConfigError};
 use crate::helpers;
+use serde::Serialize;
 use serde_json::{Value, json};
+
+// ============================================================================
+// Row Structs
+// ============================================================================
+
+/// Complete CFG_DSRC row.
+///
+/// Derives `Serialize` with no `skip_serializing_if`, so every key is always
+/// emitted. The Senzing engine's config loader requires every key to be
+/// present, so partial rows must never be written.
+#[derive(Debug, Clone, Serialize)]
+struct DsrcRow {
+    #[serde(rename = "DSRC_ID")]
+    dsrc_id: i64,
+    #[serde(rename = "DSRC_CODE")]
+    dsrc_code: String,
+    #[serde(rename = "DSRC_DESC")]
+    dsrc_desc: String,
+    #[serde(rename = "RETENTION_LEVEL")]
+    retention_level: String,
+}
 
 // ============================================================================
 // Parameter Structs
@@ -105,12 +127,15 @@ pub fn add_data_source(config_json: &str, params: AddDataSourceParams) -> Result
         "Remember"
     };
 
-    dsrcs.push(json!({
-        "DSRC_ID": next_id,
-        "DSRC_CODE": code_upper.clone(),
-        "DSRC_DESC": code_upper,  // Python uses code as description, not formatted string
-        "RETENTION_LEVEL": retention,
-    }));
+    // Build a complete row via DsrcRow so every CFG_DSRC key is present.
+    // Python uses the code as the description (not a formatted string).
+    let row = DsrcRow {
+        dsrc_id: next_id,
+        dsrc_code: code_upper.clone(),
+        dsrc_desc: code_upper,
+        retention_level: retention.to_string(),
+    };
+    dsrcs.push(serde_json::to_value(&row)?);
 
     serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
 }
@@ -245,6 +270,7 @@ pub fn list_data_sources(config_json: &str) -> Result<Vec<Value>> {
 /// - `JsonParse` if config_json is invalid
 /// - `MissingSection` if CFG_DSRC section doesn't exist
 pub fn set_data_source(config_json: &str, params: SetDataSourceParams) -> Result<String> {
+    // In-place update of a complete existing row; all keys preserved.
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
@@ -268,4 +294,51 @@ pub fn set_data_source(config_json: &str, params: SetDataSourceParams) -> Result
     }
 
     serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const DSRC_KEYS: [&str; 4] = ["DSRC_ID", "DSRC_CODE", "DSRC_DESC", "RETENTION_LEVEL"];
+
+    const TEST_CONFIG: &str = r#"{"G2_CONFIG": {"CFG_DSRC": []}}"#;
+
+    #[test]
+    fn test_add_data_source_emits_all_keys() {
+        let params = AddDataSourceParams {
+            code: "customers",
+            retention_level: None,
+        };
+
+        let modified = add_data_source(TEST_CONFIG, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let dsrc = &value["G2_CONFIG"]["CFG_DSRC"][0];
+        let obj = dsrc.as_object().unwrap();
+
+        for key in DSRC_KEYS {
+            assert!(obj.contains_key(key), "{key} key must be present");
+        }
+        assert_eq!(dsrc["DSRC_CODE"], json!("CUSTOMERS"));
+        assert_eq!(dsrc["DSRC_DESC"], json!("CUSTOMERS"));
+        assert_eq!(dsrc["RETENTION_LEVEL"], json!("Remember"));
+    }
+
+    #[test]
+    fn test_add_data_source_with_retention() {
+        let params = AddDataSourceParams {
+            code: "watchlist",
+            retention_level: Some("forget"),
+        };
+
+        let modified = add_data_source(TEST_CONFIG, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let dsrc = &value["G2_CONFIG"]["CFG_DSRC"][0];
+        let obj = dsrc.as_object().unwrap();
+
+        for key in DSRC_KEYS {
+            assert!(obj.contains_key(key), "{key} key must be present");
+        }
+        assert_eq!(dsrc["RETENTION_LEVEL"], json!("Forget"));
+    }
 }

@@ -1,6 +1,64 @@
 use crate::error::{Result, SzConfigError};
 use crate::helpers;
+use serde::Serialize;
 use serde_json::{Value, json};
+
+// ============================================================================
+// Row Structs
+// ============================================================================
+
+/// Complete CFG_CFRTN (comparison threshold) row.
+///
+/// Derives `Serialize` with no `skip_serializing_if`, so every key is always
+/// emitted — the seed-then-null fields (EXEC_ORDER and the score fields)
+/// serialize as JSON `null` when absent rather than being dropped. The Senzing
+/// engine's config loader requires every key to be present, so partial rows
+/// must never be written.
+#[derive(Debug, Clone, Serialize)]
+struct CfrtnRow {
+    #[serde(rename = "CFRTN_ID")]
+    cfrtn_id: i64,
+    #[serde(rename = "CFUNC_ID")]
+    cfunc_id: i64,
+    #[serde(rename = "FTYPE_ID")]
+    ftype_id: i64,
+    #[serde(rename = "CFUNC_RTNVAL")]
+    cfunc_rtnval: String,
+    #[serde(rename = "EXEC_ORDER")]
+    exec_order: Option<i64>,
+    #[serde(rename = "SAME_SCORE")]
+    same_score: Option<i64>,
+    #[serde(rename = "CLOSE_SCORE")]
+    close_score: Option<i64>,
+    #[serde(rename = "LIKELY_SCORE")]
+    likely_score: Option<i64>,
+    #[serde(rename = "PLAUSIBLE_SCORE")]
+    plausible_score: Option<i64>,
+    #[serde(rename = "UN_LIKELY_SCORE")]
+    un_likely_score: Option<i64>,
+}
+
+/// Complete CFG_GENERIC_THRESHOLD row.
+///
+/// Derives `Serialize` with no `skip_serializing_if`, so every key is always
+/// emitted. All fields are always populated by the builder, so none are
+/// optional. The Senzing engine's config loader requires every key to be
+/// present, so partial rows must never be written.
+#[derive(Debug, Clone, Serialize)]
+struct GenericThresholdRow {
+    #[serde(rename = "GPLAN_ID")]
+    gplan_id: i64,
+    #[serde(rename = "BEHAVIOR")]
+    behavior: String,
+    #[serde(rename = "FTYPE_ID")]
+    ftype_id: i64,
+    #[serde(rename = "CANDIDATE_CAP")]
+    candidate_cap: i64,
+    #[serde(rename = "SCORING_CAP")]
+    scoring_cap: i64,
+    #[serde(rename = "SEND_TO_REDO")]
+    send_to_redo: String,
+}
 
 // ============================================================================
 // Parameter Structs
@@ -249,38 +307,21 @@ pub fn add_comparison_threshold(
     // Get next ID
     let cfrtn_id = helpers::get_next_id_from_array(cfrtn_array, "CFRTN_ID")?;
 
-    // Build record
-    let mut record = json!({
-        "CFRTN_ID": cfrtn_id,
-        "CFUNC_ID": cfunc_id,
-        "FTYPE_ID": ftype_id,
-        "CFUNC_RTNVAL": rtnval_upper,
-    });
-
-    record["EXEC_ORDER"] = match params.exec_order {
-        Some(order) => json!(order),
-        None => Value::Null,
+    // Build a complete row via CfrtnRow so every CFG_CFRTN key is present
+    // (unset seed-then-null fields serialize as null).
+    let row = CfrtnRow {
+        cfrtn_id,
+        cfunc_id,
+        ftype_id,
+        cfunc_rtnval: rtnval_upper,
+        exec_order: params.exec_order,
+        same_score: params.same_score,
+        close_score: params.close_score,
+        likely_score: params.likely_score,
+        plausible_score: params.plausible_score,
+        un_likely_score: params.un_likely_score,
     };
-    record["SAME_SCORE"] = match params.same_score {
-        Some(score) => json!(score),
-        None => Value::Null,
-    };
-    record["CLOSE_SCORE"] = match params.close_score {
-        Some(score) => json!(score),
-        None => Value::Null,
-    };
-    record["LIKELY_SCORE"] = match params.likely_score {
-        Some(score) => json!(score),
-        None => Value::Null,
-    };
-    record["PLAUSIBLE_SCORE"] = match params.plausible_score {
-        Some(score) => json!(score),
-        None => Value::Null,
-    };
-    record["UN_LIKELY_SCORE"] = match params.un_likely_score {
-        Some(score) => json!(score),
-        None => Value::Null,
-    };
+    let record = serde_json::to_value(&row)?;
 
     helpers::add_to_config_array(config_json, "CFG_CFRTN", record)
 }
@@ -323,38 +364,21 @@ pub(crate) fn add_comparison_threshold_by_id(
     // Get next ID
     let cfrtn_id = crate::helpers::get_next_id_from_array(cfrtn_array, "CFRTN_ID")?;
 
-    // Build record
-    let mut record = json!({
-        "CFRTN_ID": cfrtn_id,
-        "CFUNC_ID": cfunc_id,
-        "FTYPE_ID": ftype,
-        "CFUNC_RTNVAL": rtnval_upper,
-    });
-
-    record["EXEC_ORDER"] = match exec_order {
-        Some(order) => json!(order),
-        None => Value::Null,
+    // Build a complete row via CfrtnRow so every CFG_CFRTN key is present
+    // (unset seed-then-null fields serialize as null).
+    let row = CfrtnRow {
+        cfrtn_id,
+        cfunc_id,
+        ftype_id: ftype,
+        cfunc_rtnval: rtnval_upper,
+        exec_order,
+        same_score,
+        close_score,
+        likely_score,
+        plausible_score,
+        un_likely_score,
     };
-    record["SAME_SCORE"] = match same_score {
-        Some(score) => json!(score),
-        None => Value::Null,
-    };
-    record["CLOSE_SCORE"] = match close_score {
-        Some(score) => json!(score),
-        None => Value::Null,
-    };
-    record["LIKELY_SCORE"] = match likely_score {
-        Some(score) => json!(score),
-        None => Value::Null,
-    };
-    record["PLAUSIBLE_SCORE"] = match plausible_score {
-        Some(score) => json!(score),
-        None => Value::Null,
-    };
-    record["UN_LIKELY_SCORE"] = match un_likely_score {
-        Some(score) => json!(score),
-        None => Value::Null,
-    };
+    let record = serde_json::to_value(&row)?;
 
     crate::helpers::add_to_config_array(config_json, "CFG_CFRTN", record)
 }
@@ -381,6 +405,7 @@ pub(crate) fn set_comparison_threshold_by_id(
         .find(|item| item["CFRTN_ID"].as_i64() == Some(cfrtn_id))
         .ok_or_else(|| SzConfigError::NotFound(format!("Comparison threshold ID: {cfrtn_id}")))?;
 
+    // In-place update of a complete existing row; all keys preserved.
     // Update fields from params
     if let Some(dest_obj) = cfrtn.as_object_mut() {
         if let Some(score) = same_score {
@@ -544,6 +569,7 @@ pub fn set_comparison_threshold(
             ))
         })?;
 
+    // In-place update of a complete existing row; all keys preserved.
     // Update fields from params
     if let Some(dest_obj) = cfrtn.as_object_mut() {
         if let Some(order) = params.exec_order {
@@ -752,15 +778,17 @@ pub fn add_generic_threshold(
         )));
     }
 
-    // Create new threshold record
-    let new_threshold = json!({
-        "GPLAN_ID": gplan_id,
-        "BEHAVIOR": behavior_upper,
-        "FTYPE_ID": ftype_id,
-        "CANDIDATE_CAP": candidate_cap,
-        "SCORING_CAP": scoring_cap,
-        "SEND_TO_REDO": redo_upper
-    });
+    // Build a complete row via GenericThresholdRow so every
+    // CFG_GENERIC_THRESHOLD key is present.
+    let row = GenericThresholdRow {
+        gplan_id,
+        behavior: behavior_upper,
+        ftype_id,
+        candidate_cap,
+        scoring_cap,
+        send_to_redo: redo_upper,
+    };
+    let new_threshold = serde_json::to_value(&row)?;
 
     if let Some(threshold_array) = config["G2_CONFIG"]["CFG_GENERIC_THRESHOLD"].as_array_mut() {
         threshold_array.push(new_threshold);
@@ -878,6 +906,7 @@ pub fn set_generic_threshold(
             ))
         })?;
 
+    // In-place update of a complete existing row; all keys preserved.
     // Update fields from params
     if let Some(dest_obj) = gthresh.as_object_mut() {
         if let Some(feature_code) = params.feature {
@@ -993,4 +1022,113 @@ pub fn set_threshold(_config_json: &str, _params: SetThresholdParams) -> Result<
     Err(SzConfigError::InvalidInput(
         "set_threshold not yet implemented".to_string(),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CFRTN_KEYS: [&str; 10] = [
+        "CFRTN_ID",
+        "CFUNC_ID",
+        "FTYPE_ID",
+        "CFUNC_RTNVAL",
+        "EXEC_ORDER",
+        "SAME_SCORE",
+        "CLOSE_SCORE",
+        "LIKELY_SCORE",
+        "PLAUSIBLE_SCORE",
+        "UN_LIKELY_SCORE",
+    ];
+
+    const GENERIC_THRESHOLD_KEYS: [&str; 6] = [
+        "GPLAN_ID",
+        "BEHAVIOR",
+        "FTYPE_ID",
+        "CANDIDATE_CAP",
+        "SCORING_CAP",
+        "SEND_TO_REDO",
+    ];
+
+    fn assert_all_keys(row: &Value, keys: &[&str]) {
+        let obj = row.as_object().unwrap();
+        for key in keys {
+            assert!(obj.contains_key(*key), "{key} key must be present");
+        }
+    }
+
+    #[test]
+    fn test_add_comparison_threshold_emits_all_keys() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_CFRTN": [],
+            "CFG_CFUNC": [{"CFUNC_ID": 5, "CFUNC_CODE": "GNR_COMP"}],
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}]
+        }}"#;
+
+        // Only the required fields supplied; the seed-then-null fields must
+        // surface as null, never dropped.
+        let params = AddComparisonThresholdParams::new("GNR_COMP", "NAME", "FULL_SCORE");
+        let modified = add_comparison_threshold(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let row = &value["G2_CONFIG"]["CFG_CFRTN"][0];
+
+        assert_all_keys(row, &CFRTN_KEYS);
+        assert_eq!(row["CFUNC_ID"], json!(5));
+        assert_eq!(row["FTYPE_ID"], json!(3));
+        assert_eq!(row["CFUNC_RTNVAL"], json!("FULL_SCORE"));
+        assert_eq!(row["EXEC_ORDER"], Value::Null);
+        assert_eq!(row["SAME_SCORE"], Value::Null);
+        assert_eq!(row["UN_LIKELY_SCORE"], Value::Null);
+    }
+
+    #[test]
+    fn test_add_comparison_threshold_by_id_emits_all_keys() {
+        let config = r#"{"G2_CONFIG": {"CFG_CFRTN": []}}"#;
+
+        let modified = add_comparison_threshold_by_id(
+            config,
+            5,
+            Some(3),
+            "full_score",
+            Some(1),
+            Some(100),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let row = &value["G2_CONFIG"]["CFG_CFRTN"][0];
+
+        assert_all_keys(row, &CFRTN_KEYS);
+        assert_eq!(row["CFUNC_RTNVAL"], json!("FULL_SCORE")); // uppercased
+        assert_eq!(row["EXEC_ORDER"], json!(1));
+        assert_eq!(row["SAME_SCORE"], json!(100));
+        assert_eq!(row["CLOSE_SCORE"], Value::Null);
+        assert_eq!(row["PLAUSIBLE_SCORE"], Value::Null);
+    }
+
+    #[test]
+    fn test_add_generic_threshold_emits_all_keys() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_GPLAN": [{"GPLAN_ID": 1, "GPLAN_CODE": "INGEST"}],
+            "CFG_GENERIC_THRESHOLD": [],
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}]
+        }}"#;
+
+        let params = AddGenericThresholdParams::new("INGEST", "NAME", 20, 10, "No");
+        let modified = add_generic_threshold(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let row = &value["G2_CONFIG"]["CFG_GENERIC_THRESHOLD"][0];
+
+        assert_all_keys(row, &GENERIC_THRESHOLD_KEYS);
+        assert_eq!(row["GPLAN_ID"], json!(1));
+        assert_eq!(row["BEHAVIOR"], json!("NAME"));
+        // feature defaults to "ALL" -> ftype_id 0.
+        assert_eq!(row["FTYPE_ID"], json!(0));
+        assert_eq!(row["CANDIDATE_CAP"], json!(10));
+        assert_eq!(row["SCORING_CAP"], json!(20));
+        assert_eq!(row["SEND_TO_REDO"], json!("NO"));
+    }
 }
