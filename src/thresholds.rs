@@ -962,11 +962,35 @@ pub fn set_generic_threshold(
 
 /// List all generic thresholds with resolved names
 ///
+/// The rows are sorted inside the SDK by `(GPLAN_ID, behaviour-code position)` —
+/// the behaviour order coming from [`crate::behavior_domain::behavior_position`]
+/// — so callers never need to re-sort or reverse-map the plan code to its id. The
+/// projection carries `id` (the `GPLAN_ID`), previously absent.
+///
 /// # Arguments
 /// * `config_json` - JSON configuration string
 ///
 /// # Returns
-/// Vector of JSON Values with plan, behavior, feature, candidateCap, scoringCap, and sendToRedo fields
+/// Vector of JSON Values with id, plan, behavior, feature, candidateCap, scoringCap, and sendToRedo fields
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::thresholds::list_generic_thresholds;
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_GPLAN": [{"GPLAN_ID": 1, "GPLAN_CODE": "INGEST"}],
+///     "CFG_FTYPE": [],
+///     "CFG_GENERIC_THRESHOLD": [
+///         {"GPLAN_ID": 1, "BEHAVIOR": "F1", "FTYPE_ID": 0, "CANDIDATE_CAP": 10,
+///          "SCORING_CAP": -1, "SEND_TO_REDO": "Yes"},
+///         {"GPLAN_ID": 1, "BEHAVIOR": "NAME", "FTYPE_ID": 0, "CANDIDATE_CAP": 10,
+///          "SCORING_CAP": -1, "SEND_TO_REDO": "Yes"}
+///     ]
+/// }}"#;
+/// let rows = list_generic_thresholds(config).unwrap();
+/// // NAME sorts before F1 despite being stored second.
+/// assert_eq!(rows[0]["behavior"], "NAME");
+/// assert_eq!(rows[0]["id"], 1);
+/// ```
 pub fn list_generic_thresholds(config_json: &str) -> Result<Vec<Value>> {
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -983,8 +1007,21 @@ pub fn list_generic_thresholds(config_json: &str) -> Result<Vec<Value>> {
         .as_array()
         .ok_or_else(|| SzConfigError::MissingSection("CFG_FTYPE".to_string()))?;
 
-    let result: Vec<Value> = gthresh_array
-        .iter()
+    // Sort the raw rows by (GPLAN_ID, behaviour-code position) before projection
+    // so the numeric sort key is never lost. The behaviour-code order comes from
+    // the SDK-owned canonical domain (behavior_domain::behavior_position); an
+    // unrecognised behaviour sorts last. sort_by_key is stable, so per-feature
+    // rows sharing a (plan, behaviour) keep their stored relative order.
+    let mut sorted: Vec<&Value> = gthresh_array.iter().collect();
+    sorted.sort_by_key(|item| {
+        let gplan_id = item["GPLAN_ID"].as_i64().unwrap_or(0);
+        let behavior = item["BEHAVIOR"].as_str().unwrap_or("");
+        let pos = crate::behavior_domain::behavior_position(behavior).unwrap_or(usize::MAX);
+        (gplan_id, pos)
+    });
+
+    let result: Vec<Value> = sorted
+        .into_iter()
         .map(|item| {
             let gplan_id = item["GPLAN_ID"].as_i64().unwrap_or(0);
             let ftype_id = item["FTYPE_ID"].as_i64().unwrap_or(0);
@@ -1009,7 +1046,11 @@ pub fn list_generic_thresholds(config_json: &str) -> Result<Vec<Value>> {
                     .to_string()
             };
 
+            // `id` carries the GPLAN_ID: generic-threshold rows have no single
+            // surrogate key, and the plan id is the numeric key callers need to
+            // sort/round-trip (previously reverse-mapped from `plan`).
             json!({
+                "id": gplan_id,
                 "plan": plan,
                 "behavior": item["BEHAVIOR"].as_str().unwrap_or(""),
                 "feature": feature,
@@ -1336,5 +1377,34 @@ mod tests {
         let err =
             delete_comparison_threshold(config, "GNR_COMP", "NAME", "CLOSE_SCORE").unwrap_err();
         assert_eq!(err.kind(), crate::error::SzErrorKind::NotFound);
+    }
+
+    #[test]
+    fn test_list_generic_thresholds_carries_id_and_sorts_by_behavior() {
+        // Stored order deliberately differs from (GPLAN_ID, behaviour-position):
+        // within plan 1, FF is stored before NAME/F1; plan 2 stored before plan 1.
+        let config = r#"{"G2_CONFIG": {
+            "CFG_GPLAN": [
+                {"GPLAN_ID": 1, "GPLAN_CODE": "INGEST"},
+                {"GPLAN_ID": 2, "GPLAN_CODE": "SEARCH"}
+            ],
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_GENERIC_THRESHOLD": [
+                {"GPLAN_ID": 2, "BEHAVIOR": "F1", "FTYPE_ID": 0, "CANDIDATE_CAP": 5, "SCORING_CAP": 5, "SEND_TO_REDO": "Yes"},
+                {"GPLAN_ID": 1, "BEHAVIOR": "FF", "FTYPE_ID": 0, "CANDIDATE_CAP": 20, "SCORING_CAP": 20, "SEND_TO_REDO": "No"},
+                {"GPLAN_ID": 1, "BEHAVIOR": "NAME", "FTYPE_ID": 0, "CANDIDATE_CAP": 10, "SCORING_CAP": -1, "SEND_TO_REDO": "Yes"},
+                {"GPLAN_ID": 1, "BEHAVIOR": "F1", "FTYPE_ID": 0, "CANDIDATE_CAP": 5, "SCORING_CAP": 5, "SEND_TO_REDO": "Yes"}
+            ]
+        }}"#;
+
+        let rows = list_generic_thresholds(config).unwrap();
+        // Plan 1 first (all its rows), each carrying id = GPLAN_ID, in behaviour
+        // order NAME < F1 < FF; then plan 2.
+        assert_eq!(rows[0]["id"], json!(1));
+        assert_eq!(rows[0]["behavior"], json!("NAME"));
+        assert_eq!(rows[1]["behavior"], json!("F1"));
+        assert_eq!(rows[2]["behavior"], json!("FF"));
+        assert_eq!(rows[3]["id"], json!(2));
+        assert_eq!(rows[3]["behavior"], json!("F1"));
     }
 }

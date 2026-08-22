@@ -274,7 +274,7 @@ pub fn list_expression_functions(config_json: &str) -> Result<Vec<Value>, SzConf
                 // connectStr and language are stored-nullable; project them
                 // null-preserving via field_or_null rather than coercing to "".
                 json!({
-                    "id": item.get("EFUNC_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+                    "id": field_or_null(item, "EFUNC_ID"),
                     "function": item.get("EFUNC_CODE").and_then(|v| v.as_str()).unwrap_or(""),
                     "connectStr": field_or_null(item, "CONNECT_STR"),
                     "language": field_or_null(item, "LANGUAGE")

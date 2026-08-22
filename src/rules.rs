@@ -448,9 +448,14 @@ pub fn get_rule(config_json: &str, code_or_id: &str) -> Result<Value> {
 ///
 /// * `config_json` - Configuration JSON string
 ///
+/// The rows are sorted inside the SDK by `ERRULE_ID` ascending. That is an
+/// **assumed** default order: the exact Python sort key for `listRules` could not
+/// be verified in-repo, so this is the documented SDK convention (a one-line
+/// change if Python later proves to sort differently).
+///
 /// # Returns
 ///
-/// Returns a vector of rule objects in Python sz_configtool format
+/// Returns a vector of rule objects in Python sz_configtool format, sorted by id
 ///
 /// # Example
 ///
@@ -499,6 +504,13 @@ pub fn list_rules(config_json: &str) -> Result<Vec<Value>> {
     } else {
         Vec::new()
     };
+
+    // SDK-owned default sort. NOTE: the exact Python sort order for listRules is
+    // unverified (Python is not in-repo); the assumed order is ERRULE_ID
+    // ascending. If Python turns out to sort by (tier, id) or similar this is a
+    // one-line change. rows carrying a null/absent id sort first (id 0).
+    let mut items = items;
+    items.sort_by_key(|item| item.get("id").and_then(|v| v.as_i64()).unwrap_or(0));
 
     Ok(items)
 }
@@ -1134,5 +1146,21 @@ mod tests {
         // id 100 is already taken by EXISTING.
         let err = add_rule(cfg, 100, &rule).unwrap_err();
         assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
+    }
+
+    #[test]
+    fn test_list_rules_default_sort_by_id() {
+        // Stored order deliberately out of ERRULE_ID order.
+        let config = r#"{"G2_CONFIG": {"CFG_ERRULE": [
+            {"ERRULE_ID": 30, "ERRULE_CODE": "C", "RESOLVE": "No"},
+            {"ERRULE_ID": 10, "ERRULE_CODE": "A", "RESOLVE": "No"},
+            {"ERRULE_ID": 20, "ERRULE_CODE": "B", "RESOLVE": "No"}
+        ]}}"#;
+
+        let rules = list_rules(config).unwrap();
+        // SDK-owned default sort: ERRULE_ID ascending.
+        assert_eq!(rules[0]["id"], json!(10));
+        assert_eq!(rules[1]["id"], json!(20));
+        assert_eq!(rules[2]["id"], json!(30));
     }
 }

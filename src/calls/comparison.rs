@@ -335,13 +335,33 @@ pub fn get_comparison_call(config: &str, selector: CallSelector) -> Result<Value
 
 /// List all comparison calls with resolved names
 ///
-/// Returns all comparison calls with feature and function codes resolved.
+/// Returns all comparison calls with feature and function codes resolved, plus
+/// the call's `elementList` (element codes assembled from `CFG_CFBOM`, ordered by
+/// `EXEC_ORDER`).
+///
+/// The rows are sorted inside the SDK by `(FTYPE_ID, CFCALL_ID)` — the same key
+/// Python uses — so callers never need to re-sort. The sort runs on the raw rows
+/// before id→code projection, so the numeric key is never lost.
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
 ///
 /// # Returns
-/// Vector of JSON Values with resolved names
+/// Vector of JSON Values with resolved names and an `elementList`
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::calls::comparison::list_comparison_calls;
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+///     "CFG_FELEM": [{"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"}],
+///     "CFG_CFUNC": [{"CFUNC_ID": 1, "CFUNC_CODE": "GNR_COMP"}],
+///     "CFG_CFCALL": [{"CFCALL_ID": 7, "FTYPE_ID": 3, "CFUNC_ID": 1}],
+///     "CFG_CFBOM": [{"CFCALL_ID": 7, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1}]
+/// }}"#;
+/// let calls = list_comparison_calls(config).unwrap();
+/// assert_eq!(calls[0]["elementList"], serde_json::json!(["FIRST_NAME"]));
+/// ```
 pub fn list_comparison_calls(config: &str) -> Result<Vec<Value>> {
     let config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -362,6 +382,18 @@ pub fn list_comparison_calls(config: &str) -> Result<Vec<Value>> {
     let cfunc_array = config_data
         .get("G2_CONFIG")
         .and_then(|g| g.get("CFG_CFUNC"))
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty_array);
+
+    let felem_array = config_data
+        .get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_FELEM"))
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty_array);
+
+    let cfbom_array = config_data
+        .get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_CFBOM"))
         .and_then(|v| v.as_array())
         .unwrap_or(&empty_array);
 
@@ -386,17 +418,54 @@ pub fn list_comparison_calls(config: &str) -> Result<Vec<Value>> {
             .to_string()
     };
 
+    let resolve_felem = |felem_id: i64| -> String {
+        felem_array
+            .iter()
+            .find(|fe| fe.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id))
+            .and_then(|fe| fe.get("FELEM_CODE"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string()
+    };
+
+    // Assemble a call's elementList from CFG_CFBOM, ordered by EXEC_ORDER.
+    let element_list = |cfcall_id: i64| -> Vec<Value> {
+        let mut rows: Vec<&Value> = cfbom_array
+            .iter()
+            .filter(|bom| bom.get("CFCALL_ID").and_then(|v| v.as_i64()) == Some(cfcall_id))
+            .collect();
+        rows.sort_by_key(|bom| bom.get("EXEC_ORDER").and_then(|v| v.as_i64()).unwrap_or(0));
+        rows.into_iter()
+            .map(|bom| {
+                let felem_id = bom.get("FELEM_ID").and_then(|v| v.as_i64()).unwrap_or(0);
+                Value::from(resolve_felem(felem_id))
+            })
+            .collect()
+    };
+
+    // Sort the raw rows by (FTYPE_ID, CFCALL_ID) before projection so the numeric
+    // sort key is never lost (mirrors Python and list_comparison_thresholds).
+    let mut sorted: Vec<&Value> = cfcall_array.iter().collect();
+    sorted.sort_by_key(|item| {
+        (
+            item.get("FTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+            item.get("CFCALL_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+        )
+    });
+
     // Transform comparison calls
-    let items: Vec<Value> = cfcall_array
-        .iter()
+    let items: Vec<Value> = sorted
+        .into_iter()
         .map(|item| {
+            let cfcall_id = item.get("CFCALL_ID").and_then(|v| v.as_i64()).unwrap_or(0);
             let ftype_id = item.get("FTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(0);
             let cfunc_id = item.get("CFUNC_ID").and_then(|v| v.as_i64()).unwrap_or(0);
 
             json!({
-                "id": item.get("CFCALL_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+                "id": cfcall_id,
                 "feature": resolve_ftype(ftype_id),
-                "function": resolve_cfunc(cfunc_id)
+                "function": resolve_cfunc(cfunc_id),
+                "elementList": element_list(cfcall_id)
             })
         })
         .collect();
@@ -738,5 +807,44 @@ mod tests {
         // Element on a call that has no such BOM row -> NotFound.
         let err = delete_comparison_call_element(&config, CallSelector::Id(999), "FIRST_NAME");
         assert_eq!(err.unwrap_err().kind(), crate::error::SzErrorKind::NotFound);
+    }
+
+    // #41: stored order deliberately differs from the sorted (FTYPE_ID, CFCALL_ID)
+    // order, and the CFBOM rows are stored out of EXEC_ORDER, so the test proves
+    // both the SDK-owned sort and the EXEC_ORDER-ordered elementList assembly.
+    fn unsorted_list_config() -> String {
+        r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [
+                {"FTYPE_ID": 3, "FTYPE_CODE": "NAME"},
+                {"FTYPE_ID": 7, "FTYPE_CODE": "ADDRESS"}
+            ],
+            "CFG_FELEM": [
+                {"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"},
+                {"FELEM_ID": 12, "FELEM_CODE": "LAST_NAME"}
+            ],
+            "CFG_CFUNC": [{"CFUNC_ID": 1, "CFUNC_CODE": "GNR_COMP"}],
+            "CFG_CFCALL": [
+                {"CFCALL_ID": 20, "FTYPE_ID": 7, "CFUNC_ID": 1},
+                {"CFCALL_ID": 5, "FTYPE_ID": 3, "CFUNC_ID": 1}
+            ],
+            "CFG_CFBOM": [
+                {"CFCALL_ID": 5, "FTYPE_ID": 3, "FELEM_ID": 12, "EXEC_ORDER": 2},
+                {"CFCALL_ID": 5, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1}
+            ]
+        }}"#
+        .to_string()
+    }
+
+    #[test]
+    fn test_list_comparison_calls_sorted_with_element_list() {
+        let calls = list_comparison_calls(&unsorted_list_config()).unwrap();
+        // Sorted by (FTYPE_ID, CFCALL_ID): NAME (ftype 3) before ADDRESS (ftype 7).
+        assert_eq!(calls[0]["feature"], json!("NAME"));
+        assert_eq!(calls[0]["id"], json!(5));
+        assert_eq!(calls[1]["feature"], json!("ADDRESS"));
+        // elementList ordered by EXEC_ORDER despite reversed storage.
+        assert_eq!(calls[0]["elementList"], json!(["FIRST_NAME", "LAST_NAME"]));
+        // The ADDRESS call has no BOM rows -> empty elementList.
+        assert_eq!(calls[1]["elementList"], json!([]));
     }
 }

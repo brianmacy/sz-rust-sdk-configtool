@@ -360,7 +360,7 @@ pub fn list_comparison_functions(config_json: &str) -> Result<Vec<Value>, SzConf
                 // Field order: id, function, description, connectStr, anonSupport,
                 // language.
                 json!({
-                    "id": item.get("CFUNC_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+                    "id": field_or_null(item, "CFUNC_ID"),
                     "function": item.get("CFUNC_CODE").and_then(|v| v.as_str()).unwrap_or(""),
                     "description": field_or_null(item, "CFUNC_DESC"),
                     "connectStr": field_or_null(item, "CONNECT_STR"),

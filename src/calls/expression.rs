@@ -383,6 +383,12 @@ pub fn list_expression_calls(config: &str) -> Result<Vec<Value>> {
         .and_then(|v| v.as_array())
         .unwrap_or(&empty_array);
 
+    let efbom_array = config_data
+        .get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_EFBOM"))
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty_array);
+
     // Helper functions for ID resolution
     let resolve_ftype = |ftype_id: i64| -> String {
         if ftype_id <= 0 {
@@ -422,10 +428,37 @@ pub fn list_expression_calls(config: &str) -> Result<Vec<Value>> {
             .to_string()
     };
 
+    // Assemble a call's elementList from CFG_EFBOM, ordered by EXEC_ORDER.
+    let element_list = |efcall_id: i64| -> Vec<Value> {
+        let mut rows: Vec<&Value> = efbom_array
+            .iter()
+            .filter(|bom| bom.get("EFCALL_ID").and_then(|v| v.as_i64()) == Some(efcall_id))
+            .collect();
+        rows.sort_by_key(|bom| bom.get("EXEC_ORDER").and_then(|v| v.as_i64()).unwrap_or(0));
+        rows.into_iter()
+            .map(|bom| {
+                let felem_id = bom.get("FELEM_ID").and_then(|v| v.as_i64()).unwrap_or(0);
+                Value::from(resolve_felem(felem_id))
+            })
+            .collect()
+    };
+
+    // Sort the raw rows by (FTYPE_ID, FELEM_ID, EXEC_ORDER) before projection so
+    // the numeric sort key is never lost (mirrors Python).
+    let mut sorted: Vec<&Value> = efcall_array.iter().collect();
+    sorted.sort_by_key(|item| {
+        (
+            item.get("FTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+            item.get("FELEM_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+            item.get("EXEC_ORDER").and_then(|v| v.as_i64()).unwrap_or(0),
+        )
+    });
+
     // Transform expression calls
-    let items: Vec<Value> = efcall_array
-        .iter()
+    let items: Vec<Value> = sorted
+        .into_iter()
         .map(|item| {
+            let efcall_id = item.get("EFCALL_ID").and_then(|v| v.as_i64()).unwrap_or(0);
             let ftype_id = item.get("FTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(0);
             let felem_id = item.get("FELEM_ID").and_then(|v| v.as_i64()).unwrap_or(0);
             let efunc_id = item.get("EFUNC_ID").and_then(|v| v.as_i64()).unwrap_or(0);
@@ -433,13 +466,14 @@ pub fn list_expression_calls(config: &str) -> Result<Vec<Value>> {
             let efeat_ftype_id = item.get("EFEAT_FTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(-1);
 
             json!({
-                "id": item.get("EFCALL_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+                "id": efcall_id,
                 "feature": resolve_ftype(ftype_id),
                 "element": resolve_felem(felem_id),
                 "execOrder": item.get("EXEC_ORDER").and_then(|v| v.as_i64()).unwrap_or(0),
                 "function": resolve_efunc(efunc_id),
                 "isVirtual": item.get("IS_VIRTUAL").and_then(|v| v.as_str()).unwrap_or("No"),
-                "expressionFeature": if efeat_ftype_id <= 0 { "n/a".to_string() } else { resolve_ftype(efeat_ftype_id) }
+                "expressionFeature": if efeat_ftype_id <= 0 { "n/a".to_string() } else { resolve_ftype(efeat_ftype_id) },
+                "elementList": element_list(efcall_id)
             })
         })
         .collect();
@@ -766,5 +800,34 @@ mod tests {
         let efbom = v["G2_CONFIG"]["CFG_EFBOM"].as_array().unwrap();
         assert_eq!(efbom.len(), 1);
         assert_eq!(efbom[0]["EFCALL_ID"], json!(10));
+    }
+
+    #[test]
+    fn test_list_expression_calls_sorted_with_element_list() {
+        // Stored order differs from (FTYPE_ID, FELEM_ID, EXEC_ORDER); BOM out of order.
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_FELEM": [
+                {"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"},
+                {"FELEM_ID": 12, "FELEM_CODE": "LAST_NAME"}
+            ],
+            "CFG_EFUNC": [{"EFUNC_ID": 1, "EFUNC_CODE": "EXP_X"}],
+            "CFG_EFCALL": [
+                {"EFCALL_ID": 30, "FTYPE_ID": 3, "FELEM_ID": 12, "EFUNC_ID": 1, "EXEC_ORDER": 1, "EFEAT_FTYPE_ID": -1, "IS_VIRTUAL": "No"},
+                {"EFCALL_ID": 10, "FTYPE_ID": 3, "FELEM_ID": 11, "EFUNC_ID": 1, "EXEC_ORDER": 1, "EFEAT_FTYPE_ID": -1, "IS_VIRTUAL": "No"}
+            ],
+            "CFG_EFBOM": [
+                {"EFCALL_ID": 10, "FTYPE_ID": 3, "FELEM_ID": 12, "EXEC_ORDER": 2, "FELEM_REQ": "Yes"},
+                {"EFCALL_ID": 10, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1, "FELEM_REQ": "Yes"}
+            ]
+        }}"#;
+
+        let calls = list_expression_calls(config).unwrap();
+        // Sorted by (FTYPE_ID, FELEM_ID, EXEC_ORDER): FELEM_ID 11 (id 10) before 12 (id 30).
+        assert_eq!(calls[0]["id"], json!(10));
+        assert_eq!(calls[0]["element"], json!("FIRST_NAME"));
+        assert_eq!(calls[1]["id"], json!(30));
+        // elementList ordered by EXEC_ORDER despite reversed storage.
+        assert_eq!(calls[0]["elementList"], json!(["FIRST_NAME", "LAST_NAME"]));
     }
 }

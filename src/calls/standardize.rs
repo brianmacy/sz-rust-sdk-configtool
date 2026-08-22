@@ -357,9 +357,20 @@ pub fn list_standardize_calls(config: &str) -> Result<Vec<Value>> {
             .to_string()
     };
 
+    // Sort the raw rows by (FTYPE_ID, EXEC_ORDER) before projection so the numeric
+    // sort key is never lost (mirrors Python). Standardize calls have no BOM, so
+    // there is deliberately no elementList.
+    let mut sorted: Vec<&Value> = sfcall_array.iter().collect();
+    sorted.sort_by_key(|item| {
+        (
+            item.get("FTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+            item.get("EXEC_ORDER").and_then(|v| v.as_i64()).unwrap_or(0),
+        )
+    });
+
     // Transform standardize calls
-    let items: Vec<Value> = sfcall_array
-        .iter()
+    let items: Vec<Value> = sorted
+        .into_iter()
         .map(|item| {
             let ftype_id = item.get("FTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(0);
             let felem_id = item.get("FELEM_ID").and_then(|v| v.as_i64()).unwrap_or(0);
@@ -644,5 +655,31 @@ mod tests {
         );
         // Addressing the specific call by id still works.
         assert!(get_standardize_call(config, CallSelector::Id(6)).is_ok());
+    }
+
+    #[test]
+    fn test_list_standardize_calls_sorted_no_element_list() {
+        // Stored order differs from (FTYPE_ID, EXEC_ORDER).
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [
+                {"FTYPE_ID": 3, "FTYPE_CODE": "NAME"},
+                {"FTYPE_ID": 7, "FTYPE_CODE": "ADDRESS"}
+            ],
+            "CFG_FELEM": [],
+            "CFG_SFUNC": [{"SFUNC_ID": 1, "SFUNC_CODE": "PARSE_NAME"}],
+            "CFG_SFCALL": [
+                {"SFCALL_ID": 20, "FTYPE_ID": 7, "FELEM_ID": -1, "SFUNC_ID": 1, "EXEC_ORDER": 1},
+                {"SFCALL_ID": 8, "FTYPE_ID": 3, "FELEM_ID": -1, "SFUNC_ID": 1, "EXEC_ORDER": 2},
+                {"SFCALL_ID": 5, "FTYPE_ID": 3, "FELEM_ID": -1, "SFUNC_ID": 1, "EXEC_ORDER": 1}
+            ]
+        }}"#;
+
+        let calls = list_standardize_calls(config).unwrap();
+        // (FTYPE_ID, EXEC_ORDER): (3,1) id 5, (3,2) id 8, (7,1) id 20.
+        assert_eq!(calls[0]["id"], json!(5));
+        assert_eq!(calls[1]["id"], json!(8));
+        assert_eq!(calls[2]["id"], json!(20));
+        // Standardize calls carry no BOM, so no elementList key.
+        assert!(!calls[0].as_object().unwrap().contains_key("elementList"));
     }
 }

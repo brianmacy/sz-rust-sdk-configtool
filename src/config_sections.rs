@@ -4,6 +4,7 @@
 //! These functions allow adding, removing, and querying configuration sections.
 
 use crate::error::{Result, SzConfigError};
+use crate::filter::to_json_dumps_string;
 use serde_json::{Value, json};
 
 /// Outcome counts for [`add_config_section_field`].
@@ -106,6 +107,26 @@ pub fn remove_config_section(config_json: &str, section_name: &str) -> Result<St
 
 /// Get items from a configuration section with optional filtering
 ///
+/// # Filter substrate
+///
+/// When a `filter` is supplied each record is stringified with **`json.dumps`
+/// spacing** (`{"K": 1, "J": null}`) — via [`crate::filter::to_json_dumps_string`]
+/// — before the case-insensitive substring test. This matches Python's
+/// `do_getConfigSection`, which filters on `json.dumps(record).lower()`. The
+/// previous implementation used compact `serde_json::to_string`
+/// (`{"K":1,"J":null}`), so a filter term spanning a key/value boundary (a `": "`
+/// or `", "`) matched under Python but missed here. The deliberate `ensure_ascii`
+/// limitation carried by [`crate::filter`] applies (non-ASCII is emitted as
+/// UTF-8, not `\uXXXX`).
+///
+/// # Empty vs. no-match
+///
+/// This function returns an empty `Vec` both when the section is empty and when a
+/// filter matched nothing; it does **not** distinguish the two (its return type
+/// is unchanged for backwards compatibility). Use [`config_section_is_empty`] to
+/// tell them apart — Python emits different messages ("Configuration section is
+/// empty" vs. "Nothing to display").
+///
 /// # Arguments
 ///
 /// * `config_json` - Configuration JSON string
@@ -147,25 +168,25 @@ pub fn get_config_section(
         return Ok(Vec::new());
     }
 
+    // Case-insensitive substring test on the json.dumps-spaced rendering (Python
+    // parity — see the "Filter substrate" doc section).
+    let matches = |record: &Value, needle: &str| -> bool {
+        to_json_dumps_string(record)
+            .to_lowercase()
+            .contains(&needle.to_lowercase())
+    };
+
     // Apply filter if provided
     let output_data = if let Some(filter_str) = filter {
         if let Some(array) = section_data.as_array() {
             array
                 .iter()
-                .filter(|record| {
-                    serde_json::to_string(record)
-                        .unwrap_or_default()
-                        .to_lowercase()
-                        .contains(&filter_str.to_lowercase())
-                })
+                .filter(|record| matches(record, filter_str))
                 .cloned()
                 .collect()
         } else {
             // Not an array, just check the single value
-            let as_string = serde_json::to_string(section_data)
-                .unwrap_or_default()
-                .to_lowercase();
-            if as_string.contains(&filter_str.to_lowercase()) {
+            if matches(section_data, filter_str) {
                 vec![section_data.clone()]
             } else {
                 Vec::new()
@@ -181,6 +202,62 @@ pub fn get_config_section(
     };
 
     Ok(output_data)
+}
+
+/// Report whether a configuration section is empty.
+///
+/// A companion to [`get_config_section`] that lets a caller distinguish an
+/// **empty section** from a **filter that matched nothing** — both of which come
+/// back from `get_config_section` as an empty `Vec`. Python emits different
+/// messages for the two cases ("Configuration section is empty" vs. "Nothing to
+/// display"); this accessor supplies the discriminator without a breaking change
+/// to `get_config_section`'s return type.
+///
+/// A section counts as empty when it is JSON `null` or an empty array. A
+/// non-array, non-null value (e.g. a scalar or object) counts as non-empty.
+///
+/// # Arguments
+///
+/// * `config_json` - Configuration JSON string
+/// * `section_name` - Name of the section to check
+///
+/// # Returns
+///
+/// * `Ok(true)` if the section exists and is empty (null or `[]`)
+/// * `Ok(false)` if the section exists and holds at least one item
+/// * `Err(SzConfigError::NotFound)` if the section does not exist
+///
+/// # Example
+///
+/// ```
+/// use sz_configtool_lib::config_sections::{config_section_is_empty, get_config_section};
+///
+/// let config = r#"{"G2_CONFIG": {"CFG_ATTR": [{"ATTR_CODE": "NAME"}], "CFG_EMPTY": []}}"#;
+///
+/// // Empty section -> is_empty is true.
+/// assert!(config_section_is_empty(config, "CFG_EMPTY").unwrap());
+///
+/// // Populated section that a filter excludes: get returns [] but is_empty is false,
+/// // so the caller knows it was "nothing matched", not "section empty".
+/// let matched = get_config_section(config, "CFG_ATTR", Some("PHONE")).unwrap();
+/// assert!(matched.is_empty());
+/// assert!(!config_section_is_empty(config, "CFG_ATTR").unwrap());
+/// ```
+pub fn config_section_is_empty(config_json: &str, section_name: &str) -> Result<bool> {
+    let config_data: Value = serde_json::from_str(config_json)?;
+
+    let section_data = config_data
+        .get("G2_CONFIG")
+        .and_then(|g2| g2.get(section_name))
+        .ok_or_else(|| {
+            SzConfigError::NotFound(format!("Configuration section '{section_name}' not found"))
+        })?;
+
+    Ok(section_data.is_null()
+        || section_data
+            .as_array()
+            .map(|arr| arr.is_empty())
+            .unwrap_or(false))
 }
 
 /// List all configuration section names
@@ -418,5 +495,53 @@ mod tests {
         let config = r#"{"G2_CONFIG": {"CFG_ATTR": []}}"#;
         let err = add_config_section_field(config, "CFG_NOPE", "F", &json!("x")).unwrap_err();
         assert_eq!(err.kind(), SzErrorKind::NotFound);
+    }
+
+    // #36 in-repo repro: a record like {"K":1,"J":null} with a boundary-spanning
+    // filter term. Under the old compact substrate the term missed; under the new
+    // json.dumps substrate it matches (Python parity).
+    #[test]
+    fn test_get_config_section_boundary_spanning_filter_matches_json_dumps() {
+        let config = r#"{"G2_CONFIG": {"CFG_X": [{"K": 1, "J": null}]}}"#;
+
+        // Boundary-spanning term with the json.dumps ", " spacing between items.
+        let matched = get_config_section(config, "CFG_X", Some("1, \"j\"")).unwrap();
+        assert_eq!(matched.len(), 1, "json.dumps substrate should match");
+
+        // Key/value boundary (": ") likewise matches.
+        let matched = get_config_section(config, "CFG_X", Some("\"k\": 1")).unwrap();
+        assert_eq!(matched.len(), 1);
+
+        // A term only present in the compact form (no spaces) must NOT match now.
+        let missed = get_config_section(config, "CFG_X", Some("1,\"j\"")).unwrap();
+        assert!(
+            missed.is_empty(),
+            "compact-only term must miss under json.dumps"
+        );
+    }
+
+    #[test]
+    fn test_config_section_is_empty_distinguishes_empty_vs_no_match() {
+        let config = r#"{"G2_CONFIG": {"CFG_ATTR": [{"ATTR_CODE": "NAME"}], "CFG_EMPTY": []}}"#;
+
+        // Empty section -> is_empty true.
+        assert!(config_section_is_empty(config, "CFG_EMPTY").unwrap());
+
+        // Populated section with a filter that excludes everything: get returns
+        // [] but is_empty is false -> caller can tell "nothing matched" apart from
+        // "section empty".
+        let matched = get_config_section(config, "CFG_ATTR", Some("PHONE")).unwrap();
+        assert!(matched.is_empty());
+        assert!(!config_section_is_empty(config, "CFG_ATTR").unwrap());
+
+        // Missing section -> NotFound, same as get_config_section.
+        let err = config_section_is_empty(config, "CFG_NOPE").unwrap_err();
+        assert_eq!(err.kind(), SzErrorKind::NotFound);
+    }
+
+    #[test]
+    fn test_config_section_is_empty_null_section() {
+        let config = r#"{"G2_CONFIG": {"CFG_NULL": null}}"#;
+        assert!(config_section_is_empty(config, "CFG_NULL").unwrap());
     }
 }

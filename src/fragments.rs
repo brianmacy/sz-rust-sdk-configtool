@@ -351,7 +351,7 @@ pub fn get_fragment(config_json: &str, code_or_id: &str) -> Result<Value> {
     // null-preserving (stored null stays null, stored "" stays "", absent ->
     // null) via helpers::field_or_null rather than coerced to "".
     Ok(json!({
-        "id": item.get("ERFRAG_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+        "id": helpers::field_or_null(&item, "ERFRAG_ID"),
         "fragment": item.get("ERFRAG_CODE").and_then(|v| v.as_str()).unwrap_or(""),
         "source": helpers::field_or_null(&item, "ERFRAG_SOURCE"),
         "depends": helpers::field_or_null(&item, "ERFRAG_DEPENDS")
@@ -388,7 +388,7 @@ pub fn list_fragments(config_json: &str) -> Result<Vec<Value>> {
                 .map(|item| {
                     // ERFRAG_SOURCE and ERFRAG_DEPENDS null-preserved (see get_fragment).
                     json!({
-                        "id": item.get("ERFRAG_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+                        "id": helpers::field_or_null(item, "ERFRAG_ID"),
                         "fragment": item.get("ERFRAG_CODE").and_then(|v| v.as_str()).unwrap_or(""),
                         "source": helpers::field_or_null(item, "ERFRAG_SOURCE"),
                         "depends": helpers::field_or_null(item, "ERFRAG_DEPENDS")

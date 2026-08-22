@@ -387,6 +387,8 @@ struct SzConfigTool_result SzConfigTool_verifyCompatibilityVersion(const char *c
 struct SzConfigTool_result SzConfigTool_addConfigSection(const char *config_json, const char *section_name, const char *section_json);
 struct SzConfigTool_result SzConfigTool_removeConfigSection(const char *config_json, const char *section_name);
 struct SzConfigTool_result SzConfigTool_getConfigSection(const char *config_json, const char *section_name, const char *filter_json);
+/* Returns JSON boolean "true"/"false": whether the section is empty (null or []); errors if the section is missing. */
+struct SzConfigTool_result SzConfigTool_configSectionIsEmpty(const char *config_json, const char *section_name);
 struct SzConfigTool_result SzConfigTool_listConfigSections(const char *config_json);
 struct SzConfigTool_result SzConfigTool_addConfigSectionField(const char *config_json, const char *section_name, const char *field_name, const char *field_value_json);
 struct SzConfigTool_result SzConfigTool_removeConfigSectionField(const char *config_json, const char *section_name, const char *field_name);

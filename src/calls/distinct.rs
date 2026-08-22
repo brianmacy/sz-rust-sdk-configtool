@@ -307,13 +307,33 @@ pub fn get_distinct_call(config: &str, selector: CallSelector) -> Result<Value> 
 
 /// List all distinct calls with resolved names
 ///
-/// Returns all distinct calls with feature and function codes resolved.
+/// Returns all distinct calls with feature and function codes resolved, plus the
+/// call's `elementList` (element codes assembled from `CFG_DFBOM`, ordered by
+/// `EXEC_ORDER`).
+///
+/// The rows are sorted inside the SDK by `(FTYPE_ID, DFCALL_ID)` — the same key
+/// Python uses — so callers never need to re-sort. `execOrder` is retained on the
+/// distinct projection (the header row's `EXEC_ORDER`, always `1`).
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
 ///
 /// # Returns
-/// Vector of JSON Values with resolved names
+/// Vector of JSON Values with resolved names, `execOrder`, and an `elementList`
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::calls::distinct::list_distinct_calls;
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+///     "CFG_FELEM": [{"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"}],
+///     "CFG_DFUNC": [{"DFUNC_ID": 1, "DFUNC_CODE": "FELEM_EXP"}],
+///     "CFG_DFCALL": [{"DFCALL_ID": 7, "FTYPE_ID": 3, "DFUNC_ID": 1, "EXEC_ORDER": 1}],
+///     "CFG_DFBOM": [{"DFCALL_ID": 7, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1}]
+/// }}"#;
+/// let calls = list_distinct_calls(config).unwrap();
+/// assert_eq!(calls[0]["elementList"], serde_json::json!(["FIRST_NAME"]));
+/// ```
 pub fn list_distinct_calls(config: &str) -> Result<Vec<Value>> {
     let config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -334,6 +354,18 @@ pub fn list_distinct_calls(config: &str) -> Result<Vec<Value>> {
     let dfunc_array = config_data
         .get("G2_CONFIG")
         .and_then(|g| g.get("CFG_DFUNC"))
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty_array);
+
+    let felem_array = config_data
+        .get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_FELEM"))
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty_array);
+
+    let dfbom_array = config_data
+        .get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_DFBOM"))
         .and_then(|v| v.as_array())
         .unwrap_or(&empty_array);
 
@@ -358,18 +390,55 @@ pub fn list_distinct_calls(config: &str) -> Result<Vec<Value>> {
             .to_string()
     };
 
+    let resolve_felem = |felem_id: i64| -> String {
+        felem_array
+            .iter()
+            .find(|fe| fe.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id))
+            .and_then(|fe| fe.get("FELEM_CODE"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string()
+    };
+
+    // Assemble a call's elementList from CFG_DFBOM, ordered by EXEC_ORDER.
+    let element_list = |dfcall_id: i64| -> Vec<Value> {
+        let mut rows: Vec<&Value> = dfbom_array
+            .iter()
+            .filter(|bom| bom.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(dfcall_id))
+            .collect();
+        rows.sort_by_key(|bom| bom.get("EXEC_ORDER").and_then(|v| v.as_i64()).unwrap_or(0));
+        rows.into_iter()
+            .map(|bom| {
+                let felem_id = bom.get("FELEM_ID").and_then(|v| v.as_i64()).unwrap_or(0);
+                Value::from(resolve_felem(felem_id))
+            })
+            .collect()
+    };
+
+    // Sort the raw rows by (FTYPE_ID, DFCALL_ID) before projection so the numeric
+    // sort key is never lost (mirrors Python).
+    let mut sorted: Vec<&Value> = dfcall_array.iter().collect();
+    sorted.sort_by_key(|item| {
+        (
+            item.get("FTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+            item.get("DFCALL_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+        )
+    });
+
     // Transform distinct calls
-    let items: Vec<Value> = dfcall_array
-        .iter()
+    let items: Vec<Value> = sorted
+        .into_iter()
         .map(|item| {
+            let dfcall_id = item.get("DFCALL_ID").and_then(|v| v.as_i64()).unwrap_or(0);
             let ftype_id = item.get("FTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(0);
             let dfunc_id = item.get("DFUNC_ID").and_then(|v| v.as_i64()).unwrap_or(0);
 
             json!({
-                "id": item.get("DFCALL_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+                "id": dfcall_id,
                 "feature": resolve_ftype(ftype_id),
                 "function": resolve_dfunc(dfunc_id),
-                "execOrder": item.get("EXEC_ORDER").and_then(|v| v.as_i64()).unwrap_or(1)
+                "execOrder": item.get("EXEC_ORDER").and_then(|v| v.as_i64()).unwrap_or(1),
+                "elementList": element_list(dfcall_id)
             })
         })
         .collect();
@@ -648,5 +717,38 @@ mod tests {
         let dfbom = v["G2_CONFIG"]["CFG_DFBOM"].as_array().unwrap();
         assert_eq!(dfbom.len(), 1);
         assert_eq!(dfbom[0]["FELEM_ID"], json!(11));
+    }
+
+    #[test]
+    fn test_list_distinct_calls_sorted_element_list_and_exec_order() {
+        // Stored order differs from (FTYPE_ID, DFCALL_ID); BOM stored out of order.
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [
+                {"FTYPE_ID": 3, "FTYPE_CODE": "NAME"},
+                {"FTYPE_ID": 7, "FTYPE_CODE": "ADDRESS"}
+            ],
+            "CFG_FELEM": [
+                {"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"},
+                {"FELEM_ID": 12, "FELEM_CODE": "LAST_NAME"}
+            ],
+            "CFG_DFUNC": [{"DFUNC_ID": 1, "DFUNC_CODE": "FELEM_EXP"}],
+            "CFG_DFCALL": [
+                {"DFCALL_ID": 20, "FTYPE_ID": 7, "DFUNC_ID": 1, "EXEC_ORDER": 1},
+                {"DFCALL_ID": 5, "FTYPE_ID": 3, "DFUNC_ID": 1, "EXEC_ORDER": 1}
+            ],
+            "CFG_DFBOM": [
+                {"DFCALL_ID": 5, "FTYPE_ID": 3, "FELEM_ID": 12, "EXEC_ORDER": 2},
+                {"DFCALL_ID": 5, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1}
+            ]
+        }}"#;
+
+        let calls = list_distinct_calls(config).unwrap();
+        assert_eq!(calls[0]["feature"], json!("NAME"));
+        assert_eq!(calls[0]["id"], json!(5));
+        // execOrder ruling retained (D28).
+        assert_eq!(calls[0]["execOrder"], json!(1));
+        // elementList ordered by EXEC_ORDER despite reversed storage.
+        assert_eq!(calls[0]["elementList"], json!(["FIRST_NAME", "LAST_NAME"]));
+        assert_eq!(calls[1]["feature"], json!("ADDRESS"));
     }
 }

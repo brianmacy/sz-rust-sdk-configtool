@@ -1774,6 +1774,73 @@ pub unsafe extern "C" fn SzConfigTool_getConfigSection(
     }
 }
 
+/// Report whether a config section is empty (null or `[]`).
+///
+/// Companion to `SzConfigTool_getConfigSection` that lets a caller distinguish an
+/// empty section from a filter that matched nothing. On success the response is
+/// the JSON boolean `"true"` or `"false"`; a missing section returns an error.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn SzConfigTool_configSectionIsEmpty(
+    config_json: *const c_char,
+    section_name: *const c_char,
+) -> SzConfigTool_result {
+    if config_json.is_null() || section_name.is_null() {
+        set_error("Required parameter is null".to_string(), -1);
+        return SzConfigTool_result {
+            response: std::ptr::null_mut(),
+            returnCode: -1,
+        };
+    }
+
+    let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -2,
+            };
+        }
+    };
+
+    let section = match unsafe { CStr::from_ptr(section_name) }.to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            set_error(format!("Invalid UTF-8 in section_name: {e}"), -2);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -2,
+            };
+        }
+    };
+
+    match crate::config_sections::config_section_is_empty(config, section) {
+        Ok(is_empty) => match CString::new(if is_empty { "true" } else { "false" }) {
+            Ok(c_str) => {
+                clear_error();
+                SzConfigTool_result {
+                    response: c_str.into_raw(),
+                    returnCode: 0,
+                }
+            }
+            Err(e) => {
+                set_error(format!("Failed to convert result: {e}"), -4);
+                SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -4,
+                }
+            }
+        },
+        Err(e) => {
+            set_error(e.to_string(), -5);
+            SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -5,
+            }
+        }
+    }
+}
+
 /// List all config sections
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn SzConfigTool_listConfigSections(
