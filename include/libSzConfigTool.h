@@ -642,6 +642,37 @@ struct SzConfigTool_result SzConfigTool_deleteExpressionFunctionCascade(const ch
 struct SzConfigTool_result SzConfigTool_deleteStandardizeFunctionCascade(const char *config_json,
                                                                          const char *sfunc_code);
 
+// Wave 4B additions (#40): by-feature call gets and code-addressed call-element deletes.
+//
+// Get the call bound to a feature (scans CFG_*CALL by FTYPE_ID). This replaces
+// the previous, incorrect practice of using the feature id directly as a call
+// id. Standardize/expression error if the feature has more than one such call
+// (address those by id via the existing get*Call functions).
+struct SzConfigTool_result SzConfigTool_getComparisonCallByFeature(const char *config_json,
+                                                                   const char *feature_code);
+struct SzConfigTool_result SzConfigTool_getDistinctCallByFeature(const char *config_json,
+                                                                 const char *feature_code);
+struct SzConfigTool_result SzConfigTool_getStandardizeCallByFeature(const char *config_json,
+                                                                    const char *feature_code);
+struct SzConfigTool_result SzConfigTool_getExpressionCallByFeature(const char *config_json,
+                                                                   const char *feature_code);
+
+// Delete a call element addressed by code; EXEC_ORDER is derived internally, so
+// (unlike the removed Rust exec_order argument) no execution order is passed.
+// NOTE: this is NEW FFI surface — there were no prior call-element delete
+// wrappers — so it does not break an existing ABI. Comparison/distinct address
+// the call by feature code (0-or-1 call per feature); expression addresses the
+// call by its EFCALL_ID because expression calls are many-per-feature.
+struct SzConfigTool_result SzConfigTool_deleteComparisonCallElement(const char *config_json,
+                                                                    const char *feature_code,
+                                                                    const char *element_code);
+struct SzConfigTool_result SzConfigTool_deleteDistinctCallElement(const char *config_json,
+                                                                  const char *feature_code,
+                                                                  const char *element_code);
+struct SzConfigTool_result SzConfigTool_deleteExpressionCallElement(const char *config_json,
+                                                                    int64_t efcall_id,
+                                                                    const char *element_code);
+
 #ifdef __cplusplus
 }
 #endif

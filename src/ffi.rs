@@ -4085,7 +4085,10 @@ pub extern "C" fn SzConfigTool_getStandardizeCall(
         }
     };
 
-    match crate::calls::standardize::get_standardize_call(config, sfcall_id) {
+    match crate::calls::standardize::get_standardize_call(
+        config,
+        crate::calls::CallSelector::Id(sfcall_id),
+    ) {
         Ok(value) => {
             let json_str = serde_json::to_string(&value)
                 .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
@@ -6438,7 +6441,10 @@ pub extern "C" fn SzConfigTool_getExpressionCall(
         }
     };
 
-    match crate::calls::expression::get_expression_call(config, efcall_id) {
+    match crate::calls::expression::get_expression_call(
+        config,
+        crate::calls::CallSelector::Id(efcall_id),
+    ) {
         Ok(record) => match serde_json::to_string(&record) {
             Ok(json_str) => match CString::new(json_str) {
                 Ok(c_str) => {
@@ -6818,7 +6824,10 @@ pub extern "C" fn SzConfigTool_getComparisonCall(
         }
     };
 
-    match crate::calls::comparison::get_comparison_call(config, cfcall_id) {
+    match crate::calls::comparison::get_comparison_call(
+        config,
+        crate::calls::CallSelector::Id(cfcall_id),
+    ) {
         Ok(record) => match serde_json::to_string(&record) {
             Ok(json_str) => match CString::new(json_str) {
                 Ok(c_str) => {
@@ -7252,7 +7261,10 @@ pub extern "C" fn SzConfigTool_getDistinctCall(
         }
     };
 
-    match crate::calls::distinct::get_distinct_call(config, dfcall_id) {
+    match crate::calls::distinct::get_distinct_call(
+        config,
+        crate::calls::CallSelector::Id(dfcall_id),
+    ) {
         Ok(record) => match serde_json::to_string(&record) {
             Ok(json_str) => match CString::new(json_str) {
                 Ok(c_str) => {
@@ -9741,6 +9753,181 @@ pub extern "C" fn SzConfigTool_deleteStandardizeFunctionCascade(
     )
 }
 
+// ============================================================================
+// Wave 4B additions (#40): by-feature call gets and code-addressed call-element
+// deletes.
+//
+// The `*CallByFeature` gets resolve a feature code to the call bound to it
+// (scanning CFG_*CALL by FTYPE_ID), fixing the historical bug where the feature
+// id was used directly as a call id. The `delete*CallElement` wrappers address
+// the element by (feature code + element code) and derive the BOM EXEC_ORDER
+// internally, so no pre-resolved exec_order is passed over the ABI. These
+// call-element deletes are new FFI surface (there were no prior wrappers).
+// ============================================================================
+
+/// Serialize a single call `Value` result into an FFI result.
+macro_rules! ffi_json_value {
+    ($result:expr) => {
+        match $result {
+            Ok(value) => match serde_json::to_string(&value) {
+                Ok(s) => handle_result!(Ok::<String, crate::error::SzConfigError>(s)),
+                Err(e) => {
+                    set_error(format!("Failed to serialize result: {e}"), -3);
+                    SzConfigTool_result {
+                        response: std::ptr::null_mut(),
+                        returnCode: -3,
+                    }
+                }
+            },
+            Err(e) => {
+                set_error(format!("{e}"), -2);
+                SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -2,
+                }
+            }
+        }
+    };
+}
+
+/// Get the comparison call bound to a feature (by feature code).
+///
+/// # Safety
+/// All pointers must be valid null-terminated C strings.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_getComparisonCallByFeature(
+    config_json: *const c_char,
+    feature_code: *const c_char,
+) -> SzConfigTool_result {
+    let config = ffi_required_str!(config_json, "config_json");
+    let feature = ffi_required_str!(feature_code, "feature_code");
+    ffi_json_value!(crate::calls::comparison::get_comparison_call(
+        config,
+        crate::calls::CallSelector::Feature(feature)
+    ))
+}
+
+/// Get the distinct call bound to a feature (by feature code).
+///
+/// # Safety
+/// All pointers must be valid null-terminated C strings.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_getDistinctCallByFeature(
+    config_json: *const c_char,
+    feature_code: *const c_char,
+) -> SzConfigTool_result {
+    let config = ffi_required_str!(config_json, "config_json");
+    let feature = ffi_required_str!(feature_code, "feature_code");
+    ffi_json_value!(crate::calls::distinct::get_distinct_call(
+        config,
+        crate::calls::CallSelector::Feature(feature)
+    ))
+}
+
+/// Get the standardize call bound to a feature (by feature code).
+///
+/// Errors if the feature has more than one standardize call (address by id).
+///
+/// # Safety
+/// All pointers must be valid null-terminated C strings.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_getStandardizeCallByFeature(
+    config_json: *const c_char,
+    feature_code: *const c_char,
+) -> SzConfigTool_result {
+    let config = ffi_required_str!(config_json, "config_json");
+    let feature = ffi_required_str!(feature_code, "feature_code");
+    ffi_json_value!(crate::calls::standardize::get_standardize_call(
+        config,
+        crate::calls::CallSelector::Feature(feature)
+    ))
+}
+
+/// Get the expression call bound to a feature (by feature code).
+///
+/// Errors if the feature has more than one expression call (address by id).
+///
+/// # Safety
+/// All pointers must be valid null-terminated C strings.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_getExpressionCallByFeature(
+    config_json: *const c_char,
+    feature_code: *const c_char,
+) -> SzConfigTool_result {
+    let config = ffi_required_str!(config_json, "config_json");
+    let feature = ffi_required_str!(feature_code, "feature_code");
+    ffi_json_value!(crate::calls::expression::get_expression_call(
+        config,
+        crate::calls::CallSelector::Feature(feature)
+    ))
+}
+
+/// Delete a comparison call element by (feature code + element code).
+///
+/// The BOM `EXEC_ORDER` is derived internally.
+///
+/// # Safety
+/// All pointers must be valid null-terminated C strings.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_deleteComparisonCallElement(
+    config_json: *const c_char,
+    feature_code: *const c_char,
+    element_code: *const c_char,
+) -> SzConfigTool_result {
+    let config = ffi_required_str!(config_json, "config_json");
+    let feature = ffi_required_str!(feature_code, "feature_code");
+    let element = ffi_required_str!(element_code, "element_code");
+    handle_result!(crate::calls::comparison::delete_comparison_call_element(
+        config,
+        crate::calls::CallSelector::Feature(feature),
+        element
+    ))
+}
+
+/// Delete a distinct call element by (feature code + element code).
+///
+/// The BOM `EXEC_ORDER` is derived internally.
+///
+/// # Safety
+/// All pointers must be valid null-terminated C strings.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_deleteDistinctCallElement(
+    config_json: *const c_char,
+    feature_code: *const c_char,
+    element_code: *const c_char,
+) -> SzConfigTool_result {
+    let config = ffi_required_str!(config_json, "config_json");
+    let feature = ffi_required_str!(feature_code, "feature_code");
+    let element = ffi_required_str!(element_code, "element_code");
+    handle_result!(crate::calls::distinct::delete_distinct_call_element(
+        config,
+        crate::calls::CallSelector::Feature(feature),
+        element
+    ))
+}
+
+/// Delete an expression call element by (call id + element code).
+///
+/// Expression calls are many-per-feature, so this wrapper addresses the call by
+/// its `EFCALL_ID`; the BOM `EXEC_ORDER` is derived internally.
+///
+/// # Safety
+/// All pointers must be valid null-terminated C strings.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_deleteExpressionCallElement(
+    config_json: *const c_char,
+    efcall_id: i64,
+    element_code: *const c_char,
+) -> SzConfigTool_result {
+    let config = ffi_required_str!(config_json, "config_json");
+    let element = ffi_required_str!(element_code, "element_code");
+    handle_result!(crate::calls::expression::delete_expression_call_element(
+        config,
+        crate::calls::CallSelector::Id(efcall_id),
+        element
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -9922,5 +10109,60 @@ mod tests {
         let frag = &v["G2_CONFIG"]["CFG_ERFRAG"][0];
         assert_eq!(frag["ERFRAG_SOURCE"], Value::Null);
         assert_eq!(frag["ERFRAG_DEPENDS"], Value::Null);
+    }
+
+    /// #40: deleteComparisonCallElement FFI addresses the row by (feature,
+    /// element) codes and derives EXEC_ORDER internally — no exec_order arg.
+    #[test]
+    fn test_ffi_delete_comparison_call_element_by_feature() {
+        let base = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_FELEM": [
+                {"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"},
+                {"FELEM_ID": 12, "FELEM_CODE": "LAST_NAME"}
+            ],
+            "CFG_CFCALL": [{"CFCALL_ID": 7, "FTYPE_ID": 3, "CFUNC_ID": 1}],
+            "CFG_CFBOM": [
+                {"CFCALL_ID": 7, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1},
+                {"CFCALL_ID": 7, "FTYPE_ID": 3, "FELEM_ID": 12, "EXEC_ORDER": 2}
+            ]
+        }}"#;
+        let config = CString::new(base).unwrap();
+        let feature = CString::new("NAME").unwrap();
+        let element = CString::new("FIRST_NAME").unwrap();
+
+        let modified = take_response(SzConfigTool_deleteComparisonCallElement(
+            config.as_ptr(),
+            feature.as_ptr(),
+            element.as_ptr(),
+        ));
+        let v: Value = serde_json::from_str(&modified).unwrap();
+        let cfbom = v["G2_CONFIG"]["CFG_CFBOM"].as_array().unwrap();
+        assert_eq!(cfbom.len(), 1);
+        assert_eq!(cfbom[0]["FELEM_ID"], 12);
+    }
+
+    /// #40: getStandardizeCallByFeature returns the feature's call — the same
+    /// row an id lookup returns — proving the FTYPE_ID-as-call-id bug is gone.
+    #[test]
+    fn test_ffi_get_standardize_call_by_feature() {
+        // FTYPE_ID (3) deliberately differs from SFCALL_ID (5): the old code
+        // used the feature id as the call id and returned the wrong/no row.
+        let base = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_SFCALL": [
+                {"SFCALL_ID": 5, "FTYPE_ID": 3, "FELEM_ID": -1, "SFUNC_ID": 1, "EXEC_ORDER": 1}
+            ]
+        }}"#;
+        let config = CString::new(base).unwrap();
+        let feature = CString::new("NAME").unwrap();
+
+        let by_feature = take_response(SzConfigTool_getStandardizeCallByFeature(
+            config.as_ptr(),
+            feature.as_ptr(),
+        ));
+        let v: Value = serde_json::from_str(&by_feature).unwrap();
+        assert_eq!(v["SFCALL_ID"], 5);
+        assert_eq!(v["FTYPE_ID"], 3);
     }
 }

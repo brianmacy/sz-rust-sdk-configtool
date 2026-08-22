@@ -3,10 +3,12 @@
 //! Functions for managing CFG_SFCALL (standardize calls) and CFG_SBOM
 //! (standardize bill of materials) configuration sections.
 
+use crate::calls::{CallSelector, resolve_call_id};
 use crate::config_rows::SfcallRow;
 use crate::error::{Result, SzConfigError};
 use crate::helpers::{
-    find_in_config_array, get_next_id, lookup_element_id, lookup_feature_id, lookup_sfunc_id,
+    get_next_id, lookup_element_id, lookup_feature_id, lookup_sfunc_id,
+    resolve_sfcall_id_for_feature,
 };
 use serde_json::{Value, json};
 
@@ -230,19 +232,51 @@ pub fn delete_standardize_call(config: &str, sfcall_id: i64) -> Result<String> {
     serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))
 }
 
-/// Get a single standardize call by ID
+/// Get a single standardize call, addressed by id or by feature code.
+///
+/// Pass [`CallSelector::Id`] to look the call up by its `SFCALL_ID`, or
+/// [`CallSelector::Feature`] to resolve the standardize call bound to a feature.
+/// The feature path scans `CFG_SFCALL` by `FTYPE_ID` via
+/// [`resolve_sfcall_id_for_feature`] rather than treating the feature id as a
+/// call id (the historical bug this fixes). Standardize calls can legitimately
+/// be many-per-feature, so an ambiguous feature match errors — address by id.
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `sfcall_id` - Standardize call ID
+/// * `selector` - Call id or feature code identifying the call
 ///
 /// # Returns
 /// JSON Value representing the standardize call record
 ///
 /// # Errors
-/// - `NotFound` if call ID doesn't exist
-pub fn get_standardize_call(config: &str, sfcall_id: i64) -> Result<Value> {
-    find_in_config_array(config, "CFG_SFCALL", "SFCALL_ID", &sfcall_id.to_string())?
+/// - `NotFound` if no matching call exists
+/// - `InvalidInput` if a feature code matches more than one call (ambiguous)
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::calls::CallSelector;
+/// use sz_configtool_lib::calls::standardize::get_standardize_call;
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+///     "CFG_SFCALL": [{"SFCALL_ID": 5, "FTYPE_ID": 3, "FELEM_ID": -1, "SFUNC_ID": 1, "EXEC_ORDER": 1}]
+/// }}"#;
+/// let by_id = get_standardize_call(config, CallSelector::Id(5)).unwrap();
+/// let by_feature = get_standardize_call(config, CallSelector::Feature("NAME")).unwrap();
+/// assert_eq!(by_id, by_feature);
+/// ```
+pub fn get_standardize_call(config: &str, selector: CallSelector) -> Result<Value> {
+    let root: Value =
+        serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let sfcall_id = resolve_call_id(config, &root, selector, resolve_sfcall_id_for_feature)?;
+
+    root.get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_SFCALL"))
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .find(|c| c.get("SFCALL_ID").and_then(|v| v.as_i64()) == Some(sfcall_id))
+        })
+        .cloned()
         .ok_or_else(|| SzConfigError::NotFound(format!("Standardize call ID {sfcall_id}")))
 }
 
@@ -574,5 +608,41 @@ mod tests {
         assert_all_keys(sfcall, &SFCALL_KEYS);
         assert_eq!(sfcall["EXEC_ORDER"], Value::Null);
         assert_eq!(sfcall["FELEM_ID"], json!(-1));
+    }
+
+    // #40 regression fixtures: SFCALL_ID (5) deliberately differs from FTYPE_ID
+    // (3). getStandardizeCall by feature must scan CFG_SFCALL and return the
+    // call with SFCALL_ID 5, not the (wrong) row the FTYPE_ID-as-call-id bug hit.
+    #[test]
+    fn test_get_standardize_call_by_feature_fixes_ftype_as_id_bug() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_SFCALL": [
+                {"SFCALL_ID": 5, "FTYPE_ID": 3, "FELEM_ID": -1, "SFUNC_ID": 1, "EXEC_ORDER": 1}
+            ]
+        }}"#;
+        let by_id = get_standardize_call(config, CallSelector::Id(5)).unwrap();
+        let by_feature = get_standardize_call(config, CallSelector::Feature("NAME")).unwrap();
+        assert_eq!(by_id, by_feature);
+        assert_eq!(by_feature["SFCALL_ID"], json!(5));
+    }
+
+    #[test]
+    fn test_get_standardize_call_ambiguous_feature_errors() {
+        // Two standardize calls for one feature -> by-feature is ambiguous.
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_SFCALL": [
+                {"SFCALL_ID": 5, "FTYPE_ID": 3, "FELEM_ID": -1, "SFUNC_ID": 1, "EXEC_ORDER": 1},
+                {"SFCALL_ID": 6, "FTYPE_ID": 3, "FELEM_ID": -1, "SFUNC_ID": 2, "EXEC_ORDER": 2}
+            ]
+        }}"#;
+        let err = get_standardize_call(config, CallSelector::Feature("NAME"));
+        assert_eq!(
+            err.unwrap_err().kind(),
+            crate::error::SzErrorKind::InvalidInput
+        );
+        // Addressing the specific call by id still works.
+        assert!(get_standardize_call(config, CallSelector::Id(6)).is_ok());
     }
 }

@@ -3,10 +3,12 @@
 //! Functions for managing CFG_EFCALL (expression calls) and CFG_EFBOM
 //! (expression bill of materials) configuration sections.
 
+use crate::calls::{CallSelector, derive_bom_exec_order, resolve_call_id};
 use crate::config_rows::{EfbomRow, EfcallRow};
 use crate::error::{Result, SzConfigError};
 use crate::helpers::{
-    find_in_config_array, get_next_id, lookup_efunc_id, lookup_element_id, lookup_feature_id,
+    get_next_id, lookup_efunc_id, lookup_element_id, lookup_feature_id,
+    resolve_efcall_id_for_feature,
 };
 use serde_json::{Value, json};
 
@@ -56,24 +58,6 @@ impl ExpressionCallElementParams {
             felem_id,
             exec_order,
             felem_req,
-        }
-    }
-}
-
-/// Parameters for identifying expression call element (for delete operations)
-#[derive(Debug, Clone)]
-pub struct ExpressionCallElementKey {
-    pub ftype_id: i64,
-    pub felem_id: i64,
-    pub exec_order: i64,
-}
-
-impl ExpressionCallElementKey {
-    pub fn new(ftype_id: i64, felem_id: i64, exec_order: i64) -> Self {
-        Self {
-            ftype_id,
-            felem_id,
-            exec_order,
         }
     }
 }
@@ -310,21 +294,55 @@ pub fn delete_expression_call(config: &str, efcall_id: i64) -> Result<String> {
     serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))
 }
 
-/// Get a single expression call by ID
+/// Get a single expression call, addressed by id or by feature code.
+///
+/// Pass [`CallSelector::Id`] to look the call up by its `EFCALL_ID`, or
+/// [`CallSelector::Feature`] to resolve the expression call bound to a feature.
+/// Expression calls are genuinely many-per-feature (`EXEC_ORDER` exists for
+/// exactly this reason), so a feature code that matches more than one call
+/// errors clearly via [`resolve_efcall_id_for_feature`] rather than silently
+/// picking one — address such calls by id.
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `efcall_id` - Expression call ID
+/// * `selector` - Call id or feature code identifying the call
 ///
 /// # Returns
 /// JSON Value representing the expression call record
 ///
 /// # Errors
-/// - `NotFound` if call ID doesn't exist
-pub fn get_expression_call(config: &str, efcall_id: i64) -> Result<Value> {
-    find_in_config_array(config, "CFG_EFCALL", "EFCALL_ID", &efcall_id.to_string())?.ok_or_else(
-        || SzConfigError::NotFound(format!("Expression call ID {efcall_id} does not exist")),
-    )
+/// - `NotFound` if no matching call exists
+/// - `InvalidInput` if a feature code matches more than one call (ambiguous)
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::calls::CallSelector;
+/// use sz_configtool_lib::calls::expression::get_expression_call;
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+///     "CFG_EFCALL": [{"EFCALL_ID": 9, "FTYPE_ID": 3, "FELEM_ID": -1, "EFUNC_ID": 1,
+///                     "EXEC_ORDER": 1, "EFEAT_FTYPE_ID": -1, "IS_VIRTUAL": "No"}]
+/// }}"#;
+/// let by_id = get_expression_call(config, CallSelector::Id(9)).unwrap();
+/// let by_feature = get_expression_call(config, CallSelector::Feature("NAME")).unwrap();
+/// assert_eq!(by_id, by_feature);
+/// ```
+pub fn get_expression_call(config: &str, selector: CallSelector) -> Result<Value> {
+    let root: Value =
+        serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let efcall_id = resolve_call_id(config, &root, selector, resolve_efcall_id_for_feature)?;
+
+    root.get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_EFCALL"))
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .find(|c| c.get("EFCALL_ID").and_then(|v| v.as_i64()) == Some(efcall_id))
+        })
+        .cloned()
+        .ok_or_else(|| {
+            SzConfigError::NotFound(format!("Expression call ID {efcall_id} does not exist"))
+        })
 }
 
 /// List all expression calls with resolved names
@@ -516,49 +534,69 @@ pub fn add_expression_call_element(
     Ok((modified_config, new_record))
 }
 
-/// Delete an expression call element
+/// Delete an expression call element, addressed by (call | feature) + element code.
+///
+/// The caller no longer supplies `EXEC_ORDER`: the target `CFG_EFBOM` row is
+/// located by its call id and the element's `FELEM_ID`, and its execution order
+/// is derived from that row. An EFBOM record stores the *element's* feature id in
+/// `FTYPE_ID`, so that column is not part of the address.
+///
+/// Because expression calls are many-per-feature, addressing by
+/// [`CallSelector::Feature`] errors when the feature has more than one
+/// expression call — use [`CallSelector::Id`] to name the specific call.
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `efcall_id` - Expression call ID
-/// * `key` - Expression call element key (identifying the element to delete)
+/// * `call` - Call id or feature code identifying the expression call
+/// * `element_code` - Element code to remove from the call
 ///
 /// # Returns
 /// Modified configuration JSON string
+///
+/// # Errors
+/// - `NotFound` if the element is not on the call (or the call/element codes don't resolve)
+/// - `InvalidInput` if a feature code matches more than one call, or the element
+///   matches more than one BOM row on the call (ambiguous)
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::calls::CallSelector;
+/// use sz_configtool_lib::calls::expression::delete_expression_call_element;
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_FELEM": [{"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"}],
+///     "CFG_EFBOM": [{"EFCALL_ID": 9, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1, "FELEM_REQ": "No"}]
+/// }}"#;
+/// let out = delete_expression_call_element(
+///     config, CallSelector::Id(9), "FIRST_NAME").unwrap();
+/// let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+/// assert!(v["G2_CONFIG"]["CFG_EFBOM"].as_array().unwrap().is_empty());
+/// ```
 pub fn delete_expression_call_element(
     config: &str,
-    efcall_id: i64,
-    key: ExpressionCallElementKey,
+    call: CallSelector,
+    element_code: &str,
 ) -> Result<String> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    // Validate that the element exists
-    let element_exists = config_data["G2_CONFIG"]["CFG_EFBOM"]
-        .as_array()
-        .map(|arr| {
-            arr.iter().any(|item| {
-                item.get("EFCALL_ID").and_then(|v| v.as_i64()) == Some(efcall_id)
-                    && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(key.ftype_id)
-                    && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(key.felem_id)
-                    && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(key.exec_order)
-            })
-        })
-        .unwrap_or(false);
+    let efcall_id = resolve_call_id(config, &config_data, call, resolve_efcall_id_for_feature)?;
+    let felem_id = lookup_element_id(config, element_code)?;
 
-    if !element_exists {
-        return Err(SzConfigError::NotFound(
-            "Expression call element not found".to_string(),
-        ));
-    }
+    // Derive EXEC_ORDER from the located BOM row (also validates existence).
+    let exec_order = derive_bom_exec_order(
+        &config_data,
+        "CFG_EFBOM",
+        "EFCALL_ID",
+        efcall_id,
+        felem_id,
+        "Expression",
+    )?;
 
-    // Delete the element
     if let Some(ebom_array) = config_data["G2_CONFIG"]["CFG_EFBOM"].as_array_mut() {
         ebom_array.retain(|item| {
             !(item.get("EFCALL_ID").and_then(|v| v.as_i64()) == Some(efcall_id)
-                && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(key.ftype_id)
-                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(key.felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(key.exec_order))
+                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
+                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order))
         });
     }
 
@@ -666,5 +704,67 @@ mod tests {
         assert_all_keys(&new_record, &EFBOM_KEYS);
         assert_eq!(efbom["FELEM_REQ"], json!("Yes"));
         assert_eq!(efbom["EXEC_ORDER"], json!(2));
+    }
+
+    // #40 fixtures: two expression calls bound to the same feature (legitimate —
+    // expression is many-per-feature) plus a BOM row per call.
+    fn populated_config() -> String {
+        r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_FELEM": [{"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"}],
+            "CFG_EFCALL": [
+                {"EFCALL_ID": 9, "FTYPE_ID": 3, "FELEM_ID": -1, "EFUNC_ID": 1,
+                 "EXEC_ORDER": 1, "EFEAT_FTYPE_ID": -1, "IS_VIRTUAL": "No"},
+                {"EFCALL_ID": 10, "FTYPE_ID": 3, "FELEM_ID": -1, "EFUNC_ID": 2,
+                 "EXEC_ORDER": 2, "EFEAT_FTYPE_ID": -1, "IS_VIRTUAL": "No"}
+            ],
+            "CFG_EFBOM": [
+                {"EFCALL_ID": 9, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1, "FELEM_REQ": "No"},
+                {"EFCALL_ID": 10, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1, "FELEM_REQ": "No"}
+            ]
+        }}"#
+        .to_string()
+    }
+
+    #[test]
+    fn test_get_expression_call_by_id() {
+        let config = populated_config();
+        let by_id = get_expression_call(&config, CallSelector::Id(10)).unwrap();
+        assert_eq!(by_id["EFCALL_ID"], json!(10));
+    }
+
+    #[test]
+    fn test_get_expression_call_ambiguous_feature_errors() {
+        let config = populated_config();
+        // The feature has two expression calls -> by-feature must error clearly,
+        // not silently pick one.
+        let err = get_expression_call(&config, CallSelector::Feature("NAME"));
+        assert_eq!(
+            err.unwrap_err().kind(),
+            crate::error::SzErrorKind::InvalidInput
+        );
+    }
+
+    #[test]
+    fn test_delete_expression_call_element_ambiguous_feature_errors() {
+        let config = populated_config();
+        let err =
+            delete_expression_call_element(&config, CallSelector::Feature("NAME"), "FIRST_NAME");
+        assert_eq!(
+            err.unwrap_err().kind(),
+            crate::error::SzErrorKind::InvalidInput
+        );
+    }
+
+    #[test]
+    fn test_delete_expression_call_element_by_id_derives_exec_order() {
+        let config = populated_config();
+        // Addressing the specific call by id disambiguates; exec_order derived.
+        let out =
+            delete_expression_call_element(&config, CallSelector::Id(9), "FIRST_NAME").unwrap();
+        let v: Value = serde_json::from_str(&out).unwrap();
+        let efbom = v["G2_CONFIG"]["CFG_EFBOM"].as_array().unwrap();
+        assert_eq!(efbom.len(), 1);
+        assert_eq!(efbom[0]["EFCALL_ID"], json!(10));
     }
 }

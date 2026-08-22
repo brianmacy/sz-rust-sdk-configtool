@@ -3,11 +3,12 @@
 //! Functions for managing CFG_CFCALL (comparison calls) and CFG_CFBOM
 //! (comparison bill of materials) configuration sections.
 
+use crate::calls::{CallSelector, derive_bom_exec_order, resolve_call_id};
 use crate::config_rows::{CfbomRow, CfcallRow};
 use crate::error::{Result, SzConfigError};
 use crate::helpers::{
-    find_in_config_array, get_desired_or_next_id_from_section, lookup_cfunc_id, lookup_element_id,
-    lookup_feature_id,
+    get_desired_or_next_id_from_section, lookup_cfunc_id, lookup_element_id, lookup_feature_id,
+    resolve_cfcall_id_for_feature,
 };
 use serde_json::{Value, json};
 
@@ -90,14 +91,6 @@ impl TryFrom<&Value> for AddComparisonCallElementParams {
                 .ok_or_else(|| SzConfigError::MissingField("execOrder".to_string()))?,
         })
     }
-}
-
-/// Parameters for deleting a comparison call element
-#[derive(Debug, Clone)]
-pub struct DeleteComparisonCallElementParams {
-    pub ftype_id: i64,
-    pub felem_id: i64,
-    pub exec_order: i64,
 }
 
 /// Parameters for setting (updating) a comparison call
@@ -293,19 +286,50 @@ pub fn delete_comparison_call(config: &str, cfcall_id: i64) -> Result<String> {
     serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))
 }
 
-/// Get a single comparison call by ID
+/// Get a single comparison call, addressed by id or by feature code.
+///
+/// Pass [`CallSelector::Id`] to look the call up by its `CFCALL_ID`, or
+/// [`CallSelector::Feature`] to resolve the (0-or-1) comparison call bound to a
+/// feature. The feature path scans `CFG_CFCALL` by `FTYPE_ID` via
+/// [`resolve_cfcall_id_for_feature`] rather than treating the feature id as a
+/// call id.
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `cfcall_id` - Comparison call ID
+/// * `selector` - Call id or feature code identifying the call
 ///
 /// # Returns
 /// JSON Value representing the comparison call record
 ///
 /// # Errors
-/// - `NotFound` if call ID doesn't exist
-pub fn get_comparison_call(config: &str, cfcall_id: i64) -> Result<Value> {
-    find_in_config_array(config, "CFG_CFCALL", "CFCALL_ID", &cfcall_id.to_string())?
+/// - `NotFound` if no matching call exists
+/// - `InvalidInput` if a feature code matches more than one call (ambiguous)
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::calls::CallSelector;
+/// use sz_configtool_lib::calls::comparison::get_comparison_call;
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+///     "CFG_CFCALL": [{"CFCALL_ID": 7, "FTYPE_ID": 3, "CFUNC_ID": 1}]
+/// }}"#;
+/// let by_id = get_comparison_call(config, CallSelector::Id(7)).unwrap();
+/// let by_feature = get_comparison_call(config, CallSelector::Feature("NAME")).unwrap();
+/// assert_eq!(by_id, by_feature);
+/// ```
+pub fn get_comparison_call(config: &str, selector: CallSelector) -> Result<Value> {
+    let root: Value =
+        serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let cfcall_id = resolve_call_id(config, &root, selector, resolve_cfcall_id_for_feature)?;
+
+    root.get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_CFCALL"))
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .find(|c| c.get("CFCALL_ID").and_then(|v| v.as_i64()) == Some(cfcall_id))
+        })
+        .cloned()
         .ok_or_else(|| SzConfigError::NotFound(format!("Comparison call ID {cfcall_id}")))
 }
 
@@ -464,49 +488,67 @@ pub fn add_comparison_call_element(
     Ok((modified_config, new_record))
 }
 
-/// Delete a comparison call element
+/// Delete a comparison call element, addressed by (call | feature) + element code.
+///
+/// The caller no longer supplies `EXEC_ORDER`: the target `CFG_CFBOM` row is
+/// located by its call id and the element's `FELEM_ID`, and its execution order
+/// is derived from that row. A CFBOM record stores the *element's* feature id in
+/// `FTYPE_ID`, so that column is not part of the address.
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `cfcall_id` - Comparison call ID
-/// * `params` - Element parameters (ftype_id, felem_id, exec_order)
+/// * `call` - Call id or feature code identifying the comparison call
+/// * `element_code` - Element code (e.g. `"FIRST_NAME"`) to remove from the call
 ///
 /// # Returns
 /// Modified configuration JSON string
+///
+/// # Errors
+/// - `NotFound` if the element is not on the call (or the call/element codes don't resolve)
+/// - `InvalidInput` if a feature code matches more than one call, or the element
+///   matches more than one BOM row on the call (ambiguous)
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::calls::CallSelector;
+/// use sz_configtool_lib::calls::comparison::delete_comparison_call_element;
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+///     "CFG_FELEM": [{"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"}],
+///     "CFG_CFCALL": [{"CFCALL_ID": 7, "FTYPE_ID": 3, "CFUNC_ID": 1}],
+///     "CFG_CFBOM": [{"CFCALL_ID": 7, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1}]
+/// }}"#;
+/// let out = delete_comparison_call_element(
+///     config, CallSelector::Feature("NAME"), "FIRST_NAME").unwrap();
+/// let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+/// assert!(v["G2_CONFIG"]["CFG_CFBOM"].as_array().unwrap().is_empty());
+/// ```
 pub fn delete_comparison_call_element(
     config: &str,
-    cfcall_id: i64,
-    params: DeleteComparisonCallElementParams,
+    call: CallSelector,
+    element_code: &str,
 ) -> Result<String> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    // Validate that the element exists
-    let element_exists = config_data["G2_CONFIG"]["CFG_CFBOM"]
-        .as_array()
-        .map(|arr| {
-            arr.iter().any(|item| {
-                item.get("CFCALL_ID").and_then(|v| v.as_i64()) == Some(cfcall_id)
-                    && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
-                    && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(params.felem_id)
-                    && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order)
-            })
-        })
-        .unwrap_or(false);
+    let cfcall_id = resolve_call_id(config, &config_data, call, resolve_cfcall_id_for_feature)?;
+    let felem_id = lookup_element_id(config, element_code)?;
 
-    if !element_exists {
-        return Err(SzConfigError::NotFound(
-            "Comparison call element not found".to_string(),
-        ));
-    }
+    // Derive EXEC_ORDER from the located BOM row (also validates existence).
+    let exec_order = derive_bom_exec_order(
+        &config_data,
+        "CFG_CFBOM",
+        "CFCALL_ID",
+        cfcall_id,
+        felem_id,
+        "Comparison",
+    )?;
 
-    // Delete the element
     if let Some(cbom_array) = config_data["G2_CONFIG"]["CFG_CFBOM"].as_array_mut() {
         cbom_array.retain(|item| {
             !(item.get("CFCALL_ID").and_then(|v| v.as_i64()) == Some(cfcall_id)
-                && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
-                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(params.felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order))
+                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
+                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order))
         });
     }
 
@@ -639,5 +681,62 @@ mod tests {
         };
         let err = add_comparison_call(&cfg, params).unwrap_err();
         assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
+    }
+
+    // #40 fixtures: a comparison call whose CFCALL_ID deliberately differs from
+    // its FTYPE_ID, so id-vs-feature addressing is distinguishable.
+    fn populated_config() -> String {
+        r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_FELEM": [
+                {"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"},
+                {"FELEM_ID": 12, "FELEM_CODE": "LAST_NAME"}
+            ],
+            "CFG_CFCALL": [{"CFCALL_ID": 7, "FTYPE_ID": 3, "CFUNC_ID": 1}],
+            "CFG_CFBOM": [
+                {"CFCALL_ID": 7, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1},
+                {"CFCALL_ID": 7, "FTYPE_ID": 3, "FELEM_ID": 12, "EXEC_ORDER": 2}
+            ]
+        }}"#
+        .to_string()
+    }
+
+    #[test]
+    fn test_get_comparison_call_by_id_and_feature_match() {
+        let config = populated_config();
+        let by_id = get_comparison_call(&config, CallSelector::Id(7)).unwrap();
+        let by_feature = get_comparison_call(&config, CallSelector::Feature("NAME")).unwrap();
+        assert_eq!(by_id, by_feature);
+        assert_eq!(by_id["CFCALL_ID"], json!(7));
+    }
+
+    #[test]
+    fn test_get_comparison_call_missing() {
+        let config = populated_config();
+        assert!(get_comparison_call(&config, CallSelector::Id(999)).is_err());
+        assert!(get_comparison_call(&config, CallSelector::Feature("PHONE")).is_err());
+    }
+
+    #[test]
+    fn test_delete_comparison_call_element_derives_exec_order() {
+        let config = populated_config();
+        // No exec_order supplied; the SDK derives it and removes the right row.
+        let out =
+            delete_comparison_call_element(&config, CallSelector::Feature("NAME"), "FIRST_NAME")
+                .unwrap();
+        let v: Value = serde_json::from_str(&out).unwrap();
+        let cfbom = v["G2_CONFIG"]["CFG_CFBOM"].as_array().unwrap();
+        assert_eq!(cfbom.len(), 1);
+        assert_eq!(cfbom[0]["FELEM_ID"], json!(12));
+    }
+
+    #[test]
+    fn test_delete_comparison_call_element_not_found() {
+        let config = populated_config();
+        let err = delete_comparison_call_element(&config, CallSelector::Id(7), "LAST_NAME");
+        assert!(err.is_ok());
+        // Element on a call that has no such BOM row -> NotFound.
+        let err = delete_comparison_call_element(&config, CallSelector::Id(999), "FIRST_NAME");
+        assert_eq!(err.unwrap_err().kind(), crate::error::SzErrorKind::NotFound);
     }
 }

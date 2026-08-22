@@ -543,64 +543,15 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
 
         // ===== Call Commands - Comparison =====
         "deleteComparisonCallElement" => {
+            // The SDK now owns the feature->call resolution and exec_order
+            // derivation (#40); the tool is a thin pass-through of the codes.
             let feature = get_str_param(params, "feature")?;
             let element = get_str_param(params, "element")?;
 
-            // Lookup IDs
-            let ftype_id = crate::helpers::lookup_feature_id(config, feature)?;
-            let felem_id = crate::helpers::lookup_element_id(config, element)?;
-
-            // Find the cfcall_id for this feature
-            let config_val: Value = serde_json::from_str(config)?;
-            let cfcall_array = config_val["G2_CONFIG"]["CFG_CFCALL"]
-                .as_array()
-                .ok_or_else(|| SzConfigError::MissingSection("CFG_CFCALL".to_string()))?;
-
-            // Find comparison call for this feature
-            let cfcall = cfcall_array
-                .iter()
-                .find(|call| call["FTYPE_ID"].as_i64() == Some(ftype_id))
-                .ok_or_else(|| {
-                    SzConfigError::NotFound(format!(
-                        "No comparison call found for feature {feature}"
-                    ))
-                })?;
-
-            let cfcall_id = cfcall["CFCALL_ID"]
-                .as_i64()
-                .ok_or_else(|| SzConfigError::InvalidStructure("CFCALL_ID missing".to_string()))?;
-
-            // Find exec_order from CFBOM
-            let cfbom_array = config_val["G2_CONFIG"]["CFG_CFBOM"]
-                .as_array()
-                .ok_or_else(|| SzConfigError::MissingSection("CFG_CFBOM".to_string()))?;
-
-            let cfbom = cfbom_array
-                .iter()
-                .find(|bom| {
-                    bom["CFCALL_ID"].as_i64() == Some(cfcall_id)
-                        && bom["FTYPE_ID"].as_i64() == Some(ftype_id)
-                        && bom["FELEM_ID"].as_i64() == Some(felem_id)
-                })
-                .ok_or_else(|| {
-                    SzConfigError::NotFound(format!(
-                        "Element {element} not found in comparison call for feature {feature}"
-                    ))
-                })?;
-
-            let exec_order = cfbom["EXEC_ORDER"]
-                .as_i64()
-                .ok_or_else(|| SzConfigError::InvalidStructure("EXEC_ORDER missing".to_string()))?;
-
-            // Call underlying SDK function
             crate::calls::comparison::delete_comparison_call_element(
                 config,
-                cfcall_id,
-                crate::calls::comparison::DeleteComparisonCallElementParams {
-                    ftype_id,
-                    felem_id,
-                    exec_order,
-                },
+                crate::calls::CallSelector::Feature(feature),
+                element,
             )
         }
 
@@ -662,61 +613,15 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
 
         // ===== Call Commands - Distinct =====
         "deleteDistinctCallElement" => {
+            // Thin pass-through: the SDK resolves the feature->call id and
+            // derives the BOM exec_order internally (#40).
             let feature = get_str_param(params, "feature")?;
             let element = get_str_param(params, "element")?;
 
-            // Lookup IDs
-            let ftype_id = crate::helpers::lookup_feature_id(config, feature)?;
-            let felem_id = crate::helpers::lookup_element_id(config, element)?;
-
-            // Find the dfcall_id for this feature
-            let config_val: Value = serde_json::from_str(config)?;
-            let dfcall_array = config_val["G2_CONFIG"]["CFG_DFCALL"]
-                .as_array()
-                .ok_or_else(|| SzConfigError::MissingSection("CFG_DFCALL".to_string()))?;
-
-            let dfcall = dfcall_array
-                .iter()
-                .find(|call| call["FTYPE_ID"].as_i64() == Some(ftype_id))
-                .ok_or_else(|| {
-                    SzConfigError::NotFound(format!("No distinct call found for feature {feature}"))
-                })?;
-
-            let dfcall_id = dfcall["DFCALL_ID"]
-                .as_i64()
-                .ok_or_else(|| SzConfigError::InvalidStructure("DFCALL_ID missing".to_string()))?;
-
-            // Find exec_order from DFBOM
-            let dfbom_array = config_val["G2_CONFIG"]["CFG_DFBOM"]
-                .as_array()
-                .ok_or_else(|| SzConfigError::MissingSection("CFG_DFBOM".to_string()))?;
-
-            let dfbom = dfbom_array
-                .iter()
-                .find(|bom| {
-                    bom["DFCALL_ID"].as_i64() == Some(dfcall_id)
-                        && bom["FTYPE_ID"].as_i64() == Some(ftype_id)
-                        && bom["FELEM_ID"].as_i64() == Some(felem_id)
-                })
-                .ok_or_else(|| {
-                    SzConfigError::NotFound(format!(
-                        "Element {element} not found in distinct call for feature {feature}"
-                    ))
-                })?;
-
-            let exec_order = dfbom["EXEC_ORDER"]
-                .as_i64()
-                .ok_or_else(|| SzConfigError::InvalidStructure("EXEC_ORDER missing".to_string()))?;
-
-            // Call underlying SDK function
             crate::calls::distinct::delete_distinct_call_element(
                 config,
-                crate::calls::distinct::DeleteDistinctCallElementParams {
-                    dfcall_id,
-                    ftype_id,
-                    felem_id,
-                    exec_order,
-                },
+                crate::calls::CallSelector::Feature(feature),
+                element,
             )
         }
 
