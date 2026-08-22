@@ -5,6 +5,117 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-08-22
+
+Coordinated breaking release resolving the SDK audit (issues #32–#43). Delivered in six
+reviewed waves; every public-API and behavioural change is listed below. Test suite grew
+from ~90 to 216 unit tests + 80 doc-tests (all green; clippy `-D warnings`, `cargo deny`,
+`cargo fmt` clean).
+
+> **Two parity assumptions to confirm against the Python `sz_configtool` reference** (both
+> one-line fixes if wrong, flagged because the reference is not in this repo): `list_rules`
+> default sort key (assumed `ERRULE_ID` ascending) and the A1-family slot in the
+> `BEHAVIOR_CODES` ordering (not present in the shipped template). The `LOCKED_FEATURES`
+> protected set below was ratified by the maintainer.
+
+### Fixed (correctness — some were silent data corruption)
+
+- **`set_generic_threshold` no longer corrupts the wrong row.** It now matches on the full
+  `(GPLAN_ID, BEHAVIOR, FTYPE_ID)` identity; `feature` is a lookup key (with `all` → `FTYPE_ID 0`)
+  and is never written into the matched row's `FTYPE_ID`. A set with no matching per-feature row
+  now returns `NotFound` instead of silently editing (and corrupting) a `(plan, behavior)` row.
+  Unknown `sendToRedo` is rejected; the value is stored canonical title-case `"Yes"`/`"No"`. (#32)
+- **`add_generic_threshold`** stores `SEND_TO_REDO` as `"Yes"`/`"No"` (was `"YES"`/`"NO"`, which
+  disagreed with the shipped config). (#32)
+- **`add_config_section_field` no longer overwrites existing values** — it inserts only where the
+  key is absent. (#32)
+- **`LOCKED_FEATURES` corrected** to the ratified protected set `NAME, ADDRESS, PHONE, DOB,
+  REL_LINK, REL_ANCHOR, REL_POINTER`. `EMAIL, RECORD_TYPE, NATIONAL_ID, TAX_ID, ACCT_NUM` are now
+  correctly deletable; `DOB` and the `REL_*` features are now correctly protected; four inert
+  non-feature-code entries were removed. (#35)
+- **Read projections preserve stored `null`.** `get_rule`/`list_rules`, `get_fragment`/
+  `list_fragments`, and all four `list_*_functions` now emit JSON `null` (not `""`) for a stored
+  or absent nullable column — the engine's loader distinguishes them. `list_comparison_functions`
+  also now emits the previously-missing `description` and a fixed field order. (#33)
+- **`get_standardize_call`/`get_distinct_call` return the correct call** when addressed by
+  feature: they now scan `CFG_SFCALL`/`CFG_DFCALL` by `FTYPE_ID` instead of using the feature id
+  as the call id. (#40)
+- **`add_rule` now validates** (duplicate code, fragment/disqualifier existence, RESOLVE/RELATE
+  domain and mutual exclusivity, RTYPE_ID coherence) via a validator shared with `set_rule`, so
+  the two cannot drift; it auto-assigns `ERRULE_ID` (seed 1000) and returns the assigned id. (#39)
+- **`get_config_section` filter** now matches on `json.dumps`-spaced JSON (Python parity) instead
+  of compact JSON, so filter terms spanning a `": "`/`", "` boundary behave correctly. (#36)
+- Fixed truncated not-found messages: `Standardize call ID {id}` and the comparison get path now
+  read `… does not exist`, consistent across all four call families. (#42)
+
+### Added
+
+- **`add_element_to_feature` / `delete_element_from_feature`** — typed `CFG_FBOM` add/remove with
+  duplicate detection and whole-table `EXEC_ORDER` allocation. (#38)
+- **`settings` module + `set_setting`** — manage `G2_CONFIG.SETTINGS` (uppercases NAME,
+  create-if-absent, overwrite). (#38)
+- **Cascading function deletes** — `delete_{comparison,expression,standardize}_function_cascade`
+  (the existing non-cascading deletes are unchanged). (#38)
+- **Caller-supplied ids** — `id: Option<i64>` on `AddDataSourceParams`, `AddAttributeParams`,
+  `AddElementParams`, `AddFeatureParams`, `AddComparisonCallParams`; `add_fragment` now honours a
+  supplied `ERFRAG_ID`. Absent/≤0 auto-assigns; a taken id is rejected. (#37)
+- **By-feature call resolution** — `calls::CallSelector { Id | Feature }` accepted by all four
+  `get_*_call`; by-feature helpers resolve a feature code to its call id. (#40)
+- **`list_behavior_overrides_resolved`** — display shape `{feature, usageType, behavior}` with
+  id→code resolution, composed behaviour, sorted `(FTYPE_ID, UTYPE_CODE)`. (#43)
+- **`validate_config`** (structure-only gate) and **`render_config(config, indent)`** (canonical
+  key-sorted export renderer). (#43)
+- **`config_section_is_empty`** — distinguishes an empty section from a filter that matched
+  nothing, without changing `get_config_section`'s return type. (#36)
+- **Public config domains** — `behavior_domain::{BEHAVIOR_CODES, compute_behavior,
+  parse_behavior_code}` (the two private copies collapsed into one), `ATTRIBUTE_CLASSES`. (#43)
+- **`SzErrorKind` + `SzConfigError::kind()`/`reason_code()`** — a stable machine-readable error
+  surface so callers branch on a discriminant rather than message text. (#42)
+- **Shared building blocks** — `FieldUpdate<T>` tri-state, `field_or_null`, and a `filter`
+  substrate module (`Compact`/`JsonDumps`/`PythonRepr`).
+- New additive FFI wrappers + header declarations for all of the above; the pre-existing
+  `SzConfigTool_listBehaviorOverrides` gained its missing header declaration.
+
+### Changed (breaking — Rust API)
+
+- `delete_comparison_threshold(config, cfunc_code, ftype_code, cfunc_rtnval)` — new required
+  `cfunc_rtnval`; full 3-key match; `all` → `FTYPE_ID 0`. (#32)
+- `add_config_section_field` returns `(String, AddFieldCounts { existed, updated })` (was
+  `(String, usize)`). (#32)
+- Four `Add*FunctionParams`: `connect_str: &str` → `Option<&str>`; the four function row structs'
+  `connect_str: String` → `Option<String>` (can now serialise `null`). The `add_distinct_function`
+  blank-CONNECTSTR rejection was removed (Python accepts blank). (#34)
+- Tri-state via `FieldUpdate<T>` on `SetRuleParams.{fragment, disqualifier, tier}`, the four
+  `Set*FunctionParams.connect_str`, and a new `SetFragmentParams` (replacing `set_fragment`'s
+  `&Value`; clearing SOURCE also clears DEPENDS). (#34)
+- `get_*_call(config, CallSelector)` (was `(config, id: i64)`); `delete_*_call_element(config,
+  CallSelector, element_code)` now derive `EXEC_ORDER` internally. Removed
+  `DeleteComparisonCallElementParams`, `DeleteDistinctCallElementParams`, `ExpressionCallElementKey`.
+  (#40)
+- `Add*Params` gained a public `id` field — exhaustive struct literals must add it; builder /
+  `..Default::default()` callers are unaffected. (#37)
+
+### Changed (breaking — behaviour/output; no signature change)
+
+- `add_data_source`/`add_attribute` now seed ids at 1000 (were unseeded `max+1`); a fresh data
+  source moves from `DSRC_ID 3` to `1000` and is no longer accidentally treated as a protected
+  low id. (#37)
+- List functions (`list_*_calls`, `list_generic_thresholds`, `list_rules`) now return rows in
+  SDK-owned sorted order; the three call lists with BOMs emit an `EXEC_ORDER`-ordered
+  `elementList`; `list_generic_thresholds` gained an `id`. Snapshot tests asserting the old stored
+  order will observe the change. (#41)
+- Not-found wording for standardize get/delete and comparison get gained `… does not exist`. (#42)
+- `set_rule` with an explicit empty-string fragment now stores `""` (was `NotFound`); the taken-id
+  message now includes the id. (#39)
+
+### Notes / follow-ups
+
+- FFI C ABI: no existing wrapper signature changed; the call-element delete redesign had no prior
+  C wrapper, so it is additive at the C level.
+- Deferred (own decision + tests): unify `add_feature`'s lenient inline `elementList`
+  DISPLAY_LEVEL/DERIVED handling onto the shared strict validators used by `add_element_to_feature`
+  and `set_feature_element`.
+
 ## [0.5.0] - 2026-08-21
 
 ### Fixed

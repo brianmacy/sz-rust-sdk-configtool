@@ -677,6 +677,9 @@ struct SzConfigTool_result SzConfigTool_deleteExpressionCallElement(const char *
 
 // Wave 6 additions (#42, #43): API-surface helpers. All additive.
 //
+// List behavior overrides as raw CFG_FBOVR rows (thin projection).
+struct SzConfigTool_result SzConfigTool_listBehaviorOverrides(const char *config_json);
+
 // List behavior overrides in the resolved display shape: a JSON array of
 // { "feature", "usageType", "behavior" } objects, sorted by (FTYPE_ID,
 // UTYPE_CODE). Richer than SzConfigTool_listBehaviorOverrides (raw rows).
