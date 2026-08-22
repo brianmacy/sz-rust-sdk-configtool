@@ -3,7 +3,7 @@
 //! This module provides functions for managing the four types of calls in
 //! Senzing configuration:
 //!
-//! - **Standardize calls** (CFG_SFCALL/CFG_SBOM) - Data standardization operations
+//! - **Standardize calls** (CFG_SFCALL) - Data standardization operations
 //! - **Expression calls** (CFG_EFCALL/CFG_EFBOM) - Feature expression operations
 //! - **Comparison calls** (CFG_CFCALL/CFG_CFBOM) - Feature comparison operations
 //! - **Distinct calls** (CFG_DFCALL/CFG_DFBOM) - Feature distinctness operations

@@ -5951,6 +5951,105 @@ pub extern "C" fn SzConfigTool_listBehaviorOverrides(
     handle_result!(result)
 }
 
+/// List behavior overrides in the resolved display shape
+///
+/// Returns a JSON array of `{ "feature", "usageType", "behavior" }` objects,
+/// sorted by `(FTYPE_ID, UTYPE_CODE)`.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_listBehaviorOverridesResolved(
+    config_json: *const c_char,
+) -> SzConfigTool_result {
+    let config = unsafe {
+        if config_json.is_null() {
+            set_error("config_json is null".to_string(), -1);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -1,
+            };
+        }
+        match CStr::from_ptr(config_json).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
+                return SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -2,
+                };
+            }
+        }
+    };
+
+    let result =
+        crate::behavior_overrides::list_behavior_overrides_resolved(config).and_then(|vec| {
+            serde_json::to_string(&vec).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+        });
+    handle_result!(result)
+}
+
+/// Validate the top-level structure of a config document
+///
+/// Returns `"OK"` with return code 0 when the document is structurally a config
+/// document; otherwise returns an error result (see `SzConfigTool_getLastError`).
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_validateConfig(config_json: *const c_char) -> SzConfigTool_result {
+    let config = unsafe {
+        if config_json.is_null() {
+            set_error("config_json is null".to_string(), -1);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -1,
+            };
+        }
+        match CStr::from_ptr(config_json).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
+                return SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -2,
+                };
+            }
+        }
+    };
+
+    let result = crate::validation::validate_config(config).map(|()| "OK".to_string());
+    handle_result!(result)
+}
+
+/// Render a config document to its canonical export form
+///
+/// Recursively sorts all object keys and pretty-prints at `indent` spaces per
+/// level. `indent` is required; a negative value is treated as 0.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_renderConfig(
+    config_json: *const c_char,
+    indent: i64,
+) -> SzConfigTool_result {
+    let config = unsafe {
+        if config_json.is_null() {
+            set_error("config_json is null".to_string(), -1);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -1,
+            };
+        }
+        match CStr::from_ptr(config_json).to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
+                return SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -2,
+                };
+            }
+        }
+    };
+
+    let indent = if indent < 0 { 0usize } else { indent as usize };
+    let result = crate::export::render_config(config, indent);
+    handle_result!(result)
+}
+
 // ===== Element Operations =====
 
 /// Add an element with JSON configuration

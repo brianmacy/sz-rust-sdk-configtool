@@ -89,12 +89,14 @@ pub mod thresholds;
 // Advanced operations modules
 pub mod command_processor;
 pub mod config_sections;
+pub mod export;
 pub mod fragments;
 pub mod generic_plans;
 pub mod hashes;
 pub mod rules;
 pub mod settings;
 pub mod system_params;
+pub mod validation;
 pub mod versioning;
 
 // Function and call management modules
@@ -110,7 +112,8 @@ pub use attributes::ATTRIBUTE_CLASSES;
 pub use behavior_domain::{
     BEHAVIOR_CODES, behavior_position, compute_behavior, parse_behavior_code,
 };
-pub use behavior_overrides::delete_behavior_override;
+pub use behavior_overrides::{delete_behavior_override, list_behavior_overrides_resolved};
+pub use export::render_config;
 pub use filter::{FilterSubstrate, matches_filter, to_json_dumps_string, to_python_repr_string};
 pub use helpers::FieldUpdate;
 pub use helpers::{
@@ -118,6 +121,7 @@ pub use helpers::{
     resolve_sfcall_id_for_feature,
 };
 pub use settings::set_setting;
+pub use validation::validate_config;
 
 // C FFI module
 pub mod ffi;

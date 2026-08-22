@@ -330,7 +330,9 @@ pub fn get_comparison_call(config: &str, selector: CallSelector) -> Result<Value
                 .find(|c| c.get("CFCALL_ID").and_then(|v| v.as_i64()) == Some(cfcall_id))
         })
         .cloned()
-        .ok_or_else(|| SzConfigError::NotFound(format!("Comparison call ID {cfcall_id}")))
+        .ok_or_else(|| {
+            SzConfigError::NotFound(format!("Comparison call ID {cfcall_id} does not exist"))
+        })
 }
 
 /// List all comparison calls with resolved names
@@ -784,6 +786,16 @@ mod tests {
         let config = populated_config();
         assert!(get_comparison_call(&config, CallSelector::Id(999)).is_err());
         assert!(get_comparison_call(&config, CallSelector::Feature("PHONE")).is_err());
+    }
+
+    // #42: get-by-id not-found now carries the canonical
+    // "{X} call ID {id} does not exist" wording, matching delete and the
+    // other call families.
+    #[test]
+    fn test_get_comparison_call_not_found_message() {
+        let config = populated_config();
+        let err = get_comparison_call(&config, CallSelector::Id(999)).unwrap_err();
+        assert_eq!(err.to_string(), "Comparison call ID 999 does not exist");
     }
 
     #[test]

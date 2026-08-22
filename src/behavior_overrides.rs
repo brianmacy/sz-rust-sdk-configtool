@@ -4,11 +4,12 @@
 //! Overrides allow different behavior codes for features depending on context
 //! (e.g., BUSINESS vs MOBILE usage).
 
-use crate::behavior_domain::parse_behavior_code;
+use crate::behavior_domain::{compute_behavior, parse_behavior_code};
 use crate::error::{Result, SzConfigError};
 use crate::helpers;
 use serde::Serialize;
 use serde_json::Value;
+use std::collections::HashMap;
 
 // ============================================================================
 // Row Structs
@@ -233,6 +234,123 @@ pub fn list_behavior_overrides(config_json: &str) -> Result<Vec<Value>> {
     Ok(result)
 }
 
+/// Display-shaped, fully resolved behaviour override row.
+///
+/// Unlike the raw `CFG_FBOVR` rows returned by [`list_behavior_overrides`],
+/// this carries the human-readable feature code (resolved from `FTYPE_ID`) and
+/// the composed behaviour code (via [`compute_behavior`]) rather than the raw
+/// `FTYPE_FREQ`/`FTYPE_EXCL`/`FTYPE_STAB` triple. It serialises to the display
+/// JSON shape `{ "feature", "usageType", "behavior" }`.
+#[derive(Debug, Clone, Serialize)]
+struct BehaviorOverrideDisplay {
+    feature: String,
+    #[serde(rename = "usageType")]
+    usage_type: String,
+    behavior: String,
+}
+
+/// List all behavior overrides in a display-ready, resolved shape.
+///
+/// This is the richer counterpart to [`list_behavior_overrides`]. Each returned
+/// value has the shape `{ "feature", "usageType", "behavior" }`, where:
+///
+/// - `feature` is the feature code resolved from the row's `FTYPE_ID`,
+/// - `usageType` is the row's `UTYPE_CODE`,
+/// - `behavior` is the composed behaviour code (frequency plus `E`/`S`
+///   suffixes) produced by [`compute_behavior`].
+///
+/// Rows are sorted by `(FTYPE_ID, UTYPE_CODE)` — the numeric feature id first,
+/// then the usage-type code as a tiebreak — which is the ordering the CLI's
+/// `listBehaviorOverrides` display expects and which [`list_behavior_overrides`]
+/// (sorted by `FTYPE_ID` only) cannot provide.
+///
+/// A row whose `FTYPE_ID` has no matching `CFG_FTYPE` entry falls back to the
+/// numeric id rendered as a string for its `feature` field, so malformed
+/// configs still list rather than error.
+///
+/// # Arguments
+/// * `config_json` - Configuration JSON string
+///
+/// # Returns
+/// Vector of resolved override values, sorted by `(FTYPE_ID, UTYPE_CODE)`.
+///
+/// # Errors
+/// - `JsonParse` if `config_json` is not valid JSON
+/// - `MissingSection` if `CFG_FBOVR` is absent
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::behavior_overrides::list_behavior_overrides_resolved;
+/// let config = r#"{"G2_CONFIG":{
+///     "CFG_FTYPE":[{"FTYPE_ID":3,"FTYPE_CODE":"ADDRESS"}],
+///     "CFG_FBOVR":[{"FTYPE_ID":3,"UTYPE_CODE":"HOME",
+///                   "FTYPE_FREQ":"FF","FTYPE_EXCL":"Yes","FTYPE_STAB":"No"}]
+/// }}"#;
+/// let rows = list_behavior_overrides_resolved(config)?;
+/// assert_eq!(rows[0]["feature"], "ADDRESS");
+/// assert_eq!(rows[0]["usageType"], "HOME");
+/// assert_eq!(rows[0]["behavior"], "FFE");
+/// # Ok::<(), sz_configtool_lib::error::SzConfigError>(())
+/// ```
+pub fn list_behavior_overrides_resolved(config_json: &str) -> Result<Vec<Value>> {
+    let config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
+    let g2 = config
+        .get("G2_CONFIG")
+        .ok_or_else(|| SzConfigError::MissingSection("G2_CONFIG".to_string()))?;
+
+    // Build an FTYPE_ID -> FTYPE_CODE resolution map from CFG_FTYPE.
+    let mut ftype_codes: HashMap<i64, String> = HashMap::new();
+    if let Some(ftypes) = g2.get("CFG_FTYPE").and_then(|v| v.as_array()) {
+        for ftype in ftypes {
+            if let (Some(id), Some(code)) = (
+                ftype.get("FTYPE_ID").and_then(|v| v.as_i64()),
+                ftype.get("FTYPE_CODE").and_then(|v| v.as_str()),
+            ) {
+                ftype_codes.insert(id, code.to_string());
+            }
+        }
+    }
+
+    let fbovr_array = g2
+        .get("CFG_FBOVR")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| SzConfigError::MissingSection("CFG_FBOVR".to_string()))?;
+
+    // Collect (ftype_id, utype_code, display) so we can sort by the raw keys
+    // before projecting away FTYPE_ID.
+    let mut rows: Vec<(i64, String, BehaviorOverrideDisplay)> =
+        Vec::with_capacity(fbovr_array.len());
+    for item in fbovr_array {
+        let ftype_id = item.get("FTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(0);
+        let utype_code = item
+            .get("UTYPE_CODE")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let feature = ftype_codes
+            .get(&ftype_id)
+            .cloned()
+            .unwrap_or_else(|| ftype_id.to_string());
+        let display = BehaviorOverrideDisplay {
+            feature,
+            usage_type: utype_code.clone(),
+            behavior: compute_behavior(item),
+        };
+        rows.push((ftype_id, utype_code, display));
+    }
+
+    // Sort by (FTYPE_ID, UTYPE_CODE).
+    rows.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
+
+    rows.into_iter()
+        .map(|(_, _, display)| {
+            serde_json::to_value(&display).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -359,6 +477,73 @@ mod tests {
         assert_eq!(freq, "NAME");
         assert_eq!(excl, "No");
         assert_eq!(stab, "No");
+    }
+
+    #[test]
+    fn test_list_behavior_overrides_resolved_projection_and_sort() {
+        // Fixture deliberately ordered so a FTYPE_ID-only sort differs from the
+        // required (FTYPE_ID, UTYPE_CODE) sort: feature 3 has two usage types
+        // stored MOBILE-before-BUSINESS, and feature 1 is stored last.
+        let config = json!({
+            "G2_CONFIG": {
+                "CFG_FTYPE": [
+                    {"FTYPE_ID": 3, "FTYPE_CODE": "ADDRESS"},
+                    {"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}
+                ],
+                "CFG_FBOVR": [
+                    {"FTYPE_ID": 3, "UTYPE_CODE": "MOBILE",
+                     "FTYPE_FREQ": "FF", "FTYPE_EXCL": "Yes", "FTYPE_STAB": "No"},
+                    {"FTYPE_ID": 3, "UTYPE_CODE": "BUSINESS",
+                     "FTYPE_FREQ": "F1", "FTYPE_EXCL": "No", "FTYPE_STAB": "Yes"},
+                    {"FTYPE_ID": 1, "UTYPE_CODE": "PRIMARY",
+                     "FTYPE_FREQ": "NAME", "FTYPE_EXCL": "No", "FTYPE_STAB": "No"}
+                ]
+            }
+        })
+        .to_string();
+
+        let rows = list_behavior_overrides_resolved(&config).expect("resolved list");
+        assert_eq!(rows.len(), 3);
+
+        // Expected order: (1,PRIMARY), (3,BUSINESS), (3,MOBILE).
+        assert_eq!(rows[0]["feature"], "NAME");
+        assert_eq!(rows[0]["usageType"], "PRIMARY");
+        assert_eq!(rows[0]["behavior"], "NAME");
+
+        assert_eq!(rows[1]["feature"], "ADDRESS");
+        assert_eq!(rows[1]["usageType"], "BUSINESS");
+        assert_eq!(rows[1]["behavior"], "F1S");
+
+        assert_eq!(rows[2]["feature"], "ADDRESS");
+        assert_eq!(rows[2]["usageType"], "MOBILE");
+        assert_eq!(rows[2]["behavior"], "FFE");
+
+        // Projection is exactly the display shape: feature, usageType, behavior.
+        for row in &rows {
+            let obj = row.as_object().unwrap();
+            assert_eq!(obj.len(), 3);
+            assert!(obj.contains_key("feature"));
+            assert!(obj.contains_key("usageType"));
+            assert!(obj.contains_key("behavior"));
+        }
+    }
+
+    #[test]
+    fn test_list_behavior_overrides_resolved_unknown_ftype_falls_back_to_id() {
+        let config = json!({
+            "G2_CONFIG": {
+                "CFG_FTYPE": [],
+                "CFG_FBOVR": [
+                    {"FTYPE_ID": 99, "UTYPE_CODE": "X",
+                     "FTYPE_FREQ": "F1", "FTYPE_EXCL": "No", "FTYPE_STAB": "No"}
+                ]
+            }
+        })
+        .to_string();
+
+        let rows = list_behavior_overrides_resolved(&config).expect("resolved list");
+        assert_eq!(rows[0]["feature"], "99");
+        assert_eq!(rows[0]["behavior"], "F1");
     }
 
     #[test]

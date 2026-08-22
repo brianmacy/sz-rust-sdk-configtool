@@ -1,7 +1,8 @@
 //! Standardize call management operations
 //!
-//! Functions for managing CFG_SFCALL (standardize calls) and CFG_SBOM
-//! (standardize bill of materials) configuration sections.
+//! Functions for managing CFG_SFCALL (standardize calls) configuration rows.
+//! Standardize calls and their elements are both represented as CFG_SFCALL
+//! rows; there is no separate standardize bill-of-materials table.
 
 use crate::calls::{CallSelector, resolve_call_id};
 use crate::config_rows::SfcallRow;
@@ -220,7 +221,7 @@ pub fn delete_standardize_call(config: &str, sfcall_id: i64) -> Result<String> {
 
     if !call_exists {
         return Err(SzConfigError::NotFound(format!(
-            "Standardize call ID {sfcall_id}"
+            "Standardize call ID {sfcall_id} does not exist"
         )));
     }
 
@@ -277,7 +278,9 @@ pub fn get_standardize_call(config: &str, selector: CallSelector) -> Result<Valu
                 .find(|c| c.get("SFCALL_ID").and_then(|v| v.as_i64()) == Some(sfcall_id))
         })
         .cloned()
-        .ok_or_else(|| SzConfigError::NotFound(format!("Standardize call ID {sfcall_id}")))
+        .ok_or_else(|| {
+            SzConfigError::NotFound(format!("Standardize call ID {sfcall_id} does not exist"))
+        })
 }
 
 /// List all standardize calls with resolved names
@@ -402,9 +405,9 @@ pub fn set_standardize_call(config: &str, _params: SetStandardizeCallParams) -> 
     Ok(config.to_string())
 }
 
-/// Add a standardize call element (SBOM record)
+/// Add a standardize call element (CFG_SFCALL record)
 ///
-/// Creates a new standardize bill of materials entry.
+/// Creates a new standardize call element as a CFG_SFCALL row.
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
@@ -681,5 +684,22 @@ mod tests {
         assert_eq!(calls[2]["id"], json!(20));
         // Standardize calls carry no BOM, so no elementList key.
         assert!(!calls[0].as_object().unwrap().contains_key("elementList"));
+    }
+
+    // #42: the not-found message must carry the canonical
+    // "{X} call ID {id} does not exist" wording, matching the comparison/
+    // distinct/expression siblings (previously it was truncated).
+    #[test]
+    fn test_delete_standardize_call_not_found_message() {
+        let config = r#"{"G2_CONFIG": {"CFG_SFCALL": []}}"#;
+        let err = delete_standardize_call(config, 99).unwrap_err();
+        assert_eq!(err.to_string(), "Standardize call ID 99 does not exist");
+    }
+
+    #[test]
+    fn test_get_standardize_call_not_found_message() {
+        let config = r#"{"G2_CONFIG": {"CFG_SFCALL": []}}"#;
+        let err = get_standardize_call(config, CallSelector::Id(99)).unwrap_err();
+        assert_eq!(err.to_string(), "Standardize call ID 99 does not exist");
     }
 }

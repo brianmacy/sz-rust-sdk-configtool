@@ -1,6 +1,28 @@
 use std::fmt;
 
-/// Custom error type for configuration operations
+/// Custom error type for configuration operations.
+///
+/// # Stable, machine-readable surface
+///
+/// `SzConfigError` is the public error boundary for this crate. Its **variant
+/// set** is a stable contract: callers should branch on the variant — or, more
+/// conveniently, on the payload-free [`SzErrorKind`] discriminant returned by
+/// [`SzConfigError::kind`], or the string returned by
+/// [`SzConfigError::reason_code`] — rather than sniffing the human-facing
+/// [`Display`](std::fmt::Display) text. The `Display` wording is **not** part of
+/// the contract and may change between releases; the variant set,
+/// [`SzErrorKind`], and [`reason_code`](SzConfigError::reason_code) are the
+/// stable surface downstream code (notably the CLI adapter) should rely on.
+///
+/// The variant set will not be restructured without a version bump. The enum is
+/// deliberately **not** `#[non_exhaustive]`, so downstream `match` expressions
+/// can be exhaustive today; adding a variant is therefore a breaking change and
+/// will be released as such.
+///
+/// Note that [`kind`](SzConfigError::kind) and
+/// [`reason_code`](SzConfigError::reason_code) are variant-level only: two
+/// distinct "not found" situations both classify as [`SzErrorKind::NotFound`].
+/// Sub-case discrimination within a variant is not part of this surface.
 #[derive(Debug)]
 pub enum SzConfigError {
     /// JSON parsing error

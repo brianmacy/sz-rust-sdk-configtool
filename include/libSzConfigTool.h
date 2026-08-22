@@ -675,6 +675,24 @@ struct SzConfigTool_result SzConfigTool_deleteExpressionCallElement(const char *
                                                                     int64_t efcall_id,
                                                                     const char *element_code);
 
+// Wave 6 additions (#42, #43): API-surface helpers. All additive.
+//
+// List behavior overrides in the resolved display shape: a JSON array of
+// { "feature", "usageType", "behavior" } objects, sorted by (FTYPE_ID,
+// UTYPE_CODE). Richer than SzConfigTool_listBehaviorOverrides (raw rows).
+struct SzConfigTool_result SzConfigTool_listBehaviorOverridesResolved(const char *config_json);
+
+// Validate the top-level structure of a config document (structure-only:
+// G2_CONFIG must be an object; any present CFG_* section must be an array).
+// Returns "OK" with return code 0 on success, or an error result otherwise.
+struct SzConfigTool_result SzConfigTool_validateConfig(const char *config_json);
+
+// Render a config document to its canonical export form: recursive object-key
+// sort (Python sort_keys=True semantics) then pretty-print at `indent` spaces
+// per level. `indent` is required; a negative value is treated as 0.
+struct SzConfigTool_result SzConfigTool_renderConfig(const char *config_json,
+                                                     int64_t indent);
+
 #ifdef __cplusplus
 }
 #endif
