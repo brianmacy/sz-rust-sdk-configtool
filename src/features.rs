@@ -1,3 +1,4 @@
+use crate::behavior_domain::{compute_behavior, parse_behavior_code};
 use crate::config_rows::{
     CfbomRow, CfcallRow, DfcallRow, EfbomRow, EfcallRow, FbomRow, FelemRow, FtypeRow, SfcallRow,
 };
@@ -1306,61 +1307,6 @@ pub fn build_feature_json(config: &Value, ftype: &Value) -> Result<Value> {
         "version": ftype["VERSION"].as_i64().unwrap_or(0),
         "elementList": element_list
     }))
-}
-
-/// Parse a behavior code string into (frequency, exclusivity, stability)
-/// Valid frequency codes: A1, F1, FF, FM, FVM, NONE, NAME
-/// E suffix means EXCLUSIVITY = "Yes"
-/// S suffix means STABILITY = "Yes"
-fn parse_behavior_code(behavior: &str) -> Result<(&'static str, &'static str, &'static str)> {
-    let mut code = behavior.to_uppercase();
-    let mut exclusivity = "No";
-    let mut stability = "No";
-
-    // Special cases that don't get E/S parsing
-    if code != "NAME" && code != "NONE" {
-        if code.contains('E') {
-            exclusivity = "Yes";
-            code = code.replace('E', "");
-        }
-        if code.contains('S') {
-            stability = "Yes";
-            code = code.replace('S', "");
-        }
-    }
-
-    // Validate frequency code
-    let frequency: &'static str = match code.as_str() {
-        "A1" => "A1",
-        "F1" => "F1",
-        "FF" => "FF",
-        "FM" => "FM",
-        "FVM" => "FVM",
-        "NONE" => "NONE",
-        "NAME" => "NAME",
-        _ => {
-            return Err(SzConfigError::InvalidInput(format!(
-                "Invalid behavior code '{behavior}'. Valid codes: A1, F1, FF, FM, FVM, NONE, NAME (with optional E/S suffixes)"
-            )));
-        }
-    };
-
-    Ok((frequency, exclusivity, stability))
-}
-
-fn compute_behavior(ftype: &Value) -> String {
-    let freq = ftype["FTYPE_FREQ"].as_str().unwrap_or("");
-    let excl = ftype["FTYPE_EXCL"].as_str().unwrap_or("");
-    let stab = ftype["FTYPE_STAB"].as_str().unwrap_or("");
-
-    let mut behavior = freq.to_string();
-    if excl.to_uppercase() == "Y" || excl == "1" || excl.to_uppercase() == "YES" {
-        behavior.push('E');
-    }
-    if stab.to_uppercase() == "Y" || stab == "1" || stab.to_uppercase() == "YES" {
-        behavior.push('S');
-    }
-    behavior
 }
 
 fn lookup_feature_id(config: &Value, feature_code: &str) -> Result<i64> {

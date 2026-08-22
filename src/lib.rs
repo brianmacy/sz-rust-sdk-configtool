@@ -73,6 +73,10 @@ pub mod helpers;
 // Shared crate-internal row structs (one per CFG_* section).
 pub(crate) mod config_rows;
 
+// Shared domain/substrate modules
+pub mod behavior_domain;
+pub mod filter;
+
 // Core entity modules
 pub mod attributes;
 pub mod behavior_overrides;
@@ -96,7 +100,20 @@ pub mod calls;
 pub mod functions;
 
 // Re-export commonly used types
-pub use error::{Result, SzConfigError};
+pub use error::{Result, SzConfigError, SzErrorKind};
+
+// Re-export shared domain items so consumers can use them without the
+// fully-qualified module path.
+pub use attributes::ATTRIBUTE_CLASSES;
+pub use behavior_domain::{
+    BEHAVIOR_CODES, behavior_position, compute_behavior, parse_behavior_code,
+};
+pub use filter::{FilterSubstrate, matches_filter, to_json_dumps_string, to_python_repr_string};
+pub use helpers::FieldUpdate;
+pub use helpers::{
+    resolve_cfcall_id_for_feature, resolve_dfcall_id_for_feature, resolve_efcall_id_for_feature,
+    resolve_sfcall_id_for_feature,
+};
 
 // C FFI module
 pub mod ffi;

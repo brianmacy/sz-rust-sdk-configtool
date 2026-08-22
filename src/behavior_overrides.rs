@@ -4,6 +4,7 @@
 //! Overrides allow different behavior codes for features depending on context
 //! (e.g., BUSINESS vs MOBILE usage).
 
+use crate::behavior_domain::parse_behavior_code;
 use crate::error::{Result, SzConfigError};
 use crate::helpers;
 use serde::Serialize;
@@ -230,56 +231,6 @@ pub fn list_behavior_overrides(config_json: &str) -> Result<Vec<Value>> {
     result.sort_by_key(|item| item["FTYPE_ID"].as_i64().unwrap_or(0));
 
     Ok(result)
-}
-
-/// Parse a behavior code string into (frequency, exclusivity, stability)
-///
-/// Valid frequency codes: A1, F1, FF, FM, FVM, NONE, NAME
-/// E suffix means EXCLUSIVITY = "Yes"
-/// S suffix means STABILITY = "Yes"
-///
-/// # Arguments
-/// * `behavior` - Behavior code (e.g., "FM", "F1E", "F1ES", "NAME")
-///
-/// # Returns
-/// Tuple of (frequency, exclusivity, stability)
-///
-/// # Errors
-/// - `InvalidInput` if behavior code is invalid
-fn parse_behavior_code(behavior: &str) -> Result<(&'static str, &'static str, &'static str)> {
-    let mut code = behavior.to_uppercase();
-    let mut exclusivity = "No";
-    let mut stability = "No";
-
-    // Special cases that don't get E/S parsing
-    if code != "NAME" && code != "NONE" {
-        if code.contains('E') {
-            exclusivity = "Yes";
-            code = code.replace('E', "");
-        }
-        if code.contains('S') {
-            stability = "Yes";
-            code = code.replace('S', "");
-        }
-    }
-
-    // Validate frequency code
-    let frequency: &'static str = match code.as_str() {
-        "A1" => "A1",
-        "F1" => "F1",
-        "FF" => "FF",
-        "FM" => "FM",
-        "FVM" => "FVM",
-        "NONE" => "NONE",
-        "NAME" => "NAME",
-        _ => {
-            return Err(SzConfigError::InvalidInput(format!(
-                "Invalid behavior code '{behavior}'. Valid codes: A1, F1, FF, FM, FVM, NONE, NAME (with optional E/S suffixes)"
-            )));
-        }
-    };
-
-    Ok((frequency, exclusivity, stability))
 }
 
 #[cfg(test)]

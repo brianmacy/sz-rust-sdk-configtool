@@ -20,7 +20,7 @@ use serde_json::{Value, json};
 /// The Senzing engine's config loader requires every key to be present (a
 /// missing key yields SENZ9117), so partial rows must never be written.
 #[derive(Debug, Clone, Serialize)]
-struct ErruleRow {
+pub(crate) struct ErruleRow {
     #[serde(rename = "ERRULE_ID")]
     errule_id: i64,
     #[serde(rename = "ERRULE_CODE")]
@@ -64,6 +64,138 @@ impl ErruleRow {
             errule_tier: cfg.get("ERRULE_TIER").and_then(|v| v.as_i64()),
         }
     }
+}
+
+/// Check whether a fragment code exists in `CFG_ERFRAG` (case-insensitive).
+// Consumed by `validate_rule_row`, which is wired into `add_rule`/`set_rule` in
+// Wave 2c; kept behind `allow(dead_code)` until then.
+#[allow(dead_code)]
+fn fragment_code_exists(config: &Value, frag_upper: &str) -> bool {
+    config
+        .get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_ERFRAG"))
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter().any(|item| {
+                item.get("ERFRAG_CODE")
+                    .and_then(|v| v.as_str())
+                    .map(|c| c.eq_ignore_ascii_case(frag_upper))
+                    .unwrap_or(false)
+            })
+        })
+        .unwrap_or(false)
+}
+
+/// Validate and normalise a proposed `CFG_ERRULE` row against the config.
+///
+/// This is the single, shared rule validator so that `add_rule` and `set_rule`
+/// enforce exactly the same invariants and cannot drift apart. It performs, in
+/// order:
+///
+/// 1. **Duplicate-code check** (only when `is_new`): rejects a rule whose
+///    `ERRULE_CODE` already exists.
+/// 2. **Fragment / disqualifier existence**: any non-empty `QUAL_ERFRAG_CODE`
+///    or `DISQ_ERFRAG_CODE` must name an existing `CFG_ERFRAG` row.
+/// 3. **RESOLVE / RELATE domain**: each must be `Yes`/`No` (case-insensitive);
+///    the returned row is normalised to title-case.
+/// 4. **Mutual exclusivity**: a rule may not both resolve and relate.
+/// 5. **RTYPE_ID coherence**: `RESOLVE=Yes` auto-corrects `RTYPE_ID` to `1`;
+///    `RELATE=Yes` requires `RTYPE_ID` in `[2, 3, 4]`.
+///
+/// On success it returns a normalised copy of the row (title-cased
+/// RESOLVE/RELATE and any auto-corrected RTYPE_ID). It never mutates the config.
+///
+/// The error messages match the historical `set_rule` wording so the two entry
+/// points remain behaviourally identical once both delegate here.
+// Created in Wave 1; `add_rule`/`set_rule` are wired to call it in Wave 2c.
+#[allow(dead_code)]
+pub(crate) fn validate_rule_row(
+    config: &Value,
+    row: &ErruleRow,
+    is_new: bool,
+) -> Result<ErruleRow> {
+    let mut out = row.clone();
+
+    // 1. Duplicate ERRULE_CODE (adds only; an update targets an existing code).
+    if is_new
+        && config
+            .get("G2_CONFIG")
+            .and_then(|g| g.get("CFG_ERRULE"))
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter().any(|item| {
+                    item.get("ERRULE_CODE")
+                        .and_then(|v| v.as_str())
+                        .map(|c| c.eq_ignore_ascii_case(&out.errule_code))
+                        .unwrap_or(false)
+                })
+            })
+            .unwrap_or(false)
+    {
+        return Err(SzConfigError::AlreadyExists(format!(
+            "Rule '{}' already exists",
+            out.errule_code
+        )));
+    }
+
+    // 2. Fragment / disqualifier existence (skip null / empty).
+    if let Some(frag) = out.qual_erfrag_code.as_deref()
+        && !frag.is_empty()
+    {
+        let frag_upper = frag.to_uppercase();
+        if !fragment_code_exists(config, &frag_upper) {
+            return Err(SzConfigError::NotFound(format!(
+                "Fragment '{frag_upper}' not found"
+            )));
+        }
+    }
+    if let Some(disq) = out.disq_erfrag_code.as_deref()
+        && !disq.is_empty()
+    {
+        let disq_upper = disq.to_uppercase();
+        if !fragment_code_exists(config, &disq_upper) {
+            return Err(SzConfigError::NotFound(format!(
+                "Fragment '{disq_upper}' not found"
+            )));
+        }
+    }
+
+    // 3. RESOLVE domain + normalise.
+    let resolve_upper = out.resolve.to_uppercase();
+    if resolve_upper != "YES" && resolve_upper != "NO" {
+        return Err(SzConfigError::InvalidInput(
+            "resolve value must be in [\"Yes\", \"No\"]".to_string(),
+        ));
+    }
+    out.resolve = if resolve_upper == "YES" { "Yes" } else { "No" }.to_string();
+
+    // 3. RELATE domain + normalise.
+    let relate_upper = out.relate.to_uppercase();
+    if relate_upper != "YES" && relate_upper != "NO" {
+        return Err(SzConfigError::InvalidInput(
+            "relate value must be in [\"Yes\", \"No\"]".to_string(),
+        ));
+    }
+    out.relate = if relate_upper == "YES" { "Yes" } else { "No" }.to_string();
+
+    // 4. Mutual exclusivity.
+    if out.resolve == "Yes" && out.relate == "Yes" {
+        return Err(SzConfigError::InvalidInput(
+            "A rule must either resolve or relate, please set the other to No".to_string(),
+        ));
+    }
+
+    // 5. RTYPE_ID coherence / auto-correct.
+    if out.resolve == "Yes" && out.rtype_id != 1 {
+        out.rtype_id = 1;
+    }
+    if out.relate == "Yes" && ![2, 3, 4].contains(&out.rtype_id) {
+        return Err(SzConfigError::InvalidInput(
+            "Relationship type (RTYPE_ID) must be set to either 2=Possible match or 3=Possibly related".to_string(),
+        ));
+    }
+
+    Ok(out)
 }
 
 // ============================================================================
@@ -598,5 +730,142 @@ mod tests {
         assert_eq!(obj["QUAL_ERFRAG_CODE"], Value::Null);
         assert_eq!(obj["DISQ_ERFRAG_CODE"], Value::Null);
         assert_eq!(obj["ERRULE_TIER"], Value::Null);
+    }
+
+    // ------------------------------------------------------------------
+    // validate_rule_row (shared validator, created in Wave 1)
+    // ------------------------------------------------------------------
+
+    fn validator_config() -> Value {
+        serde_json::from_str(
+            r#"{"G2_CONFIG": {
+                "CFG_ERRULE": [
+                    {"ERRULE_ID": 100, "ERRULE_CODE": "EXISTING", "RESOLVE": "Yes",
+                     "RELATE": "No", "RTYPE_ID": 1, "QUAL_ERFRAG_CODE": "FRAG_A",
+                     "DISQ_ERFRAG_CODE": null, "ERRULE_TIER": 10}
+                ],
+                "CFG_ERFRAG": [
+                    {"ERFRAG_ID": 1, "ERFRAG_CODE": "FRAG_A"},
+                    {"ERFRAG_ID": 2, "ERFRAG_CODE": "FRAG_B"}
+                ]
+            }}"#,
+        )
+        .unwrap()
+    }
+
+    fn base_row() -> ErruleRow {
+        ErruleRow {
+            errule_id: 1000,
+            errule_code: "NEW_RULE".to_string(),
+            resolve: "No".to_string(),
+            relate: "No".to_string(),
+            rtype_id: 1,
+            qual_erfrag_code: None,
+            disq_erfrag_code: None,
+            errule_tier: None,
+        }
+    }
+
+    #[test]
+    fn test_validate_rule_row_accepts_valid_new() {
+        let cfg = validator_config();
+        let out = validate_rule_row(&cfg, &base_row(), true).unwrap();
+        assert_eq!(out.resolve, "No");
+        assert_eq!(out.relate, "No");
+    }
+
+    #[test]
+    fn test_validate_rule_row_rejects_duplicate_code_when_new() {
+        let cfg = validator_config();
+        let mut row = base_row();
+        row.errule_code = "existing".to_string(); // case-insensitive clash
+        let err = validate_rule_row(&cfg, &row, true).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
+    }
+
+    #[test]
+    fn test_validate_rule_row_allows_existing_code_when_not_new() {
+        let cfg = validator_config();
+        let mut row = base_row();
+        row.errule_code = "EXISTING".to_string();
+        // is_new = false -> dup check skipped.
+        assert!(validate_rule_row(&cfg, &row, false).is_ok());
+    }
+
+    #[test]
+    fn test_validate_rule_row_bad_fragment() {
+        let cfg = validator_config();
+        let mut row = base_row();
+        row.qual_erfrag_code = Some("NOPE".to_string());
+        let err = validate_rule_row(&cfg, &row, true).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::NotFound);
+        assert!(err.to_string().contains("Fragment 'NOPE' not found"));
+    }
+
+    #[test]
+    fn test_validate_rule_row_bad_disqualifier() {
+        let cfg = validator_config();
+        let mut row = base_row();
+        row.disq_erfrag_code = Some("NOPE".to_string());
+        let err = validate_rule_row(&cfg, &row, true).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::NotFound);
+    }
+
+    #[test]
+    fn test_validate_rule_row_existing_fragment_ok() {
+        let cfg = validator_config();
+        let mut row = base_row();
+        row.qual_erfrag_code = Some("frag_b".to_string()); // case-insensitive
+        assert!(validate_rule_row(&cfg, &row, true).is_ok());
+    }
+
+    #[test]
+    fn test_validate_rule_row_resolve_domain() {
+        let cfg = validator_config();
+        let mut row = base_row();
+        row.resolve = "maybe".to_string();
+        let err = validate_rule_row(&cfg, &row, true).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn test_validate_rule_row_relate_domain() {
+        let cfg = validator_config();
+        let mut row = base_row();
+        row.relate = "perhaps".to_string();
+        assert!(validate_rule_row(&cfg, &row, true).is_err());
+    }
+
+    #[test]
+    fn test_validate_rule_row_mutual_exclusivity() {
+        let cfg = validator_config();
+        let mut row = base_row();
+        row.resolve = "Yes".to_string();
+        row.relate = "Yes".to_string();
+        let err = validate_rule_row(&cfg, &row, true).unwrap_err();
+        assert!(err.to_string().contains("either resolve or relate"));
+    }
+
+    #[test]
+    fn test_validate_rule_row_resolve_autocorrects_rtype() {
+        let cfg = validator_config();
+        let mut row = base_row();
+        row.resolve = "yes".to_string();
+        row.rtype_id = 3; // incoherent with RESOLVE=Yes
+        let out = validate_rule_row(&cfg, &row, true).unwrap();
+        assert_eq!(out.resolve, "Yes"); // normalised
+        assert_eq!(out.rtype_id, 1); // auto-corrected
+    }
+
+    #[test]
+    fn test_validate_rule_row_relate_requires_valid_rtype() {
+        let cfg = validator_config();
+        let mut row = base_row();
+        row.relate = "Yes".to_string();
+        row.rtype_id = 1; // invalid for RELATE
+        assert!(validate_rule_row(&cfg, &row, true).is_err());
+
+        row.rtype_id = 2; // valid
+        assert!(validate_rule_row(&cfg, &row, true).is_ok());
     }
 }

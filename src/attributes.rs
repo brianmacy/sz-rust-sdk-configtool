@@ -3,6 +3,29 @@ use crate::helpers;
 use serde::Serialize;
 use serde_json::{Value, json};
 
+/// Canonical set of valid attribute classes (`ATTR_CLASS`).
+///
+/// An attribute's class must be one of these values. This is the single source
+/// of truth used by [`add_attribute`] to validate the `class` parameter.
+///
+/// # Example
+///
+/// ```
+/// use sz_configtool_lib::attributes::ATTRIBUTE_CLASSES;
+///
+/// assert!(ATTRIBUTE_CLASSES.contains(&"IDENTIFIER"));
+/// assert!(!ATTRIBUTE_CLASSES.contains(&"NOT_A_CLASS"));
+/// ```
+pub const ATTRIBUTE_CLASSES: &[&str] = &[
+    "NAME",
+    "ATTRIBUTE",
+    "IDENTIFIER",
+    "ADDRESS",
+    "PHONE",
+    "RELATIONSHIP",
+    "OTHER",
+];
+
 // ============================================================================
 // Row Structs
 // ============================================================================
@@ -122,20 +145,11 @@ pub fn add_attribute(config_json: &str, params: AddAttributeParams) -> Result<(S
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
     // Validate attribute class (matches Python line 173-181)
-    let valid_classes = [
-        "NAME",
-        "ATTRIBUTE",
-        "IDENTIFIER",
-        "ADDRESS",
-        "PHONE",
-        "RELATIONSHIP",
-        "OTHER",
-    ];
-    if !valid_classes.contains(&params.class) {
+    if !ATTRIBUTE_CLASSES.contains(&params.class) {
         return Err(SzConfigError::InvalidInput(format!(
             "Invalid attribute class '{}'. Must be one of: {}",
             params.class,
-            valid_classes.join(", ")
+            ATTRIBUTE_CLASSES.join(", ")
         )));
     }
 
