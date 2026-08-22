@@ -6,6 +6,18 @@
 use crate::error::{Result, SzConfigError};
 use serde_json::{Value, json};
 
+/// Outcome counts for [`add_config_section_field`].
+///
+/// `existed` counts items that already carried the field (and were therefore
+/// left untouched); `updated` counts items the field was newly inserted into.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct AddFieldCounts {
+    /// Number of items that already had the field (value preserved, not overwritten).
+    pub existed: usize,
+    /// Number of items the field was newly added to.
+    pub updated: usize,
+}
+
 /// Add a new configuration section
 ///
 /// # Arguments
@@ -217,7 +229,14 @@ pub fn list_config_sections(config_json: &str) -> Result<Vec<String>> {
 ///
 /// # Returns
 ///
-/// Returns `(modified_config, item_count)` tuple on success
+/// Returns `(modified_config, AddFieldCounts)` on success. The counts report how
+/// many items already had the field (left untouched) versus how many the field
+/// was newly added to.
+///
+/// # Behaviour
+///
+/// The field is inserted only into items that do **not** already have it, so an
+/// existing value is never overwritten.
 ///
 /// # Example
 ///
@@ -226,26 +245,28 @@ pub fn list_config_sections(config_json: &str) -> Result<Vec<String>> {
 /// use serde_json::json;
 ///
 /// let config = r#"{"G2_CONFIG": {"CFG_ATTR": [{"ATTR_CODE": "NAME"}]}}"#;
-/// let (modified, count) = config_sections::add_config_section_field(
+/// let (modified, counts) = config_sections::add_config_section_field(
 ///     config,
 ///     "CFG_ATTR",
 ///     "NEW_FIELD",
 ///     &json!("default")
 /// ).unwrap();
-/// assert_eq!(count, 1);
+/// assert_eq!(counts.updated, 1);
+/// assert_eq!(counts.existed, 0);
 /// ```
 pub fn add_config_section_field(
     config_json: &str,
     section_name: &str,
     field_name: &str,
     field_value: &Value,
-) -> Result<(String, usize)> {
+) -> Result<(String, AddFieldCounts)> {
     let section_name = section_name.to_uppercase();
     let field_name = field_name.to_uppercase();
     let mut config_data: Value = serde_json::from_str(config_json)?;
-    let mut item_count = 0;
+    let mut counts = AddFieldCounts::default();
 
-    // Navigate to section and add field to all items in the array
+    // Navigate to section and add the field only to items that lack it, so an
+    // existing value is never overwritten.
     if let Some(g2_config) = config_data.get_mut("G2_CONFIG") {
         if let Some(section_array) = g2_config
             .get_mut(&section_name)
@@ -253,8 +274,12 @@ pub fn add_config_section_field(
         {
             for item in section_array.iter_mut() {
                 if let Some(item_obj) = item.as_object_mut() {
-                    item_obj.insert(field_name.clone(), field_value.clone());
-                    item_count += 1;
+                    if item_obj.contains_key(&field_name) {
+                        counts.existed += 1;
+                    } else {
+                        item_obj.insert(field_name.clone(), field_value.clone());
+                        counts.updated += 1;
+                    }
                 }
             }
         } else {
@@ -264,7 +289,7 @@ pub fn add_config_section_field(
         }
     }
 
-    Ok((serde_json::to_string(&config_data)?, item_count))
+    Ok((serde_json::to_string(&config_data)?, counts))
 }
 
 /// Remove a field from all items in a configuration section
@@ -323,4 +348,75 @@ pub fn remove_config_section_field(
     }
 
     Ok((serde_json::to_string(&config_data)?, item_count))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::error::SzErrorKind;
+
+    #[test]
+    fn test_add_config_section_field_added() {
+        let config = r#"{"G2_CONFIG": {"CFG_ATTR": [
+            {"ATTR_CODE": "NAME"},
+            {"ATTR_CODE": "PHONE"}
+        ]}}"#;
+
+        let (modified, counts) =
+            add_config_section_field(config, "CFG_ATTR", "NEW_FIELD", &json!("default")).unwrap();
+        assert_eq!(counts.updated, 2);
+        assert_eq!(counts.existed, 0);
+
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let arr = value["G2_CONFIG"]["CFG_ATTR"].as_array().unwrap();
+        assert_eq!(arr[0]["NEW_FIELD"], json!("default"));
+        assert_eq!(arr[1]["NEW_FIELD"], json!("default"));
+    }
+
+    #[test]
+    fn test_add_config_section_field_already_present_preserves_value() {
+        let config = r#"{"G2_CONFIG": {"CFG_ATTR": [
+            {"ATTR_CODE": "NAME", "EXISTING": "keep-me"}
+        ]}}"#;
+
+        let (modified, counts) =
+            add_config_section_field(config, "CFG_ATTR", "EXISTING", &json!("overwrite")).unwrap();
+        assert_eq!(counts.updated, 0);
+        assert_eq!(counts.existed, 1);
+
+        // The pre-existing value must be preserved, never overwritten.
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        assert_eq!(
+            value["G2_CONFIG"]["CFG_ATTR"][0]["EXISTING"],
+            json!("keep-me")
+        );
+    }
+
+    #[test]
+    fn test_add_config_section_field_mixed() {
+        let config = r#"{"G2_CONFIG": {"CFG_ATTR": [
+            {"ATTR_CODE": "NAME", "F": "old"},
+            {"ATTR_CODE": "PHONE"},
+            {"ATTR_CODE": "EMAIL"}
+        ]}}"#;
+
+        // Field name is upper-cased before matching, so "f" matches "F".
+        let (modified, counts) =
+            add_config_section_field(config, "CFG_ATTR", "f", &json!("new")).unwrap();
+        assert_eq!(counts.existed, 1);
+        assert_eq!(counts.updated, 2);
+
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let arr = value["G2_CONFIG"]["CFG_ATTR"].as_array().unwrap();
+        assert_eq!(arr[0]["F"], json!("old")); // preserved
+        assert_eq!(arr[1]["F"], json!("new"));
+        assert_eq!(arr[2]["F"], json!("new"));
+    }
+
+    #[test]
+    fn test_add_config_section_field_missing_section_errors() {
+        let config = r#"{"G2_CONFIG": {"CFG_ATTR": []}}"#;
+        let err = add_config_section_field(config, "CFG_NOPE", "F", &json!("x")).unwrap_err();
+        assert_eq!(err.kind(), SzErrorKind::NotFound);
+    }
 }

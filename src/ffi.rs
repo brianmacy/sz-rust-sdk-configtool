@@ -1894,7 +1894,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSectionField(
     };
 
     match crate::config_sections::add_config_section_field(config, section, field, &field_value) {
-        Ok((modified_config, _count)) => match CString::new(modified_config) {
+        Ok((modified_config, _counts)) => match CString::new(modified_config) {
             Ok(c_str) => {
                 clear_error();
                 SzConfigTool_result {

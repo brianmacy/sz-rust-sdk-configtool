@@ -264,20 +264,22 @@ impl<'a> AddFeatureDistinctCallElementParams<'a> {
     }
 }
 
-// Protected features that cannot be deleted
+// Protected features that cannot be deleted.
+//
+// This is the ratified (human-approved) locked-feature set that mirrors the
+// authoritative Python `locked_feature_list`. Only these codes are protected;
+// every other shipped feature (EMAIL, RECORD_TYPE, NATIONAL_ID, TAX_ID,
+// ACCT_NUM, ...) is deletable. The previous list also carried codes that do not
+// exist as feature codes in the shipped config (DATE_OF_BIRTH, SSN_NUM,
+// PASSPORT_NUM, DRIVERS_LICENSE_NUM), which were inert but misleading.
 const LOCKED_FEATURES: &[&str] = &[
     "NAME",
     "ADDRESS",
     "PHONE",
-    "EMAIL",
-    "RECORD_TYPE",
-    "DATE_OF_BIRTH",
-    "NATIONAL_ID",
-    "TAX_ID",
-    "ACCT_NUM",
-    "SSN_NUM",
-    "PASSPORT_NUM",
-    "DRIVERS_LICENSE_NUM",
+    "DOB",
+    "REL_LINK",
+    "REL_ANCHOR",
+    "REL_POINTER",
 ];
 
 /// Add a new feature to the configuration
@@ -1919,5 +1921,100 @@ mod tests {
         assert_eq!(dfcall["DFUNC_ID"], json!(2));
         assert!(!dfcall.as_object().unwrap().contains_key("FELEM_ID"));
         assert!(!dfcall.as_object().unwrap().contains_key("EXEC_ORDER"));
+    }
+
+    // ------------------------------------------------------------------
+    // LOCKED_FEATURES (ratified protected set) — #35
+    // ------------------------------------------------------------------
+
+    /// A real feature that is NO LONGER in the protected set (EMAIL) must be
+    /// deletable, and its dependent rows must cascade away.
+    #[test]
+    fn test_delete_feature_email_now_deletable_and_cascades() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [
+                {"FTYPE_ID": 5, "FTYPE_CODE": "EMAIL"},
+                {"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}
+            ],
+            "CFG_FBOM": [
+                {"FTYPE_ID": 5, "FELEM_ID": 1},
+                {"FTYPE_ID": 3, "FELEM_ID": 2}
+            ],
+            "CFG_ATTR": [
+                {"ATTR_CODE": "EMAIL", "FTYPE_CODE": "EMAIL"}
+            ],
+            "CFG_CFCALL": [
+                {"CFCALL_ID": 50, "FTYPE_ID": 5, "CFUNC_ID": 1}
+            ],
+            "CFG_CFBOM": [
+                {"CFCALL_ID": 50, "FELEM_ID": 1}
+            ]
+        }}"#;
+
+        let modified = delete_feature(config, "EMAIL").unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let g2 = &value["G2_CONFIG"];
+
+        // The EMAIL feature is gone; NAME survives.
+        let ftypes = g2["CFG_FTYPE"].as_array().unwrap();
+        assert_eq!(ftypes.len(), 1);
+        assert_eq!(ftypes[0]["FTYPE_CODE"], json!("NAME"));
+
+        // Cascade: EMAIL's FBOM/ATTR/CFCALL/CFBOM rows removed, NAME's kept.
+        let fbom = g2["CFG_FBOM"].as_array().unwrap();
+        assert_eq!(fbom.len(), 1);
+        assert_eq!(fbom[0]["FTYPE_ID"], json!(3));
+        assert!(g2["CFG_ATTR"].as_array().unwrap().is_empty());
+        assert!(g2["CFG_CFCALL"].as_array().unwrap().is_empty());
+        assert!(g2["CFG_CFBOM"].as_array().unwrap().is_empty());
+    }
+
+    /// Every code in the ratified protected set must be blocked from deletion,
+    /// case-insensitively.
+    #[test]
+    fn test_delete_feature_ratified_codes_blocked() {
+        for code in [
+            "NAME",
+            "ADDRESS",
+            "PHONE",
+            "DOB",
+            "REL_LINK",
+            "REL_ANCHOR",
+            "REL_POINTER",
+        ] {
+            let config = format!(
+                r#"{{"G2_CONFIG": {{"CFG_FTYPE": [{{"FTYPE_ID": 1, "FTYPE_CODE": "{code}"}}]}}}}"#
+            );
+            // Exact case.
+            let err = delete_feature(&config, code).unwrap_err();
+            assert_eq!(
+                err.kind(),
+                crate::error::SzErrorKind::InvalidInput,
+                "{code} must be protected"
+            );
+            // Case-insensitive.
+            let err_lower = delete_feature(&config, &code.to_lowercase()).unwrap_err();
+            assert_eq!(err_lower.kind(), crate::error::SzErrorKind::InvalidInput);
+        }
+    }
+
+    /// A former inert entry (a bogus DATE_OF_BIRTH feature) is no longer falsely
+    /// protected: deleting it succeeds rather than being blocked.
+    #[test]
+    fn test_delete_feature_former_inert_entry_not_protected() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 7, "FTYPE_CODE": "DATE_OF_BIRTH"}]
+        }}"#;
+
+        // DATE_OF_BIRTH was in the old list but is not a real protected feature;
+        // it must now be deletable.
+        let modified = delete_feature(config, "DATE_OF_BIRTH").unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        assert!(
+            value["G2_CONFIG"]["CFG_FTYPE"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
     }
 }
