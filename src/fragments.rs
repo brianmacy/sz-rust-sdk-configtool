@@ -243,23 +243,20 @@ pub fn add_fragment(config_json: &str, fragment_config: &Value) -> Result<(Strin
 
     let config_data: Value = serde_json::from_str(config_json)?;
 
-    // Get next ID
-    let next_id = if let Some(g2_config) = config_data.get("G2_CONFIG") {
-        if let Some(array) = g2_config.get("CFG_ERFRAG").and_then(|v| v.as_array()) {
-            array
-                .iter()
-                .filter_map(|item| item.get("ERFRAG_ID").and_then(|v| v.as_i64()))
-                .max()
-                .unwrap_or(0)
-                + 1
-        } else {
-            1
-        }
-    } else {
-        return Err(SzConfigError::InvalidConfig(
-            "G2_CONFIG not found".to_string(),
-        ));
-    };
+    // Caller-supplied ERFRAG_ID (#37/D19): previously the add path computed
+    // max+1 unconditionally and *ignored* any ERFRAG_ID present in the input
+    // Value. Now an explicit ERFRAG_ID (> 0) is honoured — rejected with
+    // AlreadyExists if taken — while None/absent/non-positive auto-assigns the
+    // next id (unseeded max+1, floor 1, preserving the historical numbering).
+    let desired_id = fragment_config.get("ERFRAG_ID").and_then(|v| v.as_i64());
+    let empty: Vec<Value> = Vec::new();
+    let erfrag_array = config_data
+        .get("G2_CONFIG")
+        .ok_or_else(|| SzConfigError::InvalidConfig("G2_CONFIG not found".to_string()))?
+        .get("CFG_ERFRAG")
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty);
+    let next_id = helpers::get_desired_or_next_id(erfrag_array, "ERFRAG_ID", desired_id, 1)?;
 
     // Build a complete row via ErfragRow so every CFG_ERFRAG key is present
     // (optional fields serialize as null).
@@ -536,6 +533,45 @@ mod tests {
         assert_eq!(frag["ERFRAG_SOURCE"], json!("NAME+DOB"));
         // No FRAGMENT[...] references -> no dependencies -> null (present).
         assert_eq!(frag["ERFRAG_DEPENDS"], Value::Null);
+    }
+
+    /// #37/D19: a caller-supplied ERFRAG_ID is now honoured (previously ignored),
+    /// and a taken id is rejected.
+    #[test]
+    fn test_add_fragment_caller_supplied_id() {
+        let config = r#"{"G2_CONFIG": {"CFG_ERFRAG": [
+            {"ERFRAG_ID": 3, "ERFRAG_CODE": "EXISTING", "ERFRAG_SOURCE": "NAME"}
+        ]}}"#;
+
+        // Honour an explicit id rather than computing max+1 (=4).
+        let frag_config = json!({
+            "ERFRAG_CODE": "CUSTOM_FRAG",
+            "ERFRAG_SOURCE": "NAME+DOB",
+            "ERFRAG_ID": 50
+        });
+        let (modified, id) = add_fragment(config, &frag_config).unwrap();
+        assert_eq!(id, 50);
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let frag = value["G2_CONFIG"]["CFG_ERFRAG"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert_eq!(frag["ERFRAG_ID"], json!(50));
+
+        // A taken id is rejected.
+        let frag_config = json!({
+            "ERFRAG_CODE": "ANOTHER",
+            "ERFRAG_SOURCE": "NAME",
+            "ERFRAG_ID": 3
+        });
+        let err = add_fragment(config, &frag_config).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
+
+        // Absent id still auto-assigns max+1.
+        let frag_config = json!({"ERFRAG_CODE": "AUTO", "ERFRAG_SOURCE": "NAME"});
+        let (_m, id) = add_fragment(config, &frag_config).unwrap();
+        assert_eq!(id, 4);
     }
 
     /// #33: get_fragment / list_fragments null-preserve ERFRAG_SOURCE and

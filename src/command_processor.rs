@@ -238,6 +238,7 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                     default_value,
                     internal,
                     required,
+                    id: params.get("id").and_then(|v| v.as_i64()),
                 },
             )
             .map(|(cfg, _)| cfg)
@@ -262,6 +263,7 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 code: element,
                 description: None, // Will default to code
                 data_type: datatype,
+                id: params.get("id").and_then(|v| v.as_i64()),
             };
 
             crate::elements::add_element(config, add_params)
@@ -313,6 +315,7 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                     comparison: get_opt_str_param(params, "comparison").filter(|s| !s.is_empty()),
                     version: params.get("version").and_then(|v| v.as_i64()),
                     rtype_id: params.get("rtypeId").and_then(|v| v.as_i64()),
+                    id: params.get("id").and_then(|v| v.as_i64()),
                 },
             )
         }

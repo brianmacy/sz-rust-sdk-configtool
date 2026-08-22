@@ -154,6 +154,80 @@ pub fn delete_expression_function(
     Ok((modified_json, function))
 }
 
+/// Delete an expression function and everything that depends on it (cascade).
+///
+/// Composes the piece-wise deletes in the Python order: `CFG_EFBOM` (rows for
+/// the function's calls) → `CFG_EFCALL` → `CFG_EFUNC`. Unlike
+/// [`delete_expression_function`] (which removes only the `CFG_EFUNC` row), this
+/// leaves no dangling references to the deleted function.
+///
+/// # Arguments
+/// * `config_json` - The configuration JSON string
+/// * `efunc_code` - Function code to delete
+///
+/// # Returns
+/// Result with modified JSON string and the deleted function record
+///
+/// # Errors
+/// Returns error if the function is not found or JSON is invalid
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::functions::expression::delete_expression_function_cascade;
+///
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_EFUNC": [{"EFUNC_ID": 1, "EFUNC_CODE": "EXP_X"}],
+///     "CFG_EFCALL": [],
+///     "CFG_EFBOM": []
+/// }}"#;
+/// let (updated, _removed) = delete_expression_function_cascade(config, "EXP_X")?;
+/// # Ok::<(), sz_configtool_lib::error::SzConfigError>(())
+/// ```
+pub fn delete_expression_function_cascade(
+    config_json: &str,
+    efunc_code: &str,
+) -> Result<(String, Value), SzConfigError> {
+    let efunc_code = efunc_code.to_uppercase();
+
+    let function = find_in_config_array(config_json, "CFG_EFUNC", "EFUNC_CODE", &efunc_code)?
+        .ok_or_else(|| {
+            SzConfigError::not_found(format!("Expression function not found: {efunc_code}"))
+        })?;
+    let efunc_id = function
+        .get("EFUNC_ID")
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| SzConfigError::MissingField("EFUNC_ID".to_string()))?;
+
+    let mut config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+
+    let efcall_ids: Vec<i64> = config["G2_CONFIG"]["CFG_EFCALL"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter(|r| r["EFUNC_ID"].as_i64() == Some(efunc_id))
+                .filter_map(|r| r["EFCALL_ID"].as_i64())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if let Some(efbom) = config["G2_CONFIG"]["CFG_EFBOM"].as_array_mut() {
+        efbom.retain(|r| match r["EFCALL_ID"].as_i64() {
+            Some(id) => !efcall_ids.contains(&id),
+            None => true,
+        });
+    }
+    if let Some(efcall) = config["G2_CONFIG"]["CFG_EFCALL"].as_array_mut() {
+        efcall.retain(|r| r["EFUNC_ID"].as_i64() != Some(efunc_id));
+    }
+    let cur =
+        serde_json::to_string(&config).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+
+    let (final_json, _) = delete_expression_function(&cur, &efunc_code)?;
+
+    Ok((final_json, function))
+}
+
 /// Get an expression function by code
 ///
 /// # Arguments
@@ -438,5 +512,51 @@ mod tests {
             v["G2_CONFIG"]["CFG_EFUNC"][0]["CONNECT_STR"],
             json!("g2New")
         );
+    }
+
+    /// #38.4: the cascade empties CFG_EFBOM and CFG_EFCALL for the function and
+    /// then removes the function, leaving no orphans.
+    #[test]
+    fn test_delete_expression_function_cascade_empties_all() {
+        let config = json!({
+            "G2_CONFIG": {
+                "CFG_EFUNC": [
+                    {"EFUNC_ID": 1, "EFUNC_CODE": "EXP_X"},
+                    {"EFUNC_ID": 2, "EFUNC_CODE": "EXP_KEEP"}
+                ],
+                "CFG_EFCALL": [
+                    {"EFCALL_ID": 10, "FTYPE_ID": 3, "EFUNC_ID": 1},
+                    {"EFCALL_ID": 11, "FTYPE_ID": 3, "EFUNC_ID": 2}
+                ],
+                "CFG_EFBOM": [
+                    {"EFCALL_ID": 10, "FTYPE_ID": 3, "FELEM_ID": 5, "EXEC_ORDER": 1},
+                    {"EFCALL_ID": 11, "FTYPE_ID": 3, "FELEM_ID": 5, "EXEC_ORDER": 1}
+                ]
+            }
+        })
+        .to_string();
+
+        let (modified, removed) = delete_expression_function_cascade(&config, "exp_x").unwrap();
+        assert_eq!(removed["EFUNC_CODE"], "EXP_X");
+        let v: Value = serde_json::from_str(&modified).unwrap();
+        let g2 = &v["G2_CONFIG"];
+
+        assert_eq!(g2["CFG_EFUNC"].as_array().unwrap().len(), 1);
+        assert!(
+            g2["CFG_EFCALL"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|r| r["EFUNC_ID"] != 1)
+        );
+        assert!(
+            g2["CFG_EFBOM"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|r| r["EFCALL_ID"] != 10)
+        );
+        assert_eq!(g2["CFG_EFCALL"].as_array().unwrap().len(), 1);
+        assert_eq!(g2["CFG_EFBOM"].as_array().unwrap().len(), 1);
     }
 }

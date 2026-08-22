@@ -39,14 +39,20 @@ fn test_data_source_workflow() {
         datasources::get_data_source(&config, "TEST_SOURCE").expect("Failed to get data source");
     assert_eq!(source["DSRC_CODE"], "TEST_SOURCE");
 
-    // Attempt to delete data source - should fail due to system datasource protection (ID ≤ 2)
-    // TEST_SOURCE gets auto-assigned a low ID, triggering protection
-    let delete_result = datasources::delete_data_source(&config, "TEST_SOURCE");
+    // #37/D18: a fresh data source now seeds at DSRC_ID 1000 (was max+1), so it is
+    // well clear of the system range (<= 2) and IS deletable.
+    assert_eq!(source["DSRC_ID"], 1000);
+    let config = datasources::delete_data_source(&config, "TEST_SOURCE")
+        .expect("A user data source (id >= 1000) must be deletable");
+    let sources = datasources::list_data_sources(&config).expect("Failed to list data sources");
+    assert_eq!(sources.len(), 0);
 
-    // Should fail with protection error (system datasources cannot be deleted)
+    // A genuine system data source (DSRC_ID <= 2) is still protected.
+    let sys_config = r#"{"G2_CONFIG": {"CFG_DSRC": [{"DSRC_ID": 1, "DSRC_CODE": "TEST"}]}}"#;
+    let delete_result = datasources::delete_data_source(sys_config, "TEST");
     assert!(
         delete_result.is_err(),
-        "Should fail to delete system datasource"
+        "Should fail to delete a system datasource (id <= 2)"
     );
     let err_msg = delete_result.unwrap_err().to_string();
     assert!(
@@ -64,6 +70,7 @@ fn test_element_workflow() {
         code: "TEST_ELEM",
         description: Some("Test Element"),
         data_type: Some("string"),
+        id: None,
     };
 
     let config = elements::add_element(&config, add_params).expect("Failed to add element");

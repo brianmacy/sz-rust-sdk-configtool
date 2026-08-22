@@ -61,6 +61,11 @@ struct AttrRow {
 // ============================================================================
 
 /// Parameters for adding an attribute
+///
+/// `id` is a caller-supplied `ATTR_ID`. Leave it `None` (or pass a non-positive
+/// value) to auto-assign the next free id (seeded at the user-range floor of
+/// 1000); pass `Some(id > 0)` to request that exact id — [`add_attribute`] then
+/// fails with `AlreadyExists` if it is already taken.
 #[derive(Debug, Clone)]
 pub struct AddAttributeParams<'a> {
     pub attribute: &'a str,
@@ -70,6 +75,7 @@ pub struct AddAttributeParams<'a> {
     pub default_value: Option<&'a str>,
     pub internal: Option<&'a str>,
     pub required: Option<&'a str>,
+    pub id: Option<i64>,
 }
 
 impl<'a> TryFrom<&'a Value> for AddAttributeParams<'a> {
@@ -96,6 +102,7 @@ impl<'a> TryFrom<&'a Value> for AddAttributeParams<'a> {
             default_value: json.get("default").and_then(|v| v.as_str()),
             internal: json.get("internal").and_then(|v| v.as_str()),
             required: json.get("required").and_then(|v| v.as_str()),
+            id: json.get("id").and_then(|v| v.as_i64()),
         })
     }
 }
@@ -213,8 +220,10 @@ pub fn add_attribute(config_json: &str, params: AddAttributeParams) -> Result<(S
         "No"
     };
 
-    // Get next ATTR_ID
-    let next_attr_id = helpers::get_next_id_from_array(attrs, "ATTR_ID")?;
+    // Get next ATTR_ID. Caller-supplied id (#37): None / non-positive ->
+    // auto-assign at the user-range floor of 1000; a specific id > 0 is honoured
+    // unless already taken (get_desired_or_next_id returns AlreadyExists).
+    let next_attr_id = helpers::get_desired_or_next_id(attrs, "ATTR_ID", params.id, 1000)?;
 
     // Build a complete row via AttrRow so every CFG_ATTR key is present
     // (the nullable DEFAULT_VALUE serializes as null) matching Python lines
@@ -431,6 +440,7 @@ mod tests {
             default_value: None,
             internal: None,
             required: None,
+            id: None,
         };
 
         let (modified, returned) = add_attribute(TEST_CONFIG, params).unwrap();
@@ -461,6 +471,7 @@ mod tests {
             default_value: Some("DFLT"),
             internal: Some("Yes"),
             required: Some("Desired"),
+            id: None,
         };
 
         let (modified, _returned) = add_attribute(TEST_CONFIG, params).unwrap();
@@ -471,5 +482,59 @@ mod tests {
         assert_eq!(attr["DEFAULT_VALUE"], json!("DFLT"));
         assert_eq!(attr["INTERNAL"], json!("Yes"));
         assert_eq!(attr["FELEM_REQ"], json!("Desired"));
+    }
+
+    fn add_params(id: Option<i64>) -> AddAttributeParams<'static> {
+        AddAttributeParams {
+            attribute: "my_attr",
+            feature: "NAME",
+            element: "FULL_NAME",
+            class: "NAME",
+            default_value: None,
+            internal: None,
+            required: None,
+            id,
+        }
+    }
+
+    #[test]
+    fn test_add_attribute_auto_id_seeds_1000() {
+        // D18: attributes now seed at ATTR_ID 1000, not max+1, on a stock config.
+        let config = r#"{
+            "G2_CONFIG": {
+                "CFG_ATTR": [{"ATTR_ID": 5, "ATTR_CODE": "EXISTING"}],
+                "CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}],
+                "CFG_FELEM": [{"FELEM_ID": 1, "FELEM_CODE": "FULL_NAME"}]
+            }
+        }"#;
+        let (modified, _) = add_attribute(config, add_params(None)).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let attr = value["G2_CONFIG"]["CFG_ATTR"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert_eq!(attr["ATTR_ID"], json!(1000));
+    }
+
+    #[test]
+    fn test_add_attribute_specific_id_honoured() {
+        let (modified, _) = add_attribute(TEST_CONFIG, add_params(Some(2500))).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let attr = &value["G2_CONFIG"]["CFG_ATTR"][0];
+        assert_eq!(attr["ATTR_ID"], json!(2500));
+    }
+
+    #[test]
+    fn test_add_attribute_taken_id_rejected() {
+        let config = r#"{
+            "G2_CONFIG": {
+                "CFG_ATTR": [{"ATTR_ID": 2500, "ATTR_CODE": "OTHER"}],
+                "CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}],
+                "CFG_FELEM": [{"FELEM_ID": 1, "FELEM_CODE": "FULL_NAME"}]
+            }
+        }"#;
+        let err = add_attribute(config, add_params(Some(2500))).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
     }
 }

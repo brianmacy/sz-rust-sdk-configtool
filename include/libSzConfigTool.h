@@ -615,6 +615,33 @@ struct SzConfigTool_result SzConfigTool_setScoringFunction(const char *config_js
                                                            const char *rtype_code,
                                                            const char *scoring_func);
 
+// Wave 4A additions (#38): feature-element mutators, settings, cascade deletes
+
+// Append a feature-element mapping (CFG_FBOM row). options_json may be NULL, or a
+// JSON object carrying displayLevel (int), displayDelim (string), derived (Yes/No).
+struct SzConfigTool_result SzConfigTool_addElementToFeature(const char *config_json,
+                                                            const char *feature_code,
+                                                            const char *element_code,
+                                                            const char *options_json);
+
+// Remove a single feature-element mapping (CFG_FBOM row).
+struct SzConfigTool_result SzConfigTool_deleteElementFromFeature(const char *config_json,
+                                                                 const char *feature_code,
+                                                                 const char *element_code);
+
+// Create or overwrite a named setting under G2_CONFIG.SETTINGS (name is uppercased).
+struct SzConfigTool_result SzConfigTool_setSetting(const char *config_json,
+                                                   const char *name,
+                                                   const char *value);
+
+// Delete a function and all of its dependent rows (cascade).
+struct SzConfigTool_result SzConfigTool_deleteComparisonFunctionCascade(const char *config_json,
+                                                                        const char *cfunc_code);
+struct SzConfigTool_result SzConfigTool_deleteExpressionFunctionCascade(const char *config_json,
+                                                                        const char *efunc_code);
+struct SzConfigTool_result SzConfigTool_deleteStandardizeFunctionCascade(const char *config_json,
+                                                                         const char *sfunc_code);
+
 #ifdef __cplusplus
 }
 #endif

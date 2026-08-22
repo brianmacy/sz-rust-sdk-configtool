@@ -154,6 +154,63 @@ pub fn delete_standardize_function(
     Ok((modified_json, function))
 }
 
+/// Delete a standardize function and everything that depends on it (cascade).
+///
+/// Composes the piece-wise deletes in the Python order: `CFG_SFCALL` →
+/// `CFG_SFUNC`. Unlike [`delete_standardize_function`] (which removes only the
+/// `CFG_SFUNC` row), this leaves no dangling `CFG_SFCALL` rows referencing the
+/// deleted function.
+///
+/// # Arguments
+/// * `config_json` - The configuration JSON string
+/// * `sfunc_code` - Function code to delete
+///
+/// # Returns
+/// Result with modified JSON string and the deleted function record
+///
+/// # Errors
+/// Returns error if the function is not found or JSON is invalid
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::functions::standardize::delete_standardize_function_cascade;
+///
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_SFUNC": [{"SFUNC_ID": 1, "SFUNC_CODE": "STD_X"}],
+///     "CFG_SFCALL": []
+/// }}"#;
+/// let (updated, _removed) = delete_standardize_function_cascade(config, "STD_X")?;
+/// # Ok::<(), sz_configtool_lib::error::SzConfigError>(())
+/// ```
+pub fn delete_standardize_function_cascade(
+    config_json: &str,
+    sfunc_code: &str,
+) -> Result<(String, Value), SzConfigError> {
+    let sfunc_code = sfunc_code.to_uppercase();
+
+    let function = find_in_config_array(config_json, "CFG_SFUNC", "SFUNC_CODE", &sfunc_code)?
+        .ok_or_else(|| {
+            SzConfigError::not_found(format!("Standardize function not found: {sfunc_code}"))
+        })?;
+    let sfunc_id = function
+        .get("SFUNC_ID")
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| SzConfigError::MissingField("SFUNC_ID".to_string()))?;
+
+    let mut config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+
+    if let Some(sfcall) = config["G2_CONFIG"]["CFG_SFCALL"].as_array_mut() {
+        sfcall.retain(|r| r["SFUNC_ID"].as_i64() != Some(sfunc_id));
+    }
+    let cur =
+        serde_json::to_string(&config).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+
+    let (final_json, _) = delete_standardize_function(&cur, &sfunc_code)?;
+
+    Ok((final_json, function))
+}
+
 /// Get a standardize function by code
 ///
 /// # Arguments
@@ -455,5 +512,39 @@ mod tests {
             v["G2_CONFIG"]["CFG_SFUNC"][0]["CONNECT_STR"],
             json!("g2New")
         );
+    }
+
+    /// #38.4: the cascade empties CFG_SFCALL for the function and then removes
+    /// the function, leaving no orphans.
+    #[test]
+    fn test_delete_standardize_function_cascade_empties_all() {
+        let config = json!({
+            "G2_CONFIG": {
+                "CFG_SFUNC": [
+                    {"SFUNC_ID": 1, "SFUNC_CODE": "STD_X"},
+                    {"SFUNC_ID": 2, "SFUNC_CODE": "STD_KEEP"}
+                ],
+                "CFG_SFCALL": [
+                    {"SFCALL_ID": 10, "FTYPE_ID": 3, "SFUNC_ID": 1},
+                    {"SFCALL_ID": 11, "FTYPE_ID": 3, "SFUNC_ID": 2}
+                ]
+            }
+        })
+        .to_string();
+
+        let (modified, removed) = delete_standardize_function_cascade(&config, "std_x").unwrap();
+        assert_eq!(removed["SFUNC_CODE"], "STD_X");
+        let v: Value = serde_json::from_str(&modified).unwrap();
+        let g2 = &v["G2_CONFIG"];
+
+        assert_eq!(g2["CFG_SFUNC"].as_array().unwrap().len(), 1);
+        assert!(
+            g2["CFG_SFCALL"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|r| r["SFUNC_ID"] != 1)
+        );
+        assert_eq!(g2["CFG_SFCALL"].as_array().unwrap().len(), 1);
     }
 }

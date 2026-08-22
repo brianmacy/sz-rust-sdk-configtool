@@ -27,6 +27,9 @@ pub struct AddFeatureParams<'a> {
     pub comparison: Option<&'a str>,
     pub version: Option<i64>,
     pub rtype_id: Option<i64>,
+    /// Caller-supplied `FTYPE_ID`. `None`/non-positive auto-assigns at the
+    /// user-range floor of 1000; `Some(id > 0)` is honoured unless already taken.
+    pub id: Option<i64>,
 }
 
 impl<'a> AddFeatureParams<'a> {
@@ -36,6 +39,12 @@ impl<'a> AddFeatureParams<'a> {
             element_list,
             ..Default::default()
         }
+    }
+
+    /// Request a specific `FTYPE_ID` for the new feature.
+    pub fn with_id(mut self, id: i64) -> Self {
+        self.id = Some(id);
+        self
     }
 }
 
@@ -76,6 +85,7 @@ impl<'a> TryFrom<&'a Value> for AddFeatureParams<'a> {
                 .filter(|s| !s.is_empty()),
             version: json.get("version").and_then(|v| v.as_i64()),
             rtype_id: json.get("rtypeId").and_then(|v| v.as_i64()),
+            id: json.get("id").and_then(|v| v.as_i64()),
         })
     }
 }
@@ -432,8 +442,10 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
         matchkey_default
     };
 
-    // Get next FTYPE_ID (seed at 1000 for user-created features)
-    let ftype_id = helpers::get_next_id_with_min(ftypes, "FTYPE_ID", 1000)?;
+    // Get next FTYPE_ID (seed at 1000 for user-created features). Caller-supplied
+    // id (#37): None/non-positive auto-assigns; a specific id > 0 is honoured
+    // unless already taken (get_desired_or_next_id returns AlreadyExists).
+    let ftype_id = helpers::get_desired_or_next_id(ftypes, "FTYPE_ID", params.id, 1000)?;
 
     // Parse behavior code (like Python's parseFeatureBehavior)
     // Valid frequency codes: A1, F1, FF, FM, FVM, NONE, NAME
@@ -1788,6 +1800,44 @@ mod tests {
         assert_eq!(fbom["EXEC_ORDER"], json!(1));
         assert_eq!(fbom["DISPLAY_LEVEL"], json!(1));
         assert_eq!(fbom["DERIVED"], json!("No"));
+    }
+
+    #[test]
+    fn test_add_feature_caller_supplied_id() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 1000, "FTYPE_CODE": "TAKEN"}],
+            "CFG_FCLASS": [{"FCLASS_ID": 1, "FCLASS_CODE": "OTHER"}],
+            "CFG_FELEM": [],
+            "CFG_FBOM": []
+        }}"#;
+        let elements = json!([{"element": "MYELEM"}]);
+
+        // Specific free id honoured.
+        let params = AddFeatureParams::new("MYFEAT", &elements).with_id(2500);
+        let modified = add_feature(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let ftype = value["G2_CONFIG"]["CFG_FTYPE"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert_eq!(ftype["FTYPE_ID"], json!(2500));
+
+        // Taken id rejected.
+        let params = AddFeatureParams::new("MYFEAT", &elements).with_id(1000);
+        let err = add_feature(config, params).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
+
+        // Auto-assign lands above the existing max (1000) -> 1001.
+        let params = AddFeatureParams::new("MYFEAT", &elements);
+        let modified = add_feature(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let ftype = value["G2_CONFIG"]["CFG_FTYPE"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert_eq!(ftype["FTYPE_ID"], json!(1001));
     }
 
     /// add_feature with standardize/expression/comparison functions must write

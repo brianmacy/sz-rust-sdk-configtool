@@ -6,7 +6,8 @@
 use crate::config_rows::{CfbomRow, CfcallRow};
 use crate::error::{Result, SzConfigError};
 use crate::helpers::{
-    find_in_config_array, get_next_id, lookup_cfunc_id, lookup_element_id, lookup_feature_id,
+    find_in_config_array, get_desired_or_next_id_from_section, lookup_cfunc_id, lookup_element_id,
+    lookup_feature_id,
 };
 use serde_json::{Value, json};
 
@@ -15,11 +16,17 @@ use serde_json::{Value, json};
 // ============================================================================
 
 /// Parameters for adding a comparison call
-#[derive(Debug, Clone)]
+///
+/// `id` is a caller-supplied `CFCALL_ID`. Leave it `None` (or pass a
+/// non-positive value) to auto-assign the next free id (seeded at the user-range
+/// floor of 1000); pass `Some(id > 0)` to request that exact id —
+/// [`add_comparison_call`] then fails with `AlreadyExists` if it is already taken.
+#[derive(Debug, Clone, Default)]
 pub struct AddComparisonCallParams {
     pub ftype_code: String,
     pub cfunc_code: String,
     pub element_list: Vec<String>,
+    pub id: Option<i64>,
 }
 
 impl TryFrom<&Value> for AddComparisonCallParams {
@@ -46,6 +53,7 @@ impl TryFrom<&Value> for AddComparisonCallParams {
                         .collect()
                 })
                 .unwrap_or_default(),
+            id: json.get("id").and_then(|v| v.as_i64()),
         })
     }
 }
@@ -147,8 +155,16 @@ pub fn add_comparison_call(
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    // Get next CFCALL_ID (seed at 1000 for user-created calls)
-    let cfcall_id = get_next_id(&config_data, "G2_CONFIG.CFG_CFCALL", "CFCALL_ID", 1000)?;
+    // Get next CFCALL_ID (seed at 1000 for user-created calls). Caller-supplied
+    // id (#37): None/non-positive auto-assigns; a specific id > 0 is honoured
+    // unless already taken (returns AlreadyExists).
+    let cfcall_id = get_desired_or_next_id_from_section(
+        &config_data,
+        "G2_CONFIG.CFG_CFCALL",
+        "CFCALL_ID",
+        params.id,
+        1000,
+    )?;
 
     // Lookup feature ID
     let ftype_id = lookup_feature_id(config, &params.ftype_code)?;
@@ -547,6 +563,7 @@ mod tests {
             ftype_code: "NAME".to_string(),
             cfunc_code: "GNR_COMP".to_string(),
             element_list: vec!["FIRST_NAME".to_string()],
+            id: None,
         };
 
         let (modified, new_record) = add_comparison_call(&config, params).unwrap();
@@ -558,6 +575,8 @@ mod tests {
         assert!(!cfcall.as_object().unwrap().contains_key("EXEC_ORDER"));
         assert_eq!(cfcall["FTYPE_ID"], json!(5));
         assert_eq!(cfcall["CFUNC_ID"], json!(7));
+        // Auto-assigned CFCALL_ID seeds at 1000.
+        assert_eq!(cfcall["CFCALL_ID"], json!(1000));
         assert_all_keys(&new_record, &CFCALL_KEYS);
 
         // CFG_CFBOM row: all 4 keys.
@@ -584,5 +603,41 @@ mod tests {
         assert_all_keys(cfbom, &CFBOM_KEYS);
         assert_all_keys(&new_record, &CFBOM_KEYS);
         assert_eq!(cfbom["EXEC_ORDER"], json!(2));
+    }
+
+    #[test]
+    fn test_add_comparison_call_specific_and_taken_id() {
+        let config = base_config();
+        // Specific free id honoured.
+        let params = AddComparisonCallParams {
+            ftype_code: "NAME".to_string(),
+            cfunc_code: "GNR_COMP".to_string(),
+            element_list: vec!["FIRST_NAME".to_string()],
+            id: Some(2500),
+        };
+        let (modified, _) = add_comparison_call(&config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        assert_eq!(
+            value["G2_CONFIG"]["CFG_CFCALL"][0]["CFCALL_ID"],
+            json!(2500)
+        );
+
+        // A taken id is rejected (config already carries CFCALL_ID 2500).
+        let cfg = json!({"G2_CONFIG": {
+            "CFG_CFCALL": [{"CFCALL_ID": 2500, "FTYPE_ID": 9, "CFUNC_ID": 7}],
+            "CFG_CFBOM": [],
+            "CFG_FTYPE": [{"FTYPE_ID": 5, "FTYPE_CODE": "NAME"}],
+            "CFG_CFUNC": [{"CFUNC_ID": 7, "CFUNC_CODE": "GNR_COMP"}],
+            "CFG_FELEM": [{"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"}]
+        }})
+        .to_string();
+        let params = AddComparisonCallParams {
+            ftype_code: "NAME".to_string(),
+            cfunc_code: "GNR_COMP".to_string(),
+            element_list: vec!["FIRST_NAME".to_string()],
+            id: Some(2500),
+        };
+        let err = add_comparison_call(&cfg, params).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
     }
 }

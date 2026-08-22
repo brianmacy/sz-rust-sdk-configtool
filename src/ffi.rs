@@ -407,6 +407,9 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute(
             default_value: def_val,
             internal: int_val,
             required: req_val,
+            // ATTR_ID is not exposed over this fixed C signature; always
+            // auto-assign (#37). Rust/JSON callers can request a specific id.
+            id: None,
         },
     )
     .map(|(json, _item)| json);
@@ -5487,6 +5490,8 @@ pub extern "C" fn SzConfigTool_addFeature(
             comparison,
             version,
             rtype_id,
+            // #37: honour a caller-supplied FTYPE_ID from the feature JSON.
+            id: feature_config.get("id").and_then(|v| v.as_i64()),
         },
     ) {
         Ok(modified_config) => match CString::new(modified_config) {
@@ -5967,6 +5972,8 @@ pub extern "C" fn SzConfigTool_addElement(
             .get("dataType")
             .and_then(|v| v.as_str())
             .or_else(|| element_config.get("DATA_TYPE").and_then(|v| v.as_str())),
+        // #37: honour a caller-supplied FELEM_ID from the element JSON.
+        id: element_config.get("id").and_then(|v| v.as_i64()),
     };
 
     handle_result!(crate::elements::add_element(config, params))
@@ -6723,6 +6730,9 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
             ftype_code: ftype.to_string(),
             cfunc_code: cfunc.to_string(),
             element_list,
+            // CFCALL_ID is not exposed over this fixed C signature; always
+            // auto-assign (#37).
+            id: None,
         },
     ) {
         Ok((modified_config, _record)) => match CString::new(modified_config) {
@@ -9571,6 +9581,166 @@ pub extern "C" fn SzConfigTool_setScoringFunction(
     }
 }
 
+// ============================================================================
+// Wave 4A additions (#38): feature-element mutators, settings, cascade deletes
+// ============================================================================
+
+/// Read a required C string arg, returning an error `SzConfigTool_result` from
+/// the enclosing function on null or invalid UTF-8.
+macro_rules! ffi_required_str {
+    ($ptr:expr, $name:expr) => {{
+        if $ptr.is_null() {
+            set_error(format!("{} is null", $name), -1);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -1,
+            };
+        }
+        match unsafe { CStr::from_ptr($ptr) }.to_str() {
+            Ok(s) => s,
+            Err(e) => {
+                set_error(format!("Invalid UTF-8 in {}: {e}", $name), -2);
+                return SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -2,
+                };
+            }
+        }
+    }};
+}
+
+/// Add an element to a feature (append a CFG_FBOM row).
+///
+/// `options_json` may be null; when present it is a JSON object that may carry
+/// `displayLevel` (integer), `displayDelim` (string), and `derived`
+/// (`"Yes"`/`"No"`).
+///
+/// # Safety
+/// `config_json`, `feature_code`, and `element_code` must be valid
+/// null-terminated C strings; `options_json` may be null or a valid C string.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_addElementToFeature(
+    config_json: *const c_char,
+    feature_code: *const c_char,
+    element_code: *const c_char,
+    options_json: *const c_char,
+) -> SzConfigTool_result {
+    let config = ffi_required_str!(config_json, "config_json");
+    let feature = ffi_required_str!(feature_code, "feature_code");
+    let element = ffi_required_str!(element_code, "element_code");
+
+    let options: serde_json::Value = if options_json.is_null() {
+        serde_json::Value::Null
+    } else {
+        let s = ffi_required_str!(options_json, "options_json");
+        match serde_json::from_str(s) {
+            Ok(v) => v,
+            Err(e) => {
+                set_error(format!("Invalid JSON in options_json: {e}"), -3);
+                return SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -3,
+                };
+            }
+        }
+    };
+
+    let params = crate::elements::AddElementToFeatureParams {
+        feature_code: feature,
+        element_code: element,
+        display_level: options.get("displayLevel").and_then(|v| v.as_i64()),
+        display_delim: options.get("displayDelim").and_then(|v| v.as_str()),
+        derived: options.get("derived").and_then(|v| v.as_str()),
+    };
+
+    handle_result!(crate::elements::add_element_to_feature(config, params))
+}
+
+/// Delete a single feature-element mapping (one CFG_FBOM row).
+///
+/// # Safety
+/// All pointers must be valid null-terminated C strings.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_deleteElementFromFeature(
+    config_json: *const c_char,
+    feature_code: *const c_char,
+    element_code: *const c_char,
+) -> SzConfigTool_result {
+    let config = ffi_required_str!(config_json, "config_json");
+    let feature = ffi_required_str!(feature_code, "feature_code");
+    let element = ffi_required_str!(element_code, "element_code");
+    handle_result!(crate::elements::delete_element_from_feature(
+        config, feature, element
+    ))
+}
+
+/// Set (create or overwrite) a named configuration setting.
+///
+/// # Safety
+/// All pointers must be valid null-terminated C strings.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_setSetting(
+    config_json: *const c_char,
+    name: *const c_char,
+    value: *const c_char,
+) -> SzConfigTool_result {
+    let config = ffi_required_str!(config_json, "config_json");
+    let name = ffi_required_str!(name, "name");
+    let value = ffi_required_str!(value, "value");
+    handle_result!(crate::settings::set_setting(config, name, value))
+}
+
+/// Delete a comparison function and all dependent rows (cascade).
+///
+/// # Safety
+/// All pointers must be valid null-terminated C strings.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_deleteComparisonFunctionCascade(
+    config_json: *const c_char,
+    cfunc_code: *const c_char,
+) -> SzConfigTool_result {
+    let config = ffi_required_str!(config_json, "config_json");
+    let code = ffi_required_str!(cfunc_code, "cfunc_code");
+    handle_result!(
+        crate::functions::comparison::delete_comparison_function_cascade(config, code)
+            .map(|(json, _)| json)
+    )
+}
+
+/// Delete an expression function and all dependent rows (cascade).
+///
+/// # Safety
+/// All pointers must be valid null-terminated C strings.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_deleteExpressionFunctionCascade(
+    config_json: *const c_char,
+    efunc_code: *const c_char,
+) -> SzConfigTool_result {
+    let config = ffi_required_str!(config_json, "config_json");
+    let code = ffi_required_str!(efunc_code, "efunc_code");
+    handle_result!(
+        crate::functions::expression::delete_expression_function_cascade(config, code)
+            .map(|(json, _)| json)
+    )
+}
+
+/// Delete a standardize function and all dependent rows (cascade).
+///
+/// # Safety
+/// All pointers must be valid null-terminated C strings.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_deleteStandardizeFunctionCascade(
+    config_json: *const c_char,
+    sfunc_code: *const c_char,
+) -> SzConfigTool_result {
+    let config = ffi_required_str!(config_json, "config_json");
+    let code = ffi_required_str!(sfunc_code, "sfunc_code");
+    handle_result!(
+        crate::functions::standardize::delete_standardize_function_cascade(config, code)
+            .map(|(json, _)| json)
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -9586,6 +9756,73 @@ mod tests {
             .to_string();
         unsafe { SzConfigTool_free(result.response) };
         s
+    }
+
+    /// #38.3: setSetting FFI round-trips and uppercases the name.
+    #[test]
+    fn test_ffi_set_setting() {
+        let config = CString::new(r#"{"G2_CONFIG": {}}"#).unwrap();
+        let name = CString::new("my_setting").unwrap();
+        let value = CString::new("42").unwrap();
+        let result = SzConfigTool_setSetting(config.as_ptr(), name.as_ptr(), value.as_ptr());
+        let modified = take_response(result);
+        let v: Value = serde_json::from_str(&modified).unwrap();
+        assert_eq!(v["G2_CONFIG"]["SETTINGS"]["MY_SETTING"], "42");
+    }
+
+    /// #38.1/#38.2: addElementToFeature then deleteElementFromFeature round-trip.
+    #[test]
+    fn test_ffi_add_delete_element_to_feature() {
+        let base = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}],
+            "CFG_FELEM": [{"FELEM_ID": 2, "FELEM_CODE": "FULL_NAME"}],
+            "CFG_FBOM": []
+        }}"#;
+        let config = CString::new(base).unwrap();
+        let feature = CString::new("NAME").unwrap();
+        let element = CString::new("FULL_NAME").unwrap();
+
+        let added = take_response(SzConfigTool_addElementToFeature(
+            config.as_ptr(),
+            feature.as_ptr(),
+            element.as_ptr(),
+            std::ptr::null(),
+        ));
+        let v: Value = serde_json::from_str(&added).unwrap();
+        assert_eq!(v["G2_CONFIG"]["CFG_FBOM"].as_array().unwrap().len(), 1);
+
+        let added_c = CString::new(added).unwrap();
+        let removed = take_response(SzConfigTool_deleteElementFromFeature(
+            added_c.as_ptr(),
+            feature.as_ptr(),
+            element.as_ptr(),
+        ));
+        let v: Value = serde_json::from_str(&removed).unwrap();
+        assert_eq!(v["G2_CONFIG"]["CFG_FBOM"].as_array().unwrap().len(), 0);
+    }
+
+    /// #38.4: deleteComparisonFunctionCascade FFI empties dependents.
+    #[test]
+    fn test_ffi_delete_comparison_function_cascade() {
+        let base = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_CFUNC": [{"CFUNC_ID": 1, "CFUNC_CODE": "CMP_X"}],
+            "CFG_CFCALL": [{"CFCALL_ID": 10, "FTYPE_ID": 3, "CFUNC_ID": 1}],
+            "CFG_CFBOM": [{"CFCALL_ID": 10, "FTYPE_ID": 3, "FELEM_ID": 5, "EXEC_ORDER": 1}],
+            "CFG_CFRTN": [{"CFRTN_ID": 100, "CFUNC_ID": 1, "FTYPE_ID": 3, "CFUNC_RTNVAL": "SAME"}]
+        }}"#;
+        let config = CString::new(base).unwrap();
+        let code = CString::new("CMP_X").unwrap();
+        let modified = take_response(SzConfigTool_deleteComparisonFunctionCascade(
+            config.as_ptr(),
+            code.as_ptr(),
+        ));
+        let v: Value = serde_json::from_str(&modified).unwrap();
+        let g2 = &v["G2_CONFIG"];
+        assert_eq!(g2["CFG_CFUNC"].as_array().unwrap().len(), 0);
+        assert_eq!(g2["CFG_CFCALL"].as_array().unwrap().len(), 0);
+        assert_eq!(g2["CFG_CFBOM"].as_array().unwrap().len(), 0);
+        assert_eq!(g2["CFG_CFRTN"].as_array().unwrap().len(), 0);
     }
 
     /// D12: a NULL connect_str on the direct-arg add FFI stores JSON null, with

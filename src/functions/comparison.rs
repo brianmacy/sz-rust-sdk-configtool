@@ -177,6 +177,141 @@ pub fn delete_comparison_function(
     Ok((modified_json, function))
 }
 
+/// Reverse-resolve a feature code from an `FTYPE_ID` (`0` -> `"all"`).
+fn ftype_code_for_id(config: &Value, ftype_id: i64) -> Option<String> {
+    if ftype_id == 0 {
+        return Some("all".to_string());
+    }
+    config
+        .get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_FTYPE"))
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .find(|f| f.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ftype_id))
+                .and_then(|f| f.get("FTYPE_CODE"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })
+}
+
+/// Delete a comparison function and everything that depends on it (cascade).
+///
+/// Composes the existing piece-wise deletes in the Python order:
+/// `CFG_CFBOM` (rows for the function's calls) → `CFG_CFCALL` → `CFG_CFRTN` →
+/// `CFG_CFUNC`. The `CFG_CFRTN` step reuses the Wave-2 three-key
+/// [`delete_comparison_threshold`](crate::thresholds::delete_comparison_threshold)
+/// for each well-formed return row, then sweeps any orphan/null rows that remain
+/// for the function so no dependent rows are left behind.
+///
+/// Unlike [`delete_comparison_function`] (which removes only the `CFG_CFUNC`
+/// row), this leaves the configuration with no dangling references to the
+/// deleted function.
+///
+/// # Arguments
+/// * `config_json` - The configuration JSON string
+/// * `cfunc_code` - Function code to delete
+///
+/// # Returns
+/// Result with modified JSON string and the deleted function record
+///
+/// # Errors
+/// Returns error if the function is not found or JSON is invalid
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::functions::comparison::delete_comparison_function_cascade;
+///
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_CFUNC": [{"CFUNC_ID": 1, "CFUNC_CODE": "CMP_X"}],
+///     "CFG_CFCALL": [],
+///     "CFG_CFBOM": [],
+///     "CFG_CFRTN": [],
+///     "CFG_FTYPE": []
+/// }}"#;
+/// let (updated, _removed) = delete_comparison_function_cascade(config, "CMP_X")?;
+/// # Ok::<(), sz_configtool_lib::error::SzConfigError>(())
+/// ```
+pub fn delete_comparison_function_cascade(
+    config_json: &str,
+    cfunc_code: &str,
+) -> Result<(String, Value), SzConfigError> {
+    let cfunc_code = cfunc_code.to_uppercase();
+
+    let function = find_in_config_array(config_json, "CFG_CFUNC", "CFUNC_CODE", &cfunc_code)?
+        .ok_or_else(|| {
+            SzConfigError::not_found(format!("Comparison function not found: {cfunc_code}"))
+        })?;
+    let cfunc_id = function
+        .get("CFUNC_ID")
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| SzConfigError::MissingField("CFUNC_ID".to_string()))?;
+
+    // Steps 1 & 2: remove CFG_CFBOM (by the CFCALL_IDs bound to this function),
+    // then CFG_CFCALL.
+    let mut config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+
+    let cfcall_ids: Vec<i64> = config["G2_CONFIG"]["CFG_CFCALL"]
+        .as_array()
+        .map(|arr| {
+            arr.iter()
+                .filter(|r| r["CFUNC_ID"].as_i64() == Some(cfunc_id))
+                .filter_map(|r| r["CFCALL_ID"].as_i64())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if let Some(cfbom) = config["G2_CONFIG"]["CFG_CFBOM"].as_array_mut() {
+        cfbom.retain(|r| match r["CFCALL_ID"].as_i64() {
+            Some(id) => !cfcall_ids.contains(&id),
+            None => true,
+        });
+    }
+    if let Some(cfcall) = config["G2_CONFIG"]["CFG_CFCALL"].as_array_mut() {
+        cfcall.retain(|r| r["CFUNC_ID"].as_i64() != Some(cfunc_id));
+    }
+    let mut cur =
+        serde_json::to_string(&config).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+
+    // Step 3: CFG_CFRTN. Reuse the Wave-2 three-key delete for well-formed rows.
+    let snapshot: Value =
+        serde_json::from_str(&cur).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+    let cfrtn_rows: Vec<Value> = snapshot["G2_CONFIG"]["CFG_CFRTN"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter(|r| r["CFUNC_ID"].as_i64() == Some(cfunc_id))
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut seen: std::collections::HashSet<(i64, String)> = std::collections::HashSet::new();
+    for row in &cfrtn_rows {
+        if let (Some(fid), Some(rt)) = (row["FTYPE_ID"].as_i64(), row["CFUNC_RTNVAL"].as_str())
+            && let Some(code) = ftype_code_for_id(&snapshot, fid)
+            && seen.insert((fid, rt.to_uppercase()))
+        {
+            cur = crate::thresholds::delete_comparison_threshold(&cur, &cfunc_code, &code, rt)?;
+        }
+    }
+
+    // Sweep any remaining CFG_CFRTN rows for this function (orphan FTYPE_ID or
+    // null CFUNC_RTNVAL rows the three-key delete cannot address).
+    let mut swept: Value =
+        serde_json::from_str(&cur).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+    if let Some(arr) = swept["G2_CONFIG"]["CFG_CFRTN"].as_array_mut() {
+        arr.retain(|r| r["CFUNC_ID"].as_i64() != Some(cfunc_id));
+    }
+    cur = serde_json::to_string(&swept).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+
+    // Step 4: CFG_CFUNC itself.
+    let (final_json, _) = delete_comparison_function(&cur, &cfunc_code)?;
+
+    Ok((final_json, function))
+}
+
 /// Get a comparison function by code
 ///
 /// # Arguments
@@ -485,6 +620,74 @@ mod tests {
             .last()
             .unwrap();
         assert_eq!(row["CONNECT_STR"], json!("g2X"));
+    }
+
+    /// #38.4: the cascade empties every dependent table (CFBOM, CFCALL, CFRTN)
+    /// for the function and then the function row, leaving no orphans.
+    #[test]
+    fn test_delete_comparison_function_cascade_empties_all() {
+        let config = json!({
+            "G2_CONFIG": {
+                "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+                "CFG_CFUNC": [
+                    {"CFUNC_ID": 1, "CFUNC_CODE": "CMP_X"},
+                    {"CFUNC_ID": 2, "CFUNC_CODE": "CMP_KEEP"}
+                ],
+                "CFG_CFCALL": [
+                    {"CFCALL_ID": 10, "FTYPE_ID": 3, "CFUNC_ID": 1},
+                    {"CFCALL_ID": 11, "FTYPE_ID": 3, "CFUNC_ID": 2}
+                ],
+                "CFG_CFBOM": [
+                    {"CFCALL_ID": 10, "FTYPE_ID": 3, "FELEM_ID": 5, "EXEC_ORDER": 1},
+                    {"CFCALL_ID": 11, "FTYPE_ID": 3, "FELEM_ID": 5, "EXEC_ORDER": 1}
+                ],
+                "CFG_CFRTN": [
+                    {"CFRTN_ID": 100, "CFUNC_ID": 1, "FTYPE_ID": 3, "CFUNC_RTNVAL": "SAME"},
+                    {"CFRTN_ID": 101, "CFUNC_ID": 1, "FTYPE_ID": 0, "CFUNC_RTNVAL": "CLOSE"},
+                    {"CFRTN_ID": 102, "CFUNC_ID": 1, "FTYPE_ID": 999, "CFUNC_RTNVAL": null},
+                    {"CFRTN_ID": 103, "CFUNC_ID": 2, "FTYPE_ID": 3, "CFUNC_RTNVAL": "SAME"}
+                ]
+            }
+        })
+        .to_string();
+
+        let (modified, removed) = delete_comparison_function_cascade(&config, "cmp_x").unwrap();
+        assert_eq!(removed["CFUNC_CODE"], "CMP_X");
+        let v: Value = serde_json::from_str(&modified).unwrap();
+        let g2 = &v["G2_CONFIG"];
+
+        // Function CMP_X gone, CMP_KEEP retained.
+        let cfuncs = g2["CFG_CFUNC"].as_array().unwrap();
+        assert_eq!(cfuncs.len(), 1);
+        assert_eq!(cfuncs[0]["CFUNC_CODE"], "CMP_KEEP");
+
+        // No CFCALL / CFBOM / CFRTN rows reference CFUNC_ID 1 or CFCALL_ID 10.
+        assert!(
+            g2["CFG_CFCALL"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|r| r["CFUNC_ID"] != 1)
+        );
+        assert!(
+            g2["CFG_CFBOM"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|r| r["CFCALL_ID"] != 10)
+        );
+        assert!(
+            g2["CFG_CFRTN"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|r| r["CFUNC_ID"] != 1)
+        );
+
+        // The unrelated function's rows survive.
+        assert_eq!(g2["CFG_CFCALL"].as_array().unwrap().len(), 1);
+        assert_eq!(g2["CFG_CFBOM"].as_array().unwrap().len(), 1);
+        assert_eq!(g2["CFG_CFRTN"].as_array().unwrap().len(), 1);
     }
 
     /// connect_str tri-state on the set path: Leave keeps, Clear nulls, Set writes.

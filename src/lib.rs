@@ -57,6 +57,7 @@
 //!             default_value: None,
 //!             internal: None,
 //!             required: None,
+//!             id: None,
 //!         },
 //!     )?;
 //!
@@ -92,6 +93,7 @@ pub mod fragments;
 pub mod generic_plans;
 pub mod hashes;
 pub mod rules;
+pub mod settings;
 pub mod system_params;
 pub mod versioning;
 
@@ -108,12 +110,14 @@ pub use attributes::ATTRIBUTE_CLASSES;
 pub use behavior_domain::{
     BEHAVIOR_CODES, behavior_position, compute_behavior, parse_behavior_code,
 };
+pub use behavior_overrides::delete_behavior_override;
 pub use filter::{FilterSubstrate, matches_filter, to_json_dumps_string, to_python_repr_string};
 pub use helpers::FieldUpdate;
 pub use helpers::{
     resolve_cfcall_id_for_feature, resolve_dfcall_id_for_feature, resolve_efcall_id_for_feature,
     resolve_sfcall_id_for_feature,
 };
+pub use settings::set_setting;
 
 // C FFI module
 pub mod ffi;
