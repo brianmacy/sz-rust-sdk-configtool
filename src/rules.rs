@@ -4,7 +4,7 @@
 //! Rules define matching and relationship logic based on fragments.
 
 use crate::error::{Result, SzConfigError};
-use crate::helpers;
+use crate::helpers::{self, FieldUpdate};
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -228,16 +228,22 @@ pub(crate) fn validate_rule_row(
 // Parameter Structs
 // ============================================================================
 
-/// Parameters for setting (updating) a rule
+/// Parameters for setting (updating) a rule.
+///
+/// `resolve`, `relate` and `rtype_id` are plain `Option`s (a `None` leaves the
+/// stored value untouched). `fragment`, `disqualifier` and `tier` are tri-state
+/// [`FieldUpdate`]s so an update can distinguish "leave unchanged" from
+/// "clear to null": `Leave` carries the stored value forward, `Clear` writes
+/// JSON `null`, and `Set` writes the new value.
 #[derive(Debug, Clone)]
 pub struct SetRuleParams<'a> {
     pub code: &'a str,
     pub resolve: Option<&'a str>,
     pub relate: Option<&'a str>,
     pub rtype_id: Option<i64>,
-    pub fragment: Option<&'a str>,
-    pub disqualifier: Option<&'a str>,
-    pub tier: Option<i64>,
+    pub fragment: FieldUpdate<&'a str>,
+    pub disqualifier: FieldUpdate<&'a str>,
+    pub tier: FieldUpdate<i64>,
 }
 
 impl<'a> TryFrom<&'a Value> for SetRuleParams<'a> {
@@ -264,18 +270,11 @@ impl<'a> TryFrom<&'a Value> for SetRuleParams<'a> {
                 .get("rtypeId")
                 .and_then(|v| v.as_i64())
                 .or_else(|| json.get("RTYPE_ID").and_then(|v| v.as_i64())),
-            fragment: json
-                .get("fragment")
-                .and_then(|v| v.as_str())
-                .or_else(|| json.get("FRAGMENT").and_then(|v| v.as_str())),
-            disqualifier: json
-                .get("disqualifier")
-                .and_then(|v| v.as_str())
-                .or_else(|| json.get("DISQUALIFIER").and_then(|v| v.as_str())),
-            tier: json
-                .get("tier")
-                .and_then(|v| v.as_i64())
-                .or_else(|| json.get("TIER").and_then(|v| v.as_i64())),
+            // Tri-state: an absent key -> Leave, an explicit JSON null -> Clear,
+            // a value -> Set.
+            fragment: helpers::field_update_str(json, &["fragment", "FRAGMENT"]),
+            disqualifier: helpers::field_update_str(json, &["disqualifier", "DISQUALIFIER"]),
+            tier: helpers::field_update_i64(json, &["tier", "TIER"]),
         })
     }
 }
@@ -419,22 +418,26 @@ pub fn get_rule(config_json: &str, code_or_id: &str) -> Result<Value> {
         )));
     };
 
-    // Transform to lowercase format (matching list_rules for consistency)
-    let resolve = item.get("RESOLVE").and_then(|v| v.as_str()).unwrap_or("");
-    let tier = if resolve == "Yes" {
-        item.get("ERRULE_TIER").and_then(|v| v.as_i64())
+    // Transform to lowercase format (matching list_rules for consistency).
+    // Stored-nullable columns are projected null-preserving (stored null stays
+    // null, stored "" stays "", absent -> null) via helpers::field_or_null. The
+    // computed `tier` keeps its business rule: it is the stored ERRULE_TIER only
+    // when RESOLVE == "Yes", otherwise null.
+    let resolve_is_yes = item.get("RESOLVE").and_then(|v| v.as_str()) == Some("Yes");
+    let tier = if resolve_is_yes {
+        helpers::field_or_null(&item, "ERRULE_TIER")
     } else {
-        None
+        Value::Null
     };
 
     Ok(json!({
-        "id": item.get("ERRULE_ID").and_then(|v| v.as_i64()).unwrap_or(0),
-        "rule": item.get("ERRULE_CODE").and_then(|v| v.as_str()).unwrap_or(""),
-        "resolve": resolve,
-        "relate": item.get("RELATE").and_then(|v| v.as_str()).unwrap_or(""),
-        "rtype_id": item.get("RTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(0),
-        "fragment": item.get("QUAL_ERFRAG_CODE").and_then(|v| v.as_str()).unwrap_or(""),
-        "disqualifier": item.get("DISQ_ERFRAG_CODE").and_then(|v| v.as_str()).unwrap_or(""),
+        "id": helpers::field_or_null(&item, "ERRULE_ID"),
+        "rule": helpers::field_or_null(&item, "ERRULE_CODE"),
+        "resolve": helpers::field_or_null(&item, "RESOLVE"),
+        "relate": helpers::field_or_null(&item, "RELATE"),
+        "rtype_id": helpers::field_or_null(&item, "RTYPE_ID"),
+        "fragment": helpers::field_or_null(&item, "QUAL_ERFRAG_CODE"),
+        "disqualifier": helpers::field_or_null(&item, "DISQ_ERFRAG_CODE"),
         "tier": tier
     }))
 }
@@ -467,21 +470,25 @@ pub fn list_rules(config_json: &str) -> Result<Vec<Value>> {
             array
                 .iter()
                 .map(|item| {
-                    let resolve = item.get("RESOLVE").and_then(|v| v.as_str()).unwrap_or("");
-                    let tier = if resolve == "Yes" {
-                        item.get("ERRULE_TIER").and_then(|v| v.as_i64())
+                    // Null-preserving projection for every stored column; the
+                    // computed `tier` keeps its business rule (stored ERRULE_TIER
+                    // only when RESOLVE == "Yes", otherwise null).
+                    let resolve_is_yes =
+                        item.get("RESOLVE").and_then(|v| v.as_str()) == Some("Yes");
+                    let tier = if resolve_is_yes {
+                        helpers::field_or_null(item, "ERRULE_TIER")
                     } else {
-                        None
+                        Value::Null
                     };
 
                     json!({
-                        "id": item.get("ERRULE_ID").and_then(|v| v.as_i64()).unwrap_or(0),
-                        "rule": item.get("ERRULE_CODE").and_then(|v| v.as_str()).unwrap_or(""),
-                        "resolve": resolve,
-                        "relate": item.get("RELATE").and_then(|v| v.as_str()).unwrap_or(""),
-                        "rtype_id": item.get("RTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(0),
-                        "fragment": item.get("QUAL_ERFRAG_CODE").and_then(|v| v.as_str()).unwrap_or(""),
-                        "disqualifier": item.get("DISQ_ERFRAG_CODE").and_then(|v| v.as_str()).unwrap_or(""),
+                        "id": helpers::field_or_null(item, "ERRULE_ID"),
+                        "rule": helpers::field_or_null(item, "ERRULE_CODE"),
+                        "resolve": helpers::field_or_null(item, "RESOLVE"),
+                        "relate": helpers::field_or_null(item, "RELATE"),
+                        "rtype_id": helpers::field_or_null(item, "RTYPE_ID"),
+                        "fragment": helpers::field_or_null(item, "QUAL_ERFRAG_CODE"),
+                        "disqualifier": helpers::field_or_null(item, "DISQ_ERFRAG_CODE"),
                         "tier": tier
                     })
                 })
@@ -513,15 +520,17 @@ pub fn list_rules(config_json: &str) -> Result<Vec<Value>> {
 /// ```
 /// use sz_configtool_lib::rules;
 ///
+/// use sz_configtool_lib::helpers::FieldUpdate;
+///
 /// let config = r#"{"G2_CONFIG": {"CFG_ERRULE": [{"ERRULE_ID": 1, "ERRULE_CODE": "TEST", "RESOLVE": "No"}], "CFG_ERFRAG": []}}"#;
 /// let params = rules::SetRuleParams {
 ///     code: "TEST",
 ///     resolve: Some("Yes"),
 ///     relate: Some("No"),
 ///     rtype_id: None,
-///     fragment: None,
-///     disqualifier: None,
-///     tier: None,
+///     fragment: FieldUpdate::Leave,
+///     disqualifier: FieldUpdate::Leave,
+///     tier: FieldUpdate::Leave,
 /// };
 /// let modified = rules::set_rule(config, params).unwrap();
 /// ```
@@ -535,12 +544,16 @@ pub fn set_rule(config_json: &str, params: SetRuleParams) -> Result<String> {
         helpers::find_in_config_array(config_json, "CFG_ERRULE", "ERRULE_CODE", &code)?
             .ok_or_else(|| SzConfigError::NotFound(format!("Rule not found: {code}")))?;
 
-    // Validate ONLY the fragment/disqualifier being changed. A code carried over
-    // unchanged from the existing rule is never re-validated, preserving the
+    // Validate ONLY the fragment/disqualifier being Set. A code carried over
+    // unchanged (Leave) or cleared (Clear) is never validated, preserving the
     // historical set_rule contract (do not newly reject previously-accepted
     // input). add_rule, by contrast, validates every code on the new row.
-    validate_fragment_code(&config_data, params.fragment, "Fragment")?;
-    validate_fragment_code(&config_data, params.disqualifier, "Disqualifier")?;
+    if let FieldUpdate::Set(frag) = params.fragment {
+        validate_fragment_code(&config_data, Some(frag), "Fragment")?;
+    }
+    if let FieldUpdate::Set(disq) = params.disqualifier {
+        validate_fragment_code(&config_data, Some(disq), "Disqualifier")?;
+    }
 
     // Extract ERRULE_ID from existing rule to preserve it
     let errule_id = existing_rule
@@ -571,17 +584,23 @@ pub fn set_rule(config_json: &str, params: SetRuleParams) -> Result<String> {
             .rtype_id
             .or_else(|| existing_rule.get("RTYPE_ID").and_then(|v| v.as_i64()))
             .unwrap_or(1),
-        qual_erfrag_code: params
-            .fragment
-            .map(str::to_uppercase)
-            .or_else(|| helpers::field_as_string(&existing_rule, "QUAL_ERFRAG_CODE")),
-        disq_erfrag_code: params
-            .disqualifier
-            .map(str::to_uppercase)
-            .or_else(|| helpers::field_as_string(&existing_rule, "DISQ_ERFRAG_CODE")),
-        errule_tier: params
-            .tier
-            .or_else(|| existing_rule.get("ERRULE_TIER").and_then(|v| v.as_i64())),
+        // Tri-state: Leave carries the stored value forward, Clear writes null,
+        // Set writes the (upper-cased) new code.
+        qual_erfrag_code: match params.fragment {
+            FieldUpdate::Leave => helpers::field_as_string(&existing_rule, "QUAL_ERFRAG_CODE"),
+            FieldUpdate::Clear => None,
+            FieldUpdate::Set(frag) => Some(frag.to_uppercase()),
+        },
+        disq_erfrag_code: match params.disqualifier {
+            FieldUpdate::Leave => helpers::field_as_string(&existing_rule, "DISQ_ERFRAG_CODE"),
+            FieldUpdate::Clear => None,
+            FieldUpdate::Set(disq) => Some(disq.to_uppercase()),
+        },
+        errule_tier: match params.tier {
+            FieldUpdate::Leave => existing_rule.get("ERRULE_TIER").and_then(|v| v.as_i64()),
+            FieldUpdate::Clear => None,
+            FieldUpdate::Set(tier) => Some(tier),
+        },
     };
 
     // Enforce/normalise the non-fragment invariants (is_new=false skips the
@@ -620,9 +639,9 @@ mod tests {
             resolve: Some("No"),
             relate: None,
             rtype_id: None,
-            fragment: None,
-            disqualifier: None,
-            tier: None,
+            fragment: FieldUpdate::Leave,
+            disqualifier: FieldUpdate::Leave,
+            tier: FieldUpdate::Leave,
         };
 
         let modified = set_rule(config, params).unwrap();
@@ -666,9 +685,9 @@ mod tests {
             resolve: Some("Yes"),
             relate: None,
             rtype_id: None,
-            fragment: None,
-            disqualifier: None,
-            tier: None,
+            fragment: FieldUpdate::Leave,
+            disqualifier: FieldUpdate::Leave,
+            tier: FieldUpdate::Leave,
         };
 
         let modified = set_rule(config, params).unwrap();
@@ -725,6 +744,51 @@ mod tests {
         assert_eq!(obj["QUAL_ERFRAG_CODE"], Value::Null);
         assert_eq!(obj["DISQ_ERFRAG_CODE"], Value::Null);
         assert_eq!(obj["ERRULE_TIER"], Value::Null);
+    }
+
+    // ------------------------------------------------------------------
+    // #33 null-preserving read projection
+    // ------------------------------------------------------------------
+
+    /// list_rules / get_rule must render a stored null as JSON null (not ""), a
+    /// stored "" as "", and an absent column as null; the computed `tier` keeps
+    /// its business rule (present only when RESOLVE == "Yes").
+    #[test]
+    fn test_list_rules_null_preserving_projection() {
+        // Row 1: RESOLVE=Yes, DISQ null, QUAL "" (empty), tier present.
+        // Row 2: RELATE=Yes, tier present but must be suppressed (RESOLVE != Yes).
+        // Row 3: QUAL_ERFRAG_CODE absent entirely -> projects as null.
+        let config = r#"{"G2_CONFIG": {"CFG_ERRULE": [
+            {"ERRULE_ID": 1, "ERRULE_CODE": "A", "RESOLVE": "Yes", "RELATE": "No",
+             "RTYPE_ID": 1, "QUAL_ERFRAG_CODE": "", "DISQ_ERFRAG_CODE": null,
+             "ERRULE_TIER": 10},
+            {"ERRULE_ID": 2, "ERRULE_CODE": "B", "RESOLVE": "No", "RELATE": "Yes",
+             "RTYPE_ID": 2, "QUAL_ERFRAG_CODE": "Q", "DISQ_ERFRAG_CODE": "D",
+             "ERRULE_TIER": 20},
+            {"ERRULE_ID": 3, "ERRULE_CODE": "C", "RESOLVE": "No", "RELATE": "No",
+             "RTYPE_ID": 1, "DISQ_ERFRAG_CODE": null}
+        ]}}"#;
+
+        let rules = list_rules(config).unwrap();
+
+        // Row 1: stored null stays null, stored "" stays "", tier computed.
+        assert_eq!(rules[0]["disqualifier"], Value::Null);
+        assert_eq!(rules[0]["fragment"], json!(""));
+        assert_eq!(rules[0]["tier"], json!(10));
+
+        // Row 2: RESOLVE != "Yes" -> tier suppressed to null despite stored 20.
+        assert_eq!(rules[1]["tier"], Value::Null);
+        assert_eq!(rules[1]["fragment"], json!("Q"));
+
+        // Row 3: absent QUAL_ERFRAG_CODE -> null (present as a key).
+        assert!(rules[2].as_object().unwrap().contains_key("fragment"));
+        assert_eq!(rules[2]["fragment"], Value::Null);
+
+        // get_rule agrees with list_rules for row 1.
+        let one = get_rule(config, "A").unwrap();
+        assert_eq!(one["disqualifier"], Value::Null);
+        assert_eq!(one["fragment"], json!(""));
+        assert_eq!(one["tier"], json!(10));
     }
 
     // ------------------------------------------------------------------
@@ -960,9 +1024,9 @@ mod tests {
             resolve: None,
             relate: None,
             rtype_id: None,
-            fragment: Some("GHOST"),
-            disqualifier: None,
-            tier: None,
+            fragment: FieldUpdate::Set("GHOST"),
+            disqualifier: FieldUpdate::Leave,
+            tier: FieldUpdate::Leave,
         };
         let set_err = set_rule(cfg, set_params).unwrap_err();
 
@@ -992,9 +1056,9 @@ mod tests {
             resolve: Some("No"),
             relate: None,
             rtype_id: None,
-            fragment: None,
-            disqualifier: None,
-            tier: None,
+            fragment: FieldUpdate::Leave,
+            disqualifier: FieldUpdate::Leave,
+            tier: FieldUpdate::Leave,
         };
         let modified = set_rule(config, params).unwrap();
         let value: Value = serde_json::from_str(&modified).unwrap();
@@ -1021,6 +1085,46 @@ mod tests {
         let rule2 = json!({"ERRULE_CODE": "R2", "RESOLVE": "No", "RELATE": "No"});
         let (_m2, id2) = add_rule(&modified, 2000, &rule2).unwrap();
         assert_eq!(id2, 2000);
+    }
+
+    /// Tri-state on set_rule: Clear writes an explicit null, Set writes a value
+    /// (validating existence), and Leave preserves the stored value.
+    #[test]
+    fn test_set_rule_disqualifier_tri_state() {
+        let cfg = add_rule_config();
+
+        // Clear: existing disqualifier (null already) stays null; and clearing a
+        // populated fragment writes null.
+        let clear_params = SetRuleParams {
+            code: "EXISTING",
+            resolve: None,
+            relate: None,
+            rtype_id: None,
+            fragment: FieldUpdate::Clear,
+            disqualifier: FieldUpdate::Leave,
+            tier: FieldUpdate::Leave,
+        };
+        let modified = set_rule(cfg, clear_params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let rule = &value["G2_CONFIG"]["CFG_ERRULE"][0];
+        assert_eq!(rule["QUAL_ERFRAG_CODE"], Value::Null);
+
+        // Set: point the disqualifier at an existing fragment.
+        let set_params = SetRuleParams {
+            code: "EXISTING",
+            resolve: None,
+            relate: None,
+            rtype_id: None,
+            fragment: FieldUpdate::Leave,
+            disqualifier: FieldUpdate::Set("frag_b"),
+            tier: FieldUpdate::Leave,
+        };
+        let modified = set_rule(cfg, set_params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let rule = &value["G2_CONFIG"]["CFG_ERRULE"][0];
+        assert_eq!(rule["DISQ_ERFRAG_CODE"], json!("FRAG_B"));
+        // The carried-over fragment (Leave) is untouched.
+        assert_eq!(rule["QUAL_ERFRAG_CODE"], json!("FRAG_A"));
     }
 
     #[test]

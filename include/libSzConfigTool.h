@@ -364,6 +364,12 @@ struct SzConfigTool_result SzConfigTool_setScoringFunctionWithJson(const char *c
  * Batch 1-4: System, Generic Plans, Rules, Config Sections
  * ============================================================================ */
 
+/*
+ * Set/update a fragment from JSON. The updates object is tri-state per field
+ * (ERFRAG_SOURCE, ERFRAG_DESC): an absent key leaves the stored value untouched,
+ * an explicit JSON null clears it (writes null), and a string sets it. Clearing
+ * ERFRAG_SOURCE also clears ERFRAG_DEPENDS to null.
+ */
 struct SzConfigTool_result SzConfigTool_setFragmentWithJson(const char *config_json, const char *fragment_code, const char *updates_json);
 struct SzConfigTool_result SzConfigTool_cloneGenericPlan(const char *config_json, const char *source_code, const char *new_code, const char *new_desc);
 struct SzConfigTool_result SzConfigTool_setGenericPlan(const char *config_json, const char *gplan_code, const char *gplan_desc, const char *updates_json);
@@ -388,6 +394,12 @@ struct SzConfigTool_result SzConfigTool_addRule(const char *config_json, const c
 struct SzConfigTool_result SzConfigTool_deleteRule(const char *config_json, const char *rule_code);
 struct SzConfigTool_result SzConfigTool_getRule(const char *config_json, const char *code_or_id);
 struct SzConfigTool_result SzConfigTool_listRules(const char *config_json);
+/*
+ * Set/update a rule from JSON. The fragment, disqualifier and tier fields are
+ * tri-state: an absent key leaves the stored value untouched, an explicit JSON
+ * null clears the column (writes null), and a value sets it. (The direct-arg
+ * function wrappers below cannot express a null-clear; this JSON API can.)
+ */
 struct SzConfigTool_result SzConfigTool_setRule(const char *config_json, const char *rule_code, const char *rule_json);
 
 
@@ -395,11 +407,30 @@ struct SzConfigTool_result SzConfigTool_setRule(const char *config_json, const c
  * Comparison Function Operations (Batch 5c)
  * ============================================================================ */
 
+/* Direct-arg add: connect_str NULL stores JSON null; a non-null pointer
+ * (including "") stores that value. */
 struct SzConfigTool_result SzConfigTool_addComparisonFunction(const char *config_json, const char *cfunc_code, const char *connect_str, const char *cfunc_desc, const char *language, const char *anon_support);
 struct SzConfigTool_result SzConfigTool_deleteComparisonFunction(const char *config_json, const char *cfunc_code);
 struct SzConfigTool_result SzConfigTool_getComparisonFunction(const char *config_json, const char *cfunc_code);
 struct SzConfigTool_result SzConfigTool_listComparisonFunctions(const char *config_json);
+/* Direct-arg set: connect_str NULL leaves the stored value untouched; a non-null
+ * pointer (including "") sets it. This form cannot clear a value to null (use the
+ * JSON-based set API for that). */
 struct SzConfigTool_result SzConfigTool_setComparisonFunction(const char *config_json, const char *cfunc_code, const char *connect_str, const char *cfunc_desc, const char *language, const char *anon_support);
+
+/* ----------------------------------------------------------------------------
+ * Standardize / Expression Function Operations (direct-arg forms)
+ *
+ * Direct-arg add: connect_str NULL stores JSON null; a non-null pointer
+ *   (including "") stores that value.
+ * Direct-arg set: connect_str NULL leaves the stored value untouched; a non-null
+ *   pointer (including "") sets it. This form cannot clear a value to null (use
+ *   the JSON-based set API for that).
+ * ---------------------------------------------------------------------------- */
+struct SzConfigTool_result SzConfigTool_addStandardizeFunction(const char *config_json, const char *sfunc_code, const char *connect_str, const char *sfunc_desc, const char *language);
+struct SzConfigTool_result SzConfigTool_setStandardizeFunction(const char *config_json, const char *sfunc_code, const char *connect_str, const char *sfunc_desc, const char *language);
+struct SzConfigTool_result SzConfigTool_addExpressionFunction(const char *config_json, const char *efunc_code, const char *connect_str, const char *efunc_desc, const char *language);
+struct SzConfigTool_result SzConfigTool_setExpressionFunction(const char *config_json, const char *efunc_code, const char *connect_str, const char *efunc_desc, const char *language);
 
 /* ============================================================================
  * Standardize Call Operations (Batch 6a)
@@ -532,6 +563,8 @@ struct SzConfigTool_result SzConfigTool_setMatchingFunction(const char *config_j
                                                             const char *matching_func);
 
 // Distinct Function Operations (Batch 12)
+/* Direct-arg add: connect_str NULL stores JSON null; a non-null pointer
+ * (including "") stores that value. A blank connect_str is accepted. */
 struct SzConfigTool_result SzConfigTool_addDistinctFunction(const char *config_json,
                                                             const char *dfunc_code,
                                                             const char *connect_str,
@@ -540,6 +573,9 @@ struct SzConfigTool_result SzConfigTool_addDistinctFunction(const char *config_j
 struct SzConfigTool_result SzConfigTool_deleteDistinctFunction(const char *config_json, const char *dfunc_code);
 struct SzConfigTool_result SzConfigTool_getDistinctFunction(const char *config_json, const char *dfunc_code);
 struct SzConfigTool_result SzConfigTool_listDistinctFunctions(const char *config_json);
+/* Direct-arg set: connect_str NULL leaves the stored value untouched; a non-null
+ * pointer (including "") sets it. This form cannot clear a value to null (use the
+ * JSON-based set API for that). */
 struct SzConfigTool_result SzConfigTool_setDistinctFunction(const char *config_json,
                                                             const char *dfunc_code,
                                                             const char *connect_str,

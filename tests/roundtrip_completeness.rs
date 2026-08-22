@@ -11,6 +11,8 @@
 //! append, so a positional comparison of the "before" rows is exact.
 
 use serde_json::{Value, json};
+use sz_configtool_lib::fragments::SetFragmentParams;
+use sz_configtool_lib::helpers::FieldUpdate;
 use sz_configtool_lib::{fragments, rules};
 
 /// For every section array under `G2_CONFIG`, assert that each row present in
@@ -87,9 +89,9 @@ fn roundtrip_set_rule_drops_no_keys() {
         resolve: Some("No"),
         relate: None,
         rtype_id: None,
-        fragment: None,
-        disqualifier: None,
-        tier: None,
+        fragment: FieldUpdate::Leave,
+        disqualifier: FieldUpdate::Leave,
+        tier: FieldUpdate::Leave,
     };
     let modified = rules::set_rule(&config_str, params).unwrap();
     let after: Value = serde_json::from_str(&modified).unwrap();
@@ -111,8 +113,11 @@ fn roundtrip_set_fragment_drops_no_keys() {
 
     // Update only the description; ERFRAG_ID / ERFRAG_SOURCE / ERFRAG_DEPENDS
     // must be carried forward, not dropped by the full-row replace.
-    let update = json!({"ERFRAG_DESC": "Updated"});
-    let modified = fragments::set_fragment(&config_str, "SAME_A1", &update).unwrap();
+    let update = SetFragmentParams {
+        source: FieldUpdate::Leave,
+        description: FieldUpdate::Set("Updated"),
+    };
+    let modified = fragments::set_fragment(&config_str, "SAME_A1", update).unwrap();
     let after: Value = serde_json::from_str(&modified).unwrap();
 
     assert_no_keys_dropped(&before, &after);
@@ -160,9 +165,9 @@ fn roundtrip_real_config_fixture() {
                     resolve: None,
                     relate: None,
                     rtype_id: None,
-                    fragment: None,
-                    disqualifier: None,
-                    tier: None,
+                    fragment: FieldUpdate::Leave,
+                    disqualifier: FieldUpdate::Leave,
+                    tier: FieldUpdate::Leave,
                 };
                 config_str = rules::set_rule(&config_str, params)
                     .unwrap_or_else(|e| panic!("set_rule({code}) failed: {e}"));
@@ -174,8 +179,8 @@ fn roundtrip_real_config_fixture() {
     if let Some(frags) = before["G2_CONFIG"]["CFG_ERFRAG"].as_array() {
         for row in frags {
             if let Some(code) = row.get("ERFRAG_CODE").and_then(|v| v.as_str()) {
-                let empty = json!({});
-                config_str = fragments::set_fragment(&config_str, code, &empty)
+                let empty = SetFragmentParams::default();
+                config_str = fragments::set_fragment(&config_str, code, empty)
                     .unwrap_or_else(|e| panic!("set_fragment({code}) failed: {e}"));
             }
         }

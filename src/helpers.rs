@@ -16,11 +16,51 @@ pub(crate) fn field_as_string(item: &Value, key: &str) -> Option<String> {
 /// explicit JSON `null`), and `Value::Null` when the key is absent. This is the
 /// read-side projection used by list/get builders that must emit `null` for a
 /// stored-null or missing field rather than coercing it to `""` or `0`.
-// Consumed by the null-projection work in Wave 3 (rules/functions/fragments
-// list builders); kept behind `allow(dead_code)` until then.
-#[allow(dead_code)]
 pub(crate) fn field_or_null(item: &Value, key: &str) -> Value {
     item.get(key).cloned().unwrap_or(Value::Null)
+}
+
+/// Parse a tri-state string [`FieldUpdate`] from a JSON object.
+///
+/// Scans `keys` in order and acts on the first key that is present on `json`:
+/// an explicit JSON `null` maps to [`FieldUpdate::Clear`] and a JSON string maps
+/// to [`FieldUpdate::Set`]. A key that is absent everywhere (or present only with
+/// a non-string, non-null value) leaves the field untouched
+/// ([`FieldUpdate::Leave`]). This encodes the JSON write contract where an
+/// omitted key means "leave", an explicit `null` means "clear", and a value
+/// means "set".
+pub(crate) fn field_update_str<'a>(json: &'a Value, keys: &[&str]) -> FieldUpdate<&'a str> {
+    for key in keys {
+        if let Some(v) = json.get(*key) {
+            if v.is_null() {
+                return FieldUpdate::Clear;
+            }
+            if let Some(s) = v.as_str() {
+                return FieldUpdate::Set(s);
+            }
+        }
+    }
+    FieldUpdate::Leave
+}
+
+/// Parse a tri-state integer [`FieldUpdate`] from a JSON object.
+///
+/// The integer analogue of [`field_update_str`]: an explicit JSON `null` maps to
+/// [`FieldUpdate::Clear`], a JSON integer maps to [`FieldUpdate::Set`], and an
+/// absent key (or present non-integer, non-null value) leaves the field
+/// untouched ([`FieldUpdate::Leave`]).
+pub(crate) fn field_update_i64(json: &Value, keys: &[&str]) -> FieldUpdate<i64> {
+    for key in keys {
+        if let Some(v) = json.get(*key) {
+            if v.is_null() {
+                return FieldUpdate::Clear;
+            }
+            if let Some(n) = v.as_i64() {
+                return FieldUpdate::Set(n);
+            }
+        }
+    }
+    FieldUpdate::Leave
 }
 
 /// Tri-state update for an optional field: leave, clear, or set.

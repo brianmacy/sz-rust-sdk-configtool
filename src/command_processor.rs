@@ -366,12 +366,14 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
             let fragment = get_str_param(params, "fragment")?;
             let source = get_str_param(params, "source")?;
 
-            // Construct fragment config with ERFRAG_SOURCE
-            let fragment_config = serde_json::json!({
-                "ERFRAG_SOURCE": source
-            });
-
-            crate::fragments::set_fragment(config, fragment, &fragment_config)
+            crate::fragments::set_fragment(
+                config,
+                fragment,
+                crate::fragments::SetFragmentParams {
+                    source: crate::helpers::FieldUpdate::Set(source),
+                    description: crate::helpers::FieldUpdate::Leave,
+                },
+            )
         }
 
         "addFragment" => {
@@ -417,7 +419,7 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 config,
                 func,
                 crate::functions::standardize::AddStandardizeFunctionParams {
-                    connect_str: connect,
+                    connect_str: Some(connect),
                     description: desc,
                     language,
                 },
@@ -442,7 +444,7 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 config,
                 func,
                 crate::functions::comparison::AddComparisonFunctionParams {
-                    connect_str: connect,
+                    connect_str: Some(connect),
                     description: desc,
                     language: None,
                     anon_support: anon,
@@ -462,7 +464,7 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 config,
                 func,
                 crate::functions::expression::AddExpressionFunctionParams {
-                    connect_str: connect,
+                    connect_str: Some(connect),
                     description: desc,
                     language,
                 },

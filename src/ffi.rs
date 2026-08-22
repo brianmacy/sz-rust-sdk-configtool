@@ -835,7 +835,20 @@ pub unsafe extern "C" fn SzConfigTool_setFragmentWithJson(
         }
     };
 
-    let result = crate::fragments::set_fragment(config, code, &fragment_config);
+    // JSON-based FFI: build a tri-state SetFragmentParams. An absent key ->
+    // Leave, an explicit null -> Clear (writes null), a value -> Set.
+    let params = match crate::fragments::SetFragmentParams::try_from(&fragment_config) {
+        Ok(p) => p,
+        Err(e) => {
+            set_error(e.to_string(), -3);
+            return SzConfigTool_result {
+                response: std::ptr::null_mut(),
+                returnCode: -3,
+            };
+        }
+    };
+
+    let result = crate::fragments::set_fragment(config, code, params);
     handle_result!(result)
 }
 
@@ -2360,9 +2373,14 @@ pub extern "C" fn SzConfigTool_setRule(
             .get("rtypeId")
             .and_then(|v| v.as_i64())
             .or_else(|| rule_value.get("RTYPE_ID").and_then(|v| v.as_i64())),
-        fragment: None,
-        disqualifier: None,
-        tier: None,
+        // JSON-based FFI can express Clear: an absent key -> Leave, an explicit
+        // null -> Clear (writes null), a value -> Set.
+        fragment: crate::helpers::field_update_str(&rule_value, &["fragment", "FRAGMENT"]),
+        disqualifier: crate::helpers::field_update_str(
+            &rule_value,
+            &["disqualifier", "DISQUALIFIER"],
+        ),
+        tier: crate::helpers::field_update_i64(&rule_value, &["tier", "TIER"]),
     };
 
     handle_result!(crate::rules::set_rule(config, params))
@@ -2421,22 +2439,21 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
         }
     };
 
-    let conn = unsafe {
-        if connect_str.is_null() {
-            set_error("connect_str is null".to_string(), -1);
-            return SzConfigTool_result {
-                response: std::ptr::null_mut(),
-                returnCode: -1,
-            };
-        }
-        match CStr::from_ptr(connect_str).to_str() {
-            Ok(s) => s,
-            Err(e) => {
-                set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -2,
-                };
+    // Direct-arg add FFI: a NULL connect_str stores JSON null; a non-null
+    // pointer (including an empty string) stores that value.
+    let conn_opt = if connect_str.is_null() {
+        None
+    } else {
+        unsafe {
+            match CStr::from_ptr(connect_str).to_str() {
+                Ok(s) => Some(s),
+                Err(e) => {
+                    set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
+                    return SzConfigTool_result {
+                        response: std::ptr::null_mut(),
+                        returnCode: -2,
+                    };
+                }
             }
         }
     };
@@ -2481,7 +2498,7 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
         config,
         code,
         crate::functions::standardize::AddStandardizeFunctionParams {
-            connect_str: conn,
+            connect_str: conn_opt,
             description: desc_opt,
             language: lang_opt,
         },
@@ -2767,13 +2784,16 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
         }
     };
 
-    let conn_opt = if connect_str.is_null() {
-        None
+    // Direct-arg set FFI: a plain pointer can encode only Leave/Set (D12), so a
+    // NULL connect_str leaves the stored value untouched and a non-null pointer
+    // (including an empty string) sets it. Clearing a value to null is only
+    // expressible via the JSON-based set APIs.
+    let conn_update = if connect_str.is_null() {
+        crate::helpers::FieldUpdate::Leave
     } else {
         unsafe {
             match CStr::from_ptr(connect_str).to_str() {
-                Ok(s) if !s.is_empty() => Some(s),
-                Ok(_) => None,
+                Ok(s) => crate::helpers::FieldUpdate::Set(s),
                 Err(e) => {
                     set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
                     return SzConfigTool_result {
@@ -2825,7 +2845,7 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
         config,
         code,
         crate::functions::standardize::SetStandardizeFunctionParams {
-            connect_str: conn_opt,
+            connect_str: conn_update,
             description: desc_opt,
             language: lang_opt,
         },
@@ -2909,22 +2929,21 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
         }
     };
 
-    let conn = unsafe {
-        if connect_str.is_null() {
-            set_error("connect_str is null".to_string(), -1);
-            return SzConfigTool_result {
-                response: std::ptr::null_mut(),
-                returnCode: -1,
-            };
-        }
-        match CStr::from_ptr(connect_str).to_str() {
-            Ok(s) => s,
-            Err(e) => {
-                set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -2,
-                };
+    // Direct-arg add FFI: a NULL connect_str stores JSON null; a non-null
+    // pointer (including an empty string) stores that value.
+    let conn_opt = if connect_str.is_null() {
+        None
+    } else {
+        unsafe {
+            match CStr::from_ptr(connect_str).to_str() {
+                Ok(s) => Some(s),
+                Err(e) => {
+                    set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
+                    return SzConfigTool_result {
+                        response: std::ptr::null_mut(),
+                        returnCode: -2,
+                    };
+                }
             }
         }
     };
@@ -2969,7 +2988,7 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
         config,
         code,
         crate::functions::expression::AddExpressionFunctionParams {
-            connect_str: conn,
+            connect_str: conn_opt,
             description: desc_opt,
             language: lang_opt,
         },
@@ -3255,13 +3274,16 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
         }
     };
 
-    let conn_opt = if connect_str.is_null() {
-        None
+    // Direct-arg set FFI: a plain pointer can encode only Leave/Set (D12), so a
+    // NULL connect_str leaves the stored value untouched and a non-null pointer
+    // (including an empty string) sets it. Clearing a value to null is only
+    // expressible via the JSON-based set APIs.
+    let conn_update = if connect_str.is_null() {
+        crate::helpers::FieldUpdate::Leave
     } else {
         unsafe {
             match CStr::from_ptr(connect_str).to_str() {
-                Ok(s) if !s.is_empty() => Some(s),
-                Ok(_) => None,
+                Ok(s) => crate::helpers::FieldUpdate::Set(s),
                 Err(e) => {
                     set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
                     return SzConfigTool_result {
@@ -3313,7 +3335,7 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
         config,
         code,
         crate::functions::expression::SetExpressionFunctionParams {
-            connect_str: conn_opt,
+            connect_str: conn_update,
             description: desc_opt,
             language: lang_opt,
         },
@@ -3398,22 +3420,21 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
         }
     };
 
-    let conn = unsafe {
-        if connect_str.is_null() {
-            set_error("connect_str is null".to_string(), -1);
-            return SzConfigTool_result {
-                response: std::ptr::null_mut(),
-                returnCode: -1,
-            };
-        }
-        match CStr::from_ptr(connect_str).to_str() {
-            Ok(s) => s,
-            Err(e) => {
-                set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -2,
-                };
+    // Direct-arg add FFI: a NULL connect_str stores JSON null; a non-null
+    // pointer (including an empty string) stores that value.
+    let conn_opt = if connect_str.is_null() {
+        None
+    } else {
+        unsafe {
+            match CStr::from_ptr(connect_str).to_str() {
+                Ok(s) => Some(s),
+                Err(e) => {
+                    set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
+                    return SzConfigTool_result {
+                        response: std::ptr::null_mut(),
+                        returnCode: -2,
+                    };
+                }
             }
         }
     };
@@ -3476,7 +3497,7 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
         config,
         code,
         crate::functions::comparison::AddComparisonFunctionParams {
-            connect_str: conn,
+            connect_str: conn_opt,
             description: desc_opt,
             language: lang_opt,
             anon_support: anon_opt,
@@ -3764,13 +3785,16 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
         }
     };
 
-    let conn_opt = if connect_str.is_null() {
-        None
+    // Direct-arg set FFI: a plain pointer can encode only Leave/Set (D12), so a
+    // NULL connect_str leaves the stored value untouched and a non-null pointer
+    // (including an empty string) sets it. Clearing a value to null is only
+    // expressible via the JSON-based set APIs.
+    let conn_update = if connect_str.is_null() {
+        crate::helpers::FieldUpdate::Leave
     } else {
         unsafe {
             match CStr::from_ptr(connect_str).to_str() {
-                Ok(s) if !s.is_empty() => Some(s),
-                Ok(_) => None,
+                Ok(s) => crate::helpers::FieldUpdate::Set(s),
                 Err(e) => {
                     set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
                     return SzConfigTool_result {
@@ -3840,7 +3864,7 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
         config,
         code,
         crate::functions::comparison::SetComparisonFunctionParams {
-            connect_str: conn_opt,
+            connect_str: conn_update,
             description: desc_opt,
             language: lang_opt,
             anon_support: anon_opt,
@@ -7887,22 +7911,21 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
         }
     };
 
-    let connect = unsafe {
-        if connect_str.is_null() {
-            set_error("connect_str is null".to_string(), -1);
-            return SzConfigTool_result {
-                response: std::ptr::null_mut(),
-                returnCode: -1,
-            };
-        }
-        match CStr::from_ptr(connect_str).to_str() {
-            Ok(s) => s,
-            Err(e) => {
-                set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -2,
-                };
+    // Direct-arg add FFI: a NULL connect_str stores JSON null; a non-null
+    // pointer (including an empty string) stores that value.
+    let connect = if connect_str.is_null() {
+        None
+    } else {
+        unsafe {
+            match CStr::from_ptr(connect_str).to_str() {
+                Ok(s) => Some(s),
+                Err(e) => {
+                    set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
+                    return SzConfigTool_result {
+                        response: std::ptr::null_mut(),
+                        returnCode: -2,
+                    };
+                }
             }
         }
     };
@@ -8242,12 +8265,16 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
         }
     };
 
-    let connect_opt = if connect_str.is_null() {
-        None
+    // Direct-arg set FFI: a plain pointer can encode only Leave/Set (D12), so a
+    // NULL connect_str leaves the stored value untouched and a non-null pointer
+    // (including an empty string) sets it. Clearing a value to null is only
+    // expressible via the JSON-based set APIs.
+    let connect_update = if connect_str.is_null() {
+        crate::helpers::FieldUpdate::Leave
     } else {
         unsafe {
             match CStr::from_ptr(connect_str).to_str() {
-                Ok(s) => Some(s),
+                Ok(s) => crate::helpers::FieldUpdate::Set(s),
                 Err(e) => {
                     set_error(format!("Invalid UTF-8 in connect_str: {e}"), -2);
                     return SzConfigTool_result {
@@ -8297,7 +8324,7 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
         config,
         dfunc,
         crate::functions::distinct::SetDistinctFunctionParams {
-            connect_str: connect_opt,
+            connect_str: connect_update,
             description: desc_opt,
             language: lang_opt,
             anon_support: None,
@@ -9541,5 +9568,122 @@ pub extern "C" fn SzConfigTool_setScoringFunction(
                 returnCode: -5,
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+
+    /// Read (and free) the response string of an FFI result, asserting success.
+    fn take_response(result: SzConfigTool_result) -> String {
+        assert_eq!(result.returnCode, 0, "FFI call returned an error code");
+        assert!(!result.response.is_null(), "response was null");
+        let s = unsafe { CStr::from_ptr(result.response) }
+            .to_str()
+            .unwrap()
+            .to_string();
+        unsafe { SzConfigTool_free(result.response) };
+        s
+    }
+
+    /// D12: a NULL connect_str on the direct-arg add FFI stores JSON null, with
+    /// the key still present.
+    #[test]
+    fn test_ffi_add_standardize_function_null_connect_str_stores_null() {
+        let config = CString::new(r#"{"G2_CONFIG": {"CFG_SFUNC": []}}"#).unwrap();
+        let code = CString::new("CUSTOM_PARSE").unwrap();
+
+        let result = SzConfigTool_addStandardizeFunction(
+            config.as_ptr(),
+            code.as_ptr(),
+            std::ptr::null(), // connect_str NULL -> stored null
+            std::ptr::null(),
+            std::ptr::null(),
+        );
+        let modified = take_response(result);
+        let v: Value = serde_json::from_str(&modified).unwrap();
+        let row = v["G2_CONFIG"]["CFG_SFUNC"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert!(row.as_object().unwrap().contains_key("CONNECT_STR"));
+        assert_eq!(row["CONNECT_STR"], Value::Null);
+    }
+
+    /// A NULL connect_str on the distinct add FFI likewise stores JSON null.
+    #[test]
+    fn test_ffi_add_distinct_function_null_connect_str_stores_null() {
+        let config = CString::new(r#"{"G2_CONFIG": {"CFG_DFUNC": []}}"#).unwrap();
+        let code = CString::new("CUSTOM_DIST").unwrap();
+
+        let result = SzConfigTool_addDistinctFunction(
+            config.as_ptr(),
+            code.as_ptr(),
+            std::ptr::null(),
+            std::ptr::null(),
+            std::ptr::null(),
+        );
+        let modified = take_response(result);
+        let v: Value = serde_json::from_str(&modified).unwrap();
+        let row = v["G2_CONFIG"]["CFG_DFUNC"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert!(row.as_object().unwrap().contains_key("CONNECT_STR"));
+        assert_eq!(row["CONNECT_STR"], Value::Null);
+    }
+
+    /// The JSON-based setRule FFI can clear a column: an explicit null for a
+    /// disqualifier writes JSON null.
+    #[test]
+    fn test_ffi_set_rule_json_explicit_null_clears_column() {
+        let config = CString::new(
+            r#"{"G2_CONFIG": {"CFG_ERRULE": [
+                {"ERRULE_ID": 100, "ERRULE_CODE": "R1", "RESOLVE": "Yes",
+                 "RELATE": "No", "RTYPE_ID": 1, "QUAL_ERFRAG_CODE": "R1",
+                 "DISQ_ERFRAG_CODE": "SOMETHING", "ERRULE_TIER": 10}
+            ], "CFG_ERFRAG": []}}"#,
+        )
+        .unwrap();
+        let code = CString::new("R1").unwrap();
+        // Explicit JSON null on disqualifier -> Clear.
+        let rule_json = CString::new(r#"{"disqualifier": null}"#).unwrap();
+
+        let result = SzConfigTool_setRule(config.as_ptr(), code.as_ptr(), rule_json.as_ptr());
+        let modified = take_response(result);
+        let v: Value = serde_json::from_str(&modified).unwrap();
+        let rule = &v["G2_CONFIG"]["CFG_ERRULE"][0];
+        assert!(rule.as_object().unwrap().contains_key("DISQ_ERFRAG_CODE"));
+        assert_eq!(rule["DISQ_ERFRAG_CODE"], Value::Null);
+        // A field not mentioned is left untouched.
+        assert_eq!(rule["QUAL_ERFRAG_CODE"], serde_json::json!("R1"));
+    }
+
+    /// The JSON-based setFragment FFI can clear ERFRAG_SOURCE (and, per D11, its
+    /// ERFRAG_DEPENDS) via an explicit null.
+    #[test]
+    fn test_ffi_set_fragment_json_explicit_null_clears_source() {
+        let config = CString::new(
+            r#"{"G2_CONFIG": {"CFG_ERFRAG": [
+                {"ERFRAG_ID": 3, "ERFRAG_CODE": "F1", "ERFRAG_DESC": "F1",
+                 "ERFRAG_SOURCE": "./FRAGMENT[./SAME_NAME>0]", "ERFRAG_DEPENDS": "1,2"}
+            ]}}"#,
+        )
+        .unwrap();
+        let code = CString::new("F1").unwrap();
+        let frag_json = CString::new(r#"{"ERFRAG_SOURCE": null}"#).unwrap();
+
+        let result = unsafe {
+            SzConfigTool_setFragmentWithJson(config.as_ptr(), code.as_ptr(), frag_json.as_ptr())
+        };
+        let modified = take_response(result);
+        let v: Value = serde_json::from_str(&modified).unwrap();
+        let frag = &v["G2_CONFIG"]["CFG_ERFRAG"][0];
+        assert_eq!(frag["ERFRAG_SOURCE"], Value::Null);
+        assert_eq!(frag["ERFRAG_DEPENDS"], Value::Null);
     }
 }

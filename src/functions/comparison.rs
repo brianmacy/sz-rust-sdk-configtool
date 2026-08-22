@@ -6,7 +6,8 @@
 
 use crate::error::SzConfigError;
 use crate::helpers::{
-    add_to_config_array, delete_from_config_array, find_in_config_array, get_next_id,
+    FieldUpdate, add_to_config_array, delete_from_config_array, field_or_null,
+    find_in_config_array, get_next_id,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -28,7 +29,7 @@ struct CfuncRow {
     #[serde(rename = "CFUNC_CODE")]
     cfunc_code: String,
     #[serde(rename = "CONNECT_STR")]
-    connect_str: String,
+    connect_str: Option<String>,
     #[serde(rename = "ANON_SUPPORT")]
     anon_support: String,
     #[serde(rename = "CFUNC_DESC")]
@@ -42,9 +43,13 @@ struct CfuncRow {
 // ============================================================================
 
 /// Parameters for adding a comparison function
+///
+/// `connect_str` is tri-valued to mirror the Python tool: `None` (or an absent
+/// `connectStr` key) stores JSON `null`, `Some("")` stores an empty string, and
+/// `Some(x)` stores `x`.
 #[derive(Debug, Clone, Default)]
 pub struct AddComparisonFunctionParams<'a> {
-    pub connect_str: &'a str,
+    pub connect_str: Option<&'a str>,
     pub description: Option<&'a str>,
     pub language: Option<&'a str>,
     pub anon_support: Option<&'a str>,
@@ -55,10 +60,8 @@ impl<'a> TryFrom<&'a Value> for AddComparisonFunctionParams<'a> {
 
     fn try_from(json: &'a Value) -> Result<Self, SzConfigError> {
         Ok(Self {
-            connect_str: json
-                .get("connectStr")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| SzConfigError::MissingField("connectStr".to_string()))?,
+            // Absent or explicit-null connectStr -> None (stored as JSON null).
+            connect_str: json.get("connectStr").and_then(|v| v.as_str()),
             description: json.get("description").and_then(|v| v.as_str()),
             language: json.get("language").and_then(|v| v.as_str()),
             anon_support: json.get("anonSupport").and_then(|v| v.as_str()),
@@ -67,9 +70,12 @@ impl<'a> TryFrom<&'a Value> for AddComparisonFunctionParams<'a> {
 }
 
 /// Parameters for setting a comparison function
+///
+/// `connect_str` is a tri-state [`FieldUpdate`]: `Leave` keeps the stored value,
+/// `Clear` writes JSON `null`, and `Set(x)` writes `x` (including `Set("")`).
 #[derive(Debug, Clone, Default)]
 pub struct SetComparisonFunctionParams<'a> {
-    pub connect_str: Option<&'a str>,
+    pub connect_str: FieldUpdate<&'a str>,
     pub description: Option<&'a str>,
     pub language: Option<&'a str>,
     pub anon_support: Option<&'a str>,
@@ -80,7 +86,8 @@ pub struct SetComparisonFunctionParams<'a> {
 /// # Arguments
 /// * `config_json` - The configuration JSON string
 /// * `cfunc_code` - Function code (will be uppercased)
-/// * `params` - Function parameters (connect_str required, others optional)
+/// * `params` - Function parameters (all optional; a `None` `connect_str` stores
+///   JSON `null`)
 ///
 /// # Returns
 /// Result with modified JSON string and the new function record
@@ -127,7 +134,7 @@ pub fn add_comparison_function(
     let row = CfuncRow {
         cfunc_id,
         cfunc_code,
-        connect_str: params.connect_str.to_string(),
+        connect_str: params.connect_str.map(str::to_string),
         anon_support: anon_support.to_string(),
         cfunc_desc: params.description.map(str::to_string),
         language: params.language.map(str::to_string),
@@ -213,12 +220,17 @@ pub fn list_comparison_functions(config_json: &str) -> Result<Vec<Value>, SzConf
         items
             .iter()
             .map(|item| {
+                // Stored-nullable columns are projected null-preserving; the
+                // previously-missing `description` (CFUNC_DESC) is now emitted.
+                // Field order: id, function, description, connectStr, anonSupport,
+                // language.
                 json!({
                     "id": item.get("CFUNC_ID").and_then(|v| v.as_i64()).unwrap_or(0),
                     "function": item.get("CFUNC_CODE").and_then(|v| v.as_str()).unwrap_or(""),
-                    "connectStr": item.get("CONNECT_STR").and_then(|v| v.as_str()).unwrap_or(""),
-                    "language": item.get("LANGUAGE").and_then(|v| v.as_str()).unwrap_or(""),
-                    "anonSupport": item.get("ANON_SUPPORT").and_then(|v| v.as_str()).unwrap_or("")
+                    "description": field_or_null(item, "CFUNC_DESC"),
+                    "connectStr": field_or_null(item, "CONNECT_STR"),
+                    "anonSupport": field_or_null(item, "ANON_SUPPORT"),
+                    "language": field_or_null(item, "LANGUAGE")
                 })
             })
             .collect()
@@ -257,8 +269,14 @@ pub fn set_comparison_function(
     // In-place update of a complete existing row; all keys preserved.
     // Update fields if provided
     if let Some(obj) = function.as_object_mut() {
-        if let Some(conn) = params.connect_str {
-            obj.insert("CONNECT_STR".to_string(), json!(conn));
+        match params.connect_str {
+            FieldUpdate::Leave => {}
+            FieldUpdate::Clear => {
+                obj.insert("CONNECT_STR".to_string(), Value::Null);
+            }
+            FieldUpdate::Set(conn) => {
+                obj.insert("CONNECT_STR".to_string(), json!(conn));
+            }
         }
         if let Some(desc) = params.description {
             obj.insert("CFUNC_DESC".to_string(), json!(desc));
@@ -306,7 +324,7 @@ mod tests {
             &config,
             "custom_cmp",
             AddComparisonFunctionParams {
-                connect_str: "g2CustomCmp",
+                connect_str: Some("g2CustomCmp"),
                 description: Some("Custom compare"),
                 language: Some("en"),
                 anon_support: Some("Yes"),
@@ -328,6 +346,48 @@ mod tests {
         assert_eq!(items[0]["function"], "CMP_NAME");
     }
 
+    /// #33: the list carries `description` (from CFUNC_DESC) in the exact key
+    /// order id, function, description, connectStr, anonSupport, language; and
+    /// stored-nullable columns are null-preserved (stored null -> null, stored ""
+    /// -> "", absent -> null).
+    #[test]
+    fn test_list_comparison_functions_description_and_order() {
+        let config = json!({
+            "G2_CONFIG": {"CFG_CFUNC": [{
+                "CFUNC_ID": 1,
+                "CFUNC_CODE": "CMP_NAME",
+                "CFUNC_DESC": "Compare names",
+                "CONNECT_STR": "",
+                "ANON_SUPPORT": null
+                // LANGUAGE absent -> null
+            }]}
+        })
+        .to_string();
+
+        let items = list_comparison_functions(&config).unwrap();
+        let keys: Vec<&str> = items[0]
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(|s| s.as_str())
+            .collect();
+        assert_eq!(
+            keys,
+            vec![
+                "id",
+                "function",
+                "description",
+                "connectStr",
+                "anonSupport",
+                "language"
+            ]
+        );
+        assert_eq!(items[0]["description"], json!("Compare names"));
+        assert_eq!(items[0]["connectStr"], json!("")); // stored "" preserved
+        assert_eq!(items[0]["anonSupport"], Value::Null); // stored null preserved
+        assert_eq!(items[0]["language"], Value::Null); // absent -> null
+    }
+
     /// add_comparison_function must write a complete CFG_CFUNC row even when the
     /// caller omits optionals — they become null, never dropped. ANON_SUPPORT
     /// defaults to "No".
@@ -338,7 +398,7 @@ mod tests {
             &config,
             "custom_cmp",
             AddComparisonFunctionParams {
-                connect_str: "g2CustomCmp",
+                connect_str: Some("g2CustomCmp"),
                 description: None,
                 language: None,
                 anon_support: None,
@@ -365,5 +425,118 @@ mod tests {
         assert_eq!(obj["CFUNC_DESC"], Value::Null);
         assert_eq!(obj["LANGUAGE"], Value::Null);
         assert_eq!(record["ANON_SUPPORT"], json!("No"));
+    }
+
+    /// connect_str tri-value on the add path: None -> null, Some("") -> "",
+    /// Some(x) -> x, with every key still emitted.
+    #[test]
+    fn test_add_comparison_function_connect_str_tri_value() {
+        // None -> stored JSON null.
+        let (m_none, _) = add_comparison_function(
+            &get_test_config(),
+            "cmp_none",
+            AddComparisonFunctionParams {
+                connect_str: None,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&m_none).unwrap();
+        let row = v["G2_CONFIG"]["CFG_CFUNC"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert!(row.as_object().unwrap().contains_key("CONNECT_STR"));
+        assert_eq!(row["CONNECT_STR"], Value::Null);
+
+        // Some("") -> stored empty string (distinct from null).
+        let (m_empty, _) = add_comparison_function(
+            &get_test_config(),
+            "cmp_empty",
+            AddComparisonFunctionParams {
+                connect_str: Some(""),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&m_empty).unwrap();
+        let row = v["G2_CONFIG"]["CFG_CFUNC"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert_eq!(row["CONNECT_STR"], json!(""));
+
+        // Some(x) -> stored x.
+        let (m_val, _) = add_comparison_function(
+            &get_test_config(),
+            "cmp_val",
+            AddComparisonFunctionParams {
+                connect_str: Some("g2X"),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&m_val).unwrap();
+        let row = v["G2_CONFIG"]["CFG_CFUNC"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert_eq!(row["CONNECT_STR"], json!("g2X"));
+    }
+
+    /// connect_str tri-state on the set path: Leave keeps, Clear nulls, Set writes.
+    #[test]
+    fn test_set_comparison_function_connect_str_tri_state() {
+        let base = get_test_config();
+
+        // Leave: existing CONNECT_STR ("g2CmpName") preserved.
+        let (m_leave, _) = set_comparison_function(
+            &base,
+            "CMP_NAME",
+            SetComparisonFunctionParams {
+                connect_str: FieldUpdate::Leave,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&m_leave).unwrap();
+        assert_eq!(
+            v["G2_CONFIG"]["CFG_CFUNC"][0]["CONNECT_STR"],
+            json!("g2CmpName")
+        );
+
+        // Clear: CONNECT_STR -> null (key still present).
+        let (m_clear, _) = set_comparison_function(
+            &base,
+            "CMP_NAME",
+            SetComparisonFunctionParams {
+                connect_str: FieldUpdate::Clear,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&m_clear).unwrap();
+        let row = &v["G2_CONFIG"]["CFG_CFUNC"][0];
+        assert!(row.as_object().unwrap().contains_key("CONNECT_STR"));
+        assert_eq!(row["CONNECT_STR"], Value::Null);
+
+        // Set: CONNECT_STR replaced.
+        let (m_set, _) = set_comparison_function(
+            &base,
+            "CMP_NAME",
+            SetComparisonFunctionParams {
+                connect_str: FieldUpdate::Set("g2New"),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&m_set).unwrap();
+        assert_eq!(
+            v["G2_CONFIG"]["CFG_CFUNC"][0]["CONNECT_STR"],
+            json!("g2New")
+        );
     }
 }
