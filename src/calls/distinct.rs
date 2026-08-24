@@ -582,10 +582,15 @@ pub fn delete_distinct_call_element(
     )?;
 
     if let Some(dbom_array) = config_data["G2_CONFIG"]["CFG_DFBOM"].as_array_mut() {
+        // Mirror the derive predicate: when a feature disambiguated the target
+        // row, constrain the retain by FTYPE too. Otherwise a sibling row sharing
+        // (call, felem, exec) under another feature would be over-deleted.
         dbom_array.retain(|item| {
             !(item.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(dfcall_id)
                 && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order))
+                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
+                && element_ftype_id
+                    .is_none_or(|ft| item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ft)))
         });
     }
 

@@ -635,10 +635,15 @@ pub fn delete_expression_call_element(
     )?;
 
     if let Some(ebom_array) = config_data["G2_CONFIG"]["CFG_EFBOM"].as_array_mut() {
+        // Mirror the derive predicate: when a feature disambiguated the target
+        // row, constrain the retain by FTYPE too. Otherwise a sibling row sharing
+        // (call, felem, exec) under another feature would be over-deleted.
         ebom_array.retain(|item| {
             !(item.get("EFCALL_ID").and_then(|v| v.as_i64()) == Some(efcall_id)
                 && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order))
+                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
+                && element_ftype_id
+                    .is_none_or(|ft| item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ft)))
         });
     }
 
@@ -895,5 +900,39 @@ mod tests {
         let bom2 = v2["G2_CONFIG"]["CFG_EFBOM"].as_array().unwrap();
         assert_eq!(bom2.len(), 1);
         assert_eq!(bom2[0]["FTYPE_ID"], json!(57));
+    }
+
+    // Belt-and-braces regression: the derive step is FTYPE-aware, but the retain
+    // used to drop by (call, felem, exec) only. If two rows on one call share the
+    // same element AND the same EXEC_ORDER but differ by feature, the FTYPE-blind
+    // retain over-deleted the sibling. No such collision exists in the stock config
+    // (add paths keep exec unique per call), so this is a synthetic guard against a
+    // future regression rather than a live bug. Pre-fix this asserted len == 0.
+    #[test]
+    fn test_delete_expression_call_element_same_exec_across_features_keeps_sibling() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FELEM": [{"FELEM_ID": 118, "FELEM_CODE": "TOKENIZED_NM"}],
+            "CFG_FTYPE": [
+                {"FTYPE_ID": 57, "FTYPE_CODE": "GROUP_ASSOCIATION"},
+                {"FTYPE_ID": 59, "FTYPE_CODE": "EMPLOYER"}
+            ],
+            "CFG_EFCALL": [{"EFCALL_ID": 97}],
+            "CFG_EFBOM": [
+                {"EFCALL_ID": 97, "FTYPE_ID": 57, "FELEM_ID": 118, "EXEC_ORDER": 13},
+                {"EFCALL_ID": 97, "FTYPE_ID": 59, "FELEM_ID": 118, "EXEC_ORDER": 13}
+            ]
+        }}"#;
+
+        let out = delete_expression_call_element(
+            config,
+            CallSelector::Id(97),
+            "TOKENIZED_NM",
+            Some("GROUP_ASSOCIATION"),
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&out).unwrap();
+        let bom = v["G2_CONFIG"]["CFG_EFBOM"].as_array().unwrap();
+        assert_eq!(bom.len(), 1, "only the GROUP_ASSOCIATION row is removed");
+        assert_eq!(bom[0]["FTYPE_ID"], json!(59), "EMPLOYER sibling survives");
     }
 }
