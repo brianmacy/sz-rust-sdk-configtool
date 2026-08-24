@@ -448,10 +448,9 @@ pub fn get_rule(config_json: &str, code_or_id: &str) -> Result<Value> {
 ///
 /// * `config_json` - Configuration JSON string
 ///
-/// The rows are sorted inside the SDK by `ERRULE_ID` ascending. That is an
-/// **assumed** default order: the exact Python sort key for `listRules` could not
-/// be verified in-repo, so this is the documented SDK convention (a one-line
-/// change if Python later proves to sort differently).
+/// The rows are sorted inside the SDK by `ERRULE_ID` ascending. This matches the
+/// Python `sz_configtool` reference (`/opt/senzing/er/bin/sz_configtool`, 4.4.0),
+/// whose `do_listRules` sorts with `key=lambda k: k["ERRULE_ID"]`.
 ///
 /// # Returns
 ///

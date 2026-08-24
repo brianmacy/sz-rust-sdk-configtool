@@ -657,7 +657,7 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
                     .to_uppercase();
 
                 // Handle display (backwards compatibility)
-                let disp_level = if let Some(display) = elem_obj
+                let disp_level_raw = if let Some(display) = elem_obj
                     .get("display")
                     .or_else(|| elem_obj.get("DISPLAY"))
                     .and_then(|v| v.as_str())
@@ -675,6 +675,10 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
                         .and_then(|v| v.as_i64())
                         .unwrap_or(1)
                 };
+                // Unify onto the shared strict validator (D25): a negative
+                // DISPLAY_LEVEL is now rejected rather than stored verbatim,
+                // matching set_feature_element / add_element_to_feature.
+                let disp_level = crate::elements::validate_display_level(disp_level_raw)?;
 
                 let disp_delim = elem_obj
                     .get("displaydelim")
@@ -683,19 +687,17 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
 
-                let elem_deriv = elem_obj
+                // Unify onto the shared strict validator (D25): an unknown
+                // DERIVED value is now rejected rather than silently coerced to
+                // "No", matching set_feature_element / add_element_to_feature.
+                let elem_deriv = match elem_obj
                     .get("derived")
                     .or_else(|| elem_obj.get("DERIVED"))
                     .and_then(|v| v.as_str())
-                    .map(|s| {
-                        if s.eq_ignore_ascii_case("yes") {
-                            "Yes"
-                        } else {
-                            "No"
-                        }
-                        .to_string()
-                    })
-                    .unwrap_or_else(|| "No".to_string());
+                {
+                    Some(s) => crate::elements::validate_derived(s)?.to_string(),
+                    None => "No".to_string(),
+                };
 
                 (code, expr, comp, disp_level, disp_delim, elem_deriv)
             } else {
@@ -1800,6 +1802,47 @@ mod tests {
         assert_eq!(fbom["EXEC_ORDER"], json!(1));
         assert_eq!(fbom["DISPLAY_LEVEL"], json!(1));
         assert_eq!(fbom["DERIVED"], json!("No"));
+    }
+
+    // D25: add_feature's per-element elementList handling is now unified onto the
+    // shared strict validators (elements::validate_display_level / validate_derived),
+    // matching set_feature_element and add_element_to_feature.
+    #[test]
+    fn test_add_feature_rejects_negative_display_level_in_element() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [], "CFG_FCLASS": [{"FCLASS_ID": 1, "FCLASS_CODE": "OTHER"}],
+            "CFG_FELEM": [], "CFG_FBOM": []
+        }}"#;
+        let elements = json!([{"element": "MYELEM", "displaylevel": -1}]);
+        let params = AddFeatureParams {
+            feature: "MYFEAT",
+            element_list: &elements,
+            ..Default::default()
+        };
+        let err = add_feature(config, params).unwrap_err();
+        assert!(
+            matches!(err, SzConfigError::InvalidInput(ref m) if m.contains("DISPLAY_LEVEL")),
+            "expected DISPLAY_LEVEL InvalidInput, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_add_feature_rejects_invalid_derived_in_element() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [], "CFG_FCLASS": [{"FCLASS_ID": 1, "FCLASS_CODE": "OTHER"}],
+            "CFG_FELEM": [], "CFG_FBOM": []
+        }}"#;
+        let elements = json!([{"element": "MYELEM", "derived": "maybe"}]);
+        let params = AddFeatureParams {
+            feature: "MYFEAT",
+            element_list: &elements,
+            ..Default::default()
+        };
+        let err = add_feature(config, params).unwrap_err();
+        assert!(
+            matches!(err, SzConfigError::InvalidInput(ref m) if m.contains("DERIVED")),
+            "expected DERIVED InvalidInput, got: {err:?}"
+        );
     }
 
     #[test]

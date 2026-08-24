@@ -25,6 +25,11 @@ use serde_json::Value;
 /// plain / `E` / `ES` variants, and finally `NONE`. This ordering is the sort
 /// key for behaviour-ordered listings (e.g. generic thresholds).
 ///
+/// Verified byte-for-byte against the Python `sz_configtool` reference
+/// (`/opt/senzing/er/bin/sz_configtool`, 4.4.0) `self.valid_behavior_codes`,
+/// which is the exact list used by its own generic-threshold sort
+/// (`valid_behavior_codes.index(BEHAVIOR)`).
+///
 /// Note that this is the canonical *display* domain: [`parse_behavior_code`]
 /// accepts a slightly broader input set (for example a bare `S` suffix), but
 /// only the codes listed here participate in ordering.

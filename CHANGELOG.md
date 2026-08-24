@@ -12,11 +12,11 @@ reviewed waves; every public-API and behavioural change is listed below. Test su
 from ~90 to 216 unit tests + 80 doc-tests (all green; clippy `-D warnings`, `cargo deny`,
 `cargo fmt` clean).
 
-> **Two parity assumptions to confirm against the Python `sz_configtool` reference** (both
-> one-line fixes if wrong, flagged because the reference is not in this repo): `list_rules`
-> default sort key (assumed `ERRULE_ID` ascending) and the A1-family slot in the
-> `BEHAVIOR_CODES` ordering (not present in the shipped template). The `LOCKED_FEATURES`
-> protected set below was ratified by the maintainer.
+> Both parity questions raised during review are now **verified** against the Python
+> `sz_configtool` reference (`/opt/senzing/er/bin/sz_configtool`, 4.4.0): `list_rules` sorts by
+> `ERRULE_ID` ascending (`do_listRules` `key=lambda k: k["ERRULE_ID"]`), and the `BEHAVIOR_CODES`
+> ordering — including the A1-family slot — is byte-identical to Python's `valid_behavior_codes`.
+> The `LOCKED_FEATURES` protected set was ratified by the maintainer.
 
 ### Fixed (correctness — some were silent data corruption)
 
@@ -107,14 +107,17 @@ from ~90 to 216 unit tests + 80 doc-tests (all green; clippy `-D warnings`, `car
 - Not-found wording for standardize get/delete and comparison get gained `… does not exist`. (#42)
 - `set_rule` with an explicit empty-string fragment now stores `""` (was `NotFound`); the taken-id
   message now includes the id. (#39)
+- `add_feature` now validates per-element `elementList` `DISPLAY_LEVEL` and `DERIVED` via the shared
+  strict validators (`elements::validate_display_level` / `validate_derived`): a negative display
+  level and an unknown `DERIVED` value in an element are now rejected rather than stored verbatim /
+  silently coerced to `"No"`. Unifies the last of the three DISPLAY_LEVEL/DERIVED code paths (D25).
 
-### Notes / follow-ups
+### Notes
 
 - FFI C ABI: no existing wrapper signature changed; the call-element delete redesign had no prior
   C wrapper, so it is additive at the C level.
-- Deferred (own decision + tests): unify `add_feature`'s lenient inline `elementList`
-  DISPLAY_LEVEL/DERIVED handling onto the shared strict validators used by `add_element_to_feature`
-  and `set_feature_element`.
+- No dependency changes in this release (`Cargo.toml`/`Cargo.lock` unchanged bar the version bump);
+  `cargo deny` posture is identical to 0.5.0.
 
 ## [0.5.0] - 2026-08-21
 
