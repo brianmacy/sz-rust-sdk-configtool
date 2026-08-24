@@ -160,8 +160,19 @@ pub fn to_python_repr_string(value: &Value) -> String {
 /// Test whether `filter` occurs as a substring of `record` rendered under the
 /// given [`FilterSubstrate`].
 ///
-/// The match is case-sensitive, mirroring Python's `in` operator on strings.
-/// An empty filter always matches.
+/// The match is **case-insensitive**: both the rendered record and the filter
+/// term are case-folded before the substring test. This mirrors every real
+/// `sz_configtool` list-filter site, which tests `arg.lower() in
+/// str(record).lower()` — not the bare `in` operator. An empty filter always
+/// matches.
+///
+/// ## Substrate and parity
+///
+/// The Python tool stringifies with `str(record)`, whose dict form is the
+/// CPython `repr` (single quotes, `None`/`True`/`False`) — i.e.
+/// [`FilterSubstrate::PythonRepr`]. Callers reproducing the tool's filtering
+/// exactly should pass `PythonRepr`; the other substrates are offered for
+/// callers filtering against a different rendering of their own choosing.
 ///
 /// # Example
 ///
@@ -182,7 +193,9 @@ pub fn matches_filter(record: &Value, filter: &str, substrate: FilterSubstrate) 
         FilterSubstrate::JsonDumps => to_json_dumps_string(record),
         FilterSubstrate::PythonRepr => to_python_repr_string(record),
     };
-    haystack.contains(filter)
+    // Case-fold both sides, matching the tool's `arg.lower() in str(...).lower()`.
+    // An empty filter still matches (`contains("")` is always true).
+    haystack.to_lowercase().contains(&filter.to_lowercase())
 }
 
 #[cfg(test)]
@@ -278,6 +291,35 @@ mod tests {
         assert!(matches_filter(&record, "None", FilterSubstrate::PythonRepr));
         assert!(!matches_filter(&record, "None", FilterSubstrate::JsonDumps));
         assert!(matches_filter(&record, "null", FilterSubstrate::JsonDumps));
+    }
+
+    #[test]
+    fn test_matches_filter_is_case_insensitive() {
+        // The tool filters with `arg.lower() in str(record).lower()`, so a
+        // differently-cased term must still match (e.g. `listRules none`
+        // matching a `None`/`null` in the record).
+        let record = json!({"RULE": "RESOLVE", "J": null});
+
+        // Term case differs from the record in every substrate.
+        assert!(matches_filter(
+            &record,
+            "resolve",
+            FilterSubstrate::JsonDumps
+        ));
+        assert!(matches_filter(
+            &record,
+            "RESOLVE",
+            FilterSubstrate::JsonDumps
+        ));
+        assert!(matches_filter(&record, "ReSoLvE", FilterSubstrate::Compact));
+        // `none` matches the repr rendering of `null` (None) case-insensitively.
+        assert!(matches_filter(&record, "none", FilterSubstrate::PythonRepr));
+        // Non-substring still misses regardless of case.
+        assert!(!matches_filter(
+            &record,
+            "candidate",
+            FilterSubstrate::JsonDumps
+        ));
     }
 
     #[test]
