@@ -548,7 +548,7 @@ pub fn add_distinct_call_element(
 ///     "CFG_DFBOM": [{"DFCALL_ID": 11, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1}]
 /// }}"#;
 /// let out = delete_distinct_call_element(
-///     config, CallSelector::Id(11), "FIRST_NAME").unwrap();
+///     config, CallSelector::Id(11), "FIRST_NAME", None).unwrap();
 /// let v: serde_json::Value = serde_json::from_str(&out).unwrap();
 /// assert!(v["G2_CONFIG"]["CFG_DFBOM"].as_array().unwrap().is_empty());
 /// ```
@@ -556,12 +556,19 @@ pub fn delete_distinct_call_element(
     config: &str,
     call: CallSelector,
     element_code: &str,
+    element_feature: Option<&str>,
 ) -> Result<String> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
     let dfcall_id = resolve_call_id(config, &config_data, call, resolve_dfcall_id_for_feature)?;
     let felem_id = lookup_element_id(config, element_code)?;
+    // When the element appears under multiple features in this call, the
+    // element's feature disambiguates to the correct BOM row (Python parity).
+    let element_ftype_id = match element_feature {
+        Some(f) => Some(lookup_feature_id(config, f)?),
+        None => None,
+    };
 
     // Derive EXEC_ORDER from the located BOM row (also validates existence).
     let exec_order = derive_bom_exec_order(
@@ -570,6 +577,7 @@ pub fn delete_distinct_call_element(
         "DFCALL_ID",
         dfcall_id,
         felem_id,
+        element_ftype_id,
         "Distinct",
     )?;
 
@@ -712,7 +720,8 @@ mod tests {
     #[test]
     fn test_delete_distinct_call_element_derives_exec_order() {
         let config = populated_config();
-        let out = delete_distinct_call_element(&config, CallSelector::Id(11), "LAST_NAME").unwrap();
+        let out =
+            delete_distinct_call_element(&config, CallSelector::Id(11), "LAST_NAME", None).unwrap();
         let v: Value = serde_json::from_str(&out).unwrap();
         let dfbom = v["G2_CONFIG"]["CFG_DFBOM"].as_array().unwrap();
         assert_eq!(dfbom.len(), 1);

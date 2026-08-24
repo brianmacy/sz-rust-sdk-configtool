@@ -72,22 +72,28 @@ pub(crate) fn resolve_call_id(
     }
 }
 
-/// Derive the `EXEC_ORDER` of the single BOM row addressed by (call, element).
+/// Derive the `EXEC_ORDER` of the single BOM row addressed by
+/// (call, element[, element feature]).
 ///
 /// A BOM record (`CFG_CFBOM` / `CFG_DFBOM` / `CFG_EFBOM`) stores the *element's*
-/// feature id in its `FTYPE_ID`, not the call's, so `FTYPE_ID` is deliberately
-/// **not** part of the address here — the row is located by (call id, element
-/// id) alone. Returns the located row's `EXEC_ORDER`, so callers no longer need
-/// to supply it.
+/// feature id in its `FTYPE_ID` (not the call's). One call can carry the same
+/// element (`FELEM_ID`) under several element-features — the stock config does
+/// exactly this (e.g. `EFCALL_ID 97` / `TOKENIZED_NM` under both
+/// `GROUP_ASSOCIATION` and `EMPLOYER`). When `element_ftype_id` is supplied it is
+/// added to the match so that collision resolves to the feature-matched row,
+/// mirroring Python's `(call_id, FTYPE_ID, FELEM_ID)` addressing. When it is
+/// `None` the row is located by (call id, element id) alone.
 ///
-/// Errors with `NotFound` when no row matches and `InvalidInput` when more than
-/// one does (the element cannot be uniquely addressed without more information).
+/// Returns the located row's `EXEC_ORDER`. Errors with `NotFound` when no row
+/// matches and `InvalidInput` when more than one does (an ambiguous
+/// `(call, element)` — the caller should pass the element's feature).
 pub(crate) fn derive_bom_exec_order(
     root: &Value,
     section: &str,
     call_id_field: &str,
     call_id: i64,
     felem_id: i64,
+    element_ftype_id: Option<i64>,
     label: &str,
 ) -> Result<i64> {
     let empty: Vec<Value> = Vec::new();
@@ -102,6 +108,8 @@ pub(crate) fn derive_bom_exec_order(
         .filter(|r| {
             r.get(call_id_field).and_then(|v| v.as_i64()) == Some(call_id)
                 && r.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
+                && element_ftype_id
+                    .is_none_or(|ft| r.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ft))
         })
         .filter_map(|r| r.get("EXEC_ORDER").and_then(|v| v.as_i64()))
         .collect();
@@ -112,7 +120,7 @@ pub(crate) fn derive_bom_exec_order(
         ))),
         [order] => Ok(*order),
         many => Err(SzConfigError::InvalidInput(format!(
-            "Ambiguous {label} call element: element matches {} rows; cannot derive execution order",
+            "Ambiguous {label} call element: element matches {} rows across features; specify the element's feature to disambiguate",
             many.len()
         ))),
     }

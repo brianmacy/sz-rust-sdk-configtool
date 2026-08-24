@@ -10039,14 +10039,30 @@ pub extern "C" fn SzConfigTool_deleteComparisonCallElement(
     config_json: *const c_char,
     feature_code: *const c_char,
     element_code: *const c_char,
+    element_feature: *const c_char,
 ) -> SzConfigTool_result {
     let config = ffi_required_str!(config_json, "config_json");
     let feature = ffi_required_str!(feature_code, "feature_code");
     let element = ffi_required_str!(element_code, "element_code");
+    let elem_feature = if element_feature.is_null() {
+        None
+    } else {
+        match unsafe { CStr::from_ptr(element_feature) }.to_str() {
+            Ok(s) => Some(s),
+            Err(e) => {
+                set_error(format!("Invalid UTF-8 in element_feature: {e}"), -1);
+                return SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -1,
+                };
+            }
+        }
+    };
     handle_result!(crate::calls::comparison::delete_comparison_call_element(
         config,
         crate::calls::CallSelector::Feature(feature),
-        element
+        element,
+        elem_feature,
     ))
 }
 
@@ -10061,14 +10077,30 @@ pub extern "C" fn SzConfigTool_deleteDistinctCallElement(
     config_json: *const c_char,
     feature_code: *const c_char,
     element_code: *const c_char,
+    element_feature: *const c_char,
 ) -> SzConfigTool_result {
     let config = ffi_required_str!(config_json, "config_json");
     let feature = ffi_required_str!(feature_code, "feature_code");
     let element = ffi_required_str!(element_code, "element_code");
+    let elem_feature = if element_feature.is_null() {
+        None
+    } else {
+        match unsafe { CStr::from_ptr(element_feature) }.to_str() {
+            Ok(s) => Some(s),
+            Err(e) => {
+                set_error(format!("Invalid UTF-8 in element_feature: {e}"), -1);
+                return SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -1,
+                };
+            }
+        }
+    };
     handle_result!(crate::calls::distinct::delete_distinct_call_element(
         config,
         crate::calls::CallSelector::Feature(feature),
-        element
+        element,
+        elem_feature,
     ))
 }
 
@@ -10084,13 +10116,29 @@ pub extern "C" fn SzConfigTool_deleteExpressionCallElement(
     config_json: *const c_char,
     efcall_id: i64,
     element_code: *const c_char,
+    element_feature: *const c_char,
 ) -> SzConfigTool_result {
     let config = ffi_required_str!(config_json, "config_json");
     let element = ffi_required_str!(element_code, "element_code");
+    let elem_feature = if element_feature.is_null() {
+        None
+    } else {
+        match unsafe { CStr::from_ptr(element_feature) }.to_str() {
+            Ok(s) => Some(s),
+            Err(e) => {
+                set_error(format!("Invalid UTF-8 in element_feature: {e}"), -1);
+                return SzConfigTool_result {
+                    response: std::ptr::null_mut(),
+                    returnCode: -1,
+                };
+            }
+        }
+    };
     handle_result!(crate::calls::expression::delete_expression_call_element(
         config,
         crate::calls::CallSelector::Id(efcall_id),
-        element
+        element,
+        elem_feature,
     ))
 }
 
@@ -10301,6 +10349,7 @@ mod tests {
             config.as_ptr(),
             feature.as_ptr(),
             element.as_ptr(),
+            std::ptr::null(), // element_feature: not needed (unambiguous)
         ));
         let v: Value = serde_json::from_str(&modified).unwrap();
         let cfbom = v["G2_CONFIG"]["CFG_CFBOM"].as_array().unwrap();
