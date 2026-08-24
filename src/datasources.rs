@@ -29,10 +29,32 @@ struct DsrcRow {
 // ============================================================================
 
 /// Parameters for adding a data source
+///
+/// `id` is a caller-supplied `DSRC_ID`. Leave it `None` (or pass a non-positive
+/// value) to auto-assign the next free id (seeded at the user-range floor of
+/// 1000); pass `Some(id > 0)` to request that exact id — [`add_data_source`]
+/// then fails with `AlreadyExists` if it is already taken.
 #[derive(Debug, Clone, Default)]
 pub struct AddDataSourceParams<'a> {
     pub code: &'a str,
     pub retention_level: Option<&'a str>,
+    pub id: Option<i64>,
+}
+
+impl<'a> AddDataSourceParams<'a> {
+    /// Request a specific `DSRC_ID` for the new data source.
+    ///
+    /// # Example
+    /// ```
+    /// use sz_configtool_lib::datasources::AddDataSourceParams;
+    /// let params = AddDataSourceParams { code: "CUSTOMERS", ..Default::default() }
+    ///     .with_id(1500);
+    /// assert_eq!(params.id, Some(1500));
+    /// ```
+    pub fn with_id(mut self, id: i64) -> Self {
+        self.id = Some(id);
+        self
+    }
 }
 
 /// Parameters for setting (updating) a data source
@@ -54,6 +76,7 @@ impl<'a> TryFrom<&'a Value> for AddDataSourceParams<'a> {
         Ok(Self {
             code,
             retention_level: json.get("retentionLevel").and_then(|v| v.as_str()),
+            id: json.get("id").and_then(|v| v.as_i64()),
         })
     }
 }
@@ -108,7 +131,10 @@ pub fn add_data_source(config_json: &str, params: AddDataSourceParams) -> Result
         )));
     }
 
-    let next_id = helpers::get_next_id_from_array(dsrcs, "DSRC_ID")?;
+    // Caller-supplied id (#37): None / non-positive -> auto-assign the next free
+    // id at the user-range floor of 1000; a specific id > 0 is honoured unless
+    // already taken (get_desired_or_next_id then returns AlreadyExists).
+    let next_id = helpers::get_desired_or_next_id(dsrcs, "DSRC_ID", params.id, 1000)?;
 
     // Validate and use parameters or defaults (case-insensitive with normalization)
     let retention = if let Some(level) = params.retention_level {
@@ -309,6 +335,7 @@ mod tests {
         let params = AddDataSourceParams {
             code: "customers",
             retention_level: None,
+            id: None,
         };
 
         let modified = add_data_source(TEST_CONFIG, params).unwrap();
@@ -329,6 +356,7 @@ mod tests {
         let params = AddDataSourceParams {
             code: "watchlist",
             retention_level: Some("forget"),
+            id: None,
         };
 
         let modified = add_data_source(TEST_CONFIG, params).unwrap();
@@ -340,5 +368,78 @@ mod tests {
             assert!(obj.contains_key(key), "{key} key must be present");
         }
         assert_eq!(dsrc["RETENTION_LEVEL"], json!("Forget"));
+    }
+
+    #[test]
+    fn test_add_data_source_auto_id_seeds_1000() {
+        // D18: a fresh data source now seeds at DSRC_ID 1000, not 3, even when the
+        // reserved system data sources (1, 2) are present.
+        let config = r#"{"G2_CONFIG": {"CFG_DSRC": [
+            {"DSRC_ID": 1, "DSRC_CODE": "TEST"},
+            {"DSRC_ID": 2, "DSRC_CODE": "SEARCH"}
+        ]}}"#;
+        let modified = add_data_source(
+            config,
+            AddDataSourceParams {
+                code: "customers",
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let dsrc = value["G2_CONFIG"]["CFG_DSRC"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert_eq!(dsrc["DSRC_ID"], json!(1000));
+    }
+
+    #[test]
+    fn test_add_data_source_specific_id_honoured() {
+        let modified = add_data_source(
+            TEST_CONFIG,
+            AddDataSourceParams {
+                code: "customers",
+                id: Some(2500),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let dsrc = &value["G2_CONFIG"]["CFG_DSRC"][0];
+        assert_eq!(dsrc["DSRC_ID"], json!(2500));
+    }
+
+    #[test]
+    fn test_add_data_source_taken_id_rejected() {
+        let config = r#"{"G2_CONFIG": {"CFG_DSRC": [{"DSRC_ID": 2500, "DSRC_CODE": "OTHER"}]}}"#;
+        let err = add_data_source(
+            config,
+            AddDataSourceParams {
+                code: "customers",
+                id: Some(2500),
+                ..Default::default()
+            },
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
+    }
+
+    #[test]
+    fn test_add_data_source_nonpositive_id_falls_back_to_auto() {
+        // D17: a non-positive requested id auto-assigns rather than erroring.
+        let modified = add_data_source(
+            TEST_CONFIG,
+            AddDataSourceParams {
+                code: "customers",
+                id: Some(0),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let dsrc = &value["G2_CONFIG"]["CFG_DSRC"][0];
+        assert_eq!(dsrc["DSRC_ID"], json!(1000));
     }
 }

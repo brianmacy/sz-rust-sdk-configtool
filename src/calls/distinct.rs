@@ -3,10 +3,12 @@
 //! Functions for managing CFG_DFCALL (distinct calls) and CFG_DFBOM
 //! (distinct bill of materials) configuration sections.
 
+use crate::calls::{CallSelector, derive_bom_exec_order, resolve_call_id};
 use crate::config_rows::{DfbomRow, DfcallRow};
 use crate::error::{Result, SzConfigError};
 use crate::helpers::{
-    find_in_config_array, get_next_id, lookup_dfunc_id, lookup_element_id, lookup_feature_id,
+    get_next_id, lookup_dfunc_id, lookup_element_id, lookup_feature_id,
+    resolve_dfcall_id_for_feature,
 };
 use serde_json::{Value, json};
 
@@ -53,15 +55,6 @@ impl TryFrom<&Value> for AddDistinctCallParams {
 /// Parameters for adding a distinct call element
 #[derive(Debug, Clone)]
 pub struct AddDistinctCallElementParams {
-    pub dfcall_id: i64,
-    pub ftype_id: i64,
-    pub felem_id: i64,
-    pub exec_order: i64,
-}
-
-/// Parameters for deleting a distinct call element
-#[derive(Debug, Clone)]
-pub struct DeleteDistinctCallElementParams {
     pub dfcall_id: i64,
     pub ftype_id: i64,
     pub felem_id: i64,
@@ -263,32 +256,84 @@ pub fn delete_distinct_call(config: &str, dfcall_id: i64) -> Result<String> {
     serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))
 }
 
-/// Get a single distinct call by ID
+/// Get a single distinct call, addressed by id or by feature code.
+///
+/// Pass [`CallSelector::Id`] to look the call up by its `DFCALL_ID`, or
+/// [`CallSelector::Feature`] to resolve the (0-or-1) distinct call bound to a
+/// feature. The feature path scans `CFG_DFCALL` by `FTYPE_ID` via
+/// [`resolve_dfcall_id_for_feature`] rather than treating the feature id as a
+/// call id (the historical bug this fixes).
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `dfcall_id` - Distinct call ID
+/// * `selector` - Call id or feature code identifying the call
 ///
 /// # Returns
 /// JSON Value representing the distinct call record
 ///
 /// # Errors
-/// - `NotFound` if call ID doesn't exist
-pub fn get_distinct_call(config: &str, dfcall_id: i64) -> Result<Value> {
-    find_in_config_array(config, "CFG_DFCALL", "DFCALL_ID", &dfcall_id.to_string())?.ok_or_else(
-        || SzConfigError::NotFound(format!("Distinct call ID {dfcall_id} does not exist")),
-    )
+/// - `NotFound` if no matching call exists
+/// - `InvalidInput` if a feature code matches more than one call (ambiguous)
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::calls::CallSelector;
+/// use sz_configtool_lib::calls::distinct::get_distinct_call;
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+///     "CFG_DFCALL": [{"DFCALL_ID": 11, "FTYPE_ID": 3, "DFUNC_ID": 1}]
+/// }}"#;
+/// let by_id = get_distinct_call(config, CallSelector::Id(11)).unwrap();
+/// let by_feature = get_distinct_call(config, CallSelector::Feature("NAME")).unwrap();
+/// assert_eq!(by_id, by_feature);
+/// ```
+pub fn get_distinct_call(config: &str, selector: CallSelector) -> Result<Value> {
+    let root: Value =
+        serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let dfcall_id = resolve_call_id(config, &root, selector, resolve_dfcall_id_for_feature)?;
+
+    root.get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_DFCALL"))
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .find(|c| c.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(dfcall_id))
+        })
+        .cloned()
+        .ok_or_else(|| {
+            SzConfigError::NotFound(format!("Distinct call ID {dfcall_id} does not exist"))
+        })
 }
 
 /// List all distinct calls with resolved names
 ///
-/// Returns all distinct calls with feature and function codes resolved.
+/// Returns all distinct calls with feature and function codes resolved, plus the
+/// call's `elementList` (element codes assembled from `CFG_DFBOM`, ordered by
+/// `EXEC_ORDER`).
+///
+/// The rows are sorted inside the SDK by `(FTYPE_ID, DFCALL_ID)` — the same key
+/// Python uses — so callers never need to re-sort. `execOrder` is retained on the
+/// distinct projection (the header row's `EXEC_ORDER`, always `1`).
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
 ///
 /// # Returns
-/// Vector of JSON Values with resolved names
+/// Vector of JSON Values with resolved names, `execOrder`, and an `elementList`
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::calls::distinct::list_distinct_calls;
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+///     "CFG_FELEM": [{"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"}],
+///     "CFG_DFUNC": [{"DFUNC_ID": 1, "DFUNC_CODE": "FELEM_EXP"}],
+///     "CFG_DFCALL": [{"DFCALL_ID": 7, "FTYPE_ID": 3, "DFUNC_ID": 1, "EXEC_ORDER": 1}],
+///     "CFG_DFBOM": [{"DFCALL_ID": 7, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1}]
+/// }}"#;
+/// let calls = list_distinct_calls(config).unwrap();
+/// assert_eq!(calls[0]["elementList"], serde_json::json!(["FIRST_NAME"]));
+/// ```
 pub fn list_distinct_calls(config: &str) -> Result<Vec<Value>> {
     let config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -309,6 +354,18 @@ pub fn list_distinct_calls(config: &str) -> Result<Vec<Value>> {
     let dfunc_array = config_data
         .get("G2_CONFIG")
         .and_then(|g| g.get("CFG_DFUNC"))
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty_array);
+
+    let felem_array = config_data
+        .get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_FELEM"))
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty_array);
+
+    let dfbom_array = config_data
+        .get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_DFBOM"))
         .and_then(|v| v.as_array())
         .unwrap_or(&empty_array);
 
@@ -333,18 +390,55 @@ pub fn list_distinct_calls(config: &str) -> Result<Vec<Value>> {
             .to_string()
     };
 
+    let resolve_felem = |felem_id: i64| -> String {
+        felem_array
+            .iter()
+            .find(|fe| fe.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id))
+            .and_then(|fe| fe.get("FELEM_CODE"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string()
+    };
+
+    // Assemble a call's elementList from CFG_DFBOM, ordered by EXEC_ORDER.
+    let element_list = |dfcall_id: i64| -> Vec<Value> {
+        let mut rows: Vec<&Value> = dfbom_array
+            .iter()
+            .filter(|bom| bom.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(dfcall_id))
+            .collect();
+        rows.sort_by_key(|bom| bom.get("EXEC_ORDER").and_then(|v| v.as_i64()).unwrap_or(0));
+        rows.into_iter()
+            .map(|bom| {
+                let felem_id = bom.get("FELEM_ID").and_then(|v| v.as_i64()).unwrap_or(0);
+                Value::from(resolve_felem(felem_id))
+            })
+            .collect()
+    };
+
+    // Sort the raw rows by (FTYPE_ID, DFCALL_ID) before projection so the numeric
+    // sort key is never lost (mirrors Python).
+    let mut sorted: Vec<&Value> = dfcall_array.iter().collect();
+    sorted.sort_by_key(|item| {
+        (
+            item.get("FTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+            item.get("DFCALL_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+        )
+    });
+
     // Transform distinct calls
-    let items: Vec<Value> = dfcall_array
-        .iter()
+    let items: Vec<Value> = sorted
+        .into_iter()
         .map(|item| {
+            let dfcall_id = item.get("DFCALL_ID").and_then(|v| v.as_i64()).unwrap_or(0);
             let ftype_id = item.get("FTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(0);
             let dfunc_id = item.get("DFUNC_ID").and_then(|v| v.as_i64()).unwrap_or(0);
 
             json!({
-                "id": item.get("DFCALL_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+                "id": dfcall_id,
                 "feature": resolve_ftype(ftype_id),
                 "function": resolve_dfunc(dfunc_id),
-                "execOrder": item.get("EXEC_ORDER").and_then(|v| v.as_i64()).unwrap_or(1)
+                "execOrder": item.get("EXEC_ORDER").and_then(|v| v.as_i64()).unwrap_or(1),
+                "elementList": element_list(dfcall_id)
             })
         })
         .collect();
@@ -423,47 +517,67 @@ pub fn add_distinct_call_element(
     Ok((modified_config, new_record))
 }
 
-/// Delete a distinct call element
+/// Delete a distinct call element, addressed by (call | feature) + element code.
+///
+/// The caller no longer supplies `EXEC_ORDER`: the target `CFG_DFBOM` row is
+/// located by its call id and the element's `FELEM_ID`, and its execution order
+/// is derived from that row. A DFBOM record stores the *element's* feature id in
+/// `FTYPE_ID`, so that column is not part of the address.
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `params` - Element parameters (dfcall_id, ftype_id, felem_id, exec_order)
+/// * `call` - Call id or feature code identifying the distinct call
+/// * `element_code` - Element code to remove from the call
 ///
 /// # Returns
 /// Modified configuration JSON string
+///
+/// # Errors
+/// - `NotFound` if the element is not on the call (or the call/element codes don't resolve)
+/// - `InvalidInput` if a feature code matches more than one call, or the element
+///   matches more than one BOM row on the call (ambiguous)
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::calls::CallSelector;
+/// use sz_configtool_lib::calls::distinct::delete_distinct_call_element;
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+///     "CFG_FELEM": [{"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"}],
+///     "CFG_DFCALL": [{"DFCALL_ID": 11, "FTYPE_ID": 3, "DFUNC_ID": 1}],
+///     "CFG_DFBOM": [{"DFCALL_ID": 11, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1}]
+/// }}"#;
+/// let out = delete_distinct_call_element(
+///     config, CallSelector::Id(11), "FIRST_NAME").unwrap();
+/// let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+/// assert!(v["G2_CONFIG"]["CFG_DFBOM"].as_array().unwrap().is_empty());
+/// ```
 pub fn delete_distinct_call_element(
     config: &str,
-    params: DeleteDistinctCallElementParams,
+    call: CallSelector,
+    element_code: &str,
 ) -> Result<String> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    // Validate that the element exists
-    let element_exists = config_data["G2_CONFIG"]["CFG_DFBOM"]
-        .as_array()
-        .map(|arr| {
-            arr.iter().any(|item| {
-                item.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(params.dfcall_id)
-                    && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
-                    && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(params.felem_id)
-                    && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order)
-            })
-        })
-        .unwrap_or(false);
+    let dfcall_id = resolve_call_id(config, &config_data, call, resolve_dfcall_id_for_feature)?;
+    let felem_id = lookup_element_id(config, element_code)?;
 
-    if !element_exists {
-        return Err(SzConfigError::NotFound(
-            "Distinct call element not found".to_string(),
-        ));
-    }
+    // Derive EXEC_ORDER from the located BOM row (also validates existence).
+    let exec_order = derive_bom_exec_order(
+        &config_data,
+        "CFG_DFBOM",
+        "DFCALL_ID",
+        dfcall_id,
+        felem_id,
+        "Distinct",
+    )?;
 
-    // Delete the element
     if let Some(dbom_array) = config_data["G2_CONFIG"]["CFG_DFBOM"].as_array_mut() {
         dbom_array.retain(|item| {
-            !(item.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(params.dfcall_id)
-                && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
-                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(params.felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order))
+            !(item.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(dfcall_id)
+                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
+                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order))
         });
     }
 
@@ -563,5 +677,78 @@ mod tests {
         assert_all_keys(dfbom, &DFBOM_KEYS);
         assert_all_keys(&new_record, &DFBOM_KEYS);
         assert_eq!(dfbom["EXEC_ORDER"], json!(3));
+    }
+
+    // #40 fixtures: DFCALL_ID (11) deliberately differs from FTYPE_ID (3). The
+    // historical bug used the feature id directly as the call id; the by-feature
+    // path must instead scan CFG_DFCALL and return DFCALL_ID 11.
+    fn populated_config() -> String {
+        r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_FELEM": [
+                {"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"},
+                {"FELEM_ID": 12, "FELEM_CODE": "LAST_NAME"}
+            ],
+            "CFG_DFCALL": [{"DFCALL_ID": 11, "FTYPE_ID": 3, "DFUNC_ID": 1}],
+            "CFG_DFBOM": [
+                {"DFCALL_ID": 11, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1},
+                {"DFCALL_ID": 11, "FTYPE_ID": 3, "FELEM_ID": 12, "EXEC_ORDER": 2}
+            ]
+        }}"#
+        .to_string()
+    }
+
+    #[test]
+    fn test_get_distinct_call_by_feature_returns_correct_call() {
+        let config = populated_config();
+        let by_id = get_distinct_call(&config, CallSelector::Id(11)).unwrap();
+        let by_feature = get_distinct_call(&config, CallSelector::Feature("NAME")).unwrap();
+        assert_eq!(by_id, by_feature);
+        // Regression: the returned call id is the real DFCALL_ID (11), NOT the
+        // feature id (3) that the old FTYPE_ID-as-call-id bug would have used.
+        assert_eq!(by_feature["DFCALL_ID"], json!(11));
+    }
+
+    #[test]
+    fn test_delete_distinct_call_element_derives_exec_order() {
+        let config = populated_config();
+        let out = delete_distinct_call_element(&config, CallSelector::Id(11), "LAST_NAME").unwrap();
+        let v: Value = serde_json::from_str(&out).unwrap();
+        let dfbom = v["G2_CONFIG"]["CFG_DFBOM"].as_array().unwrap();
+        assert_eq!(dfbom.len(), 1);
+        assert_eq!(dfbom[0]["FELEM_ID"], json!(11));
+    }
+
+    #[test]
+    fn test_list_distinct_calls_sorted_element_list_and_exec_order() {
+        // Stored order differs from (FTYPE_ID, DFCALL_ID); BOM stored out of order.
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [
+                {"FTYPE_ID": 3, "FTYPE_CODE": "NAME"},
+                {"FTYPE_ID": 7, "FTYPE_CODE": "ADDRESS"}
+            ],
+            "CFG_FELEM": [
+                {"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"},
+                {"FELEM_ID": 12, "FELEM_CODE": "LAST_NAME"}
+            ],
+            "CFG_DFUNC": [{"DFUNC_ID": 1, "DFUNC_CODE": "FELEM_EXP"}],
+            "CFG_DFCALL": [
+                {"DFCALL_ID": 20, "FTYPE_ID": 7, "DFUNC_ID": 1, "EXEC_ORDER": 1},
+                {"DFCALL_ID": 5, "FTYPE_ID": 3, "DFUNC_ID": 1, "EXEC_ORDER": 1}
+            ],
+            "CFG_DFBOM": [
+                {"DFCALL_ID": 5, "FTYPE_ID": 3, "FELEM_ID": 12, "EXEC_ORDER": 2},
+                {"DFCALL_ID": 5, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1}
+            ]
+        }}"#;
+
+        let calls = list_distinct_calls(config).unwrap();
+        assert_eq!(calls[0]["feature"], json!("NAME"));
+        assert_eq!(calls[0]["id"], json!(5));
+        // execOrder ruling retained (D28).
+        assert_eq!(calls[0]["execOrder"], json!(1));
+        // elementList ordered by EXEC_ORDER despite reversed storage.
+        assert_eq!(calls[0]["elementList"], json!(["FIRST_NAME", "LAST_NAME"]));
+        assert_eq!(calls[1]["feature"], json!("ADDRESS"));
     }
 }

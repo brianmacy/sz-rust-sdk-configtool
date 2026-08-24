@@ -5,7 +5,8 @@
 
 use crate::error::SzConfigError;
 use crate::helpers::{
-    add_to_config_array, delete_from_config_array, find_in_config_array, get_next_id,
+    FieldUpdate, add_to_config_array, delete_from_config_array, field_or_null,
+    find_in_config_array, get_next_id,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -29,7 +30,7 @@ struct DfuncRow {
     #[serde(rename = "DFUNC_DESC")]
     dfunc_desc: Option<String>,
     #[serde(rename = "CONNECT_STR")]
-    connect_str: String,
+    connect_str: Option<String>,
     #[serde(rename = "ANON_SUPPORT")]
     anon_support: String,
     #[serde(rename = "LANGUAGE")]
@@ -41,9 +42,13 @@ struct DfuncRow {
 // ============================================================================
 
 /// Parameters for adding a distinct function
+///
+/// `connect_str` is tri-valued to mirror the Python tool: `None` (or an absent
+/// `connectStr` key) stores JSON `null`, `Some("")` stores an empty string, and
+/// `Some(x)` stores `x`. A blank `connect_str` is accepted (Python parity).
 #[derive(Debug, Clone, Default)]
 pub struct AddDistinctFunctionParams<'a> {
-    pub connect_str: &'a str,
+    pub connect_str: Option<&'a str>,
     pub description: Option<&'a str>,
     pub language: Option<&'a str>,
     pub anon_support: Option<&'a str>,
@@ -54,10 +59,8 @@ impl<'a> TryFrom<&'a Value> for AddDistinctFunctionParams<'a> {
 
     fn try_from(json: &'a Value) -> Result<Self, SzConfigError> {
         Ok(Self {
-            connect_str: json
-                .get("connectStr")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| SzConfigError::MissingField("connectStr".to_string()))?,
+            // Absent or explicit-null connectStr -> None (stored as JSON null).
+            connect_str: json.get("connectStr").and_then(|v| v.as_str()),
             description: json.get("description").and_then(|v| v.as_str()),
             language: json.get("language").and_then(|v| v.as_str()),
             anon_support: json.get("anonSupport").and_then(|v| v.as_str()),
@@ -66,9 +69,12 @@ impl<'a> TryFrom<&'a Value> for AddDistinctFunctionParams<'a> {
 }
 
 /// Parameters for setting a distinct function
+///
+/// `connect_str` is a tri-state [`FieldUpdate`]: `Leave` keeps the stored value,
+/// `Clear` writes JSON `null`, and `Set(x)` writes `x` (including `Set("")`).
 #[derive(Debug, Clone, Default)]
 pub struct SetDistinctFunctionParams<'a> {
-    pub connect_str: Option<&'a str>,
+    pub connect_str: FieldUpdate<&'a str>,
     pub description: Option<&'a str>,
     pub language: Option<&'a str>,
     pub anon_support: Option<&'a str>,
@@ -79,7 +85,8 @@ pub struct SetDistinctFunctionParams<'a> {
 /// # Arguments
 /// * `config_json` - The configuration JSON string
 /// * `dfunc_code` - Function code (will be uppercased)
-/// * `params` - Function parameters (connect_str required, others optional)
+/// * `params` - Function parameters (all optional; a `None` `connect_str` stores
+///   JSON `null`, and a blank `connect_str` is accepted)
 ///
 /// # Returns
 /// Result with modified JSON string and the new function record
@@ -98,13 +105,6 @@ pub fn add_distinct_function(
         return Err(SzConfigError::validation(format!(
             "Distinct function already exists: {dfunc_code}"
         )));
-    }
-
-    // Validate blank CONNECTSTR (Python parity)
-    if params.connect_str.trim().is_empty() {
-        return Err(SzConfigError::validation(
-            "CONNECTSTR cannot be blank".to_string(),
-        ));
     }
 
     // Validate ANON_SUPPORT domain (["Yes", "No"], default "No"), mirroring
@@ -135,7 +135,7 @@ pub fn add_distinct_function(
         dfunc_id,
         dfunc_code,
         dfunc_desc: params.description.map(str::to_string),
-        connect_str: params.connect_str.to_string(),
+        connect_str: params.connect_str.map(str::to_string),
         anon_support: anon_support.to_string(),
         language: params.language.map(str::to_string),
     };
@@ -217,12 +217,14 @@ pub fn list_distinct_functions(config_json: &str) -> Result<Vec<Value>, SzConfig
         items
             .iter()
             .map(|item| {
+                // Stored-nullable columns (and the id, per D10) are projected
+                // null-preserving via field_or_null rather than coerced.
                 json!({
-                    "id": item.get("DFUNC_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+                    "id": field_or_null(item, "DFUNC_ID"),
                     "function": item.get("DFUNC_CODE").and_then(|v| v.as_str()).unwrap_or(""),
-                    "connectStr": item.get("CONNECT_STR").and_then(|v| v.as_str()).unwrap_or(""),
-                    "anonSupport": item.get("ANON_SUPPORT").and_then(|v| v.as_str()).unwrap_or(""),
-                    "language": item.get("LANGUAGE").and_then(|v| v.as_str()).unwrap_or("")
+                    "connectStr": field_or_null(item, "CONNECT_STR"),
+                    "anonSupport": field_or_null(item, "ANON_SUPPORT"),
+                    "language": field_or_null(item, "LANGUAGE")
                 })
             })
             .collect()
@@ -261,8 +263,14 @@ pub fn set_distinct_function(
     // In-place update of a complete existing row; all keys preserved.
     // Update fields if provided
     if let Some(obj) = function.as_object_mut() {
-        if let Some(conn) = params.connect_str {
-            obj.insert("CONNECT_STR".to_string(), json!(conn));
+        match params.connect_str {
+            FieldUpdate::Leave => {}
+            FieldUpdate::Clear => {
+                obj.insert("CONNECT_STR".to_string(), Value::Null);
+            }
+            FieldUpdate::Set(conn) => {
+                obj.insert("CONNECT_STR".to_string(), json!(conn));
+            }
         }
         if let Some(desc) = params.description {
             obj.insert("DFUNC_DESC".to_string(), json!(desc));
@@ -309,7 +317,7 @@ mod tests {
             &config,
             "custom_dist",
             AddDistinctFunctionParams {
-                connect_str: "g2CustomDist",
+                connect_str: Some("g2CustomDist"),
                 description: Some("Custom distinct"),
                 language: Some("en"),
                 anon_support: Some("Yes"),
@@ -342,7 +350,7 @@ mod tests {
             &config,
             "custom_dist",
             AddDistinctFunctionParams {
-                connect_str: "g2CustomDist",
+                connect_str: Some("g2CustomDist"),
                 description: None,
                 language: None,
                 anon_support: None,
@@ -370,5 +378,117 @@ mod tests {
         assert_eq!(obj["LANGUAGE"], Value::Null);
         assert_eq!(record["DFUNC_DESC"], Value::Null);
         assert_eq!(record["ANON_SUPPORT"], json!("No"));
+    }
+
+    /// A blank connect_str is now accepted (the "CONNECTSTR cannot be blank"
+    /// rejection was removed for Python parity) and stored as an empty string.
+    #[test]
+    fn test_add_distinct_function_accepts_blank_connect_str() {
+        let (modified, _record) = add_distinct_function(
+            &get_test_config(),
+            "custom_blank",
+            AddDistinctFunctionParams {
+                connect_str: Some(""),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&modified).unwrap();
+        let row = v["G2_CONFIG"]["CFG_DFUNC"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert_eq!(row["CONNECT_STR"], json!(""));
+    }
+
+    /// connect_str tri-value on the add path: None -> null, Some("") -> "",
+    /// Some(x) -> x.
+    #[test]
+    fn test_add_distinct_function_connect_str_tri_value() {
+        let (m_none, _) = add_distinct_function(
+            &get_test_config(),
+            "d_none",
+            AddDistinctFunctionParams {
+                connect_str: None,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&m_none).unwrap();
+        let row = v["G2_CONFIG"]["CFG_DFUNC"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert!(row.as_object().unwrap().contains_key("CONNECT_STR"));
+        assert_eq!(row["CONNECT_STR"], Value::Null);
+
+        let (m_val, _) = add_distinct_function(
+            &get_test_config(),
+            "d_val",
+            AddDistinctFunctionParams {
+                connect_str: Some("g2X"),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&m_val).unwrap();
+        let row = v["G2_CONFIG"]["CFG_DFUNC"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert_eq!(row["CONNECT_STR"], json!("g2X"));
+    }
+
+    /// connect_str tri-state on the set path: Leave keeps, Clear nulls, Set writes.
+    #[test]
+    fn test_set_distinct_function_connect_str_tri_state() {
+        let base = get_test_config();
+
+        let (m_leave, _) = set_distinct_function(
+            &base,
+            "DIST_NAME",
+            SetDistinctFunctionParams {
+                connect_str: FieldUpdate::Leave,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&m_leave).unwrap();
+        assert_eq!(
+            v["G2_CONFIG"]["CFG_DFUNC"][0]["CONNECT_STR"],
+            json!("g2DistName")
+        );
+
+        let (m_clear, _) = set_distinct_function(
+            &base,
+            "DIST_NAME",
+            SetDistinctFunctionParams {
+                connect_str: FieldUpdate::Clear,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&m_clear).unwrap();
+        let row = &v["G2_CONFIG"]["CFG_DFUNC"][0];
+        assert!(row.as_object().unwrap().contains_key("CONNECT_STR"));
+        assert_eq!(row["CONNECT_STR"], Value::Null);
+
+        let (m_set, _) = set_distinct_function(
+            &base,
+            "DIST_NAME",
+            SetDistinctFunctionParams {
+                connect_str: FieldUpdate::Set("g2New"),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&m_set).unwrap();
+        assert_eq!(
+            v["G2_CONFIG"]["CFG_DFUNC"][0]["CONNECT_STR"],
+            json!("g2New")
+        );
     }
 }

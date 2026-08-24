@@ -1,18 +1,126 @@
+use crate::config_rows::FbomRow;
 use crate::config_rows::FelemRow;
 use crate::error::{Result, SzConfigError};
 use crate::helpers;
 use serde_json::{Value, json};
 
 // ============================================================================
+// Canonical feature-element validation (D25)
+// ============================================================================
+//
+// One source of truth for validating the DISPLAY_LEVEL and DERIVED columns of a
+// CFG_FBOM (feature-element) row, shared by [`add_element_to_feature`] and
+// [`set_feature_element`] so the two cannot drift. `add_feature`'s own
+// element-list builder is intentionally left on its (more lenient, coercing)
+// path this wave to avoid changing its established behaviour.
+
+/// Validate a feature-element `DISPLAY_LEVEL`.
+///
+/// The level is stored as an integer (sz-tools#130); a negative value is
+/// rejected as invalid input.
+pub(crate) fn validate_display_level(level: i64) -> Result<i64> {
+    if level < 0 {
+        return Err(SzConfigError::InvalidInput(format!(
+            "Invalid DISPLAY_LEVEL value '{level}'. Must be a non-negative integer"
+        )));
+    }
+    Ok(level)
+}
+
+/// Validate and canonicalize a feature-element `DERIVED` flag to `"Yes"`/`"No"`.
+pub(crate) fn validate_derived(value: &str) -> Result<&'static str> {
+    match value.to_uppercase().as_str() {
+        "YES" => Ok("Yes"),
+        "NO" => Ok("No"),
+        _ => Err(SzConfigError::InvalidInput(format!(
+            "Invalid DERIVED value '{value}'. Must be 'Yes' or 'No'"
+        ))),
+    }
+}
+
+// ============================================================================
 // Parameter Structs
 // ============================================================================
 
+/// Parameters for adding an element to a feature (a new CFG_FBOM row).
+///
+/// `display_level` defaults to `1`, `derived` to `"No"`, and `display_delim` to
+/// null when omitted. `EXEC_ORDER` is always allocated automatically.
+#[derive(Debug, Clone, Default)]
+pub struct AddElementToFeatureParams<'a> {
+    pub feature_code: &'a str,
+    pub element_code: &'a str,
+    pub display_level: Option<i64>,
+    pub display_delim: Option<&'a str>,
+    pub derived: Option<&'a str>,
+}
+
+impl<'a> AddElementToFeatureParams<'a> {
+    /// Create params for the given feature and element codes.
+    pub fn new(feature_code: &'a str, element_code: &'a str) -> Self {
+        Self {
+            feature_code,
+            element_code,
+            ..Default::default()
+        }
+    }
+
+    /// Set the display level (default `1`).
+    pub fn with_display_level(mut self, level: i64) -> Self {
+        self.display_level = Some(level);
+        self
+    }
+
+    /// Set the display delimiter (default null).
+    pub fn with_display_delim(mut self, delim: &'a str) -> Self {
+        self.display_delim = Some(delim);
+        self
+    }
+
+    /// Set the derived flag (default `"No"`).
+    pub fn with_derived(mut self, derived: &'a str) -> Self {
+        self.derived = Some(derived);
+        self
+    }
+}
+
+impl<'a> TryFrom<&'a Value> for AddElementToFeatureParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self> {
+        let feature_code = json
+            .get("featureCode")
+            .or_else(|| json.get("feature"))
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("featureCode".to_string()))?;
+        let element_code = json
+            .get("elementCode")
+            .or_else(|| json.get("element"))
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| SzConfigError::MissingField("elementCode".to_string()))?;
+
+        Ok(Self {
+            feature_code,
+            element_code,
+            display_level: json.get("displayLevel").and_then(|v| v.as_i64()),
+            display_delim: json.get("displayDelim").and_then(|v| v.as_str()),
+            derived: json.get("derived").and_then(|v| v.as_str()),
+        })
+    }
+}
+
 /// Parameters for adding an element
+///
+/// `id` is a caller-supplied `FELEM_ID`. Leave it `None` (or pass a non-positive
+/// value) to auto-assign the next free id (seeded at the user-range floor of
+/// 1000); pass `Some(id > 0)` to request that exact id — [`add_element`] then
+/// fails with `AlreadyExists` if it is already taken.
 #[derive(Debug, Clone)]
 pub struct AddElementParams<'a> {
     pub code: &'a str,
     pub description: Option<&'a str>,
     pub data_type: Option<&'a str>,
+    pub id: Option<i64>,
 }
 
 impl<'a> TryFrom<&'a Value> for AddElementParams<'a> {
@@ -28,6 +136,7 @@ impl<'a> TryFrom<&'a Value> for AddElementParams<'a> {
             code,
             description: json.get("description").and_then(|v| v.as_str()),
             data_type: json.get("dataType").and_then(|v| v.as_str()),
+            id: json.get("id").and_then(|v| v.as_i64()),
         })
     }
 }
@@ -171,8 +280,10 @@ pub fn add_element(config_json: &str, params: AddElementParams) -> Result<String
         )));
     }
 
-    // Get next ID
-    let felem_id = helpers::get_next_id_with_min(felem_array, "FELEM_ID", 1000)?;
+    // Get next FELEM_ID. Caller-supplied id (#37): None / non-positive ->
+    // auto-assign at the user-range floor of 1000; a specific id > 0 is honoured
+    // unless already taken (get_desired_or_next_id returns AlreadyExists).
+    let felem_id = helpers::get_desired_or_next_id(felem_array, "FELEM_ID", params.id, 1000)?;
 
     // Validate and normalize datatype (Python lines 1974-1981)
     let data_type = if let Some(dt) = params.data_type {
@@ -443,29 +554,19 @@ pub fn set_feature_element(config_json: &str, params: SetFeatureElementParams) -
             ))
         })?;
 
-    // Update fields if provided (with validation for Python parity)
+    // Update fields if provided, using the canonical validators (D25) shared
+    // with add_element_to_feature.
     if let Some(order) = params.exec_order {
         fbom["EXEC_ORDER"] = json!(order);
     }
     if let Some(level) = params.display_level {
-        fbom["DISPLAY_LEVEL"] = json!(level);
+        fbom["DISPLAY_LEVEL"] = json!(validate_display_level(level)?);
     }
     if let Some(delim) = params.display_delim {
         fbom["DISPLAY_DELIM"] = json!(delim);
     }
     if let Some(der) = params.derived {
-        // Validate derived domain (Python lines 2192-2198)
-        let der_upper = der.to_uppercase();
-        let validated_derived = match der_upper.as_str() {
-            "YES" => "Yes",
-            "NO" => "No",
-            _ => {
-                return Err(SzConfigError::InvalidInput(format!(
-                    "Invalid DERIVED value '{der}'. Must be 'Yes' or 'No'"
-                )));
-            }
-        };
-        fbom["DERIVED"] = json!(validated_derived);
+        fbom["DERIVED"] = json!(validate_derived(der)?);
     }
 
     serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
@@ -533,6 +634,136 @@ pub fn set_feature_element_derived(
         config_json,
         SetFeatureElementParams::new(feature_code, element_code).with_derived(derived),
     )
+}
+
+/// Add an element to a feature (append a new CFG_FBOM row).
+///
+/// Resolves the feature and element codes to their ids, rejects a duplicate
+/// `(FTYPE_ID, FELEM_ID)` mapping with `AlreadyExists`, allocates a fresh
+/// `EXEC_ORDER` from the whole CFG_FBOM table, and writes a complete
+/// [`FbomRow`](crate::config_rows) (every key present). `DISPLAY_LEVEL` and
+/// `DERIVED` are checked with the canonical validators (D25).
+///
+/// # Arguments
+/// * `config_json` - JSON configuration string
+/// * `params` - Feature/element codes and optional display/derived overrides
+///
+/// # Errors
+/// - `NotFound` if the feature or element code does not exist
+/// - `AlreadyExists` if the feature already maps that element
+/// - `InvalidInput` if `display_level` or `derived` is invalid
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::elements::{add_element_to_feature, AddElementToFeatureParams};
+///
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}],
+///     "CFG_FELEM": [{"FELEM_ID": 2, "FELEM_CODE": "FULL_NAME"}],
+///     "CFG_FBOM": []
+/// }}"#;
+/// let params = AddElementToFeatureParams::new("NAME", "FULL_NAME");
+/// let updated = add_element_to_feature(config, params)?;
+/// assert!(updated.contains("FULL_NAME") || updated.contains("\"FELEM_ID\":2"));
+/// # Ok::<(), sz_configtool_lib::error::SzConfigError>(())
+/// ```
+pub fn add_element_to_feature(
+    config_json: &str,
+    params: AddElementToFeatureParams,
+) -> Result<String> {
+    let ftype_id = helpers::lookup_feature_id(config_json, params.feature_code)?;
+    let felem_id = helpers::lookup_element_id(config_json, params.element_code)?;
+
+    // Validate the display/derived inputs before mutating anything.
+    let display_level = validate_display_level(params.display_level.unwrap_or(1))?;
+    let derived = validate_derived(params.derived.unwrap_or("No"))?;
+
+    let mut config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
+    let fbom_array = config["G2_CONFIG"]["CFG_FBOM"]
+        .as_array_mut()
+        .ok_or_else(|| SzConfigError::MissingSection("CFG_FBOM".to_string()))?;
+
+    // Duplicate (FTYPE_ID, FELEM_ID) detection.
+    if fbom_array.iter().any(|item| {
+        item["FTYPE_ID"].as_i64() == Some(ftype_id) && item["FELEM_ID"].as_i64() == Some(felem_id)
+    }) {
+        return Err(SzConfigError::AlreadyExists(format!(
+            "Feature element mapping already exists: FTYPE_ID={ftype_id}, FELEM_ID={felem_id}"
+        )));
+    }
+
+    // Whole-table EXEC_ORDER allocation (max over the entire CFG_FBOM + 1).
+    let exec_order = helpers::get_next_id_from_array(fbom_array, "EXEC_ORDER")?;
+
+    let row = FbomRow {
+        ftype_id,
+        felem_id,
+        exec_order: Some(exec_order),
+        display_level: Some(display_level),
+        display_delim: params.display_delim.map(str::to_string),
+        derived: Some(derived.to_string()),
+    };
+    fbom_array.push(serde_json::to_value(&row)?);
+
+    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+}
+
+/// Delete a single feature-element mapping (one CFG_FBOM row).
+///
+/// The inverse of [`add_element_to_feature`]: removes the row matching both the
+/// resolved feature id and element id. Returns `NotFound` if the mapping is
+/// absent.
+///
+/// # Arguments
+/// * `config_json` - JSON configuration string
+/// * `feature_code` - Feature code (case-insensitive)
+/// * `element_code` - Element code (case-insensitive)
+///
+/// # Errors
+/// - `NotFound` if the feature, element, or the mapping does not exist
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::elements::delete_element_from_feature;
+///
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}],
+///     "CFG_FELEM": [{"FELEM_ID": 2, "FELEM_CODE": "FULL_NAME"}],
+///     "CFG_FBOM": [{"FTYPE_ID": 1, "FELEM_ID": 2, "EXEC_ORDER": 1, "DISPLAY_LEVEL": 1}]
+/// }}"#;
+/// let updated = delete_element_from_feature(config, "NAME", "FULL_NAME")?;
+/// # Ok::<(), sz_configtool_lib::error::SzConfigError>(())
+/// ```
+pub fn delete_element_from_feature(
+    config_json: &str,
+    feature_code: &str,
+    element_code: &str,
+) -> Result<String> {
+    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
+    let felem_id = helpers::lookup_element_id(config_json, element_code)?;
+
+    let mut config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
+    let fbom_array = config["G2_CONFIG"]["CFG_FBOM"]
+        .as_array_mut()
+        .ok_or_else(|| SzConfigError::MissingSection("CFG_FBOM".to_string()))?;
+
+    let original_len = fbom_array.len();
+    fbom_array.retain(|item| {
+        !(item["FTYPE_ID"].as_i64() == Some(ftype_id)
+            && item["FELEM_ID"].as_i64() == Some(felem_id))
+    });
+
+    if fbom_array.len() == original_len {
+        return Err(SzConfigError::NotFound(format!(
+            "Feature element mapping not found: FTYPE_ID={ftype_id}, FELEM_ID={felem_id}"
+        )));
+    }
+
+    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
 }
 
 #[cfg(test)]
@@ -654,6 +885,7 @@ mod tests {
             code: "my_elem",
             description: None,
             data_type: None,
+            id: None,
         };
 
         let modified = add_element(config, params).unwrap();
@@ -681,6 +913,7 @@ mod tests {
             code: "my_elem",
             description: Some("My element"),
             data_type: Some("number"),
+            id: None,
         };
 
         let modified = add_element(config, params).unwrap();
@@ -710,5 +943,146 @@ mod tests {
         let config: Value = serde_json::from_str(&result.unwrap()).unwrap();
         let fbom = &config["G2_CONFIG"]["CFG_FBOM"][0];
         assert_eq!(fbom["DISPLAY_LEVEL"], 9);
+    }
+
+    #[test]
+    fn test_add_element_auto_id_seeds_1000() {
+        let config = r#"{"G2_CONFIG": {"CFG_FELEM": [{"FELEM_ID": 5, "FELEM_CODE": "X"}]}}"#;
+        let modified = add_element(
+            config,
+            AddElementParams {
+                code: "my_elem",
+                description: None,
+                data_type: None,
+                id: None,
+            },
+        )
+        .unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let felem = value["G2_CONFIG"]["CFG_FELEM"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert_eq!(felem["FELEM_ID"], json!(1000));
+    }
+
+    #[test]
+    fn test_add_element_specific_id_and_taken() {
+        let config = r#"{"G2_CONFIG": {"CFG_FELEM": []}}"#;
+        let modified = add_element(
+            config,
+            AddElementParams {
+                code: "my_elem",
+                description: None,
+                data_type: None,
+                id: Some(2500),
+            },
+        )
+        .unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        assert_eq!(value["G2_CONFIG"]["CFG_FELEM"][0]["FELEM_ID"], json!(2500));
+
+        // Requesting the now-taken id fails.
+        let err = add_element(
+            &modified,
+            AddElementParams {
+                code: "other",
+                description: None,
+                data_type: None,
+                id: Some(2500),
+            },
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
+    }
+
+    #[test]
+    fn test_add_element_to_feature_emits_all_keys_and_exec_order() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}],
+            "CFG_FELEM": [{"FELEM_ID": 2, "FELEM_CODE": "FULL_NAME"}],
+            "CFG_FBOM": [{"FTYPE_ID": 9, "FELEM_ID": 9, "EXEC_ORDER": 7, "DISPLAY_LEVEL": 1,
+                          "DISPLAY_DELIM": null, "DERIVED": "No"}]
+        }}"#;
+        let modified = add_element_to_feature(
+            config,
+            AddElementToFeatureParams::new("name", "full_name").with_display_level(3),
+        )
+        .unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let row = value["G2_CONFIG"]["CFG_FBOM"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        let obj = row.as_object().unwrap();
+        for key in [
+            "FTYPE_ID",
+            "FELEM_ID",
+            "EXEC_ORDER",
+            "DISPLAY_LEVEL",
+            "DISPLAY_DELIM",
+            "DERIVED",
+        ] {
+            assert!(obj.contains_key(key), "{key} key must be present");
+        }
+        assert_eq!(row["FTYPE_ID"], json!(1));
+        assert_eq!(row["FELEM_ID"], json!(2));
+        // Whole-table EXEC_ORDER allocation: max(7) + 1.
+        assert_eq!(row["EXEC_ORDER"], json!(8));
+        assert_eq!(row["DISPLAY_LEVEL"], json!(3));
+        assert_eq!(row["DERIVED"], json!("No"));
+        assert_eq!(row["DISPLAY_DELIM"], Value::Null);
+    }
+
+    #[test]
+    fn test_add_element_to_feature_duplicate_rejected() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}],
+            "CFG_FELEM": [{"FELEM_ID": 2, "FELEM_CODE": "FULL_NAME"}],
+            "CFG_FBOM": [{"FTYPE_ID": 1, "FELEM_ID": 2, "EXEC_ORDER": 1, "DISPLAY_LEVEL": 1}]
+        }}"#;
+        let err =
+            add_element_to_feature(config, AddElementToFeatureParams::new("NAME", "FULL_NAME"))
+                .unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
+    }
+
+    #[test]
+    fn test_add_element_to_feature_invalid_display_level() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}],
+            "CFG_FELEM": [{"FELEM_ID": 2, "FELEM_CODE": "FULL_NAME"}],
+            "CFG_FBOM": []
+        }}"#;
+        let err = add_element_to_feature(
+            config,
+            AddElementToFeatureParams::new("NAME", "FULL_NAME").with_display_level(-1),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::InvalidInput);
+    }
+
+    #[test]
+    fn test_delete_element_from_feature_round_trip() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}],
+            "CFG_FELEM": [{"FELEM_ID": 2, "FELEM_CODE": "FULL_NAME"}],
+            "CFG_FBOM": []
+        }}"#;
+        let added =
+            add_element_to_feature(config, AddElementToFeatureParams::new("NAME", "FULL_NAME"))
+                .unwrap();
+        let v: Value = serde_json::from_str(&added).unwrap();
+        assert_eq!(v["G2_CONFIG"]["CFG_FBOM"].as_array().unwrap().len(), 1);
+
+        let removed = delete_element_from_feature(&added, "name", "full_name").unwrap();
+        let v: Value = serde_json::from_str(&removed).unwrap();
+        assert_eq!(v["G2_CONFIG"]["CFG_FBOM"].as_array().unwrap().len(), 0);
+
+        // Deleting again -> NotFound.
+        let err = delete_element_from_feature(&removed, "NAME", "FULL_NAME").unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::NotFound);
     }
 }

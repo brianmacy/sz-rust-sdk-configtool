@@ -4,7 +4,7 @@
 //! Fragments define matching criteria used by rules.
 
 use crate::error::{Result, SzConfigError};
-use crate::helpers;
+use crate::helpers::{self, FieldUpdate};
 use serde::Serialize;
 use serde_json::{Value, json};
 
@@ -26,6 +26,36 @@ struct ErfragRow {
     erfrag_source: Option<String>,
     #[serde(rename = "ERFRAG_DEPENDS")]
     erfrag_depends: Option<String>,
+}
+
+/// Parameters for setting (updating) a fragment.
+///
+/// Both fields are tri-state [`FieldUpdate`]s so an update can distinguish "leave
+/// unchanged" from "clear to null":
+///
+/// - `source` (`ERFRAG_SOURCE`): `Leave` keeps the stored source and its computed
+///   `ERFRAG_DEPENDS`; `Clear` writes `null` for both source and depends (D11);
+///   `Set` validates the new source and recomputes `ERFRAG_DEPENDS`.
+/// - `description` (`ERFRAG_DESC`): `Leave` keeps the stored description; `Clear`
+///   writes `null`; `Set` writes the new description.
+#[derive(Debug, Clone, Default)]
+pub struct SetFragmentParams<'a> {
+    pub source: FieldUpdate<&'a str>,
+    pub description: FieldUpdate<&'a str>,
+}
+
+impl<'a> TryFrom<&'a Value> for SetFragmentParams<'a> {
+    type Error = SzConfigError;
+
+    fn try_from(json: &'a Value) -> Result<Self> {
+        // Tri-state per field: an absent key -> Leave, an explicit JSON null ->
+        // Clear, a string value -> Set. Both the uppercase CFG_ERFRAG column
+        // names and lowercase aliases are accepted.
+        Ok(Self {
+            source: helpers::field_update_str(json, &["ERFRAG_SOURCE", "source"]),
+            description: helpers::field_update_str(json, &["ERFRAG_DESC", "description"]),
+        })
+    }
 }
 
 /// Validates a fragment source XPath expression and computes dependencies
@@ -213,23 +243,20 @@ pub fn add_fragment(config_json: &str, fragment_config: &Value) -> Result<(Strin
 
     let config_data: Value = serde_json::from_str(config_json)?;
 
-    // Get next ID
-    let next_id = if let Some(g2_config) = config_data.get("G2_CONFIG") {
-        if let Some(array) = g2_config.get("CFG_ERFRAG").and_then(|v| v.as_array()) {
-            array
-                .iter()
-                .filter_map(|item| item.get("ERFRAG_ID").and_then(|v| v.as_i64()))
-                .max()
-                .unwrap_or(0)
-                + 1
-        } else {
-            1
-        }
-    } else {
-        return Err(SzConfigError::InvalidConfig(
-            "G2_CONFIG not found".to_string(),
-        ));
-    };
+    // Caller-supplied ERFRAG_ID (#37/D19): previously the add path computed
+    // max+1 unconditionally and *ignored* any ERFRAG_ID present in the input
+    // Value. Now an explicit ERFRAG_ID (> 0) is honoured — rejected with
+    // AlreadyExists if taken — while None/absent/non-positive auto-assigns the
+    // next id (unseeded max+1, floor 1, preserving the historical numbering).
+    let desired_id = fragment_config.get("ERFRAG_ID").and_then(|v| v.as_i64());
+    let empty: Vec<Value> = Vec::new();
+    let erfrag_array = config_data
+        .get("G2_CONFIG")
+        .ok_or_else(|| SzConfigError::InvalidConfig("G2_CONFIG not found".to_string()))?
+        .get("CFG_ERFRAG")
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty);
+    let next_id = helpers::get_desired_or_next_id(erfrag_array, "ERFRAG_ID", desired_id, 1)?;
 
     // Build a complete row via ErfragRow so every CFG_ERFRAG key is present
     // (optional fields serialize as null).
@@ -319,12 +346,15 @@ pub fn get_fragment(config_json: &str, code_or_id: &str) -> Result<Value> {
         )));
     };
 
-    // Transform to lowercase format (matching list_fragments for consistency)
+    // Transform to lowercase format (matching list_fragments for consistency).
+    // ERFRAG_SOURCE and ERFRAG_DEPENDS are stored-nullable, so they are projected
+    // null-preserving (stored null stays null, stored "" stays "", absent ->
+    // null) via helpers::field_or_null rather than coerced to "".
     Ok(json!({
-        "id": item.get("ERFRAG_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+        "id": helpers::field_or_null(&item, "ERFRAG_ID"),
         "fragment": item.get("ERFRAG_CODE").and_then(|v| v.as_str()).unwrap_or(""),
-        "source": item.get("ERFRAG_SOURCE").and_then(|v| v.as_str()).unwrap_or(""),
-        "depends": item.get("ERFRAG_DEPENDS").and_then(|v| v.as_str()).unwrap_or("")
+        "source": helpers::field_or_null(&item, "ERFRAG_SOURCE"),
+        "depends": helpers::field_or_null(&item, "ERFRAG_DEPENDS")
     }))
 }
 
@@ -356,11 +386,12 @@ pub fn list_fragments(config_json: &str) -> Result<Vec<Value>> {
             array
                 .iter()
                 .map(|item| {
+                    // ERFRAG_SOURCE and ERFRAG_DEPENDS null-preserved (see get_fragment).
                     json!({
-                        "id": item.get("ERFRAG_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+                        "id": helpers::field_or_null(item, "ERFRAG_ID"),
                         "fragment": item.get("ERFRAG_CODE").and_then(|v| v.as_str()).unwrap_or(""),
-                        "source": item.get("ERFRAG_SOURCE").and_then(|v| v.as_str()).unwrap_or(""),
-                        "depends": item.get("ERFRAG_DEPENDS").and_then(|v| v.as_str()).unwrap_or("")
+                        "source": helpers::field_or_null(item, "ERFRAG_SOURCE"),
+                        "depends": helpers::field_or_null(item, "ERFRAG_DEPENDS")
                     })
                 })
                 .collect()
@@ -380,7 +411,8 @@ pub fn list_fragments(config_json: &str) -> Result<Vec<Value>> {
 ///
 /// * `config_json` - Configuration JSON string
 /// * `fragment_code` - Fragment code to update
-/// * `fragment_config` - New configuration for the fragment
+/// * `params` - Tri-state update for `ERFRAG_SOURCE` / `ERFRAG_DESC`
+///   ([`SetFragmentParams`])
 ///
 /// # Returns
 ///
@@ -389,23 +421,26 @@ pub fn list_fragments(config_json: &str) -> Result<Vec<Value>> {
 /// # Example
 ///
 /// ```
-/// use sz_configtool_lib::fragments;
-/// use serde_json::json;
+/// use sz_configtool_lib::fragments::{self, SetFragmentParams};
+/// use sz_configtool_lib::helpers::FieldUpdate;
 ///
 /// let config = r#"{"G2_CONFIG": {"CFG_ERFRAG": [{"ERFRAG_ID": 1, "ERFRAG_CODE": "TEST"}]}}"#;
-/// let new_config = json!({"ERFRAG_SOURCE": "NAME+DOB"});
-/// let modified = fragments::set_fragment(config, "TEST", &new_config).unwrap();
+/// let params = SetFragmentParams {
+///     source: FieldUpdate::Set("NAME+DOB"),
+///     description: FieldUpdate::Leave,
+/// };
+/// let modified = fragments::set_fragment(config, "TEST", params).unwrap();
 /// ```
 pub fn set_fragment(
     config_json: &str,
     fragment_code: &str,
-    fragment_config: &Value,
+    params: SetFragmentParams,
 ) -> Result<String> {
     let code = fragment_code.to_uppercase();
 
-    // Fetch the existing row so fields not part of the update (ERFRAG_ID,
-    // ERFRAG_DESC, and — when SOURCE is unchanged — ERFRAG_SOURCE/ERFRAG_DEPENDS)
-    // are carried forward rather than dropped by the full-row replace.
+    // Fetch the existing row so fields not part of the update (ERFRAG_ID, and any
+    // Leave field) are carried forward rather than dropped by the full-row
+    // replace.
     let existing = helpers::find_in_config_array(config_json, "CFG_ERFRAG", "ERFRAG_CODE", &code)?
         .ok_or_else(|| SzConfigError::NotFound(format!("Fragment not found: {code}")))?;
 
@@ -414,32 +449,37 @@ pub fn set_fragment(
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
 
-    // If SOURCE is being updated, validate it and recompute ERFRAG_DEPENDS;
-    // otherwise keep the existing SOURCE and DEPENDS.
-    let (erfrag_source, erfrag_depends) = if let Some(new_source) = fragment_config
-        .get("ERFRAG_SOURCE")
-        .and_then(|v| v.as_str())
-    {
-        let (dependency_list, error_message) = validate_fragment_source(config_json, new_source);
-        if !error_message.is_empty() {
-            return Err(SzConfigError::InvalidInput(error_message));
-        }
-        let depends = if dependency_list.is_empty() {
-            None
-        } else {
-            Some(dependency_list.join(","))
-        };
-        (Some(new_source.to_string()), depends)
-    } else {
-        (
+    // SOURCE tri-state:
+    // - Leave: keep the existing SOURCE and DEPENDS.
+    // - Clear: write null for SOURCE and, per D11, also clear DEPENDS to null.
+    // - Set: validate the new SOURCE and recompute DEPENDS.
+    let (erfrag_source, erfrag_depends) = match params.source {
+        FieldUpdate::Leave => (
             helpers::field_as_string(&existing, "ERFRAG_SOURCE"),
             helpers::field_as_string(&existing, "ERFRAG_DEPENDS"),
-        )
+        ),
+        FieldUpdate::Clear => (None, None),
+        FieldUpdate::Set(new_source) => {
+            let (dependency_list, error_message) =
+                validate_fragment_source(config_json, new_source);
+            if !error_message.is_empty() {
+                return Err(SzConfigError::InvalidInput(error_message));
+            }
+            let depends = if dependency_list.is_empty() {
+                None
+            } else {
+                Some(dependency_list.join(","))
+            };
+            (Some(new_source.to_string()), depends)
+        }
     };
 
-    // ERFRAG_DESC from the update if supplied, else preserve existing.
-    let erfrag_desc = helpers::field_as_string(fragment_config, "ERFRAG_DESC")
-        .or_else(|| helpers::field_as_string(&existing, "ERFRAG_DESC"));
+    // ERFRAG_DESC tri-state: Leave preserves, Clear nulls, Set writes.
+    let erfrag_desc = match params.description {
+        FieldUpdate::Leave => helpers::field_as_string(&existing, "ERFRAG_DESC"),
+        FieldUpdate::Clear => None,
+        FieldUpdate::Set(desc) => Some(desc.to_string()),
+    };
 
     let row = ErfragRow {
         erfrag_id,
@@ -495,6 +535,69 @@ mod tests {
         assert_eq!(frag["ERFRAG_DEPENDS"], Value::Null);
     }
 
+    /// #37/D19: a caller-supplied ERFRAG_ID is now honoured (previously ignored),
+    /// and a taken id is rejected.
+    #[test]
+    fn test_add_fragment_caller_supplied_id() {
+        let config = r#"{"G2_CONFIG": {"CFG_ERFRAG": [
+            {"ERFRAG_ID": 3, "ERFRAG_CODE": "EXISTING", "ERFRAG_SOURCE": "NAME"}
+        ]}}"#;
+
+        // Honour an explicit id rather than computing max+1 (=4).
+        let frag_config = json!({
+            "ERFRAG_CODE": "CUSTOM_FRAG",
+            "ERFRAG_SOURCE": "NAME+DOB",
+            "ERFRAG_ID": 50
+        });
+        let (modified, id) = add_fragment(config, &frag_config).unwrap();
+        assert_eq!(id, 50);
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let frag = value["G2_CONFIG"]["CFG_ERFRAG"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert_eq!(frag["ERFRAG_ID"], json!(50));
+
+        // A taken id is rejected.
+        let frag_config = json!({
+            "ERFRAG_CODE": "ANOTHER",
+            "ERFRAG_SOURCE": "NAME",
+            "ERFRAG_ID": 3
+        });
+        let err = add_fragment(config, &frag_config).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
+
+        // Absent id still auto-assigns max+1.
+        let frag_config = json!({"ERFRAG_CODE": "AUTO", "ERFRAG_SOURCE": "NAME"});
+        let (_m, id) = add_fragment(config, &frag_config).unwrap();
+        assert_eq!(id, 4);
+    }
+
+    /// #33: get_fragment / list_fragments null-preserve ERFRAG_SOURCE and
+    /// ERFRAG_DEPENDS (stored null -> null, stored "" -> "", absent -> null)
+    /// rather than coercing them to "".
+    #[test]
+    fn test_fragments_source_depends_null_preserved() {
+        let config = r#"{"G2_CONFIG": {"CFG_ERFRAG": [
+            {"ERFRAG_ID": 1, "ERFRAG_CODE": "A", "ERFRAG_SOURCE": null, "ERFRAG_DEPENDS": ""},
+            {"ERFRAG_ID": 2, "ERFRAG_CODE": "B", "ERFRAG_SOURCE": "NAME"}
+        ]}}"#;
+
+        let list = list_fragments(config).unwrap();
+        // Row A: stored null stays null; stored "" stays "".
+        assert_eq!(list[0]["source"], Value::Null);
+        assert_eq!(list[0]["depends"], json!(""));
+        // Row B: source present; depends absent -> null.
+        assert_eq!(list[1]["source"], json!("NAME"));
+        assert_eq!(list[1]["depends"], Value::Null);
+
+        // get_fragment agrees.
+        let a = get_fragment(config, "A").unwrap();
+        assert_eq!(a["source"], Value::Null);
+        assert_eq!(a["depends"], json!(""));
+    }
+
     /// Regression: updating one field must not drop the row's other keys.
     /// Previously set_fragment replaced the whole row with the partial update,
     /// discarding ERFRAG_ID / ERFRAG_DESC and leaving the engine loader with an
@@ -507,8 +610,11 @@ mod tests {
         ]}}"#;
 
         // Update only the description; SOURCE is not part of the update.
-        let update = json!({"ERFRAG_DESC": "Updated desc"});
-        let modified = set_fragment(config, "TEST", &update).unwrap();
+        let params = SetFragmentParams {
+            source: FieldUpdate::Leave,
+            description: FieldUpdate::Set("Updated desc"),
+        };
+        let modified = set_fragment(config, "TEST", params).unwrap();
         let value: Value = serde_json::from_str(&modified).unwrap();
         let frag = &value["G2_CONFIG"]["CFG_ERFRAG"][0];
 
@@ -525,13 +631,60 @@ mod tests {
             {"ERFRAG_ID": 1, "ERFRAG_CODE": "TEST"}
         ]}}"#;
 
-        let update = json!({"ERFRAG_SOURCE": "NAME+DOB"});
-        let modified = set_fragment(config, "TEST", &update).unwrap();
+        let params = SetFragmentParams {
+            source: FieldUpdate::Set("NAME+DOB"),
+            description: FieldUpdate::Leave,
+        };
+        let modified = set_fragment(config, "TEST", params).unwrap();
         let value: Value = serde_json::from_str(&modified).unwrap();
         let frag = &value["G2_CONFIG"]["CFG_ERFRAG"][0];
 
         assert_all_keys(frag);
         assert_eq!(frag["ERFRAG_ID"], json!(1));
         assert_eq!(frag["ERFRAG_SOURCE"], json!("NAME+DOB"));
+    }
+
+    /// D11: clearing ERFRAG_SOURCE also clears ERFRAG_DEPENDS to null; both keys
+    /// remain present.
+    #[test]
+    fn test_set_fragment_source_clear_clears_depends() {
+        let config = r#"{"G2_CONFIG": {"CFG_ERFRAG": [
+            {"ERFRAG_ID": 3, "ERFRAG_CODE": "TEST", "ERFRAG_DESC": "TEST",
+             "ERFRAG_SOURCE": "./FRAGMENT[./SAME_NAME>0]", "ERFRAG_DEPENDS": "1,2"}
+        ]}}"#;
+
+        let params = SetFragmentParams {
+            source: FieldUpdate::Clear,
+            description: FieldUpdate::Leave,
+        };
+        let modified = set_fragment(config, "TEST", params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let frag = &value["G2_CONFIG"]["CFG_ERFRAG"][0];
+
+        assert_all_keys(frag);
+        assert_eq!(frag["ERFRAG_SOURCE"], Value::Null);
+        assert_eq!(frag["ERFRAG_DEPENDS"], Value::Null);
+        // Untouched fields preserved.
+        assert_eq!(frag["ERFRAG_DESC"], json!("TEST"));
+    }
+
+    /// The description can be cleared independently of the source.
+    #[test]
+    fn test_set_fragment_description_clear() {
+        let config = r#"{"G2_CONFIG": {"CFG_ERFRAG": [
+            {"ERFRAG_ID": 4, "ERFRAG_CODE": "TEST", "ERFRAG_DESC": "TEST",
+             "ERFRAG_SOURCE": "NAME", "ERFRAG_DEPENDS": null}
+        ]}}"#;
+
+        let params = SetFragmentParams {
+            source: FieldUpdate::Leave,
+            description: FieldUpdate::Clear,
+        };
+        let modified = set_fragment(config, "TEST", params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let frag = &value["G2_CONFIG"]["CFG_ERFRAG"][0];
+        assert_eq!(frag["ERFRAG_DESC"], Value::Null);
+        // Source untouched (Leave).
+        assert_eq!(frag["ERFRAG_SOURCE"], json!("NAME"));
     }
 }

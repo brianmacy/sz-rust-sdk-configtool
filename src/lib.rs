@@ -57,6 +57,7 @@
 //!             default_value: None,
 //!             internal: None,
 //!             required: None,
+//!             id: None,
 //!         },
 //!     )?;
 //!
@@ -73,6 +74,10 @@ pub mod helpers;
 // Shared crate-internal row structs (one per CFG_* section).
 pub(crate) mod config_rows;
 
+// Shared domain/substrate modules
+pub mod behavior_domain;
+pub mod filter;
+
 // Core entity modules
 pub mod attributes;
 pub mod behavior_overrides;
@@ -84,11 +89,14 @@ pub mod thresholds;
 // Advanced operations modules
 pub mod command_processor;
 pub mod config_sections;
+pub mod export;
 pub mod fragments;
 pub mod generic_plans;
 pub mod hashes;
 pub mod rules;
+pub mod settings;
 pub mod system_params;
+pub mod validation;
 pub mod versioning;
 
 // Function and call management modules
@@ -96,7 +104,24 @@ pub mod calls;
 pub mod functions;
 
 // Re-export commonly used types
-pub use error::{Result, SzConfigError};
+pub use error::{Result, SzConfigError, SzErrorKind};
+
+// Re-export shared domain items so consumers can use them without the
+// fully-qualified module path.
+pub use attributes::ATTRIBUTE_CLASSES;
+pub use behavior_domain::{
+    BEHAVIOR_CODES, behavior_position, compute_behavior, parse_behavior_code,
+};
+pub use behavior_overrides::{delete_behavior_override, list_behavior_overrides_resolved};
+pub use export::render_config;
+pub use filter::{FilterSubstrate, matches_filter, to_json_dumps_string, to_python_repr_string};
+pub use helpers::FieldUpdate;
+pub use helpers::{
+    resolve_cfcall_id_for_feature, resolve_dfcall_id_for_feature, resolve_efcall_id_for_feature,
+    resolve_sfcall_id_for_feature,
+};
+pub use settings::set_setting;
+pub use validation::validate_config;
 
 // C FFI module
 pub mod ffi;

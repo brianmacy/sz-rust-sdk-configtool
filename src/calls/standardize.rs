@@ -1,12 +1,15 @@
 //! Standardize call management operations
 //!
-//! Functions for managing CFG_SFCALL (standardize calls) and CFG_SBOM
-//! (standardize bill of materials) configuration sections.
+//! Functions for managing CFG_SFCALL (standardize calls) configuration rows.
+//! Standardize calls and their elements are both represented as CFG_SFCALL
+//! rows; there is no separate standardize bill-of-materials table.
 
+use crate::calls::{CallSelector, resolve_call_id};
 use crate::config_rows::SfcallRow;
 use crate::error::{Result, SzConfigError};
 use crate::helpers::{
-    find_in_config_array, get_next_id, lookup_element_id, lookup_feature_id, lookup_sfunc_id,
+    get_next_id, lookup_element_id, lookup_feature_id, lookup_sfunc_id,
+    resolve_sfcall_id_for_feature,
 };
 use serde_json::{Value, json};
 
@@ -218,7 +221,7 @@ pub fn delete_standardize_call(config: &str, sfcall_id: i64) -> Result<String> {
 
     if !call_exists {
         return Err(SzConfigError::NotFound(format!(
-            "Standardize call ID {sfcall_id}"
+            "Standardize call ID {sfcall_id} does not exist"
         )));
     }
 
@@ -230,20 +233,54 @@ pub fn delete_standardize_call(config: &str, sfcall_id: i64) -> Result<String> {
     serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))
 }
 
-/// Get a single standardize call by ID
+/// Get a single standardize call, addressed by id or by feature code.
+///
+/// Pass [`CallSelector::Id`] to look the call up by its `SFCALL_ID`, or
+/// [`CallSelector::Feature`] to resolve the standardize call bound to a feature.
+/// The feature path scans `CFG_SFCALL` by `FTYPE_ID` via
+/// [`resolve_sfcall_id_for_feature`] rather than treating the feature id as a
+/// call id (the historical bug this fixes). Standardize calls can legitimately
+/// be many-per-feature, so an ambiguous feature match errors — address by id.
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
-/// * `sfcall_id` - Standardize call ID
+/// * `selector` - Call id or feature code identifying the call
 ///
 /// # Returns
 /// JSON Value representing the standardize call record
 ///
 /// # Errors
-/// - `NotFound` if call ID doesn't exist
-pub fn get_standardize_call(config: &str, sfcall_id: i64) -> Result<Value> {
-    find_in_config_array(config, "CFG_SFCALL", "SFCALL_ID", &sfcall_id.to_string())?
-        .ok_or_else(|| SzConfigError::NotFound(format!("Standardize call ID {sfcall_id}")))
+/// - `NotFound` if no matching call exists
+/// - `InvalidInput` if a feature code matches more than one call (ambiguous)
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::calls::CallSelector;
+/// use sz_configtool_lib::calls::standardize::get_standardize_call;
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+///     "CFG_SFCALL": [{"SFCALL_ID": 5, "FTYPE_ID": 3, "FELEM_ID": -1, "SFUNC_ID": 1, "EXEC_ORDER": 1}]
+/// }}"#;
+/// let by_id = get_standardize_call(config, CallSelector::Id(5)).unwrap();
+/// let by_feature = get_standardize_call(config, CallSelector::Feature("NAME")).unwrap();
+/// assert_eq!(by_id, by_feature);
+/// ```
+pub fn get_standardize_call(config: &str, selector: CallSelector) -> Result<Value> {
+    let root: Value =
+        serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let sfcall_id = resolve_call_id(config, &root, selector, resolve_sfcall_id_for_feature)?;
+
+    root.get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_SFCALL"))
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .find(|c| c.get("SFCALL_ID").and_then(|v| v.as_i64()) == Some(sfcall_id))
+        })
+        .cloned()
+        .ok_or_else(|| {
+            SzConfigError::NotFound(format!("Standardize call ID {sfcall_id} does not exist"))
+        })
 }
 
 /// List all standardize calls with resolved names
@@ -323,9 +360,20 @@ pub fn list_standardize_calls(config: &str) -> Result<Vec<Value>> {
             .to_string()
     };
 
+    // Sort the raw rows by (FTYPE_ID, EXEC_ORDER) before projection so the numeric
+    // sort key is never lost (mirrors Python). Standardize calls have no BOM, so
+    // there is deliberately no elementList.
+    let mut sorted: Vec<&Value> = sfcall_array.iter().collect();
+    sorted.sort_by_key(|item| {
+        (
+            item.get("FTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(0),
+            item.get("EXEC_ORDER").and_then(|v| v.as_i64()).unwrap_or(0),
+        )
+    });
+
     // Transform standardize calls
-    let items: Vec<Value> = sfcall_array
-        .iter()
+    let items: Vec<Value> = sorted
+        .into_iter()
         .map(|item| {
             let ftype_id = item.get("FTYPE_ID").and_then(|v| v.as_i64()).unwrap_or(0);
             let felem_id = item.get("FELEM_ID").and_then(|v| v.as_i64()).unwrap_or(0);
@@ -357,9 +405,9 @@ pub fn set_standardize_call(config: &str, _params: SetStandardizeCallParams) -> 
     Ok(config.to_string())
 }
 
-/// Add a standardize call element (SBOM record)
+/// Add a standardize call element (CFG_SFCALL record)
 ///
-/// Creates a new standardize bill of materials entry.
+/// Creates a new standardize call element as a CFG_SFCALL row.
 ///
 /// # Arguments
 /// * `config` - Configuration JSON string
@@ -574,5 +622,84 @@ mod tests {
         assert_all_keys(sfcall, &SFCALL_KEYS);
         assert_eq!(sfcall["EXEC_ORDER"], Value::Null);
         assert_eq!(sfcall["FELEM_ID"], json!(-1));
+    }
+
+    // #40 regression fixtures: SFCALL_ID (5) deliberately differs from FTYPE_ID
+    // (3). getStandardizeCall by feature must scan CFG_SFCALL and return the
+    // call with SFCALL_ID 5, not the (wrong) row the FTYPE_ID-as-call-id bug hit.
+    #[test]
+    fn test_get_standardize_call_by_feature_fixes_ftype_as_id_bug() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_SFCALL": [
+                {"SFCALL_ID": 5, "FTYPE_ID": 3, "FELEM_ID": -1, "SFUNC_ID": 1, "EXEC_ORDER": 1}
+            ]
+        }}"#;
+        let by_id = get_standardize_call(config, CallSelector::Id(5)).unwrap();
+        let by_feature = get_standardize_call(config, CallSelector::Feature("NAME")).unwrap();
+        assert_eq!(by_id, by_feature);
+        assert_eq!(by_feature["SFCALL_ID"], json!(5));
+    }
+
+    #[test]
+    fn test_get_standardize_call_ambiguous_feature_errors() {
+        // Two standardize calls for one feature -> by-feature is ambiguous.
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_SFCALL": [
+                {"SFCALL_ID": 5, "FTYPE_ID": 3, "FELEM_ID": -1, "SFUNC_ID": 1, "EXEC_ORDER": 1},
+                {"SFCALL_ID": 6, "FTYPE_ID": 3, "FELEM_ID": -1, "SFUNC_ID": 2, "EXEC_ORDER": 2}
+            ]
+        }}"#;
+        let err = get_standardize_call(config, CallSelector::Feature("NAME"));
+        assert_eq!(
+            err.unwrap_err().kind(),
+            crate::error::SzErrorKind::InvalidInput
+        );
+        // Addressing the specific call by id still works.
+        assert!(get_standardize_call(config, CallSelector::Id(6)).is_ok());
+    }
+
+    #[test]
+    fn test_list_standardize_calls_sorted_no_element_list() {
+        // Stored order differs from (FTYPE_ID, EXEC_ORDER).
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [
+                {"FTYPE_ID": 3, "FTYPE_CODE": "NAME"},
+                {"FTYPE_ID": 7, "FTYPE_CODE": "ADDRESS"}
+            ],
+            "CFG_FELEM": [],
+            "CFG_SFUNC": [{"SFUNC_ID": 1, "SFUNC_CODE": "PARSE_NAME"}],
+            "CFG_SFCALL": [
+                {"SFCALL_ID": 20, "FTYPE_ID": 7, "FELEM_ID": -1, "SFUNC_ID": 1, "EXEC_ORDER": 1},
+                {"SFCALL_ID": 8, "FTYPE_ID": 3, "FELEM_ID": -1, "SFUNC_ID": 1, "EXEC_ORDER": 2},
+                {"SFCALL_ID": 5, "FTYPE_ID": 3, "FELEM_ID": -1, "SFUNC_ID": 1, "EXEC_ORDER": 1}
+            ]
+        }}"#;
+
+        let calls = list_standardize_calls(config).unwrap();
+        // (FTYPE_ID, EXEC_ORDER): (3,1) id 5, (3,2) id 8, (7,1) id 20.
+        assert_eq!(calls[0]["id"], json!(5));
+        assert_eq!(calls[1]["id"], json!(8));
+        assert_eq!(calls[2]["id"], json!(20));
+        // Standardize calls carry no BOM, so no elementList key.
+        assert!(!calls[0].as_object().unwrap().contains_key("elementList"));
+    }
+
+    // #42: the not-found message must carry the canonical
+    // "{X} call ID {id} does not exist" wording, matching the comparison/
+    // distinct/expression siblings (previously it was truncated).
+    #[test]
+    fn test_delete_standardize_call_not_found_message() {
+        let config = r#"{"G2_CONFIG": {"CFG_SFCALL": []}}"#;
+        let err = delete_standardize_call(config, 99).unwrap_err();
+        assert_eq!(err.to_string(), "Standardize call ID 99 does not exist");
+    }
+
+    #[test]
+    fn test_get_standardize_call_not_found_message() {
+        let config = r#"{"G2_CONFIG": {"CFG_SFCALL": []}}"#;
+        let err = get_standardize_call(config, CallSelector::Id(99)).unwrap_err();
+        assert_eq!(err.to_string(), "Standardize call ID 99 does not exist");
     }
 }

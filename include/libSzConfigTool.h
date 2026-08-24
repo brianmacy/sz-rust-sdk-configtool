@@ -364,6 +364,12 @@ struct SzConfigTool_result SzConfigTool_setScoringFunctionWithJson(const char *c
  * Batch 1-4: System, Generic Plans, Rules, Config Sections
  * ============================================================================ */
 
+/*
+ * Set/update a fragment from JSON. The updates object is tri-state per field
+ * (ERFRAG_SOURCE, ERFRAG_DESC): an absent key leaves the stored value untouched,
+ * an explicit JSON null clears it (writes null), and a string sets it. Clearing
+ * ERFRAG_SOURCE also clears ERFRAG_DEPENDS to null.
+ */
 struct SzConfigTool_result SzConfigTool_setFragmentWithJson(const char *config_json, const char *fragment_code, const char *updates_json);
 struct SzConfigTool_result SzConfigTool_cloneGenericPlan(const char *config_json, const char *source_code, const char *new_code, const char *new_desc);
 struct SzConfigTool_result SzConfigTool_setGenericPlan(const char *config_json, const char *gplan_code, const char *gplan_desc, const char *updates_json);
@@ -381,6 +387,8 @@ struct SzConfigTool_result SzConfigTool_verifyCompatibilityVersion(const char *c
 struct SzConfigTool_result SzConfigTool_addConfigSection(const char *config_json, const char *section_name, const char *section_json);
 struct SzConfigTool_result SzConfigTool_removeConfigSection(const char *config_json, const char *section_name);
 struct SzConfigTool_result SzConfigTool_getConfigSection(const char *config_json, const char *section_name, const char *filter_json);
+/* Returns JSON boolean "true"/"false": whether the section is empty (null or []); errors if the section is missing. */
+struct SzConfigTool_result SzConfigTool_configSectionIsEmpty(const char *config_json, const char *section_name);
 struct SzConfigTool_result SzConfigTool_listConfigSections(const char *config_json);
 struct SzConfigTool_result SzConfigTool_addConfigSectionField(const char *config_json, const char *section_name, const char *field_name, const char *field_value_json);
 struct SzConfigTool_result SzConfigTool_removeConfigSectionField(const char *config_json, const char *section_name, const char *field_name);
@@ -388,6 +396,12 @@ struct SzConfigTool_result SzConfigTool_addRule(const char *config_json, const c
 struct SzConfigTool_result SzConfigTool_deleteRule(const char *config_json, const char *rule_code);
 struct SzConfigTool_result SzConfigTool_getRule(const char *config_json, const char *code_or_id);
 struct SzConfigTool_result SzConfigTool_listRules(const char *config_json);
+/*
+ * Set/update a rule from JSON. The fragment, disqualifier and tier fields are
+ * tri-state: an absent key leaves the stored value untouched, an explicit JSON
+ * null clears the column (writes null), and a value sets it. (The direct-arg
+ * function wrappers below cannot express a null-clear; this JSON API can.)
+ */
 struct SzConfigTool_result SzConfigTool_setRule(const char *config_json, const char *rule_code, const char *rule_json);
 
 
@@ -395,11 +409,30 @@ struct SzConfigTool_result SzConfigTool_setRule(const char *config_json, const c
  * Comparison Function Operations (Batch 5c)
  * ============================================================================ */
 
+/* Direct-arg add: connect_str NULL stores JSON null; a non-null pointer
+ * (including "") stores that value. */
 struct SzConfigTool_result SzConfigTool_addComparisonFunction(const char *config_json, const char *cfunc_code, const char *connect_str, const char *cfunc_desc, const char *language, const char *anon_support);
 struct SzConfigTool_result SzConfigTool_deleteComparisonFunction(const char *config_json, const char *cfunc_code);
 struct SzConfigTool_result SzConfigTool_getComparisonFunction(const char *config_json, const char *cfunc_code);
 struct SzConfigTool_result SzConfigTool_listComparisonFunctions(const char *config_json);
+/* Direct-arg set: connect_str NULL leaves the stored value untouched; a non-null
+ * pointer (including "") sets it. This form cannot clear a value to null (use the
+ * JSON-based set API for that). */
 struct SzConfigTool_result SzConfigTool_setComparisonFunction(const char *config_json, const char *cfunc_code, const char *connect_str, const char *cfunc_desc, const char *language, const char *anon_support);
+
+/* ----------------------------------------------------------------------------
+ * Standardize / Expression Function Operations (direct-arg forms)
+ *
+ * Direct-arg add: connect_str NULL stores JSON null; a non-null pointer
+ *   (including "") stores that value.
+ * Direct-arg set: connect_str NULL leaves the stored value untouched; a non-null
+ *   pointer (including "") sets it. This form cannot clear a value to null (use
+ *   the JSON-based set API for that).
+ * ---------------------------------------------------------------------------- */
+struct SzConfigTool_result SzConfigTool_addStandardizeFunction(const char *config_json, const char *sfunc_code, const char *connect_str, const char *sfunc_desc, const char *language);
+struct SzConfigTool_result SzConfigTool_setStandardizeFunction(const char *config_json, const char *sfunc_code, const char *connect_str, const char *sfunc_desc, const char *language);
+struct SzConfigTool_result SzConfigTool_addExpressionFunction(const char *config_json, const char *efunc_code, const char *connect_str, const char *efunc_desc, const char *language);
+struct SzConfigTool_result SzConfigTool_setExpressionFunction(const char *config_json, const char *efunc_code, const char *connect_str, const char *efunc_desc, const char *language);
 
 /* ============================================================================
  * Standardize Call Operations (Batch 6a)
@@ -532,6 +565,8 @@ struct SzConfigTool_result SzConfigTool_setMatchingFunction(const char *config_j
                                                             const char *matching_func);
 
 // Distinct Function Operations (Batch 12)
+/* Direct-arg add: connect_str NULL stores JSON null; a non-null pointer
+ * (including "") stores that value. A blank connect_str is accepted. */
 struct SzConfigTool_result SzConfigTool_addDistinctFunction(const char *config_json,
                                                             const char *dfunc_code,
                                                             const char *connect_str,
@@ -540,6 +575,9 @@ struct SzConfigTool_result SzConfigTool_addDistinctFunction(const char *config_j
 struct SzConfigTool_result SzConfigTool_deleteDistinctFunction(const char *config_json, const char *dfunc_code);
 struct SzConfigTool_result SzConfigTool_getDistinctFunction(const char *config_json, const char *dfunc_code);
 struct SzConfigTool_result SzConfigTool_listDistinctFunctions(const char *config_json);
+/* Direct-arg set: connect_str NULL leaves the stored value untouched; a non-null
+ * pointer (including "") sets it. This form cannot clear a value to null (use the
+ * JSON-based set API for that). */
 struct SzConfigTool_result SzConfigTool_setDistinctFunction(const char *config_json,
                                                             const char *dfunc_code,
                                                             const char *connect_str,
@@ -578,6 +616,85 @@ struct SzConfigTool_result SzConfigTool_listScoringFunctions(const char *config_
 struct SzConfigTool_result SzConfigTool_setScoringFunction(const char *config_json,
                                                            const char *rtype_code,
                                                            const char *scoring_func);
+
+// Wave 4A additions (#38): feature-element mutators, settings, cascade deletes
+
+// Append a feature-element mapping (CFG_FBOM row). options_json may be NULL, or a
+// JSON object carrying displayLevel (int), displayDelim (string), derived (Yes/No).
+struct SzConfigTool_result SzConfigTool_addElementToFeature(const char *config_json,
+                                                            const char *feature_code,
+                                                            const char *element_code,
+                                                            const char *options_json);
+
+// Remove a single feature-element mapping (CFG_FBOM row).
+struct SzConfigTool_result SzConfigTool_deleteElementFromFeature(const char *config_json,
+                                                                 const char *feature_code,
+                                                                 const char *element_code);
+
+// Create or overwrite a named setting under G2_CONFIG.SETTINGS (name is uppercased).
+struct SzConfigTool_result SzConfigTool_setSetting(const char *config_json,
+                                                   const char *name,
+                                                   const char *value);
+
+// Delete a function and all of its dependent rows (cascade).
+struct SzConfigTool_result SzConfigTool_deleteComparisonFunctionCascade(const char *config_json,
+                                                                        const char *cfunc_code);
+struct SzConfigTool_result SzConfigTool_deleteExpressionFunctionCascade(const char *config_json,
+                                                                        const char *efunc_code);
+struct SzConfigTool_result SzConfigTool_deleteStandardizeFunctionCascade(const char *config_json,
+                                                                         const char *sfunc_code);
+
+// Wave 4B additions (#40): by-feature call gets and code-addressed call-element deletes.
+//
+// Get the call bound to a feature (scans CFG_*CALL by FTYPE_ID). This replaces
+// the previous, incorrect practice of using the feature id directly as a call
+// id. Standardize/expression error if the feature has more than one such call
+// (address those by id via the existing get*Call functions).
+struct SzConfigTool_result SzConfigTool_getComparisonCallByFeature(const char *config_json,
+                                                                   const char *feature_code);
+struct SzConfigTool_result SzConfigTool_getDistinctCallByFeature(const char *config_json,
+                                                                 const char *feature_code);
+struct SzConfigTool_result SzConfigTool_getStandardizeCallByFeature(const char *config_json,
+                                                                    const char *feature_code);
+struct SzConfigTool_result SzConfigTool_getExpressionCallByFeature(const char *config_json,
+                                                                   const char *feature_code);
+
+// Delete a call element addressed by code; EXEC_ORDER is derived internally, so
+// (unlike the removed Rust exec_order argument) no execution order is passed.
+// NOTE: this is NEW FFI surface — there were no prior call-element delete
+// wrappers — so it does not break an existing ABI. Comparison/distinct address
+// the call by feature code (0-or-1 call per feature); expression addresses the
+// call by its EFCALL_ID because expression calls are many-per-feature.
+struct SzConfigTool_result SzConfigTool_deleteComparisonCallElement(const char *config_json,
+                                                                    const char *feature_code,
+                                                                    const char *element_code);
+struct SzConfigTool_result SzConfigTool_deleteDistinctCallElement(const char *config_json,
+                                                                  const char *feature_code,
+                                                                  const char *element_code);
+struct SzConfigTool_result SzConfigTool_deleteExpressionCallElement(const char *config_json,
+                                                                    int64_t efcall_id,
+                                                                    const char *element_code);
+
+// Wave 6 additions (#42, #43): API-surface helpers. All additive.
+//
+// List behavior overrides as raw CFG_FBOVR rows (thin projection).
+struct SzConfigTool_result SzConfigTool_listBehaviorOverrides(const char *config_json);
+
+// List behavior overrides in the resolved display shape: a JSON array of
+// { "feature", "usageType", "behavior" } objects, sorted by (FTYPE_ID,
+// UTYPE_CODE). Richer than SzConfigTool_listBehaviorOverrides (raw rows).
+struct SzConfigTool_result SzConfigTool_listBehaviorOverridesResolved(const char *config_json);
+
+// Validate the top-level structure of a config document (structure-only:
+// G2_CONFIG must be an object; any present CFG_* section must be an array).
+// Returns "OK" with return code 0 on success, or an error result otherwise.
+struct SzConfigTool_result SzConfigTool_validateConfig(const char *config_json);
+
+// Render a config document to its canonical export form: recursive object-key
+// sort (Python sort_keys=True semantics) then pretty-print at `indent` spaces
+// per level. `indent` is required; a negative value is treated as 0.
+struct SzConfigTool_result SzConfigTool_renderConfig(const char *config_json,
+                                                     int64_t indent);
 
 #ifdef __cplusplus
 }

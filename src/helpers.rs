@@ -10,6 +10,120 @@ pub(crate) fn field_as_string(item: &Value, key: &str) -> Option<String> {
     item.get(key).and_then(|v| v.as_str()).map(String::from)
 }
 
+/// Project a config-row field as an owned JSON value, null-preserving.
+///
+/// Returns the field's value cloned when the key is present (including an
+/// explicit JSON `null`), and `Value::Null` when the key is absent. This is the
+/// read-side projection used by list/get builders that must emit `null` for a
+/// stored-null or missing field rather than coercing it to `""` or `0`.
+pub(crate) fn field_or_null(item: &Value, key: &str) -> Value {
+    item.get(key).cloned().unwrap_or(Value::Null)
+}
+
+/// Parse a tri-state string [`FieldUpdate`] from a JSON object.
+///
+/// Scans `keys` in order and acts on the first key that is present on `json`:
+/// an explicit JSON `null` maps to [`FieldUpdate::Clear`] and a JSON string maps
+/// to [`FieldUpdate::Set`]. A key that is absent everywhere (or present only with
+/// a non-string, non-null value) leaves the field untouched
+/// ([`FieldUpdate::Leave`]). This encodes the JSON write contract where an
+/// omitted key means "leave", an explicit `null` means "clear", and a value
+/// means "set".
+pub(crate) fn field_update_str<'a>(json: &'a Value, keys: &[&str]) -> FieldUpdate<&'a str> {
+    for key in keys {
+        if let Some(v) = json.get(*key) {
+            if v.is_null() {
+                return FieldUpdate::Clear;
+            }
+            if let Some(s) = v.as_str() {
+                return FieldUpdate::Set(s);
+            }
+        }
+    }
+    FieldUpdate::Leave
+}
+
+/// Parse a tri-state integer [`FieldUpdate`] from a JSON object.
+///
+/// The integer analogue of [`field_update_str`]: an explicit JSON `null` maps to
+/// [`FieldUpdate::Clear`], a JSON integer maps to [`FieldUpdate::Set`], and an
+/// absent key (or present non-integer, non-null value) leaves the field
+/// untouched ([`FieldUpdate::Leave`]).
+pub(crate) fn field_update_i64(json: &Value, keys: &[&str]) -> FieldUpdate<i64> {
+    for key in keys {
+        if let Some(v) = json.get(*key) {
+            if v.is_null() {
+                return FieldUpdate::Clear;
+            }
+            if let Some(n) = v.as_i64() {
+                return FieldUpdate::Set(n);
+            }
+        }
+    }
+    FieldUpdate::Leave
+}
+
+/// Tri-state update for an optional field: leave, clear, or set.
+///
+/// This distinguishes the three intents a partial update can express, which a
+/// plain `Option<T>` cannot:
+///
+/// - [`FieldUpdate::Leave`] — do not touch the field; keep whatever exists.
+/// - [`FieldUpdate::Clear`] — remove the field's value (store `null`).
+/// - [`FieldUpdate::Set`] — replace the field's value.
+///
+/// The default is [`FieldUpdate::Leave`], so a field omitted from an update
+/// builder carries its existing value forward untouched.
+///
+/// # Example
+///
+/// ```
+/// use sz_configtool_lib::helpers::FieldUpdate;
+///
+/// // Leave keeps the existing value.
+/// assert_eq!(FieldUpdate::Leave.apply(Some("old")), Some("old"));
+/// // Clear drops it.
+/// assert_eq!(FieldUpdate::<&str>::Clear.apply(Some("old")), None);
+/// // Set overrides it.
+/// assert_eq!(FieldUpdate::Set("new").apply(Some("old")), Some("new"));
+/// // The default is Leave.
+/// assert_eq!(FieldUpdate::<&str>::default(), FieldUpdate::Leave);
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub enum FieldUpdate<T> {
+    /// Do not modify the field; keep the existing value.
+    #[default]
+    Leave,
+    /// Clear the field (resolve to `None` / stored `null`).
+    Clear,
+    /// Set the field to the given value.
+    Set(T),
+}
+
+impl<T> FieldUpdate<T> {
+    /// Resolve this update against the current value of the field.
+    ///
+    /// - [`FieldUpdate::Leave`] returns `existing` unchanged.
+    /// - [`FieldUpdate::Clear`] returns `None`.
+    /// - [`FieldUpdate::Set`] returns `Some(value)`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use sz_configtool_lib::helpers::FieldUpdate;
+    ///
+    /// let update: FieldUpdate<i64> = FieldUpdate::Set(5);
+    /// assert_eq!(update.apply(Some(1)), Some(5));
+    /// ```
+    pub fn apply(self, existing: Option<T>) -> Option<T> {
+        match self {
+            FieldUpdate::Leave => existing,
+            FieldUpdate::Clear => None,
+            FieldUpdate::Set(value) => Some(value),
+        }
+    }
+}
+
 /// Get the next available ID for a config array
 ///
 /// Finds the maximum value of the specified ID field and returns max + 1
@@ -695,4 +809,240 @@ pub(crate) fn lookup_gplan_code(config_json: &str, gplan_id: i64) -> Result<Stri
                 .map(|s| s.to_string())
         })
         .ok_or_else(|| SzConfigError::NotFound(format!("Generic plan ID: {gplan_id}")))
+}
+
+// ============================================================================
+// By-feature call-id resolvers
+// ============================================================================
+//
+// A call row (CFG_?CALL) binds a function to a feature via FTYPE_ID. These
+// resolvers find the call *id* for a given feature by scanning the relevant
+// call section for rows whose FTYPE_ID matches.
+//
+// Multiplicity policy (see decision D22): all four resolvers require an
+// unambiguous result.
+//   * 0 matching rows  -> NotFound
+//   * exactly 1 row    -> that row's call id
+//   * 2+ matching rows -> InvalidInput (ambiguous; the caller must address the
+//                         call by id instead)
+// Comparison (CFCALL) and distinct (DFCALL) calls are expected to be 0-or-1
+// per feature, so ambiguity there indicates malformed config. Standardize
+// (SFCALL) and expression (EFCALL) calls *can* legitimately be many-per-feature,
+// so the ambiguity error is the safety net that prevents silently picking the
+// wrong call.
+
+/// Resolve the single call id for a feature within one call section.
+///
+/// Scans `config["G2_CONFIG"][section]` for rows whose `FTYPE_ID` equals
+/// `ftype_id` and returns the value of `id_field` when exactly one such row
+/// exists. `label` names the call family for error messages.
+fn resolve_call_id_for_feature(
+    config: &Value,
+    section: &str,
+    id_field: &str,
+    ftype_id: i64,
+    label: &str,
+) -> Result<i64> {
+    let empty: Vec<Value> = Vec::new();
+    let rows = config
+        .get("G2_CONFIG")
+        .and_then(|g| g.get(section))
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty);
+
+    let matches: Vec<i64> = rows
+        .iter()
+        .filter(|row| row.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ftype_id))
+        .filter_map(|row| row.get(id_field).and_then(|v| v.as_i64()))
+        .collect();
+
+    match matches.as_slice() {
+        [] => Err(SzConfigError::NotFound(format!(
+            "No {label} call found for feature id {ftype_id}"
+        ))),
+        [id] => Ok(*id),
+        many => Err(SzConfigError::InvalidInput(format!(
+            "Ambiguous {label} call for feature id {ftype_id}: {} calls match; address the call by id instead",
+            many.len()
+        ))),
+    }
+}
+
+/// Resolve the comparison call id (`CFCALL_ID`) bound to a feature.
+///
+/// See the module policy: returns `NotFound` when the feature has no comparison
+/// call and `InvalidInput` when more than one matches.
+///
+/// # Example
+///
+/// ```
+/// use serde_json::json;
+/// use sz_configtool_lib::helpers::resolve_cfcall_id_for_feature;
+///
+/// let config = json!({"G2_CONFIG": {"CFG_CFCALL": [
+///     {"CFCALL_ID": 7, "FTYPE_ID": 3, "CFUNC_ID": 1}
+/// ]}});
+/// assert_eq!(resolve_cfcall_id_for_feature(&config, 3).unwrap(), 7);
+/// assert!(resolve_cfcall_id_for_feature(&config, 99).is_err());
+/// ```
+pub fn resolve_cfcall_id_for_feature(config: &Value, ftype_id: i64) -> Result<i64> {
+    resolve_call_id_for_feature(config, "CFG_CFCALL", "CFCALL_ID", ftype_id, "comparison")
+}
+
+/// Resolve the distinct call id (`DFCALL_ID`) bound to a feature.
+///
+/// See the module policy: returns `NotFound` when the feature has no distinct
+/// call and `InvalidInput` when more than one matches.
+///
+/// # Example
+///
+/// ```
+/// use serde_json::json;
+/// use sz_configtool_lib::helpers::resolve_dfcall_id_for_feature;
+///
+/// let config = json!({"G2_CONFIG": {"CFG_DFCALL": [
+///     {"DFCALL_ID": 11, "FTYPE_ID": 3, "DFUNC_ID": 1}
+/// ]}});
+/// assert_eq!(resolve_dfcall_id_for_feature(&config, 3).unwrap(), 11);
+/// ```
+pub fn resolve_dfcall_id_for_feature(config: &Value, ftype_id: i64) -> Result<i64> {
+    resolve_call_id_for_feature(config, "CFG_DFCALL", "DFCALL_ID", ftype_id, "distinct")
+}
+
+/// Resolve the standardize call id (`SFCALL_ID`) bound to a feature.
+///
+/// Standardize calls can legitimately be many-per-feature; this returns
+/// `InvalidInput` when more than one matches (address by id instead) and
+/// `NotFound` when none do.
+///
+/// # Example
+///
+/// ```
+/// use serde_json::json;
+/// use sz_configtool_lib::helpers::resolve_sfcall_id_for_feature;
+///
+/// let config = json!({"G2_CONFIG": {"CFG_SFCALL": [
+///     {"SFCALL_ID": 5, "FTYPE_ID": 3, "SFUNC_ID": 1}
+/// ]}});
+/// assert_eq!(resolve_sfcall_id_for_feature(&config, 3).unwrap(), 5);
+/// ```
+pub fn resolve_sfcall_id_for_feature(config: &Value, ftype_id: i64) -> Result<i64> {
+    resolve_call_id_for_feature(config, "CFG_SFCALL", "SFCALL_ID", ftype_id, "standardize")
+}
+
+/// Resolve the expression call id (`EFCALL_ID`) bound to a feature.
+///
+/// Expression calls can legitimately be many-per-feature; this returns
+/// `InvalidInput` when more than one matches (address by id instead) and
+/// `NotFound` when none do.
+///
+/// # Example
+///
+/// ```
+/// use serde_json::json;
+/// use sz_configtool_lib::helpers::resolve_efcall_id_for_feature;
+///
+/// let config = json!({"G2_CONFIG": {"CFG_EFCALL": [
+///     {"EFCALL_ID": 9, "FTYPE_ID": 3, "EFUNC_ID": 1}
+/// ]}});
+/// assert_eq!(resolve_efcall_id_for_feature(&config, 3).unwrap(), 9);
+/// ```
+pub fn resolve_efcall_id_for_feature(config: &Value, ftype_id: i64) -> Result<i64> {
+    resolve_call_id_for_feature(config, "CFG_EFCALL", "EFCALL_ID", ftype_id, "expression")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_field_or_null_present_empty_null_absent() {
+        let item = json!({"a": "value", "b": "", "c": null});
+        // Present, non-empty string -> cloned value.
+        assert_eq!(field_or_null(&item, "a"), json!("value"));
+        // Present, empty string -> preserved as "".
+        assert_eq!(field_or_null(&item, "b"), json!(""));
+        // Present, explicit null -> null.
+        assert_eq!(field_or_null(&item, "c"), Value::Null);
+        // Absent key -> null.
+        assert_eq!(field_or_null(&item, "missing"), Value::Null);
+    }
+
+    #[test]
+    fn test_field_or_null_non_string_values() {
+        let item = json!({"n": 42, "arr": [1, 2]});
+        assert_eq!(field_or_null(&item, "n"), json!(42));
+        assert_eq!(field_or_null(&item, "arr"), json!([1, 2]));
+    }
+
+    #[test]
+    fn test_field_update_apply() {
+        assert_eq!(FieldUpdate::Leave.apply(Some(1)), Some(1));
+        assert_eq!(FieldUpdate::Leave.apply(None::<i64>), None);
+        assert_eq!(FieldUpdate::<i64>::Clear.apply(Some(1)), None);
+        assert_eq!(FieldUpdate::<i64>::Clear.apply(None), None);
+        assert_eq!(FieldUpdate::Set(9).apply(Some(1)), Some(9));
+        assert_eq!(FieldUpdate::Set(9).apply(None), Some(9));
+    }
+
+    #[test]
+    fn test_field_update_default_is_leave() {
+        let d: FieldUpdate<String> = FieldUpdate::default();
+        assert_eq!(d, FieldUpdate::Leave);
+    }
+
+    fn resolver_config() -> Value {
+        json!({"G2_CONFIG": {
+            "CFG_CFCALL": [
+                {"CFCALL_ID": 100, "FTYPE_ID": 1, "CFUNC_ID": 1},
+                {"CFCALL_ID": 101, "FTYPE_ID": 2, "CFUNC_ID": 1}
+            ],
+            "CFG_DFCALL": [
+                {"DFCALL_ID": 200, "FTYPE_ID": 1, "DFUNC_ID": 1}
+            ],
+            "CFG_SFCALL": [
+                {"SFCALL_ID": 300, "FTYPE_ID": 1, "SFUNC_ID": 1},
+                {"SFCALL_ID": 301, "FTYPE_ID": 1, "SFUNC_ID": 2}
+            ],
+            "CFG_EFCALL": [
+                {"EFCALL_ID": 400, "FTYPE_ID": 5, "EFUNC_ID": 1}
+            ]
+        }})
+    }
+
+    #[test]
+    fn test_resolvers_single_match() {
+        let cfg = resolver_config();
+        assert_eq!(resolve_cfcall_id_for_feature(&cfg, 1).unwrap(), 100);
+        assert_eq!(resolve_cfcall_id_for_feature(&cfg, 2).unwrap(), 101);
+        assert_eq!(resolve_dfcall_id_for_feature(&cfg, 1).unwrap(), 200);
+        assert_eq!(resolve_efcall_id_for_feature(&cfg, 5).unwrap(), 400);
+    }
+
+    #[test]
+    fn test_resolvers_zero_match_not_found() {
+        let cfg = resolver_config();
+        let err = resolve_cfcall_id_for_feature(&cfg, 999).unwrap_err();
+        assert_eq!(err.kind(), SzConfigError::not_found("").kind());
+        assert!(resolve_dfcall_id_for_feature(&cfg, 999).is_err());
+        assert!(resolve_sfcall_id_for_feature(&cfg, 999).is_err());
+        assert!(resolve_efcall_id_for_feature(&cfg, 999).is_err());
+    }
+
+    #[test]
+    fn test_resolvers_ambiguous_many_match() {
+        let cfg = resolver_config();
+        // Feature 1 has two standardize calls -> ambiguous.
+        let err = resolve_sfcall_id_for_feature(&cfg, 1).unwrap_err();
+        assert_eq!(err.kind(), SzConfigError::validation("").kind());
+        assert!(err.to_string().contains("Ambiguous"));
+    }
+
+    #[test]
+    fn test_resolvers_missing_section_is_not_found() {
+        // Absent section behaves like zero matches.
+        let cfg = json!({"G2_CONFIG": {}});
+        assert!(resolve_cfcall_id_for_feature(&cfg, 1).is_err());
+    }
 }

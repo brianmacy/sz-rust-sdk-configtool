@@ -1,3 +1,4 @@
+use crate::behavior_domain::{compute_behavior, parse_behavior_code};
 use crate::config_rows::{
     CfbomRow, CfcallRow, DfcallRow, EfbomRow, EfcallRow, FbomRow, FelemRow, FtypeRow, SfcallRow,
 };
@@ -26,6 +27,9 @@ pub struct AddFeatureParams<'a> {
     pub comparison: Option<&'a str>,
     pub version: Option<i64>,
     pub rtype_id: Option<i64>,
+    /// Caller-supplied `FTYPE_ID`. `None`/non-positive auto-assigns at the
+    /// user-range floor of 1000; `Some(id > 0)` is honoured unless already taken.
+    pub id: Option<i64>,
 }
 
 impl<'a> AddFeatureParams<'a> {
@@ -35,6 +39,12 @@ impl<'a> AddFeatureParams<'a> {
             element_list,
             ..Default::default()
         }
+    }
+
+    /// Request a specific `FTYPE_ID` for the new feature.
+    pub fn with_id(mut self, id: i64) -> Self {
+        self.id = Some(id);
+        self
     }
 }
 
@@ -75,6 +85,7 @@ impl<'a> TryFrom<&'a Value> for AddFeatureParams<'a> {
                 .filter(|s| !s.is_empty()),
             version: json.get("version").and_then(|v| v.as_i64()),
             rtype_id: json.get("rtypeId").and_then(|v| v.as_i64()),
+            id: json.get("id").and_then(|v| v.as_i64()),
         })
     }
 }
@@ -263,20 +274,22 @@ impl<'a> AddFeatureDistinctCallElementParams<'a> {
     }
 }
 
-// Protected features that cannot be deleted
+// Protected features that cannot be deleted.
+//
+// This is the ratified (human-approved) locked-feature set that mirrors the
+// authoritative Python `locked_feature_list`. Only these codes are protected;
+// every other shipped feature (EMAIL, RECORD_TYPE, NATIONAL_ID, TAX_ID,
+// ACCT_NUM, ...) is deletable. The previous list also carried codes that do not
+// exist as feature codes in the shipped config (DATE_OF_BIRTH, SSN_NUM,
+// PASSPORT_NUM, DRIVERS_LICENSE_NUM), which were inert but misleading.
 const LOCKED_FEATURES: &[&str] = &[
     "NAME",
     "ADDRESS",
     "PHONE",
-    "EMAIL",
-    "RECORD_TYPE",
-    "DATE_OF_BIRTH",
-    "NATIONAL_ID",
-    "TAX_ID",
-    "ACCT_NUM",
-    "SSN_NUM",
-    "PASSPORT_NUM",
-    "DRIVERS_LICENSE_NUM",
+    "DOB",
+    "REL_LINK",
+    "REL_ANCHOR",
+    "REL_POINTER",
 ];
 
 /// Add a new feature to the configuration
@@ -429,8 +442,10 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
         matchkey_default
     };
 
-    // Get next FTYPE_ID (seed at 1000 for user-created features)
-    let ftype_id = helpers::get_next_id_with_min(ftypes, "FTYPE_ID", 1000)?;
+    // Get next FTYPE_ID (seed at 1000 for user-created features). Caller-supplied
+    // id (#37): None/non-positive auto-assigns; a specific id > 0 is honoured
+    // unless already taken (get_desired_or_next_id returns AlreadyExists).
+    let ftype_id = helpers::get_desired_or_next_id(ftypes, "FTYPE_ID", params.id, 1000)?;
 
     // Parse behavior code (like Python's parseFeatureBehavior)
     // Valid frequency codes: A1, F1, FF, FM, FVM, NONE, NAME
@@ -642,7 +657,7 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
                     .to_uppercase();
 
                 // Handle display (backwards compatibility)
-                let disp_level = if let Some(display) = elem_obj
+                let disp_level_raw = if let Some(display) = elem_obj
                     .get("display")
                     .or_else(|| elem_obj.get("DISPLAY"))
                     .and_then(|v| v.as_str())
@@ -660,6 +675,10 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
                         .and_then(|v| v.as_i64())
                         .unwrap_or(1)
                 };
+                // Unify onto the shared strict validator (D25): a negative
+                // DISPLAY_LEVEL is now rejected rather than stored verbatim,
+                // matching set_feature_element / add_element_to_feature.
+                let disp_level = crate::elements::validate_display_level(disp_level_raw)?;
 
                 let disp_delim = elem_obj
                     .get("displaydelim")
@@ -668,19 +687,17 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
 
-                let elem_deriv = elem_obj
+                // Unify onto the shared strict validator (D25): an unknown
+                // DERIVED value is now rejected rather than silently coerced to
+                // "No", matching set_feature_element / add_element_to_feature.
+                let elem_deriv = match elem_obj
                     .get("derived")
                     .or_else(|| elem_obj.get("DERIVED"))
                     .and_then(|v| v.as_str())
-                    .map(|s| {
-                        if s.eq_ignore_ascii_case("yes") {
-                            "Yes"
-                        } else {
-                            "No"
-                        }
-                        .to_string()
-                    })
-                    .unwrap_or_else(|| "No".to_string());
+                {
+                    Some(s) => crate::elements::validate_derived(s)?.to_string(),
+                    None => "No".to_string(),
+                };
 
                 (code, expr, comp, disp_level, disp_delim, elem_deriv)
             } else {
@@ -1308,61 +1325,6 @@ pub fn build_feature_json(config: &Value, ftype: &Value) -> Result<Value> {
     }))
 }
 
-/// Parse a behavior code string into (frequency, exclusivity, stability)
-/// Valid frequency codes: A1, F1, FF, FM, FVM, NONE, NAME
-/// E suffix means EXCLUSIVITY = "Yes"
-/// S suffix means STABILITY = "Yes"
-fn parse_behavior_code(behavior: &str) -> Result<(&'static str, &'static str, &'static str)> {
-    let mut code = behavior.to_uppercase();
-    let mut exclusivity = "No";
-    let mut stability = "No";
-
-    // Special cases that don't get E/S parsing
-    if code != "NAME" && code != "NONE" {
-        if code.contains('E') {
-            exclusivity = "Yes";
-            code = code.replace('E', "");
-        }
-        if code.contains('S') {
-            stability = "Yes";
-            code = code.replace('S', "");
-        }
-    }
-
-    // Validate frequency code
-    let frequency: &'static str = match code.as_str() {
-        "A1" => "A1",
-        "F1" => "F1",
-        "FF" => "FF",
-        "FM" => "FM",
-        "FVM" => "FVM",
-        "NONE" => "NONE",
-        "NAME" => "NAME",
-        _ => {
-            return Err(SzConfigError::InvalidInput(format!(
-                "Invalid behavior code '{behavior}'. Valid codes: A1, F1, FF, FM, FVM, NONE, NAME (with optional E/S suffixes)"
-            )));
-        }
-    };
-
-    Ok((frequency, exclusivity, stability))
-}
-
-fn compute_behavior(ftype: &Value) -> String {
-    let freq = ftype["FTYPE_FREQ"].as_str().unwrap_or("");
-    let excl = ftype["FTYPE_EXCL"].as_str().unwrap_or("");
-    let stab = ftype["FTYPE_STAB"].as_str().unwrap_or("");
-
-    let mut behavior = freq.to_string();
-    if excl.to_uppercase() == "Y" || excl == "1" || excl.to_uppercase() == "YES" {
-        behavior.push('E');
-    }
-    if stab.to_uppercase() == "Y" || stab == "1" || stab.to_uppercase() == "YES" {
-        behavior.push('S');
-    }
-    behavior
-}
-
 fn lookup_feature_id(config: &Value, feature_code: &str) -> Result<i64> {
     let code_upper = feature_code.to_uppercase();
     config["G2_CONFIG"]["CFG_FTYPE"]
@@ -1842,6 +1804,85 @@ mod tests {
         assert_eq!(fbom["DERIVED"], json!("No"));
     }
 
+    // D25: add_feature's per-element elementList handling is now unified onto the
+    // shared strict validators (elements::validate_display_level / validate_derived),
+    // matching set_feature_element and add_element_to_feature.
+    #[test]
+    fn test_add_feature_rejects_negative_display_level_in_element() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [], "CFG_FCLASS": [{"FCLASS_ID": 1, "FCLASS_CODE": "OTHER"}],
+            "CFG_FELEM": [], "CFG_FBOM": []
+        }}"#;
+        let elements = json!([{"element": "MYELEM", "displaylevel": -1}]);
+        let params = AddFeatureParams {
+            feature: "MYFEAT",
+            element_list: &elements,
+            ..Default::default()
+        };
+        let err = add_feature(config, params).unwrap_err();
+        assert!(
+            matches!(err, SzConfigError::InvalidInput(ref m) if m.contains("DISPLAY_LEVEL")),
+            "expected DISPLAY_LEVEL InvalidInput, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_add_feature_rejects_invalid_derived_in_element() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [], "CFG_FCLASS": [{"FCLASS_ID": 1, "FCLASS_CODE": "OTHER"}],
+            "CFG_FELEM": [], "CFG_FBOM": []
+        }}"#;
+        let elements = json!([{"element": "MYELEM", "derived": "maybe"}]);
+        let params = AddFeatureParams {
+            feature: "MYFEAT",
+            element_list: &elements,
+            ..Default::default()
+        };
+        let err = add_feature(config, params).unwrap_err();
+        assert!(
+            matches!(err, SzConfigError::InvalidInput(ref m) if m.contains("DERIVED")),
+            "expected DERIVED InvalidInput, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_add_feature_caller_supplied_id() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 1000, "FTYPE_CODE": "TAKEN"}],
+            "CFG_FCLASS": [{"FCLASS_ID": 1, "FCLASS_CODE": "OTHER"}],
+            "CFG_FELEM": [],
+            "CFG_FBOM": []
+        }}"#;
+        let elements = json!([{"element": "MYELEM"}]);
+
+        // Specific free id honoured.
+        let params = AddFeatureParams::new("MYFEAT", &elements).with_id(2500);
+        let modified = add_feature(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let ftype = value["G2_CONFIG"]["CFG_FTYPE"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert_eq!(ftype["FTYPE_ID"], json!(2500));
+
+        // Taken id rejected.
+        let params = AddFeatureParams::new("MYFEAT", &elements).with_id(1000);
+        let err = add_feature(config, params).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
+
+        // Auto-assign lands above the existing max (1000) -> 1001.
+        let params = AddFeatureParams::new("MYFEAT", &elements);
+        let modified = add_feature(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let ftype = value["G2_CONFIG"]["CFG_FTYPE"]
+            .as_array()
+            .unwrap()
+            .last()
+            .unwrap();
+        assert_eq!(ftype["FTYPE_ID"], json!(1001));
+    }
+
     /// add_feature with standardize/expression/comparison functions must write
     /// complete CFG_SFCALL, CFG_EFCALL, CFG_CFCALL, CFG_EFBOM and CFG_CFBOM rows.
     /// CFG_CFCALL has no EXEC_ORDER column in the Senzing v4 schema.
@@ -1973,5 +2014,100 @@ mod tests {
         assert_eq!(dfcall["DFUNC_ID"], json!(2));
         assert!(!dfcall.as_object().unwrap().contains_key("FELEM_ID"));
         assert!(!dfcall.as_object().unwrap().contains_key("EXEC_ORDER"));
+    }
+
+    // ------------------------------------------------------------------
+    // LOCKED_FEATURES (ratified protected set) — #35
+    // ------------------------------------------------------------------
+
+    /// A real feature that is NO LONGER in the protected set (EMAIL) must be
+    /// deletable, and its dependent rows must cascade away.
+    #[test]
+    fn test_delete_feature_email_now_deletable_and_cascades() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [
+                {"FTYPE_ID": 5, "FTYPE_CODE": "EMAIL"},
+                {"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}
+            ],
+            "CFG_FBOM": [
+                {"FTYPE_ID": 5, "FELEM_ID": 1},
+                {"FTYPE_ID": 3, "FELEM_ID": 2}
+            ],
+            "CFG_ATTR": [
+                {"ATTR_CODE": "EMAIL", "FTYPE_CODE": "EMAIL"}
+            ],
+            "CFG_CFCALL": [
+                {"CFCALL_ID": 50, "FTYPE_ID": 5, "CFUNC_ID": 1}
+            ],
+            "CFG_CFBOM": [
+                {"CFCALL_ID": 50, "FELEM_ID": 1}
+            ]
+        }}"#;
+
+        let modified = delete_feature(config, "EMAIL").unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let g2 = &value["G2_CONFIG"];
+
+        // The EMAIL feature is gone; NAME survives.
+        let ftypes = g2["CFG_FTYPE"].as_array().unwrap();
+        assert_eq!(ftypes.len(), 1);
+        assert_eq!(ftypes[0]["FTYPE_CODE"], json!("NAME"));
+
+        // Cascade: EMAIL's FBOM/ATTR/CFCALL/CFBOM rows removed, NAME's kept.
+        let fbom = g2["CFG_FBOM"].as_array().unwrap();
+        assert_eq!(fbom.len(), 1);
+        assert_eq!(fbom[0]["FTYPE_ID"], json!(3));
+        assert!(g2["CFG_ATTR"].as_array().unwrap().is_empty());
+        assert!(g2["CFG_CFCALL"].as_array().unwrap().is_empty());
+        assert!(g2["CFG_CFBOM"].as_array().unwrap().is_empty());
+    }
+
+    /// Every code in the ratified protected set must be blocked from deletion,
+    /// case-insensitively.
+    #[test]
+    fn test_delete_feature_ratified_codes_blocked() {
+        for code in [
+            "NAME",
+            "ADDRESS",
+            "PHONE",
+            "DOB",
+            "REL_LINK",
+            "REL_ANCHOR",
+            "REL_POINTER",
+        ] {
+            let config = format!(
+                r#"{{"G2_CONFIG": {{"CFG_FTYPE": [{{"FTYPE_ID": 1, "FTYPE_CODE": "{code}"}}]}}}}"#
+            );
+            // Exact case.
+            let err = delete_feature(&config, code).unwrap_err();
+            assert_eq!(
+                err.kind(),
+                crate::error::SzErrorKind::InvalidInput,
+                "{code} must be protected"
+            );
+            // Case-insensitive.
+            let err_lower = delete_feature(&config, &code.to_lowercase()).unwrap_err();
+            assert_eq!(err_lower.kind(), crate::error::SzErrorKind::InvalidInput);
+        }
+    }
+
+    /// A former inert entry (a bogus DATE_OF_BIRTH feature) is no longer falsely
+    /// protected: deleting it succeeds rather than being blocked.
+    #[test]
+    fn test_delete_feature_former_inert_entry_not_protected() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 7, "FTYPE_CODE": "DATE_OF_BIRTH"}]
+        }}"#;
+
+        // DATE_OF_BIRTH was in the old list but is not a real protected feature;
+        // it must now be deletable.
+        let modified = delete_feature(config, "DATE_OF_BIRTH").unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        assert!(
+            value["G2_CONFIG"]["CFG_FTYPE"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
     }
 }

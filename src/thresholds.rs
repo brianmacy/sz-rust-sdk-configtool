@@ -251,6 +251,36 @@ impl<'a> TryFrom<&'a Value> for DeleteGenericThresholdParams<'a> {
     }
 }
 
+// ============================================================================
+// Shared local helpers
+// ============================================================================
+
+/// Resolve a feature code to its `FTYPE_ID`, treating `"all"` (case-insensitive)
+/// as the `0` sentinel that means "all features".
+///
+/// Used as a *lookup* key by the threshold add/set/delete paths.
+fn resolve_ftype_id_or_all(config_json: &str, feature: &str) -> Result<i64> {
+    if feature.eq_ignore_ascii_case("all") {
+        Ok(0)
+    } else {
+        helpers::lookup_feature_id(config_json, feature)
+    }
+}
+
+/// Canonicalise a `sendToRedo` value to the title-case form stored on disk.
+///
+/// Accepts `"Yes"`/`"No"` in any case and returns the canonical `"Yes"`/`"No"`.
+/// Any other value is rejected as invalid input.
+fn send_to_redo_canonical(value: &str) -> Result<&'static str> {
+    match value.to_uppercase().as_str() {
+        "YES" => Ok("Yes"),
+        "NO" => Ok("No"),
+        _ => Err(SzConfigError::InvalidInput(format!(
+            "Invalid sendToRedo value '{value}'. Must be 'Yes' or 'No'"
+        ))),
+    }
+}
+
 // ===== Comparison Thresholds (CFG_CFRTN) =====
 
 /// Add a new comparison threshold (CFG_CFRTN record)
@@ -461,53 +491,51 @@ pub(crate) fn delete_comparison_threshold_by_id(
     serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
 }
 
+/// Delete a comparison threshold (CFG_CFRTN record)
+///
+/// Matches on the full three-key identity of a comparison threshold:
+/// `(CFUNC_ID, FTYPE_ID, CFUNC_RTNVAL)`. `cfunc_rtnval` is matched
+/// case-insensitively (mirroring [`set_comparison_threshold`]), and
+/// `ftype_code = "all"` resolves to the `FTYPE_ID` `0` sentinel.
+///
+/// # Arguments
+/// * `config_json` - JSON configuration string
+/// * `cfunc_code` - Comparison function code
+/// * `ftype_code` - Feature code, or `"all"` for the all-features (0) sentinel
+/// * `cfunc_rtnval` - Return value / score name (matched case-insensitively)
+///
+/// # Returns
+/// Modified configuration JSON string
 pub fn delete_comparison_threshold(
     config_json: &str,
     cfunc_code: &str,
     ftype_code: &str,
+    cfunc_rtnval: &str,
 ) -> Result<String> {
     let cfunc_id = helpers::lookup_cfunc_id(config_json, cfunc_code)?;
-    let ftype_id = helpers::lookup_feature_id(config_json, ftype_code)?;
-
-    // Find the CFRTN_ID for this combination
-    let config_lookup: Value =
-        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
-
-    let cfrtn_array = config_lookup["G2_CONFIG"]["CFG_CFRTN"]
-        .as_array()
-        .ok_or_else(|| SzConfigError::MissingSection("CFG_CFRTN".to_string()))?;
-
-    let cfrtn_id = cfrtn_array
-        .iter()
-        .find(|item| {
-            item["CFUNC_ID"].as_i64() == Some(cfunc_id)
-                && item["FTYPE_ID"].as_i64() == Some(ftype_id)
-        })
-        .and_then(|item| item["CFRTN_ID"].as_i64())
-        .ok_or_else(|| {
-            SzConfigError::NotFound(format!(
-                "Comparison threshold for cfunc='{cfunc_code}', ftype='{ftype_code}'"
-            ))
-        })?;
+    let ftype_id = resolve_ftype_id_or_all(config_json, ftype_code)?;
 
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    let mut found = false;
+    let cfrtn_array = config["G2_CONFIG"]["CFG_CFRTN"]
+        .as_array_mut()
+        .ok_or_else(|| SzConfigError::MissingSection("CFG_CFRTN".to_string()))?;
 
-    if let Some(cfrtn_array) = config["G2_CONFIG"]["CFG_CFRTN"].as_array_mut() {
-        cfrtn_array.retain(|item| {
-            let matches = item["CFRTN_ID"].as_i64() == Some(cfrtn_id);
-            if matches {
-                found = true;
-            }
-            !matches
-        });
-    }
+    let original_len = cfrtn_array.len();
+    cfrtn_array.retain(|item| {
+        let matches = item["CFUNC_ID"].as_i64() == Some(cfunc_id)
+            && item["FTYPE_ID"].as_i64() == Some(ftype_id)
+            && item["CFUNC_RTNVAL"]
+                .as_str()
+                .map(|s| s.eq_ignore_ascii_case(cfunc_rtnval))
+                .unwrap_or(false);
+        !matches
+    });
 
-    if !found {
+    if cfrtn_array.len() == original_len {
         return Err(SzConfigError::NotFound(format!(
-            "Comparison threshold: {cfrtn_id}"
+            "Comparison threshold for cfunc='{cfunc_code}', ftype='{ftype_code}', rtnval='{cfunc_rtnval}'"
         )));
     }
 
@@ -727,15 +755,10 @@ pub fn add_generic_threshold(
 
     let plan_upper = plan.to_uppercase();
     let behavior_upper = behavior.to_uppercase();
-    let redo_upper = send_to_redo.to_uppercase();
     let feature_upper = params.feature.unwrap_or("ALL").to_uppercase();
 
-    // Validate sendToRedo
-    if redo_upper != "YES" && redo_upper != "NO" {
-        return Err(SzConfigError::InvalidInput(format!(
-            "Invalid sendToRedo value '{send_to_redo}'. Must be 'Yes' or 'No'"
-        )));
-    }
+    // Validate sendToRedo and store the canonical title-case form ("Yes"/"No").
+    let redo_canonical = send_to_redo_canonical(send_to_redo)?;
 
     // Lookup plan ID
     let gplan_array = config["G2_CONFIG"]["CFG_GPLAN"]
@@ -786,7 +809,7 @@ pub fn add_generic_threshold(
         ftype_id,
         candidate_cap,
         scoring_cap,
-        send_to_redo: redo_upper,
+        send_to_redo: redo_canonical.to_string(),
     };
     let new_threshold = serde_json::to_value(&row)?;
 
@@ -885,6 +908,17 @@ pub fn set_generic_threshold(
 
     let gplan_id = helpers::lookup_gplan_id(config_json, plan)?;
 
+    // The feature selects WHICH per-feature row to edit; it is a lookup key,
+    // never a value to write. Defaults to the all-features (0) sentinel.
+    let ftype_id = resolve_ftype_id_or_all(config_json, params.feature.unwrap_or("ALL"))?;
+
+    // Canonicalise sendToRedo up front so an invalid value is rejected before
+    // any mutation (case-insensitive validation, title-case storage).
+    let redo_canonical = match params.send_to_redo {
+        Some(v) => Some(send_to_redo_canonical(v)?),
+        None => None,
+    };
+
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
@@ -894,33 +928,32 @@ pub fn set_generic_threshold(
         .as_array_mut()
         .ok_or_else(|| SzConfigError::MissingSection("CFG_GENERIC_THRESHOLD".to_string()))?;
 
+    // Match on the FULL triple (GPLAN_ID, BEHAVIOR, FTYPE_ID) so per-feature
+    // rows that share a (plan, behaviour) are distinguished by feature.
     let gthresh = gthresh_array
         .iter_mut()
         .find(|item| {
             item["GPLAN_ID"].as_i64() == Some(gplan_id)
                 && item["BEHAVIOR"].as_str() == Some(behavior_upper.as_str())
+                && item["FTYPE_ID"].as_i64() == Some(ftype_id)
         })
         .ok_or_else(|| {
             SzConfigError::NotFound(format!(
-                "Generic threshold not found: GPLAN_ID={gplan_id}, BEHAVIOR={behavior_upper}"
+                "Generic threshold not found: GPLAN_ID={gplan_id}, BEHAVIOR={behavior_upper}, FTYPE_ID={ftype_id}"
             ))
         })?;
 
     // In-place update of a complete existing row; all keys preserved.
-    // Update fields from params
+    // FTYPE_ID is a lookup key and must never be overwritten here.
     if let Some(dest_obj) = gthresh.as_object_mut() {
-        if let Some(feature_code) = params.feature {
-            let new_ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
-            dest_obj.insert("FTYPE_ID".to_string(), json!(new_ftype_id));
-        }
         if let Some(cap) = params.candidate_cap {
             dest_obj.insert("CANDIDATE_CAP".to_string(), json!(cap));
         }
         if let Some(cap) = params.scoring_cap {
             dest_obj.insert("SCORING_CAP".to_string(), json!(cap));
         }
-        if let Some(redo) = params.send_to_redo {
-            dest_obj.insert("SEND_TO_REDO".to_string(), json!(redo.to_uppercase()));
+        if let Some(redo) = redo_canonical {
+            dest_obj.insert("SEND_TO_REDO".to_string(), json!(redo));
         }
     }
 
@@ -929,11 +962,35 @@ pub fn set_generic_threshold(
 
 /// List all generic thresholds with resolved names
 ///
+/// The rows are sorted inside the SDK by `(GPLAN_ID, behaviour-code position)` —
+/// the behaviour order coming from [`crate::behavior_domain::behavior_position`]
+/// — so callers never need to re-sort or reverse-map the plan code to its id. The
+/// projection carries `id` (the `GPLAN_ID`), previously absent.
+///
 /// # Arguments
 /// * `config_json` - JSON configuration string
 ///
 /// # Returns
-/// Vector of JSON Values with plan, behavior, feature, candidateCap, scoringCap, and sendToRedo fields
+/// Vector of JSON Values with id, plan, behavior, feature, candidateCap, scoringCap, and sendToRedo fields
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::thresholds::list_generic_thresholds;
+/// let config = r#"{"G2_CONFIG": {
+///     "CFG_GPLAN": [{"GPLAN_ID": 1, "GPLAN_CODE": "INGEST"}],
+///     "CFG_FTYPE": [],
+///     "CFG_GENERIC_THRESHOLD": [
+///         {"GPLAN_ID": 1, "BEHAVIOR": "F1", "FTYPE_ID": 0, "CANDIDATE_CAP": 10,
+///          "SCORING_CAP": -1, "SEND_TO_REDO": "Yes"},
+///         {"GPLAN_ID": 1, "BEHAVIOR": "NAME", "FTYPE_ID": 0, "CANDIDATE_CAP": 10,
+///          "SCORING_CAP": -1, "SEND_TO_REDO": "Yes"}
+///     ]
+/// }}"#;
+/// let rows = list_generic_thresholds(config).unwrap();
+/// // NAME sorts before F1 despite being stored second.
+/// assert_eq!(rows[0]["behavior"], "NAME");
+/// assert_eq!(rows[0]["id"], 1);
+/// ```
 pub fn list_generic_thresholds(config_json: &str) -> Result<Vec<Value>> {
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -950,8 +1007,21 @@ pub fn list_generic_thresholds(config_json: &str) -> Result<Vec<Value>> {
         .as_array()
         .ok_or_else(|| SzConfigError::MissingSection("CFG_FTYPE".to_string()))?;
 
-    let result: Vec<Value> = gthresh_array
-        .iter()
+    // Sort the raw rows by (GPLAN_ID, behaviour-code position) before projection
+    // so the numeric sort key is never lost. The behaviour-code order comes from
+    // the SDK-owned canonical domain (behavior_domain::behavior_position); an
+    // unrecognised behaviour sorts last. sort_by_key is stable, so per-feature
+    // rows sharing a (plan, behaviour) keep their stored relative order.
+    let mut sorted: Vec<&Value> = gthresh_array.iter().collect();
+    sorted.sort_by_key(|item| {
+        let gplan_id = item["GPLAN_ID"].as_i64().unwrap_or(0);
+        let behavior = item["BEHAVIOR"].as_str().unwrap_or("");
+        let pos = crate::behavior_domain::behavior_position(behavior).unwrap_or(usize::MAX);
+        (gplan_id, pos)
+    });
+
+    let result: Vec<Value> = sorted
+        .into_iter()
         .map(|item| {
             let gplan_id = item["GPLAN_ID"].as_i64().unwrap_or(0);
             let ftype_id = item["FTYPE_ID"].as_i64().unwrap_or(0);
@@ -976,7 +1046,11 @@ pub fn list_generic_thresholds(config_json: &str) -> Result<Vec<Value>> {
                     .to_string()
             };
 
+            // `id` carries the GPLAN_ID: generic-threshold rows have no single
+            // surrogate key, and the plan id is the numeric key callers need to
+            // sort/round-trip (previously reverse-mapped from `plan`).
             json!({
+                "id": gplan_id,
                 "plan": plan,
                 "behavior": item["BEHAVIOR"].as_str().unwrap_or(""),
                 "feature": feature,
@@ -1129,6 +1203,208 @@ mod tests {
         assert_eq!(row["FTYPE_ID"], json!(0));
         assert_eq!(row["CANDIDATE_CAP"], json!(10));
         assert_eq!(row["SCORING_CAP"], json!(20));
-        assert_eq!(row["SEND_TO_REDO"], json!("NO"));
+        // Canonical storage is title-case "No", not "NO".
+        assert_eq!(row["SEND_TO_REDO"], json!("No"));
+    }
+
+    #[test]
+    fn test_add_generic_threshold_send_to_redo_yes_title_case() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_GPLAN": [{"GPLAN_ID": 1, "GPLAN_CODE": "INGEST"}],
+            "CFG_GENERIC_THRESHOLD": [],
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}]
+        }}"#;
+
+        // Lower-case input must be accepted and stored title-case.
+        let params = AddGenericThresholdParams::new("INGEST", "NAME", 20, 10, "yes");
+        let modified = add_generic_threshold(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let row = &value["G2_CONFIG"]["CFG_GENERIC_THRESHOLD"][0];
+        assert_eq!(row["SEND_TO_REDO"], json!("Yes"));
+    }
+
+    #[test]
+    fn test_add_generic_threshold_rejects_unknown_send_to_redo() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_GPLAN": [{"GPLAN_ID": 1, "GPLAN_CODE": "INGEST"}],
+            "CFG_GENERIC_THRESHOLD": [],
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}]
+        }}"#;
+
+        let params = AddGenericThresholdParams::new("INGEST", "NAME", 20, 10, "maybe");
+        let err = add_generic_threshold(config, params).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::InvalidInput);
+    }
+
+    /// Rows sharing (GPLAN_ID, BEHAVIOR) but differing by FTYPE_ID must be
+    /// distinguished by the feature key; the matched row's FTYPE_ID must never
+    /// be overwritten.
+    #[test]
+    fn test_set_generic_threshold_edits_correct_per_feature_row() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_GPLAN": [{"GPLAN_ID": 1, "GPLAN_CODE": "INGEST"}],
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_GENERIC_THRESHOLD": [
+                {"GPLAN_ID": 1, "BEHAVIOR": "FF", "FTYPE_ID": 0,
+                 "CANDIDATE_CAP": 10, "SCORING_CAP": 20, "SEND_TO_REDO": "No"},
+                {"GPLAN_ID": 1, "BEHAVIOR": "FF", "FTYPE_ID": 3,
+                 "CANDIDATE_CAP": 11, "SCORING_CAP": 21, "SEND_TO_REDO": "No"}
+            ]
+        }}"#;
+
+        let params = SetGenericThresholdParams {
+            plan: Some("INGEST"),
+            behavior: Some("FF"),
+            feature: Some("NAME"),
+            candidate_cap: Some(99),
+            scoring_cap: None,
+            send_to_redo: Some("yes"),
+        };
+        let modified = set_generic_threshold(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let rows = value["G2_CONFIG"]["CFG_GENERIC_THRESHOLD"]
+            .as_array()
+            .unwrap();
+
+        // The FTYPE_ID=0 row is untouched.
+        assert_eq!(rows[0]["CANDIDATE_CAP"], json!(10));
+        assert_eq!(rows[0]["SEND_TO_REDO"], json!("No"));
+        assert_eq!(rows[0]["FTYPE_ID"], json!(0));
+
+        // The NAME (FTYPE_ID=3) row is edited; FTYPE_ID preserved, redo canonical.
+        assert_eq!(rows[1]["FTYPE_ID"], json!(3));
+        assert_eq!(rows[1]["CANDIDATE_CAP"], json!(99));
+        assert_eq!(rows[1]["SCORING_CAP"], json!(21));
+        assert_eq!(rows[1]["SEND_TO_REDO"], json!("Yes"));
+    }
+
+    #[test]
+    fn test_set_generic_threshold_defaults_to_all_sentinel() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_GPLAN": [{"GPLAN_ID": 1, "GPLAN_CODE": "INGEST"}],
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_GENERIC_THRESHOLD": [
+                {"GPLAN_ID": 1, "BEHAVIOR": "FF", "FTYPE_ID": 0,
+                 "CANDIDATE_CAP": 10, "SCORING_CAP": 20, "SEND_TO_REDO": "No"}
+            ]
+        }}"#;
+
+        // No feature supplied -> matches the FTYPE_ID=0 row.
+        let params = SetGenericThresholdParams {
+            plan: Some("INGEST"),
+            behavior: Some("FF"),
+            feature: None,
+            candidate_cap: Some(5),
+            scoring_cap: None,
+            send_to_redo: None,
+        };
+        let modified = set_generic_threshold(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let row = &value["G2_CONFIG"]["CFG_GENERIC_THRESHOLD"][0];
+        assert_eq!(row["FTYPE_ID"], json!(0));
+        assert_eq!(row["CANDIDATE_CAP"], json!(5));
+    }
+
+    #[test]
+    fn test_set_generic_threshold_rejects_unknown_send_to_redo() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_GPLAN": [{"GPLAN_ID": 1, "GPLAN_CODE": "INGEST"}],
+            "CFG_FTYPE": [],
+            "CFG_GENERIC_THRESHOLD": [
+                {"GPLAN_ID": 1, "BEHAVIOR": "FF", "FTYPE_ID": 0,
+                 "CANDIDATE_CAP": 10, "SCORING_CAP": 20, "SEND_TO_REDO": "No"}
+            ]
+        }}"#;
+
+        let params = SetGenericThresholdParams {
+            plan: Some("INGEST"),
+            behavior: Some("FF"),
+            feature: None,
+            candidate_cap: None,
+            scoring_cap: None,
+            send_to_redo: Some("nope"),
+        };
+        let err = set_generic_threshold(config, params).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::InvalidInput);
+    }
+
+    /// delete_comparison_threshold must match the full 3-key identity and leave
+    /// rows that differ in any key intact. "all" resolves to FTYPE_ID 0.
+    #[test]
+    fn test_delete_comparison_threshold_three_key_match() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_CFUNC": [{"CFUNC_ID": 5, "CFUNC_CODE": "GNR_COMP"}],
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_CFRTN": [
+                {"CFRTN_ID": 1, "CFUNC_ID": 5, "FTYPE_ID": 3, "CFUNC_RTNVAL": "FULL_SCORE"},
+                {"CFRTN_ID": 2, "CFUNC_ID": 5, "FTYPE_ID": 3, "CFUNC_RTNVAL": "CLOSE_SCORE"},
+                {"CFRTN_ID": 3, "CFUNC_ID": 5, "FTYPE_ID": 0, "CFUNC_RTNVAL": "FULL_SCORE"}
+            ]
+        }}"#;
+
+        // Case-insensitive rtnval; only the exact 3-key row is removed.
+        let modified =
+            delete_comparison_threshold(config, "GNR_COMP", "NAME", "full_score").unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let rows = value["G2_CONFIG"]["CFG_CFRTN"].as_array().unwrap();
+        assert_eq!(rows.len(), 2);
+        let ids: Vec<i64> = rows
+            .iter()
+            .map(|r| r["CFRTN_ID"].as_i64().unwrap())
+            .collect();
+        assert_eq!(ids, vec![2, 3]);
+
+        // "all" -> FTYPE_ID 0 sentinel.
+        let modified2 =
+            delete_comparison_threshold(&modified, "GNR_COMP", "all", "FULL_SCORE").unwrap();
+        let value2: Value = serde_json::from_str(&modified2).unwrap();
+        let rows2 = value2["G2_CONFIG"]["CFG_CFRTN"].as_array().unwrap();
+        assert_eq!(rows2.len(), 1);
+        assert_eq!(rows2[0]["CFRTN_ID"], json!(2));
+    }
+
+    #[test]
+    fn test_delete_comparison_threshold_not_found() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_CFUNC": [{"CFUNC_ID": 5, "CFUNC_CODE": "GNR_COMP"}],
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_CFRTN": [
+                {"CFRTN_ID": 1, "CFUNC_ID": 5, "FTYPE_ID": 3, "CFUNC_RTNVAL": "FULL_SCORE"}
+            ]
+        }}"#;
+
+        // Right cfunc+ftype, wrong rtnval -> NotFound (3-key addressing).
+        let err =
+            delete_comparison_threshold(config, "GNR_COMP", "NAME", "CLOSE_SCORE").unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::NotFound);
+    }
+
+    #[test]
+    fn test_list_generic_thresholds_carries_id_and_sorts_by_behavior() {
+        // Stored order deliberately differs from (GPLAN_ID, behaviour-position):
+        // within plan 1, FF is stored before NAME/F1; plan 2 stored before plan 1.
+        let config = r#"{"G2_CONFIG": {
+            "CFG_GPLAN": [
+                {"GPLAN_ID": 1, "GPLAN_CODE": "INGEST"},
+                {"GPLAN_ID": 2, "GPLAN_CODE": "SEARCH"}
+            ],
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_GENERIC_THRESHOLD": [
+                {"GPLAN_ID": 2, "BEHAVIOR": "F1", "FTYPE_ID": 0, "CANDIDATE_CAP": 5, "SCORING_CAP": 5, "SEND_TO_REDO": "Yes"},
+                {"GPLAN_ID": 1, "BEHAVIOR": "FF", "FTYPE_ID": 0, "CANDIDATE_CAP": 20, "SCORING_CAP": 20, "SEND_TO_REDO": "No"},
+                {"GPLAN_ID": 1, "BEHAVIOR": "NAME", "FTYPE_ID": 0, "CANDIDATE_CAP": 10, "SCORING_CAP": -1, "SEND_TO_REDO": "Yes"},
+                {"GPLAN_ID": 1, "BEHAVIOR": "F1", "FTYPE_ID": 0, "CANDIDATE_CAP": 5, "SCORING_CAP": 5, "SEND_TO_REDO": "Yes"}
+            ]
+        }}"#;
+
+        let rows = list_generic_thresholds(config).unwrap();
+        // Plan 1 first (all its rows), each carrying id = GPLAN_ID, in behaviour
+        // order NAME < F1 < FF; then plan 2.
+        assert_eq!(rows[0]["id"], json!(1));
+        assert_eq!(rows[0]["behavior"], json!("NAME"));
+        assert_eq!(rows[1]["behavior"], json!("F1"));
+        assert_eq!(rows[2]["behavior"], json!("FF"));
+        assert_eq!(rows[3]["id"], json!(2));
+        assert_eq!(rows[3]["behavior"], json!("F1"));
     }
 }
