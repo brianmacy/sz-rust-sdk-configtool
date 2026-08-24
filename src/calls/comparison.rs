@@ -590,7 +590,7 @@ pub fn add_comparison_call_element(
 ///     "CFG_CFBOM": [{"CFCALL_ID": 7, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1}]
 /// }}"#;
 /// let out = delete_comparison_call_element(
-///     config, CallSelector::Feature("NAME"), "FIRST_NAME").unwrap();
+///     config, CallSelector::Feature("NAME"), "FIRST_NAME", None).unwrap();
 /// let v: serde_json::Value = serde_json::from_str(&out).unwrap();
 /// assert!(v["G2_CONFIG"]["CFG_CFBOM"].as_array().unwrap().is_empty());
 /// ```
@@ -598,12 +598,19 @@ pub fn delete_comparison_call_element(
     config: &str,
     call: CallSelector,
     element_code: &str,
+    element_feature: Option<&str>,
 ) -> Result<String> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
     let cfcall_id = resolve_call_id(config, &config_data, call, resolve_cfcall_id_for_feature)?;
     let felem_id = lookup_element_id(config, element_code)?;
+    // When the element appears under multiple features in this call, the
+    // element's feature disambiguates to the correct BOM row (Python parity).
+    let element_ftype_id = match element_feature {
+        Some(f) => Some(lookup_feature_id(config, f)?),
+        None => None,
+    };
 
     // Derive EXEC_ORDER from the located BOM row (also validates existence).
     let exec_order = derive_bom_exec_order(
@@ -612,6 +619,7 @@ pub fn delete_comparison_call_element(
         "CFCALL_ID",
         cfcall_id,
         felem_id,
+        element_ftype_id,
         "Comparison",
     )?;
 
@@ -802,9 +810,13 @@ mod tests {
     fn test_delete_comparison_call_element_derives_exec_order() {
         let config = populated_config();
         // No exec_order supplied; the SDK derives it and removes the right row.
-        let out =
-            delete_comparison_call_element(&config, CallSelector::Feature("NAME"), "FIRST_NAME")
-                .unwrap();
+        let out = delete_comparison_call_element(
+            &config,
+            CallSelector::Feature("NAME"),
+            "FIRST_NAME",
+            None,
+        )
+        .unwrap();
         let v: Value = serde_json::from_str(&out).unwrap();
         let cfbom = v["G2_CONFIG"]["CFG_CFBOM"].as_array().unwrap();
         assert_eq!(cfbom.len(), 1);
@@ -814,10 +826,11 @@ mod tests {
     #[test]
     fn test_delete_comparison_call_element_not_found() {
         let config = populated_config();
-        let err = delete_comparison_call_element(&config, CallSelector::Id(7), "LAST_NAME");
+        let err = delete_comparison_call_element(&config, CallSelector::Id(7), "LAST_NAME", None);
         assert!(err.is_ok());
         // Element on a call that has no such BOM row -> NotFound.
-        let err = delete_comparison_call_element(&config, CallSelector::Id(999), "FIRST_NAME");
+        let err =
+            delete_comparison_call_element(&config, CallSelector::Id(999), "FIRST_NAME", None);
         assert_eq!(err.unwrap_err().kind(), crate::error::SzErrorKind::NotFound);
     }
 

@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-08-24
+
+Patch: fixes a call-element delete regression found during the CLI's v0.6.x adoption, verified
+against the stock config and Python `sz_configtool` 4.4.0. Gates green: 329 test cases, clippy/fmt
+clean.
+
+### Fixed
+
+- **`delete_{comparison,expression,distinct}_call_element` can now disambiguate an element that
+  appears under multiple features in one call.** The v0.6.0 redesign (#40) derived `EXEC_ORDER` from
+  `(call, element)` alone, so when one call carried the same `FELEM_ID` under multiple `FTYPE_ID`s it
+  errored `Ambiguous …` instead of deleting the right row. The **stock config** ships exactly this
+  (`EFCALL_ID 97` / `TOKENIZED_NM` under both `GROUP_ASSOCIATION` and `EMPLOYER`), so
+  `deleteExpressionCallElement` was broken on shipped data. The three delete functions (and their FFI
+  wrappers) now take an optional **`element_feature`** which, when supplied, resolves the collision to
+  the feature-matched BOM row — mirroring Python's `(call_id, FTYPE_ID, FELEM_ID)` addressing. When
+  `(call, element)` is unambiguous the feature is optional (`None` / `NULL`).
+
+### Changed (API/FFI — additive optional parameter)
+
+- `delete_comparison_call_element`, `delete_expression_call_element`, `delete_distinct_call_element`
+  gain a trailing `element_feature: Option<&str>`.
+- The FFI wrappers `SzConfigTool_delete{Comparison,Distinct,Expression}CallElement` gain a trailing
+  **nullable** `element_feature` C-string argument (`include/libSzConfigTool.h` updated). Pass `NULL`
+  when unambiguous.
+- The `deleteComparisonCallElement` / `deleteDistinctCallElement` script commands accept an optional
+  `elementFeature` parameter.
+
 ## [0.6.1] - 2026-08-24
 
 Patch: rule-validation parity fixes found during the downstream CLI's adoption of v0.6.0,

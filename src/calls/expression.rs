@@ -601,7 +601,7 @@ pub fn add_expression_call_element(
 ///     "CFG_EFBOM": [{"EFCALL_ID": 9, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1, "FELEM_REQ": "No"}]
 /// }}"#;
 /// let out = delete_expression_call_element(
-///     config, CallSelector::Id(9), "FIRST_NAME").unwrap();
+///     config, CallSelector::Id(9), "FIRST_NAME", None).unwrap();
 /// let v: serde_json::Value = serde_json::from_str(&out).unwrap();
 /// assert!(v["G2_CONFIG"]["CFG_EFBOM"].as_array().unwrap().is_empty());
 /// ```
@@ -609,12 +609,19 @@ pub fn delete_expression_call_element(
     config: &str,
     call: CallSelector,
     element_code: &str,
+    element_feature: Option<&str>,
 ) -> Result<String> {
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
     let efcall_id = resolve_call_id(config, &config_data, call, resolve_efcall_id_for_feature)?;
     let felem_id = lookup_element_id(config, element_code)?;
+    // When the element appears under multiple features in this call, the
+    // element's feature disambiguates to the correct BOM row (Python parity).
+    let element_ftype_id = match element_feature {
+        Some(f) => Some(lookup_feature_id(config, f)?),
+        None => None,
+    };
 
     // Derive EXEC_ORDER from the located BOM row (also validates existence).
     let exec_order = derive_bom_exec_order(
@@ -623,6 +630,7 @@ pub fn delete_expression_call_element(
         "EFCALL_ID",
         efcall_id,
         felem_id,
+        element_ftype_id,
         "Expression",
     )?;
 
@@ -782,8 +790,12 @@ mod tests {
     #[test]
     fn test_delete_expression_call_element_ambiguous_feature_errors() {
         let config = populated_config();
-        let err =
-            delete_expression_call_element(&config, CallSelector::Feature("NAME"), "FIRST_NAME");
+        let err = delete_expression_call_element(
+            &config,
+            CallSelector::Feature("NAME"),
+            "FIRST_NAME",
+            None,
+        );
         assert_eq!(
             err.unwrap_err().kind(),
             crate::error::SzErrorKind::InvalidInput
@@ -794,8 +806,8 @@ mod tests {
     fn test_delete_expression_call_element_by_id_derives_exec_order() {
         let config = populated_config();
         // Addressing the specific call by id disambiguates; exec_order derived.
-        let out =
-            delete_expression_call_element(&config, CallSelector::Id(9), "FIRST_NAME").unwrap();
+        let out = delete_expression_call_element(&config, CallSelector::Id(9), "FIRST_NAME", None)
+            .unwrap();
         let v: Value = serde_json::from_str(&out).unwrap();
         let efbom = v["G2_CONFIG"]["CFG_EFBOM"].as_array().unwrap();
         assert_eq!(efbom.len(), 1);
@@ -829,5 +841,59 @@ mod tests {
         assert_eq!(calls[1]["id"], json!(30));
         // elementList ordered by EXEC_ORDER despite reversed storage.
         assert_eq!(calls[0]["elementList"], json!(["FIRST_NAME", "LAST_NAME"]));
+    }
+
+    // Regression: one call can carry the same element under multiple features.
+    // The stock config ships exactly this (EFCALL_ID 97 / TOKENIZED_NM under both
+    // GROUP_ASSOCIATION and EMPLOYER). Without the element's feature the delete is
+    // ambiguous; with it, only the feature-matched BOM row is removed.
+    #[test]
+    fn test_delete_expression_call_element_disambiguates_by_feature() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FELEM": [{"FELEM_ID": 118, "FELEM_CODE": "TOKENIZED_NM"}],
+            "CFG_FTYPE": [
+                {"FTYPE_ID": 57, "FTYPE_CODE": "GROUP_ASSOCIATION"},
+                {"FTYPE_ID": 59, "FTYPE_CODE": "EMPLOYER"}
+            ],
+            "CFG_EFCALL": [{"EFCALL_ID": 97}],
+            "CFG_EFBOM": [
+                {"EFCALL_ID": 97, "FTYPE_ID": 57, "FELEM_ID": 118, "EXEC_ORDER": 13},
+                {"EFCALL_ID": 97, "FTYPE_ID": 59, "FELEM_ID": 118, "EXEC_ORDER": 14}
+            ]
+        }}"#;
+
+        // Ambiguous without the element's feature -> InvalidInput (not a silent
+        // wrong-row delete).
+        let err =
+            delete_expression_call_element(config, CallSelector::Id(97), "TOKENIZED_NM", None)
+                .unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::InvalidInput);
+
+        // With GROUP_ASSOCIATION, only the FTYPE 57 / exec 13 row is removed.
+        let out = delete_expression_call_element(
+            config,
+            CallSelector::Id(97),
+            "TOKENIZED_NM",
+            Some("GROUP_ASSOCIATION"),
+        )
+        .unwrap();
+        let v: Value = serde_json::from_str(&out).unwrap();
+        let bom = v["G2_CONFIG"]["CFG_EFBOM"].as_array().unwrap();
+        assert_eq!(bom.len(), 1, "exactly one row removed");
+        assert_eq!(bom[0]["FTYPE_ID"], json!(59), "EMPLOYER row remains");
+        assert_eq!(bom[0]["EXEC_ORDER"], json!(14));
+
+        // With EMPLOYER, the other row is removed instead.
+        let out2 = delete_expression_call_element(
+            config,
+            CallSelector::Id(97),
+            "TOKENIZED_NM",
+            Some("EMPLOYER"),
+        )
+        .unwrap();
+        let v2: Value = serde_json::from_str(&out2).unwrap();
+        let bom2 = v2["G2_CONFIG"]["CFG_EFBOM"].as_array().unwrap();
+        assert_eq!(bom2.len(), 1);
+        assert_eq!(bom2[0]["FTYPE_ID"], json!(57));
     }
 }

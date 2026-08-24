@@ -547,11 +547,15 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
             // derivation (#40); the tool is a thin pass-through of the codes.
             let feature = get_str_param(params, "feature")?;
             let element = get_str_param(params, "element")?;
+            // Optional: the element's feature disambiguates when one call carries
+            // the same element under multiple features (#40 follow-up).
+            let element_feature = params.get("elementFeature").and_then(|v| v.as_str());
 
             crate::calls::comparison::delete_comparison_call_element(
                 config,
                 crate::calls::CallSelector::Feature(feature),
                 element,
+                element_feature,
             )
         }
 
@@ -617,11 +621,15 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
             // derives the BOM exec_order internally (#40).
             let feature = get_str_param(params, "feature")?;
             let element = get_str_param(params, "element")?;
+            // Optional: the element's feature disambiguates when one call carries
+            // the same element under multiple features (#40 follow-up).
+            let element_feature = params.get("elementFeature").and_then(|v| v.as_str());
 
             crate::calls::distinct::delete_distinct_call_element(
                 config,
                 crate::calls::CallSelector::Feature(feature),
                 element,
+                element_feature,
             )
         }
 

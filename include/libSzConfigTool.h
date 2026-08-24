@@ -665,15 +665,22 @@ struct SzConfigTool_result SzConfigTool_getExpressionCallByFeature(const char *c
 // wrappers — so it does not break an existing ABI. Comparison/distinct address
 // the call by feature code (0-or-1 call per feature); expression addresses the
 // call by its EFCALL_ID because expression calls are many-per-feature.
+// element_feature is OPTIONAL (may be NULL): when one call carries the same
+// element under multiple element-features, pass the element's feature code to
+// disambiguate to the correct BOM row (matches Python). Pass NULL when the
+// (call, element) pair is unambiguous.
 struct SzConfigTool_result SzConfigTool_deleteComparisonCallElement(const char *config_json,
                                                                     const char *feature_code,
-                                                                    const char *element_code);
+                                                                    const char *element_code,
+                                                                    const char *element_feature);
 struct SzConfigTool_result SzConfigTool_deleteDistinctCallElement(const char *config_json,
                                                                   const char *feature_code,
-                                                                  const char *element_code);
+                                                                  const char *element_code,
+                                                                  const char *element_feature);
 struct SzConfigTool_result SzConfigTool_deleteExpressionCallElement(const char *config_json,
                                                                     int64_t efcall_id,
-                                                                    const char *element_code);
+                                                                    const char *element_code,
+                                                                    const char *element_feature);
 
 // Wave 6 additions (#42, #43): API-surface helpers. All additive.
 //
