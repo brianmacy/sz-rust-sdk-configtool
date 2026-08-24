@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-08-24
+
+Patch: rule-validation parity fixes found during the downstream CLI's adoption of v0.6.0,
+verified against the Python `sz_configtool` reference (`/opt/senzing/er/bin/sz_configtool`, 4.4.0)
+and coordinated with the CLI. All three tighten rule validation (reject inputs 0.6.0 accepted);
+the CLI already enforced all three locally, confirmed none break it, and needs them to re-delegate
+rule validation to the SDK. Gates green: 328 test cases, clippy/fmt clean.
+
+### Fixed
+
+- **`set_rule`/`add_rule`: a blank `fragment` code is now rejected** (`Fragment "" not found`),
+  matching Python's unconditional `lookupFragment("")`. v0.6.0 silently accepted a blank fragment
+  as a no-op (the `!c.is_empty()` skip in `validate_fragment_code`) — reverting that 0.6.0
+  behavioural note. A blank **disqualifier** is still accepted (nullable — Python guards its lookup
+  with `if record.get("DISQ_ERFRAG_CODE"):`). (#45)
+
+### Changed (breaking — behaviour; Python parity, folded in with #45)
+
+- **`add_rule` now requires a fragment.** An absent `QUAL_ERFRAG_CODE` is a `MissingField`
+  (`Fragment is required`), matching Python `do_addRule` which lists FRAGMENT as a required param.
+  v0.6.0 accepted a rule with no fragment.
+- **`RESOLVE="Yes"` now requires a non-zero tier.** An absent tier or `0` is rejected
+  (`A tier … must be specified`), matching Python `validateRule` (`if not tier`). This reverses the
+  v0.6.0 decision D15 to omit the check, which was made on the incorrect premise that the Python
+  reference did not enforce it — it does.
+
 ## [0.6.0] - 2026-08-22
 
 Coordinated breaking release resolving the SDK audit (issues #32–#43). Delivered in six

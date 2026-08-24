@@ -84,7 +84,17 @@ fn fragment_code_exists(config: &Value, frag_upper: &str) -> bool {
 }
 
 /// Validate that a single fragment/disqualifier code names an existing
-/// `CFG_ERFRAG` row. `None` and empty codes are accepted (nothing to check).
+/// `CFG_ERFRAG` row.
+///
+/// `required` selects the reference's nullability, matching Python's
+/// `validateRule`:
+/// - **`required` (the fragment / `QUAL_ERFRAG_CODE`)** — Python calls
+///   `lookupFragment(...)` unconditionally, so a blank `""` fails lookup and is
+///   rejected here too (`Fragment "" not found`). `None` is skipped (the caller,
+///   e.g. `set_rule`, only validates a code it is actually changing).
+/// - **not `required` (the disqualifier / `DISQ_ERFRAG_CODE`)** — Python guards
+///   its lookup with `if record.get("DISQ_ERFRAG_CODE"):`, so a blank clears the
+///   nullable reference and is accepted.
 ///
 /// `label` distinguishes the message (`"Fragment"` vs `"Disqualifier"`). The
 /// message uses double quotes for Python parity (D13).
@@ -92,16 +102,35 @@ fn fragment_code_exists(config: &Value, frag_upper: &str) -> bool {
 /// This is the single-code building block so callers can validate *only* the
 /// codes they are changing (as `set_rule` does), while `validate_rule_row`
 /// composes it to validate every code present on a new row.
-fn validate_fragment_code(config: &Value, code: Option<&str>, label: &str) -> Result<()> {
-    if let Some(c) = code
-        && !c.is_empty()
-    {
-        let upper = c.to_uppercase();
-        if !fragment_code_exists(config, &upper) {
-            return Err(SzConfigError::NotFound(format!(
-                "{label} \"{upper}\" not found"
-            )));
+fn validate_fragment_code(
+    config: &Value,
+    code: Option<&str>,
+    label: &str,
+    required: bool,
+) -> Result<()> {
+    match code {
+        Some(c) if !c.is_empty() => {
+            let upper = c.to_uppercase();
+            if !fragment_code_exists(config, &upper) {
+                return Err(SzConfigError::NotFound(format!(
+                    "{label} \"{upper}\" not found"
+                )));
+            }
         }
+        // A blank *required* reference (the fragment) is rejected, matching
+        // Python's unconditional `lookupFragment("")`; a blank *nullable*
+        // reference (the disqualifier) is accepted (clears it).
+        Some(c) if c.is_empty() && required => {
+            return Err(SzConfigError::NotFound(format!("{label} \"\" not found")));
+        }
+        // An *absent* required reference is also rejected: Python's `do_addRule`
+        // lists FRAGMENT as a required parameter (`{attr} is required`). Only the
+        // add path reaches this (set_rule validates only codes it is Setting, so
+        // it never passes `None` for a required code).
+        None if required => {
+            return Err(SzConfigError::MissingField(format!("{label} is required")));
+        }
+        _ => {}
     }
     Ok(())
 }
@@ -116,8 +145,9 @@ fn validate_fragment_code(config: &Value, code: Option<&str>, label: &str) -> Re
 /// 2. **RESOLVE / RELATE domain** — each must be `Yes`/`No` (case-insensitive);
 ///    the returned row is normalised to title-case.
 /// 3. **Mutual exclusivity** — a rule may not both resolve and relate.
-/// 4. **RTYPE_ID coherence** — `RESOLVE=Yes` auto-corrects `RTYPE_ID` to `1`;
-///    `RELATE=Yes` requires `RTYPE_ID` in `[2, 3, 4]`.
+/// 4. **RESOLVE=Yes requires a non-zero tier**, then **RTYPE_ID coherence** —
+///    `RESOLVE=Yes` auto-corrects `RTYPE_ID` to `1`; `RELATE=Yes` requires
+///    `RTYPE_ID` in `[2, 3, 4]`.
 ///
 /// Fragment/disqualifier *existence* is intentionally NOT checked here: `add_rule`
 /// validates every code on the new row via [`validate_rule_row`], while `set_rule`
@@ -173,9 +203,18 @@ fn validate_rule_row_core(config: &Value, row: &ErruleRow, is_new: bool) -> Resu
         ));
     }
 
-    // 4. RTYPE_ID coherence / auto-correct.
-    if out.resolve == "Yes" && out.rtype_id != 1 {
-        out.rtype_id = 1;
+    // 4. RESOLVE=Yes requires a tier, then RTYPE_ID coherence / auto-correct.
+    if out.resolve == "Yes" {
+        // Python `validateRule`: `if not tier` — an absent tier OR 0 fails.
+        if out.errule_tier.unwrap_or(0) == 0 {
+            return Err(SzConfigError::InvalidInput(
+                "A tier matching other rules that could be considered ambiguous to this one must be specified"
+                    .to_string(),
+            ));
+        }
+        if out.rtype_id != 1 {
+            out.rtype_id = 1;
+        }
     }
     if out.relate == "Yes" && ![2, 3, 4].contains(&out.rtype_id) {
         return Err(SzConfigError::InvalidInput(
@@ -217,8 +256,13 @@ pub(crate) fn validate_rule_row(
     is_new: bool,
 ) -> Result<ErruleRow> {
     // Fragment / disqualifier existence for every code on the row.
-    validate_fragment_code(config, row.qual_erfrag_code.as_deref(), "Fragment")?;
-    validate_fragment_code(config, row.disq_erfrag_code.as_deref(), "Disqualifier")?;
+    validate_fragment_code(config, row.qual_erfrag_code.as_deref(), "Fragment", true)?;
+    validate_fragment_code(
+        config,
+        row.disq_erfrag_code.as_deref(),
+        "Disqualifier",
+        false,
+    )?;
 
     // Remaining invariants (dup code, domains, exclusivity, RTYPE_ID coherence).
     validate_rule_row_core(config, row, is_new)
@@ -295,9 +339,10 @@ impl<'a> TryFrom<&'a Value> for SetRuleParams<'a> {
 /// the id actually assigned.
 ///
 /// The proposed row is run through the shared rule validator, so `add_rule`
-/// rejects a duplicate code, an unknown fragment/disqualifier, an invalid
-/// RESOLVE/RELATE value, a rule that both resolves and relates, and an
-/// incoherent RTYPE_ID — exactly as `set_rule` does.
+/// rejects a duplicate code, a missing or unknown fragment, an unknown
+/// disqualifier, an invalid RESOLVE/RELATE value, a rule that both resolves and
+/// relates, a `RESOLVE=Yes` rule without a (non-zero) tier, and an incoherent
+/// RTYPE_ID — exactly as `set_rule` does.
 ///
 /// # Example
 ///
@@ -305,12 +350,16 @@ impl<'a> TryFrom<&'a Value> for SetRuleParams<'a> {
 /// use sz_configtool_lib::rules;
 /// use serde_json::json;
 ///
-/// let config = r#"{"G2_CONFIG": {"CFG_ERRULE": []}}"#;
+/// let config = r#"{"G2_CONFIG": {"CFG_ERRULE": [],
+///     "CFG_ERFRAG": [{"ERFRAG_ID": 1, "ERFRAG_CODE": "MY_FRAGMENT"}]}}"#;
+/// // A rule requires a fragment (matches Python's addRule); RESOLVE="Yes"
+/// // additionally requires a non-zero tier.
 /// let rule_config = json!({
 ///     "ERRULE_CODE": "CUSTOM_RULE",
-///     "RESOLVE": "Yes",
+///     "RESOLVE": "No",
 ///     "RELATE": "No",
-///     "RTYPE_ID": 1
+///     "RTYPE_ID": 1,
+///     "QUAL_ERFRAG_CODE": "MY_FRAGMENT"
 /// });
 /// // Pass 0 to auto-assign the next id, or a positive value for a specific id.
 /// let (_modified, _rule_id) = rules::add_rule(config, 0, &rule_config).unwrap();
@@ -504,10 +553,9 @@ pub fn list_rules(config_json: &str) -> Result<Vec<Value>> {
         Vec::new()
     };
 
-    // SDK-owned default sort. NOTE: the exact Python sort order for listRules is
-    // unverified (Python is not in-repo); the assumed order is ERRULE_ID
-    // ascending. If Python turns out to sort by (tier, id) or similar this is a
-    // one-line change. rows carrying a null/absent id sort first (id 0).
+    // SDK-owned default sort by ERRULE_ID ascending, matching Python
+    // sz_configtool `do_listRules` (`key=lambda k: k["ERRULE_ID"]`). Rows
+    // carrying a null/absent id sort first (id 0).
     let mut items = items;
     items.sort_by_key(|item| item.get("id").and_then(|v| v.as_i64()).unwrap_or(0));
 
@@ -541,7 +589,7 @@ pub fn list_rules(config_json: &str) -> Result<Vec<Value>> {
 ///     rtype_id: None,
 ///     fragment: FieldUpdate::Leave,
 ///     disqualifier: FieldUpdate::Leave,
-///     tier: FieldUpdate::Leave,
+///     tier: FieldUpdate::Set(10), // RESOLVE="Yes" requires a non-zero tier
 /// };
 /// let modified = rules::set_rule(config, params).unwrap();
 /// ```
@@ -560,10 +608,10 @@ pub fn set_rule(config_json: &str, params: SetRuleParams) -> Result<String> {
     // historical set_rule contract (do not newly reject previously-accepted
     // input). add_rule, by contrast, validates every code on the new row.
     if let FieldUpdate::Set(frag) = params.fragment {
-        validate_fragment_code(&config_data, Some(frag), "Fragment")?;
+        validate_fragment_code(&config_data, Some(frag), "Fragment", true)?;
     }
     if let FieldUpdate::Set(disq) = params.disqualifier {
-        validate_fragment_code(&config_data, Some(disq), "Disqualifier")?;
+        validate_fragment_code(&config_data, Some(disq), "Disqualifier", false)?;
     }
 
     // Extract ERRULE_ID from existing rule to preserve it
@@ -688,12 +736,13 @@ mod tests {
     #[test]
     fn test_set_rule_emits_all_keys_when_optionals_absent() {
         let config = r#"{"G2_CONFIG": {"CFG_ERRULE": [
-            {"ERRULE_ID": 42, "ERRULE_CODE": "MINIMAL", "RESOLVE": "No"}
-        ], "CFG_ERFRAG": []}}"#;
+            {"ERRULE_ID": 42, "ERRULE_CODE": "MINIMAL", "RESOLVE": "No",
+             "QUAL_ERFRAG_CODE": "F", "DISQ_ERFRAG_CODE": null, "ERRULE_TIER": null}
+        ], "CFG_ERFRAG": [{"ERFRAG_ID": 1, "ERFRAG_CODE": "F"}]}}"#;
 
         let params = SetRuleParams {
             code: "MINIMAL",
-            resolve: Some("Yes"),
+            resolve: Some("No"),
             relate: None,
             rtype_id: None,
             fragment: FieldUpdate::Leave,
@@ -717,8 +766,9 @@ mod tests {
         ] {
             assert!(obj.contains_key(key), "{key} key must be present");
         }
-        // Nothing existed for these optionals, so they surface as null.
-        assert_eq!(obj["QUAL_ERFRAG_CODE"], Value::Null);
+        // Fragment is required so it is present; the truly optional disqualifier
+        // and tier were absent, so they surface as null.
+        assert_eq!(obj["QUAL_ERFRAG_CODE"], json!("F"));
         assert_eq!(obj["DISQ_ERFRAG_CODE"], Value::Null);
         assert_eq!(obj["ERRULE_TIER"], Value::Null);
     }
@@ -727,12 +777,14 @@ mod tests {
     /// subset of fields — the omitted optionals become null, never dropped.
     #[test]
     fn test_add_rule_emits_all_keys() {
-        let config = r#"{"G2_CONFIG": {"CFG_ERRULE": []}}"#;
+        let config = r#"{"G2_CONFIG": {"CFG_ERRULE": [],
+            "CFG_ERFRAG": [{"ERFRAG_ID": 1, "ERFRAG_CODE": "MYFRAG"}]}}"#;
         let rule_config = json!({
             "ERRULE_CODE": "custom_rule",
-            "RESOLVE": "Yes",
+            "RESOLVE": "No",
             "RELATE": "No",
-            "RTYPE_ID": 1
+            "RTYPE_ID": 1,
+            "QUAL_ERFRAG_CODE": "MYFRAG"
         });
 
         let (modified, _id) = add_rule(config, 0, &rule_config).unwrap();
@@ -752,7 +804,7 @@ mod tests {
             assert!(obj.contains_key(key), "{key} key must be present");
         }
         assert_eq!(obj["ERRULE_CODE"], json!("CUSTOM_RULE"));
-        assert_eq!(obj["QUAL_ERFRAG_CODE"], Value::Null);
+        assert_eq!(obj["QUAL_ERFRAG_CODE"], json!("MYFRAG"));
         assert_eq!(obj["DISQ_ERFRAG_CODE"], Value::Null);
         assert_eq!(obj["ERRULE_TIER"], Value::Null);
     }
@@ -824,15 +876,18 @@ mod tests {
     }
 
     fn base_row() -> ErruleRow {
+        // A valid baseline: a required fragment (#45) is present and, so
+        // RESOLVE=Yes cases pass the tier check, a tier is set. Tests that
+        // exercise the fragment/tier rules override these explicitly.
         ErruleRow {
             errule_id: 1000,
             errule_code: "NEW_RULE".to_string(),
             resolve: "No".to_string(),
             relate: "No".to_string(),
             rtype_id: 1,
-            qual_erfrag_code: None,
+            qual_erfrag_code: Some("FRAG_A".to_string()),
             disq_erfrag_code: None,
-            errule_tier: None,
+            errule_tier: Some(10),
         }
     }
 
@@ -973,7 +1028,8 @@ mod tests {
     #[test]
     fn test_add_rule_rejects_duplicate_code() {
         let cfg = add_rule_config();
-        let rule = json!({"ERRULE_CODE": "existing", "RESOLVE": "No", "RELATE": "No"});
+        let rule = json!({"ERRULE_CODE": "existing", "RESOLVE": "No", "RELATE": "No",
+            "QUAL_ERFRAG_CODE": "FRAG_A"});
         let err = add_rule(cfg, 0, &rule).unwrap_err();
         assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
     }
@@ -992,17 +1048,124 @@ mod tests {
     fn test_add_rule_rejects_bad_disqualifier() {
         let cfg = add_rule_config();
         let rule = json!({"ERRULE_CODE": "NEW", "RESOLVE": "No", "RELATE": "No",
-            "DISQ_ERFRAG_CODE": "NOPE"});
+            "QUAL_ERFRAG_CODE": "FRAG_A", "DISQ_ERFRAG_CODE": "NOPE"});
         let err = add_rule(cfg, 0, &rule).unwrap_err();
         assert_eq!(err.kind(), crate::error::SzErrorKind::NotFound);
         assert!(err.to_string().contains("Disqualifier \"NOPE\" not found"));
+    }
+
+    // #45: a blank fragment code is a required-reference error (matches Python's
+    // unconditional lookupFragment("")), while a blank disqualifier is accepted
+    // (nullable). Regression guard for the v0.6.0 empty-skip.
+    #[test]
+    fn test_add_rule_rejects_blank_fragment() {
+        let cfg = add_rule_config();
+        let rule = json!({"ERRULE_CODE": "NEW", "RESOLVE": "No", "RELATE": "No",
+            "QUAL_ERFRAG_CODE": ""});
+        let err = add_rule(cfg, 0, &rule).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::NotFound);
+        assert!(
+            err.to_string().contains("Fragment \"\" not found"),
+            "got: {err}"
+        );
+    }
+
+    // add_rule requires a fragment (Python `do_addRule` lists FRAGMENT as a
+    // required param). An absent fragment is a MissingField error.
+    #[test]
+    fn test_add_rule_rejects_missing_fragment() {
+        let cfg = add_rule_config();
+        let rule = json!({"ERRULE_CODE": "NEW", "RESOLVE": "No", "RELATE": "No"});
+        let err = add_rule(cfg, 0, &rule).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::MissingField);
+        assert!(
+            err.to_string().contains("Fragment is required"),
+            "got: {err}"
+        );
+    }
+
+    // RESOLVE=Yes requires a non-zero tier (Python `validateRule`: `if not tier`,
+    // so both an absent tier and 0 fail).
+    #[test]
+    fn test_rule_resolve_yes_requires_nonzero_tier() {
+        let cfg = add_rule_config();
+        let base = |tier: Option<i64>| {
+            let mut r = json!({"ERRULE_CODE": "NEW", "RESOLVE": "Yes", "RELATE": "No",
+                "RTYPE_ID": 1, "QUAL_ERFRAG_CODE": "FRAG_A"});
+            if let Some(t) = tier {
+                r["ERRULE_TIER"] = json!(t);
+            }
+            r
+        };
+        // Absent tier -> rejected.
+        let err = add_rule(cfg, 0, &base(None)).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::InvalidInput);
+        assert!(err.to_string().contains("tier"), "got: {err}");
+        // Tier 0 -> also rejected.
+        assert_eq!(
+            add_rule(cfg, 0, &base(Some(0))).unwrap_err().kind(),
+            crate::error::SzErrorKind::InvalidInput
+        );
+        // Non-zero tier -> accepted.
+        assert!(add_rule(cfg, 0, &base(Some(5))).is_ok());
+    }
+
+    #[test]
+    fn test_set_rule_rejects_blank_fragment() {
+        let config = r#"{"G2_CONFIG": {"CFG_ERRULE": [
+            {"ERRULE_ID": 100, "ERRULE_CODE": "R", "RESOLVE": "No", "RELATE": "No",
+             "RTYPE_ID": 0, "QUAL_ERFRAG_CODE": "F", "DISQ_ERFRAG_CODE": null,
+             "ERRULE_TIER": null}
+        ], "CFG_ERFRAG": [{"ERFRAG_ID": 1, "ERFRAG_CODE": "F"}]}}"#;
+        let params = SetRuleParams {
+            code: "R",
+            resolve: None,
+            relate: None,
+            rtype_id: None,
+            fragment: FieldUpdate::Set(""),
+            disqualifier: FieldUpdate::Leave,
+            tier: FieldUpdate::Leave,
+        };
+        let err = set_rule(config, params).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::NotFound);
+        assert!(
+            err.to_string().contains("Fragment \"\" not found"),
+            "got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_set_rule_accepts_blank_disqualifier() {
+        // A blank disqualifier is a nullable reference and must NOT be rejected
+        // (Python guards its lookup with `if record.get("DISQ_ERFRAG_CODE"):`).
+        let config = r#"{"G2_CONFIG": {"CFG_ERRULE": [
+            {"ERRULE_ID": 100, "ERRULE_CODE": "R", "RESOLVE": "No", "RELATE": "No",
+             "RTYPE_ID": 0, "QUAL_ERFRAG_CODE": "F", "DISQ_ERFRAG_CODE": "D",
+             "ERRULE_TIER": null}
+        ], "CFG_ERFRAG": [{"ERFRAG_ID": 1, "ERFRAG_CODE": "F"},
+                          {"ERFRAG_ID": 2, "ERFRAG_CODE": "D"}]}}"#;
+        let params = SetRuleParams {
+            code: "R",
+            resolve: None,
+            relate: None,
+            rtype_id: None,
+            fragment: FieldUpdate::Leave,
+            disqualifier: FieldUpdate::Set(""),
+            tier: FieldUpdate::Leave,
+        };
+        let modified = set_rule(config, params).expect("blank disqualifier accepted");
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        assert_eq!(
+            value["G2_CONFIG"]["CFG_ERRULE"][0]["DISQ_ERFRAG_CODE"],
+            json!("")
+        );
     }
 
     #[test]
     fn test_add_rule_rejects_resolve_and_relate_both_yes() {
         let cfg = add_rule_config();
         let rule = json!({"ERRULE_CODE": "NEW", "RESOLVE": "Yes", "RELATE": "Yes",
-            "RTYPE_ID": 2});
+            "RTYPE_ID": 2, "QUAL_ERFRAG_CODE": "FRAG_A"});
         let err = add_rule(cfg, 0, &rule).unwrap_err();
         assert_eq!(err.kind(), crate::error::SzErrorKind::InvalidInput);
         assert!(err.to_string().contains("either resolve or relate"));
@@ -1013,7 +1176,7 @@ mod tests {
         let cfg = add_rule_config();
         // RELATE=Yes with RTYPE_ID=1 is incoherent.
         let rule = json!({"ERRULE_CODE": "NEW", "RESOLVE": "No", "RELATE": "Yes",
-            "RTYPE_ID": 1});
+            "RTYPE_ID": 1, "QUAL_ERFRAG_CODE": "FRAG_A"});
         let err = add_rule(cfg, 0, &rule).unwrap_err();
         assert_eq!(err.kind(), crate::error::SzErrorKind::InvalidInput);
     }
@@ -1082,8 +1245,10 @@ mod tests {
     #[test]
     fn test_add_rule_auto_assigns_id() {
         // Empty rule table -> first user id seeds at 1000.
-        let config = r#"{"G2_CONFIG": {"CFG_ERRULE": []}}"#;
-        let rule = json!({"ERRULE_CODE": "R1", "RESOLVE": "No", "RELATE": "No"});
+        let config = r#"{"G2_CONFIG": {"CFG_ERRULE": [],
+            "CFG_ERFRAG": [{"ERFRAG_ID": 1, "ERFRAG_CODE": "F"}]}}"#;
+        let rule = json!({"ERRULE_CODE": "R1", "RESOLVE": "No", "RELATE": "No",
+            "QUAL_ERFRAG_CODE": "F"});
         let (modified, id) = add_rule(config, 0, &rule).unwrap();
         assert_eq!(id, 1000);
         let value: Value = serde_json::from_str(&modified).unwrap();
@@ -1093,7 +1258,8 @@ mod tests {
         );
 
         // A specific positive id is honoured.
-        let rule2 = json!({"ERRULE_CODE": "R2", "RESOLVE": "No", "RELATE": "No"});
+        let rule2 = json!({"ERRULE_CODE": "R2", "RESOLVE": "No", "RELATE": "No",
+            "QUAL_ERFRAG_CODE": "F"});
         let (_m2, id2) = add_rule(&modified, 2000, &rule2).unwrap();
         assert_eq!(id2, 2000);
     }
