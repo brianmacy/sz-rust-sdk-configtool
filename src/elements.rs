@@ -45,7 +45,15 @@ pub(crate) fn validate_derived(value: &str) -> Result<&'static str> {
 /// Parameters for adding an element to a feature (a new CFG_FBOM row).
 ///
 /// `display_level` defaults to `1`, `derived` to `"No"`, and `display_delim` to
-/// null when omitted. `EXEC_ORDER` is always allocated automatically.
+/// null when omitted.
+///
+/// This path does not accept an `exec_order`: `EXEC_ORDER` is *always*
+/// auto-allocated across the whole `CFG_FBOM` table (max + 1). To request a
+/// specific order (honour-or-reject), use
+/// [`features::add_feature_comparison`](crate::features::add_feature_comparison),
+/// which shares the same table but takes an `exec_order`. `DISPLAY_LEVEL` is the
+/// display fact carried on the FBOM row (0 = not displayed); the element's
+/// `FELEM_DESC` lives on the `CFG_FELEM` row, not here.
 #[derive(Debug, Clone, Default)]
 pub struct AddElementToFeatureParams<'a> {
     pub feature_code: &'a str,

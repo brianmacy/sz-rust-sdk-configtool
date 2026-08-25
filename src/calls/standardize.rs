@@ -43,6 +43,11 @@ pub struct AddStandardizeCallElementParams {
     pub ftype_id: i64,
     pub sfunc_id: i64,
     pub felem_id: Option<i64>,
+    /// Execution order, allocated per `(FTYPE_ID, FELEM_ID)` (see the
+    /// "Execution-order policy" in [`crate::calls`]). `None` auto-allocates the
+    /// next order for that feature/element; `Some(n > 0)` requests that exact
+    /// order and fails with `AlreadyExists` if already taken. The written row
+    /// always carries a concrete order, never null.
     pub exec_order: Option<i64>,
 }
 
@@ -134,42 +139,20 @@ pub fn add_standardize_call(
         ));
     }
 
-    // Determine exec_order: use provided value or get next available for this feature/element
-    let final_exec_order = if let Some(order) = params.exec_order {
-        // Check if this exec_order is already taken for this feature/element
-        let order_taken = config_data["G2_CONFIG"]["CFG_SFCALL"]
+    // Determine exec_order per (FTYPE_ID, FELEM_ID) via the shared helper: a
+    // supplied value is honoured or rejected if taken, otherwise the next free
+    // order is allocated (Scheme C — same policy as the *element path).
+    let final_exec_order = {
+        let empty: Vec<Value> = Vec::new();
+        let sfcall_rows = config_data["G2_CONFIG"]["CFG_SFCALL"]
             .as_array()
-            .map(|arr| {
-                arr.iter().any(|call| {
-                    call["FTYPE_ID"].as_i64() == Some(ftype_id)
-                        && call["FELEM_ID"].as_i64() == Some(felem_id)
-                        && call["EXEC_ORDER"].as_i64() == Some(order)
-                })
-            })
-            .unwrap_or(false);
-
-        if order_taken {
-            return Err(SzConfigError::AlreadyExists(format!(
-                "Execution order {order} already taken for this feature/element"
-            )));
-        }
-        order
-    } else {
-        // Get next available exec_order for this feature/element combination
-        config_data["G2_CONFIG"]["CFG_SFCALL"]
-            .as_array()
-            .map(|arr| {
-                arr.iter()
-                    .filter(|call| {
-                        call["FTYPE_ID"].as_i64() == Some(ftype_id)
-                            && call["FELEM_ID"].as_i64() == Some(felem_id)
-                    })
-                    .filter_map(|call| call["EXEC_ORDER"].as_i64())
-                    .max()
-                    .map(|max| max + 1)
-                    .unwrap_or(1)
-            })
-            .unwrap_or(1)
+            .unwrap_or(&empty);
+        crate::helpers::get_desired_or_next_order(
+            sfcall_rows,
+            "EXEC_ORDER",
+            &[("FTYPE_ID", ftype_id), ("FELEM_ID", felem_id)],
+            params.exec_order,
+        )?
     };
 
     // Create new CFG_SFCALL record via SfcallRow so every key is always present.
@@ -435,7 +418,7 @@ pub fn add_standardize_call_element(
                 && item.get("SFUNC_ID").and_then(|v| v.as_i64()) == Some(params.sfunc_id)
                 && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(final_felem_id)
             {
-                return Err(SzConfigError::AlreadyExists(
+                return Err(SzConfigError::AlreadyPresent(
                     "Standardize call element already exists".to_string(),
                 ));
             }
@@ -445,14 +428,32 @@ pub fn add_standardize_call_element(
     // Get next SFCALL_ID
     let sfcall_id = get_next_id(&config_data, "G2_CONFIG.CFG_SFCALL", "SFCALL_ID", 1000)?;
 
+    // Allocate EXEC_ORDER per (FTYPE_ID, FELEM_ID) — the scope Python
+    // do_addStandardizeCall numbers standardize execution order within
+    // (getDesiredValueOrNext("CFG_SFCALL", ["FTYPE_ID","FELEM_ID","EXEC_ORDER"])).
+    // `None` auto-allocates the next order; a supplied order is honoured or
+    // rejected if taken. An order is always resolved, never left null.
+    let exec_order = {
+        let empty: Vec<Value> = Vec::new();
+        let sfcall_rows = config_data["G2_CONFIG"]["CFG_SFCALL"]
+            .as_array()
+            .unwrap_or(&empty);
+        crate::helpers::get_desired_or_next_order(
+            sfcall_rows,
+            "EXEC_ORDER",
+            &[("FTYPE_ID", params.ftype_id), ("FELEM_ID", final_felem_id)],
+            params.exec_order,
+        )?
+    };
+
     // Create new call element record via SfcallRow so every key is always
-    // present (EXEC_ORDER null when not specified - seed-then-null pattern).
+    // present; EXEC_ORDER now always carries the allocated value.
     let row = SfcallRow {
         sfcall_id,
         ftype_id: params.ftype_id,
         felem_id: final_felem_id,
         sfunc_id: params.sfunc_id,
-        exec_order: params.exec_order,
+        exec_order: Some(exec_order),
     };
     let new_record = serde_json::to_value(&row)?;
 
@@ -499,7 +500,7 @@ pub fn delete_standardize_call_element(
         .unwrap_or(false);
 
     if !element_exists {
-        return Err(SzConfigError::NotFound(
+        return Err(SzConfigError::NotOnCall(
             "Standardize call element not found".to_string(),
         ));
     }
@@ -605,7 +606,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_standardize_call_element_emits_exec_order_null_when_absent() {
+    fn test_add_standardize_call_element_auto_allocates_exec_order_when_absent() {
         let config = base_config();
         let params = AddStandardizeCallElementParams {
             ftype_id: 5,
@@ -618,10 +619,40 @@ mod tests {
         let value: Value = serde_json::from_str(&modified).unwrap();
         let sfcall = &value["G2_CONFIG"]["CFG_SFCALL"][0];
 
-        // EXEC_ORDER key present but null (seed-then-null preserved); FELEM_ID -1.
+        // EXEC_ORDER is now auto-allocated (not left null): the first row for
+        // (FTYPE_ID 5, FELEM_ID -1) gets order 1. FELEM_ID defaults to -1.
         assert_all_keys(sfcall, &SFCALL_KEYS);
-        assert_eq!(sfcall["EXEC_ORDER"], Value::Null);
+        assert_eq!(sfcall["EXEC_ORDER"], json!(1));
         assert_eq!(sfcall["FELEM_ID"], json!(-1));
+    }
+
+    #[test]
+    fn test_add_standardize_call_element_increments_per_feature_element() {
+        // A second element on the same (FTYPE_ID, FELEM_ID) scope increments.
+        let config = r#"{"G2_CONFIG": {
+            "CFG_SFCALL": [
+                {"SFCALL_ID": 5, "FTYPE_ID": 5, "FELEM_ID": 11, "SFUNC_ID": 7, "EXEC_ORDER": 1}
+            ],
+            "CFG_FTYPE": [{"FTYPE_ID": 5, "FTYPE_CODE": "NAME"}],
+            "CFG_SFUNC": [{"SFUNC_ID": 7, "SFUNC_CODE": "PARSE_NAME"}],
+            "CFG_FELEM": [{"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"}]
+        }}"#;
+        let params = AddStandardizeCallElementParams {
+            ftype_id: 5,
+            sfunc_id: 8,
+            felem_id: Some(11),
+            exec_order: None,
+        };
+        let (modified, _) = add_standardize_call_element(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let new_row = value["G2_CONFIG"]["CFG_SFCALL"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["SFUNC_ID"].as_i64() == Some(8))
+            .unwrap();
+        // Existing (5,11) order 1 -> next is 2.
+        assert_eq!(new_row["EXEC_ORDER"], json!(2));
     }
 
     // #40 regression fixtures: SFCALL_ID (5) deliberately differs from FTYPE_ID

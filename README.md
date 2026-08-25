@@ -58,6 +58,24 @@ features::set_feature(&config, SetFeatureParams {
 
 All parameter structs implement `TryFrom<&Value>` for easy JSON conversion.
 
+### Execution-order policy
+
+Add paths that write an `EXEC_ORDER` (call elements, feature comparisons and
+comparison thresholds) resolve it uniformly:
+
+- `exec_order: None` — **auto-allocate** the next free order within the row's
+  scope (max in scope + 1).
+- `exec_order: Some(n)` (`n > 0`, free) — **honour** the requested order.
+- `exec_order: Some(n)` (`n > 0`, taken) — **reject** with `AlreadyExists`
+  (never silently reallocated).
+
+An order is always written as a concrete value, never `null`. The scope is the
+call for BOM elements, `(feature, element)` for standardize/expression calls,
+and the whole table for feature comparisons. Comparison thresholds additionally
+**reuse** an existing all-features return-value tier's order first, so
+per-feature overrides stay on the same scoring tier as the base row. See the
+`calls` module docs for the full table.
+
 ## Installation
 
 Add to your `Cargo.toml`:

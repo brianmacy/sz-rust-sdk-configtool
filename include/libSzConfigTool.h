@@ -632,6 +632,9 @@ struct SzConfigTool_result SzConfigTool_deleteElementFromFeature(const char *con
                                                                  const char *element_code);
 
 // Create or overwrite a named setting under G2_CONFIG.SETTINGS (name is uppercased).
+// The value param is a JSON-encoded value: it is parsed and stored verbatim as its
+// typed value (e.g. "3" is stored as the number 3). A bare string must be quoted JSON
+// (e.g. "\"hello\""). Invalid JSON returns an error (no string fallback).
 struct SzConfigTool_result SzConfigTool_setSetting(const char *config_json,
                                                    const char *name,
                                                    const char *value);

@@ -11,13 +11,16 @@ use serde_json::{Value, json};
 ///
 /// The `SETTINGS` object under `G2_CONFIG` is created if absent. The `name` is
 /// upper-cased before use, and an existing setting of the same name is
-/// overwritten silently. No validation is applied to `value` — it is stored
-/// verbatim as a JSON string.
+/// overwritten silently. The `value` is stored verbatim as its typed JSON
+/// value — an integer stays an integer, a string stays a string — no
+/// validation is applied.
 ///
 /// # Arguments
 /// * `config_json` - JSON configuration string
 /// * `name` - Setting name (upper-cased before storing)
-/// * `value` - Setting value (stored as a JSON string, unvalidated)
+/// * `value` - Setting value, stored verbatim as its typed JSON value
+///   (accepts anything convertible into `serde_json::Value`, e.g. an integer,
+///   a `&str`, or a pre-built `Value`)
 ///
 /// # Returns
 /// Modified configuration JSON string
@@ -31,11 +34,14 @@ use serde_json::{Value, json};
 /// use sz_configtool_lib::settings::set_setting;
 ///
 /// let config = r#"{"G2_CONFIG": {}}"#;
-/// let updated = set_setting(config, "my_setting", "42")?;
-/// assert!(updated.contains("MY_SETTING"));
-/// # Ok::<(), sz_configtool_lib::error::SzConfigError>(())
+/// // A typed integer is stored as a JSON number, not a quoted string.
+/// let updated = set_setting(config, "metaphone_version", 3)?;
+/// let parsed: serde_json::Value = serde_json::from_str(&updated)?;
+/// assert_eq!(parsed["G2_CONFIG"]["SETTINGS"]["METAPHONE_VERSION"], serde_json::json!(3));
+/// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
-pub fn set_setting(config_json: &str, name: &str, value: &str) -> Result<String> {
+pub fn set_setting(config_json: &str, name: &str, value: impl Into<Value>) -> Result<String> {
+    let value = value.into();
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
@@ -59,7 +65,7 @@ pub fn set_setting(config_json: &str, name: &str, value: &str) -> Result<String>
         .and_then(|v| v.as_object_mut())
         .expect("SETTINGS object was just ensured");
 
-    settings.insert(name.to_uppercase(), json!(value));
+    settings.insert(name.to_uppercase(), value);
 
     serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
 }
@@ -93,6 +99,31 @@ mod tests {
         assert_eq!(value["G2_CONFIG"]["SETTINGS"]["FOO"], json!("new"));
         // Exactly one entry — overwrite, not append.
         assert_eq!(value["G2_CONFIG"]["SETTINGS"].as_object().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_set_setting_stores_typed_integer() {
+        let config = r#"{"G2_CONFIG": {}}"#;
+        let modified = set_setting(config, "metaphone_version", 3).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        // Stored verbatim as a JSON number, not a quoted string.
+        assert_eq!(
+            value["G2_CONFIG"]["SETTINGS"]["METAPHONE_VERSION"],
+            json!(3)
+        );
+        assert_ne!(
+            value["G2_CONFIG"]["SETTINGS"]["METAPHONE_VERSION"],
+            json!("3")
+        );
+    }
+
+    #[test]
+    fn test_set_setting_stores_str_verbatim() {
+        // A &str value is still stored as a JSON string.
+        let config = r#"{"G2_CONFIG": {}}"#;
+        let modified = set_setting(config, "foo", "bar").unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        assert_eq!(value["G2_CONFIG"]["SETTINGS"]["FOO"], json!("bar"));
     }
 
     #[test]

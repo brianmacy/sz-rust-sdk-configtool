@@ -10,6 +10,40 @@
 //!
 //! Each call type links functions to features/elements with execution order and
 //! maintains associated bill of materials (BOM) records for element relationships.
+//!
+//! # Execution-order policy
+//!
+//! Every add path that writes an `EXEC_ORDER` resolves it through one shared
+//! helper, [`crate::helpers::get_desired_or_next_order`], so the behaviour is
+//! uniform across the SDK. The three intents are:
+//!
+//! - **Auto-allocate** (`exec_order: None`): the next free order *within the
+//!   row's scope* is used (max in scope + 1, seeded at `0` so an empty scope
+//!   starts at `1`).
+//! - **Honour** (`Some(n)`, `n > 0`, free in scope): the requested order is used
+//!   verbatim.
+//! - **Reject** (`Some(n)`, `n > 0`, already taken in scope): the call fails with
+//!   `AlreadyExists` rather than silently reallocating (the SDK-wide
+//!   reject-if-taken policy). A non-positive value falls through to
+//!   auto-allocation.
+//!
+//! An order is always resolved to a concrete value — it is never written as
+//! `null`. The *scope* (the senior key fields that partition the order space)
+//! differs per family:
+//!
+//! | Path | Section | Scope |
+//! |------|---------|-------|
+//! | `add_standardize_call` / `add_standardize_call_element` | `CFG_SFCALL` | `(FTYPE_ID, FELEM_ID)` |
+//! | `add_expression_call` | `CFG_EFCALL` | `(FTYPE_ID, FELEM_ID)` |
+//! | comparison / expression / distinct `add_*_call_element` | `CFG_?FBOM` | `(call id)` |
+//! | `features::add_feature_comparison` | `CFG_FBOM` | whole table |
+//! | `thresholds::add_comparison_threshold` | `CFG_CFRTN` | `(CFUNC_ID, FTYPE_ID=0)`, after tier reuse |
+//!
+//! The comparison-threshold path additionally reuses an existing all-features
+//! (`FTYPE_ID = 0`) return-value tier's order before falling back to the policy
+//! above — see [`crate::thresholds`]. The `add_feature` bulk builder and the
+//! positional BOM loops assign `EXEC_ORDER` by 1-based list position and are
+//! deliberately outside this policy.
 
 pub mod comparison;
 pub mod distinct;
@@ -115,7 +149,7 @@ pub(crate) fn derive_bom_exec_order(
         .collect();
 
     match orders.as_slice() {
-        [] => Err(SzConfigError::NotFound(format!(
+        [] => Err(SzConfigError::NotOnCall(format!(
             "{label} call element not found"
         ))),
         [order] => Ok(*order),
@@ -123,6 +157,40 @@ pub(crate) fn derive_bom_exec_order(
             "Ambiguous {label} call element: element matches {} rows across features; specify the element's feature to disambiguate",
             many.len()
         ))),
+    }
+}
+
+/// Assert that a call with `call_id` exists in `section`, returning `NotFound`
+/// otherwise.
+///
+/// This distinguishes the two "no BOM row" situations that
+/// [`derive_bom_exec_order`] alone cannot: a *missing element on an existing
+/// call* (the benign [`SzConfigError::NotOnCall`]) versus a *call that does not
+/// exist at all* (a hard [`SzConfigError::NotFound`], matching Python's
+/// `prepCallElement`, which errors on a missing call record before ever looking
+/// at the BOM). Delete-by-`CallSelector::Id` skips the resolver's existence
+/// check, so the call-family delete paths call this first.
+pub(crate) fn ensure_call_exists(
+    root: &Value,
+    section: &str,
+    id_field: &str,
+    call_id: i64,
+    label: &str,
+) -> Result<()> {
+    let exists = root
+        .get("G2_CONFIG")
+        .and_then(|g| g.get(section))
+        .and_then(|v| v.as_array())
+        .is_some_and(|rows| {
+            rows.iter()
+                .any(|r| r.get(id_field).and_then(|v| v.as_i64()) == Some(call_id))
+        });
+    if exists {
+        Ok(())
+    } else {
+        Err(SzConfigError::NotFound(format!(
+            "{label} call ID {call_id} does not exist"
+        )))
     }
 }
 

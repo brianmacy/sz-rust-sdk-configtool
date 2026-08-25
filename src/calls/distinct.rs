@@ -3,7 +3,7 @@
 //! Functions for managing CFG_DFCALL (distinct calls) and CFG_DFBOM
 //! (distinct bill of materials) configuration sections.
 
-use crate::calls::{CallSelector, derive_bom_exec_order, resolve_call_id};
+use crate::calls::{CallSelector, derive_bom_exec_order, ensure_call_exists, resolve_call_id};
 use crate::config_rows::{DfbomRow, DfcallRow};
 use crate::error::{Result, SzConfigError};
 use crate::helpers::{
@@ -58,7 +58,12 @@ pub struct AddDistinctCallElementParams {
     pub dfcall_id: i64,
     pub ftype_id: i64,
     pub felem_id: i64,
-    pub exec_order: i64,
+    /// Execution order, allocated per `DFCALL_ID` (see the "Execution-order
+    /// policy" in [`crate::calls`]). `None` auto-allocates the next order on the
+    /// call; `Some(n > 0)` requests that exact order and fails with
+    /// `AlreadyExists` if already taken. The written BOM row always carries a
+    /// concrete order.
+    pub exec_order: Option<i64>,
 }
 
 /// Parameters for setting (updating) a distinct call
@@ -147,7 +152,7 @@ pub fn add_distinct_call(config: &str, params: AddDistinctCallParams) -> Result<
         .unwrap_or(false);
 
     if call_exists {
-        return Err(SzConfigError::AlreadyExists(format!(
+        return Err(SzConfigError::AlreadyPresent(format!(
             "Distinct call for feature {} already set",
             params.ftype_code
         )));
@@ -476,7 +481,10 @@ pub fn add_distinct_call_element(
     let mut config_data: Value =
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    // Check if element already exists
+    // Check if element already exists. Dup identity is (DFCALL_ID, FTYPE_ID,
+    // FELEM_ID) — EXEC_ORDER is NOT part of it (realigned to match the
+    // comparison/expression siblings and Python addCallElement, which treats the
+    // same element on a call as a duplicate regardless of position).
     if let Some(dbom_array) = config_data
         .get("G2_CONFIG")
         .and_then(|g| g.get("CFG_DFBOM"))
@@ -486,21 +494,36 @@ pub fn add_distinct_call_element(
             if item.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(params.dfcall_id)
                 && item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
                 && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(params.felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(params.exec_order)
             {
-                return Err(SzConfigError::AlreadyExists(
+                return Err(SzConfigError::AlreadyPresent(
                     "Distinct call element already exists".to_string(),
                 ));
             }
         }
     }
 
+    // Allocate EXEC_ORDER per DFCALL_ID (the scope Python addCallElement numbers
+    // BOM execution order within). `None` auto-allocates; a supplied order is
+    // honoured or rejected if taken. Never left null.
+    let exec_order = {
+        let empty: Vec<Value> = Vec::new();
+        let dfbom_rows = config_data["G2_CONFIG"]["CFG_DFBOM"]
+            .as_array()
+            .unwrap_or(&empty);
+        crate::helpers::get_desired_or_next_order(
+            dfbom_rows,
+            "EXEC_ORDER",
+            &[("DFCALL_ID", params.dfcall_id)],
+            params.exec_order,
+        )?
+    };
+
     // Create new DBOM record via DfbomRow so every key is always present.
     let row = DfbomRow {
         dfcall_id: params.dfcall_id,
         ftype_id: params.ftype_id,
         felem_id: params.felem_id,
-        exec_order: params.exec_order,
+        exec_order,
     };
     let new_record = serde_json::to_value(&row)?;
 
@@ -533,7 +556,8 @@ pub fn add_distinct_call_element(
 /// Modified configuration JSON string
 ///
 /// # Errors
-/// - `NotFound` if the element is not on the call (or the call/element codes don't resolve)
+/// - `NotFound` if the call id does not exist, or the call/element codes don't resolve
+/// - `NotOnCall` if the call exists but the element is not one of its BOM rows
 /// - `InvalidInput` if a feature code matches more than one call, or the element
 ///   matches more than one BOM row on the call (ambiguous)
 ///
@@ -562,6 +586,15 @@ pub fn delete_distinct_call_element(
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
     let dfcall_id = resolve_call_id(config, &config_data, call, resolve_dfcall_id_for_feature)?;
+    // A non-existent call id is a hard NotFound (Python parity); only a missing
+    // element on an *existing* call is the benign NotOnCall from derive below.
+    ensure_call_exists(
+        &config_data,
+        "CFG_DFCALL",
+        "DFCALL_ID",
+        dfcall_id,
+        "Distinct",
+    )?;
     let felem_id = lookup_element_id(config, element_code)?;
     // When the element appears under multiple features in this call, the
     // element's feature disambiguates to the correct BOM row (Python parity).
@@ -676,11 +709,12 @@ mod tests {
     #[test]
     fn test_add_distinct_call_element_emits_all_keys() {
         let config = base_config();
+        // A specific free order is honoured (exec_order now Option).
         let params = AddDistinctCallElementParams {
             dfcall_id: 1000,
             ftype_id: 5,
             felem_id: 11,
-            exec_order: 3,
+            exec_order: Some(3),
         };
 
         let (modified, new_record) = add_distinct_call_element(&config, params).unwrap();
@@ -690,6 +724,53 @@ mod tests {
         assert_all_keys(dfbom, &DFBOM_KEYS);
         assert_all_keys(&new_record, &DFBOM_KEYS);
         assert_eq!(dfbom["EXEC_ORDER"], json!(3));
+    }
+
+    #[test]
+    fn test_add_distinct_call_element_auto_alloc_and_dup_ignores_exec_order() {
+        // Call 1000 carries one BOM row at order 1. Auto-alloc gives 2, and the
+        // dup check on (DFCALL_ID, FTYPE_ID, FELEM_ID) rejects the same element
+        // even when a DIFFERENT exec_order is requested.
+        let config = r#"{"G2_CONFIG": {
+            "CFG_DFBOM": [
+                {"DFCALL_ID": 1000, "FTYPE_ID": 5, "FELEM_ID": 11, "EXEC_ORDER": 1}
+            ]
+        }}"#;
+
+        // New element -> next order 2.
+        let (modified, _) = add_distinct_call_element(
+            config,
+            AddDistinctCallElementParams {
+                dfcall_id: 1000,
+                ftype_id: 5,
+                felem_id: 12,
+                exec_order: None,
+            },
+        )
+        .unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let new_row = value["G2_CONFIG"]["CFG_DFBOM"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["FELEM_ID"].as_i64() == Some(12))
+            .unwrap();
+        assert_eq!(new_row["EXEC_ORDER"], json!(2));
+
+        // Same (call, ftype, felem) but a different exec_order -> still a dup.
+        let err = add_distinct_call_element(
+            config,
+            AddDistinctCallElementParams {
+                dfcall_id: 1000,
+                ftype_id: 5,
+                felem_id: 11,
+                exec_order: Some(99),
+            },
+        )
+        .unwrap_err();
+        // A duplicate element on the call is the benign "already present"
+        // sub-case (step D), distinct from a taken exec-order (AlreadyExists).
+        assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyPresent);
     }
 
     // #40 fixtures: DFCALL_ID (11) deliberately differs from FTYPE_ID (3). The

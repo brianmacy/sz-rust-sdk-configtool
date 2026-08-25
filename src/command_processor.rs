@@ -586,30 +586,16 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 .as_i64()
                 .ok_or_else(|| SzConfigError::InvalidStructure("CFCALL_ID missing".to_string()))?;
 
-            // Determine next exec_order
-            let cfbom_array = config_val["G2_CONFIG"]["CFG_CFBOM"]
-                .as_array()
-                .ok_or_else(|| SzConfigError::MissingSection("CFG_CFBOM".to_string()))?;
-
-            let next_order = cfbom_array
-                .iter()
-                .filter(|bom| {
-                    bom["CFCALL_ID"].as_i64() == Some(cfcall_id)
-                        && bom["FTYPE_ID"].as_i64() == Some(ftype_id)
-                })
-                .filter_map(|bom| bom["EXEC_ORDER"].as_i64())
-                .max()
-                .unwrap_or(0)
-                + 1;
-
-            // Call underlying SDK function
+            // exec_order: None -> the SDK auto-allocates per CFCALL_ID. This drops
+            // the old manual calc, which scoped by (call, ftype) and so restarted
+            // the count per element-feature instead of numbering the whole call.
             crate::calls::comparison::add_comparison_call_element(
                 config,
                 crate::calls::comparison::AddComparisonCallElementParams {
                     cfcall_id,
                     ftype_id,
                     felem_id,
-                    exec_order: next_order,
+                    exec_order: None,
                 },
             )
             .map(|(cfg, _)| cfg)

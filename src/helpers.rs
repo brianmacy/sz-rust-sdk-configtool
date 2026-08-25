@@ -268,6 +268,79 @@ pub fn get_desired_or_next_id(
     get_next_id_with_min(array, id_field, min_value)
 }
 
+/// Resolve an execution-order value within a scope, honouring a desired value or
+/// allocating the next available one.
+///
+/// This is the order-field analogue of [`get_desired_or_next_id`] and mirrors
+/// Python `getDesiredValueOrNext` with its default `seed_order` of `0`. A row is
+/// *in scope* when every `(field, value)` pair in `scope` matches that row's
+/// field (compared as `i64`); `scope` is the list of *senior* key fields that
+/// partition the order space (e.g. `[("CFCALL_ID", 42)]` numbers `EXEC_ORDER`
+/// independently per call, and an empty scope numbers `order_field` across the
+/// whole table).
+///
+/// Over the in-scope rows:
+/// - `desired == Some(d)` with `d > 0` and `d` free -> returns `d`.
+/// - `desired == Some(d)` with `d > 0` but `d` already taken -> `AlreadyExists`
+///   (the reject-if-taken policy; Python instead silently reallocates, but this
+///   SDK surfaces the collision).
+/// - otherwise (`None`, or a non-positive `d`) -> `(max in scope, seed 0) + 1`.
+///
+/// Never returns `null`/absent: an order is always resolved to a concrete value.
+///
+/// # Arguments
+/// * `array` - The section's rows to scan
+/// * `order_field` - The order column being allocated (e.g. `"EXEC_ORDER"`)
+/// * `scope` - Senior `(field, value)` keys that partition the order space
+/// * `desired` - Caller-requested order, or `None` to auto-allocate
+///
+/// # Errors
+/// Returns `AlreadyExists` when a positive `desired` value is already taken
+/// within the scope.
+pub(crate) fn get_desired_or_next_order(
+    array: &[Value],
+    order_field: &str,
+    scope: &[(&str, i64)],
+    desired: Option<i64>,
+) -> Result<i64> {
+    // seed_order default is 0 (Python getDesiredValueOrNext default).
+    let mut last: i64 = 0;
+    let mut taken = false;
+
+    for row in array {
+        let in_scope = scope
+            .iter()
+            .all(|(field, value)| row.get(*field).and_then(|v| v.as_i64()) == Some(*value));
+        if !in_scope {
+            continue;
+        }
+        if let Some(order) = row.get(order_field).and_then(|v| v.as_i64()) {
+            if let Some(d) = desired
+                && d > 0
+                && order == d
+            {
+                taken = true;
+            }
+            if order > last {
+                last = order;
+            }
+        }
+    }
+
+    if let Some(d) = desired
+        && d > 0
+    {
+        if taken {
+            return Err(SzConfigError::AlreadyExists(format!(
+                "The specified {order_field} {d} is already taken"
+            )));
+        }
+        return Ok(d);
+    }
+
+    Ok(last + 1)
+}
+
 /// Get the next available ID or use desired ID (for config sections)
 ///
 /// Same as get_desired_or_next_id but works with section paths
@@ -1044,5 +1117,63 @@ mod tests {
         // Absent section behaves like zero matches.
         let cfg = json!({"G2_CONFIG": {}});
         assert!(resolve_cfcall_id_for_feature(&cfg, 1).is_err());
+    }
+
+    #[test]
+    fn test_get_desired_or_next_order_empty_and_scoped() {
+        let rows = vec![
+            json!({"CALL_ID": 1, "EXEC_ORDER": 1}),
+            json!({"CALL_ID": 1, "EXEC_ORDER": 3}),
+            json!({"CALL_ID": 2, "EXEC_ORDER": 9}),
+        ];
+
+        // Empty scope -> whole-table max (9) + 1.
+        assert_eq!(
+            get_desired_or_next_order(&rows, "EXEC_ORDER", &[], None).unwrap(),
+            10
+        );
+
+        // Scoped to CALL_ID 1 -> max (3) + 1.
+        assert_eq!(
+            get_desired_or_next_order(&rows, "EXEC_ORDER", &[("CALL_ID", 1)], None).unwrap(),
+            4
+        );
+
+        // Scoped to a fresh CALL_ID with no rows -> seed 0 + 1.
+        assert_eq!(
+            get_desired_or_next_order(&rows, "EXEC_ORDER", &[("CALL_ID", 99)], None).unwrap(),
+            1
+        );
+    }
+
+    #[test]
+    fn test_get_desired_or_next_order_honour_and_reject() {
+        let rows = vec![
+            json!({"CALL_ID": 1, "EXEC_ORDER": 1}),
+            json!({"CALL_ID": 1, "EXEC_ORDER": 2}),
+        ];
+
+        // Desired free within scope -> honoured.
+        assert_eq!(
+            get_desired_or_next_order(&rows, "EXEC_ORDER", &[("CALL_ID", 1)], Some(5)).unwrap(),
+            5
+        );
+
+        // Desired taken within scope -> AlreadyExists.
+        let err =
+            get_desired_or_next_order(&rows, "EXEC_ORDER", &[("CALL_ID", 1)], Some(2)).unwrap_err();
+        assert_eq!(err.kind(), SzConfigError::already_exists("").kind());
+
+        // The same value is free under a different scope key -> honoured there.
+        assert_eq!(
+            get_desired_or_next_order(&rows, "EXEC_ORDER", &[("CALL_ID", 7)], Some(2)).unwrap(),
+            2
+        );
+
+        // Non-positive desired falls through to auto-allocation.
+        assert_eq!(
+            get_desired_or_next_order(&rows, "EXEC_ORDER", &[("CALL_ID", 1)], Some(0)).unwrap(),
+            3
+        );
     }
 }
