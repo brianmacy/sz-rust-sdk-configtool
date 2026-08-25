@@ -500,7 +500,12 @@ pub fn delete_standardize_call_element(
         .unwrap_or(false);
 
     if !element_exists {
-        return Err(SzConfigError::NotOnCall(
+        // Standardize has no call/BOM two-tier split (the CFG_SFCALL row *is* the
+        // element), and Python has no deleteStandardizeCallElement — its nearest
+        // parity, deleteStandardizeCall, hard-errors on a miss. So a non-match is
+        // a plain NotFound, not the benign NotOnCall used by the BOM-backed
+        // comparison/expression/distinct families.
+        return Err(SzConfigError::NotFound(
             "Standardize call element not found".to_string(),
         ));
     }

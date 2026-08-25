@@ -104,11 +104,13 @@ fn felem_not_on_call(v: &Value, bom_section: &str, id_field: &str, call_id: i64)
 }
 
 // ============================================================================
-// NotOnCall: delete of an element that is NOT on the call, all four families.
+// NotOnCall: delete of an element that is NOT on the call, for the three
+// BOM-backed families (comparison/expression/distinct). Standardize has no
+// NotOnCall concept — see the missing-call NotFound test.
 // ============================================================================
 
 #[test]
-fn delete_element_not_on_call_is_not_on_call_all_families() {
+fn delete_element_not_on_call_is_not_on_call_bom_families() {
     let config = template();
     let v = parse(&config);
 
@@ -136,19 +138,9 @@ fn delete_element_not_on_call_is_not_on_call_all_families() {
         delete_distinct_call_element(&config, CallSelector::Id(call_id), &code, None).unwrap_err();
     assert_eq!(err.kind(), SzErrorKind::NotOnCall, "distinct");
 
-    // --- standardize (no BOM table: the SFCALL rows ARE the elements) ---
-    let sfcall = &rows(&v, "CFG_SFCALL")[0];
-    let err = delete_standardize_call_element(
-        &config,
-        DeleteStandardizeCallElementParams {
-            ftype_id: sfcall["FTYPE_ID"].as_i64().unwrap(),
-            sfunc_id: sfcall["SFUNC_ID"].as_i64().unwrap(),
-            // A FELEM_ID no standardize row carries -> not on the call.
-            felem_id: Some(9_999_999),
-        },
-    )
-    .unwrap_err();
-    assert_eq!(err.kind(), SzErrorKind::NotOnCall, "standardize");
+    // Standardize is deliberately NOT here: it has no BOM/two-tier split (the
+    // SFCALL row IS the element) and no benign "not on call" concept — any miss
+    // is a hard NotFound (see the missing-call test below).
 }
 
 // ============================================================================
@@ -179,6 +171,22 @@ fn delete_element_missing_call_id_is_not_found_all_families() {
     let err =
         delete_distinct_call_element(&config, CallSelector::Id(GHOST), &code, None).unwrap_err();
     assert_eq!(err.kind(), SzErrorKind::NotFound, "distinct");
+
+    // Standardize: a delete that matches no SFCALL row (here a non-existent
+    // element on a real (ftype, sfunc)) is a hard NotFound — Python's nearest
+    // parity, deleteStandardizeCall, errors on a miss; there is no benign
+    // "not on call" for the BOM-less standardize family.
+    let sfcall = &rows(&v, "CFG_SFCALL")[0];
+    let err = delete_standardize_call_element(
+        &config,
+        DeleteStandardizeCallElementParams {
+            ftype_id: sfcall["FTYPE_ID"].as_i64().unwrap(),
+            sfunc_id: sfcall["SFUNC_ID"].as_i64().unwrap(),
+            felem_id: Some(GHOST),
+        },
+    )
+    .unwrap_err();
+    assert_eq!(err.kind(), SzErrorKind::NotFound, "standardize");
 }
 
 // ============================================================================

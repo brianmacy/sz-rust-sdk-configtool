@@ -34,10 +34,17 @@ policy — details in the sections below):
   `NotFound` / `AlreadyExists` families and given their own stable
   `SzErrorKind` discriminants and `reason_code()` strings (`"NOT_ON_CALL"` /
   `"ALREADY_PRESENT"`, both a permanent machine contract):
-  - **`NotOnCall`** — a call-element delete found nothing to remove (the
-    feature/element is not a BOM row of the call). Re-pointed sites: the shared
+  - **`NotOnCall`** — a call-element delete against an **existing** call found
+    the element is not one of its BOM rows. Re-pointed site: the shared
     `derive_bom_exec_order` "not found" arm (comparison/expression/distinct
-    delete) and the `delete_standardize_call_element` inline existence check.
+    delete). The three delete paths first call a new `ensure_call_exists` guard
+    so a **non-existent call id** (which `CallSelector::Id` does not otherwise
+    validate) stays a hard `NotFound` — "call ID N does not exist" — matching
+    Python `prepCallElement`, which errors on a missing call record before ever
+    looking at the BOM. `delete_standardize_call_element` is **not** re-pointed:
+    standardize has no call/BOM split (the `CFG_SFCALL` row *is* the element) and
+    no benign "not on call" concept, so any miss stays `NotFound` (its nearest
+    Python parity, `deleteStandardizeCall`, hard-errors on a miss).
   - **`AlreadyPresent`** — a call/call-element add is a no-op: a per-feature
     comparison/distinct call is already set, or the element is already on the
     call (all four `add_*_call_element` duplicate checks).
@@ -51,8 +58,15 @@ policy — details in the sections below):
   - **Breaking:** `SzConfigError` is not `#[non_exhaustive]`, so adding these
     variants breaks exhaustive downstream matches.
   - Verified against `tests/fixtures/g2config_template.json` (real Senzing v4
-    template) across all four call families, including a delete-path regression
-    guard that a delete of an on-call element removes exactly one BOM row.
+    template): the `NotOnCall` split across the three BOM-backed families, the
+    `NotFound` guard for a missing call id (all families, standardize included),
+    and a delete-path regression guard that a delete of an on-call element
+    removes exactly one BOM row.
+  - *Note (behavioural, Python-consistent):* a call-element delete now requires
+    the `CFG_?CALL` section to contain the call id, so a delete against a
+    BOM-only config fragment (no owning call row) now returns `NotFound` where it
+    previously proceeded. This also closes an orphan-BOM bug where such a row
+    could be deleted without its call existing.
 - **`FilterSubstrate::ValuesJoin` filter substrate (#56)** reproducing Python
   `do_listComparisonThresholds`' filter rendering: the record's **values only**
   (keys dropped) are each rendered via Python `str()` semantics — bare unquoted
