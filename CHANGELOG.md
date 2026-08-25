@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2026-08-25
+
+Patch: two parity/robustness fixes raised during the CLI's Wave-2 read-path re-delegation, verified
+against the stock config and Python `sz_configtool` 4.4.0 and coordinated with the CLI. Both are
+**no-op on shipped data** — the FTYPE guard closes a latent trap that the stock config can't hit, and
+the filter fix corrects a wrapper the CLI had not yet adopted. Gates green: 331 test cases, clippy/fmt
+clean.
+
+### Fixed
+
+- **`matches_filter` is now case-insensitive**, matching every `sz_configtool` list-filter site
+  (`arg.lower() in str(record).lower()`). It previously did a case-sensitive `contains`, so calling
+  the wrapper directly regressed filters such as `listRules none` to zero matches — which is why the
+  CLI kept its own case-insensitive `.contains` rather than adopting it. Both the rendered record and
+  the filter term are now case-folded before the substring test. The rustdoc is corrected (the
+  "mirroring Python's `in`" note referred to the bare operator the tool never uses) and now records
+  that the tool's actual `str(record)` substrate is `FilterSubstrate::PythonRepr`, so callers
+  reproducing the tool's filtering exactly should pass `PythonRepr`.
+- **`delete_{expression,comparison,distinct}_call_element` no longer risk over-deleting a sibling BOM
+  row.** The target `EXEC_ORDER` is derived FTYPE-aware (via the element's feature), but the final
+  `retain` matched only `(call_id, FELEM_ID, EXEC_ORDER)`. If one call ever held two BOM rows sharing
+  the same element **and** `EXEC_ORDER` under different features, disambiguating by feature would
+  derive the right row then drop its sibling too. Not reachable on the stock config (add paths keep
+  `EXEC_ORDER` unique per call, and the no-feature path already errors as ambiguous before `retain`);
+  each `retain` now mirrors the derive predicate as a belt-and-braces guard. (`standardize` was
+  already FTYPE-inclusive and is unchanged.)
+
+### Behaviour note
+
+- The `matches_filter` change is observable: case-insensitive matching returns more results than the
+  previous case-sensitive test for mixed-case terms. This is a parity fix (the SDK behaviour now
+  matches the Python tool) rather than a regression.
+
 ## [0.6.2] - 2026-08-24
 
 Patch: fixes a call-element delete regression found during the CLI's v0.6.x adoption, verified
