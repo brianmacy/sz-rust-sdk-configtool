@@ -114,7 +114,10 @@ pub use behavior_domain::{
 };
 pub use behavior_overrides::{delete_behavior_override, list_behavior_overrides_resolved};
 pub use export::render_config;
-pub use filter::{FilterSubstrate, matches_filter, to_json_dumps_string, to_python_repr_string};
+pub use filter::{
+    FilterSubstrate, matches_filter, to_json_dumps_string, to_python_repr_string,
+    to_values_join_string,
+};
 pub use helpers::FieldUpdate;
 pub use helpers::{
     resolve_cfcall_id_for_feature, resolve_dfcall_id_for_feature, resolve_efcall_id_for_feature,

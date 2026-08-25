@@ -70,6 +70,15 @@ pub struct AddComparisonThresholdParams<'a> {
     pub cfunc_code: Option<&'a str>,
     pub ftype_code: Option<&'a str>,
     pub cfunc_rtnval: Option<&'a str>,
+    /// Requested return-value execution order (tier). This is only consulted
+    /// when no all-features tier row already exists for this
+    /// `(cfunc, rtnval)` — that tier's order is reused verbatim so per-feature
+    /// overrides stay on the same tier as the base row (a load-bearing scoring
+    /// invariant). When no tier row exists, `Some(n > 0)` is honoured (or
+    /// rejected with `AlreadyExists` if taken within the `(CFUNC_ID,
+    /// FTYPE_ID=0)` scope) and `None` auto-allocates the next order. The written
+    /// row always carries a concrete order. See the "Execution-order policy" in
+    /// [`crate::calls`].
     pub exec_order: Option<i64>,
     pub same_score: Option<i64>,
     pub close_score: Option<i64>,
@@ -97,12 +106,12 @@ impl<'a> TryFrom<&'a Value> for AddComparisonThresholdParams<'a> {
             cfunc_code: json.get("cfuncCode").and_then(|v| v.as_str()),
             ftype_code: json.get("ftypeCode").and_then(|v| v.as_str()),
             cfunc_rtnval: json.get("cfuncRtnval").and_then(|v| v.as_str()),
-            exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
-            same_score: json.get("sameScore").and_then(|v| v.as_i64()),
-            close_score: json.get("closeScore").and_then(|v| v.as_i64()),
-            likely_score: json.get("likelyScore").and_then(|v| v.as_i64()),
-            plausible_score: json.get("plausibleScore").and_then(|v| v.as_i64()),
-            un_likely_score: json.get("unlikelyScore").and_then(|v| v.as_i64()),
+            exec_order: optional_i64(json, "execOrder")?,
+            same_score: optional_i64(json, "sameScore")?,
+            close_score: optional_i64(json, "closeScore")?,
+            likely_score: optional_i64(json, "likelyScore")?,
+            plausible_score: optional_i64(json, "plausibleScore")?,
+            un_likely_score: optional_i64(json, "unlikelyScore")?,
         })
     }
 }
@@ -144,8 +153,8 @@ impl<'a> TryFrom<&'a Value> for AddGenericThresholdParams<'a> {
         Ok(Self {
             plan: json.get("plan").and_then(|v| v.as_str()),
             behavior: json.get("behavior").and_then(|v| v.as_str()),
-            scoring_cap: json.get("scoringCap").and_then(|v| v.as_i64()),
-            candidate_cap: json.get("candidateCap").and_then(|v| v.as_i64()),
+            scoring_cap: optional_i64(json, "scoringCap")?,
+            candidate_cap: optional_i64(json, "candidateCap")?,
             send_to_redo: json.get("sendToRedo").and_then(|v| v.as_str()),
             feature: json.get("feature").and_then(|v| v.as_str()),
         })
@@ -174,12 +183,12 @@ impl<'a> TryFrom<&'a Value> for SetComparisonThresholdParams<'a> {
             cfunc_code: json.get("cfuncCode").and_then(|v| v.as_str()),
             ftype_code: json.get("ftypeCode").and_then(|v| v.as_str()),
             cfunc_rtnval: json.get("cfuncRtnval").and_then(|v| v.as_str()),
-            exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
-            same_score: json.get("sameScore").and_then(|v| v.as_i64()),
-            close_score: json.get("closeScore").and_then(|v| v.as_i64()),
-            likely_score: json.get("likelyScore").and_then(|v| v.as_i64()),
-            plausible_score: json.get("plausibleScore").and_then(|v| v.as_i64()),
-            un_likely_score: json.get("unlikelyScore").and_then(|v| v.as_i64()),
+            exec_order: optional_i64(json, "execOrder")?,
+            same_score: optional_i64(json, "sameScore")?,
+            close_score: optional_i64(json, "closeScore")?,
+            likely_score: optional_i64(json, "likelyScore")?,
+            plausible_score: optional_i64(json, "plausibleScore")?,
+            un_likely_score: optional_i64(json, "unlikelyScore")?,
         })
     }
 }
@@ -203,8 +212,8 @@ impl<'a> TryFrom<&'a Value> for SetGenericThresholdParams<'a> {
             plan: json.get("plan").and_then(|v| v.as_str()),
             behavior: json.get("behavior").and_then(|v| v.as_str()),
             feature: json.get("feature").and_then(|v| v.as_str()),
-            candidate_cap: json.get("candidateCap").and_then(|v| v.as_i64()),
-            scoring_cap: json.get("scoringCap").and_then(|v| v.as_i64()),
+            candidate_cap: optional_i64(json, "candidateCap")?,
+            scoring_cap: optional_i64(json, "scoringCap")?,
             send_to_redo: json.get("sendToRedo").and_then(|v| v.as_str()),
         })
     }
@@ -267,6 +276,27 @@ fn resolve_ftype_id_or_all(config_json: &str, feature: &str) -> Result<i64> {
     }
 }
 
+/// Read an optional integer field from a JSON object with strict typing.
+///
+/// This exists so a present-but-wrong-type numeric field (a JSON string, float,
+/// or bool) is *rejected* rather than silently coerced to `None` — the trap the
+/// old `.and_then(Value::as_i64)` parsing fell into, where
+/// `{"candidateCap": "500"}` was quietly dropped and the update became a no-op.
+///
+/// - missing key or JSON `null` -> `Ok(None)` (the field is genuinely absent)
+/// - integer value -> `Ok(Some(n))`
+/// - any other present value (string / float / bool / array / object) ->
+///   `Err(SzConfigError::InvalidInput)`
+fn optional_i64(json: &Value, key: &str) -> Result<Option<i64>> {
+    match json.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v
+            .as_i64()
+            .map(Some)
+            .ok_or_else(|| SzConfigError::InvalidInput(format!("{key} must be an integer"))),
+    }
+}
+
 /// Canonicalise a `sendToRedo` value to the title-case form stored on disk.
 ///
 /// Accepts `"Yes"`/`"No"` in any case and returns the canonical `"Yes"`/`"No"`.
@@ -282,6 +312,59 @@ fn send_to_redo_canonical(value: &str) -> Result<&'static str> {
 }
 
 // ===== Comparison Thresholds (CFG_CFRTN) =====
+
+/// Resolve the `EXEC_ORDER` for a new `CFG_CFRTN` (comparison threshold) row.
+///
+/// Mirrors Python `do_addComparisonThreshold`'s three-step logic, which is
+/// load-bearing for scoring — it keeps every return value of one comparison
+/// function on the same tier across features:
+///
+/// 1. **Tier reuse.** If a return-value tier row already exists for this
+///    `(CFUNC_ID, CFUNC_RTNVAL)` at the all-features level (`FTYPE_ID = 0`), its
+///    `EXEC_ORDER` is reused verbatim — a per-feature override must land on the
+///    same tier as the base row. This takes precedence over any `desired` value,
+///    and a naive max+1 here would be a silent scoring regression.
+/// 2. **Honour desired.** Otherwise, if `desired` is `Some(n > 0)`, it is
+///    honoured — unless already taken within the `(CFUNC_ID, FTYPE_ID = 0)`
+///    scope, in which case `AlreadyExists` is returned (reject-if-taken policy).
+/// 3. **Next available.** Otherwise the next free order within
+///    `(CFUNC_ID, FTYPE_ID = 0)` is allocated.
+///
+/// Never returns `null`: an order is always resolved to a concrete value.
+fn resolve_cfrtn_exec_order(
+    cfrtn_array: &[Value],
+    cfunc_id: i64,
+    rtnval_upper: &str,
+    desired: Option<i64>,
+) -> Result<i64> {
+    // Step 1: reuse the all-features tier row's EXEC_ORDER when present.
+    let tier_order = cfrtn_array.iter().find_map(|row| {
+        let is_tier = row["CFUNC_ID"].as_i64() == Some(cfunc_id)
+            && row["FTYPE_ID"].as_i64() == Some(0)
+            && row["CFUNC_RTNVAL"]
+                .as_str()
+                .map(|s| s.eq_ignore_ascii_case(rtnval_upper))
+                .unwrap_or(false);
+        if is_tier {
+            row["EXEC_ORDER"].as_i64()
+        } else {
+            None
+        }
+    });
+    if let Some(order) = tier_order {
+        return Ok(order);
+    }
+
+    // Steps 2 & 3: honour desired (reject if taken) else next-available, scoped
+    // to (CFUNC_ID, FTYPE_ID = 0) — exactly Python's getDesiredValueOrNext
+    // over ["CFUNC_ID", "FTYPE_ID", "EXEC_ORDER"] with [cfuncID, 0, ...].
+    helpers::get_desired_or_next_order(
+        cfrtn_array,
+        "EXEC_ORDER",
+        &[("CFUNC_ID", cfunc_id), ("FTYPE_ID", 0)],
+        desired,
+    )
+}
 
 /// Add a new comparison threshold (CFG_CFRTN record)
 ///
@@ -337,14 +420,19 @@ pub fn add_comparison_threshold(
     // Get next ID
     let cfrtn_id = helpers::get_next_id_from_array(cfrtn_array, "CFRTN_ID")?;
 
+    // Resolve EXEC_ORDER: reuse the all-features tier row when present, else
+    // honour/allocate within (CFUNC_ID, FTYPE_ID=0). Never null.
+    let exec_order =
+        resolve_cfrtn_exec_order(cfrtn_array, cfunc_id, &rtnval_upper, params.exec_order)?;
+
     // Build a complete row via CfrtnRow so every CFG_CFRTN key is present
-    // (unset seed-then-null fields serialize as null).
+    // (unset seed-then-null score fields serialize as null).
     let row = CfrtnRow {
         cfrtn_id,
         cfunc_id,
         ftype_id,
         cfunc_rtnval: rtnval_upper,
-        exec_order: params.exec_order,
+        exec_order: Some(exec_order),
         same_score: params.same_score,
         close_score: params.close_score,
         likely_score: params.likely_score,
@@ -394,14 +482,19 @@ pub(crate) fn add_comparison_threshold_by_id(
     // Get next ID
     let cfrtn_id = crate::helpers::get_next_id_from_array(cfrtn_array, "CFRTN_ID")?;
 
+    // Resolve EXEC_ORDER: reuse the all-features tier row when present, else
+    // honour/allocate within (CFUNC_ID, FTYPE_ID=0). Never null.
+    let resolved_exec_order =
+        resolve_cfrtn_exec_order(cfrtn_array, cfunc_id, &rtnval_upper, exec_order)?;
+
     // Build a complete row via CfrtnRow so every CFG_CFRTN key is present
-    // (unset seed-then-null fields serialize as null).
+    // (unset seed-then-null score fields serialize as null).
     let row = CfrtnRow {
         cfrtn_id,
         cfunc_id,
         ftype_id: ftype,
         cfunc_rtnval: rtnval_upper,
-        exec_order,
+        exec_order: Some(resolved_exec_order),
         same_score,
         close_score,
         likely_score,
@@ -733,22 +826,35 @@ pub fn add_generic_threshold(
     config_json: &str,
     params: AddGenericThresholdParams,
 ) -> Result<String> {
-    // Extract and validate required fields
-    let plan = params
-        .plan
-        .ok_or_else(|| SzConfigError::MissingField("plan".to_string()))?;
-    let behavior = params
-        .behavior
-        .ok_or_else(|| SzConfigError::MissingField("behavior".to_string()))?;
-    let scoring_cap = params
-        .scoring_cap
-        .ok_or_else(|| SzConfigError::MissingField("scoring_cap".to_string()))?;
-    let candidate_cap = params
-        .candidate_cap
-        .ok_or_else(|| SzConfigError::MissingField("candidate_cap".to_string()))?;
-    let send_to_redo = params
-        .send_to_redo
-        .ok_or_else(|| SzConfigError::MissingField("send_to_redo".to_string()))?;
+    // Aggregate ALL missing required fields into a single MissingField error,
+    // mirroring Python `do_addGenericThreshold`'s up-front `validate_parms`
+    // (which reports every absent parameter at once rather than one at a time).
+    // Field order matches the Python required list: PLAN, BEHAVIOR, SCORINGCAP,
+    // CANDIDATECAP, SENDTOREDO.
+    let mut missing: Vec<&str> = Vec::new();
+    if params.plan.is_none() {
+        missing.push("plan");
+    }
+    if params.behavior.is_none() {
+        missing.push("behavior");
+    }
+    if params.scoring_cap.is_none() {
+        missing.push("scoring_cap");
+    }
+    if params.candidate_cap.is_none() {
+        missing.push("candidate_cap");
+    }
+    if params.send_to_redo.is_none() {
+        missing.push("send_to_redo");
+    }
+    if !missing.is_empty() {
+        return Err(SzConfigError::MissingField(missing.join(", ")));
+    }
+    let plan = params.plan.expect("checked present above");
+    let behavior = params.behavior.expect("checked present above");
+    let scoring_cap = params.scoring_cap.expect("checked present above");
+    let candidate_cap = params.candidate_cap.expect("checked present above");
+    let send_to_redo = params.send_to_redo.expect("checked present above");
 
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -756,9 +862,6 @@ pub fn add_generic_threshold(
     let plan_upper = plan.to_uppercase();
     let behavior_upper = behavior.to_uppercase();
     let feature_upper = params.feature.unwrap_or("ALL").to_uppercase();
-
-    // Validate sendToRedo and store the canonical title-case form ("Yes"/"No").
-    let redo_canonical = send_to_redo_canonical(send_to_redo)?;
 
     // Lookup plan ID
     let gplan_array = config["G2_CONFIG"]["CFG_GPLAN"]
@@ -800,6 +903,40 @@ pub fn add_generic_threshold(
             "Generic threshold: plan={plan_upper}, behavior={behavior_upper}, feature={feature_upper}"
         )));
     }
+
+    // Collect-all validity block, mirroring Python `validateGenericThreshold`
+    // (which appends every failure to one `errorList` and reports them together
+    // AFTER the plan/feature/duplicate checks). Two things are validated here:
+    //
+    //   1. BEHAVIOR must be one of the canonical 17 codes. We use
+    //      `behavior_domain::behavior_position` (backed by `BEHAVIOR_CODES`),
+    //      the EXACT set Python's `lookupBehaviorCode` checks against — NOT the
+    //      broader `parse_behavior_code`, which also accepts variants that are
+    //      not valid generic-threshold behaviours.
+    //   2. SEND_TO_REDO must canonicalise to "Yes"/"No" via
+    //      `send_to_redo_canonical`.
+    //
+    // The caps are already `i64` (typed at the API/FFI boundary via
+    // `optional_i64`), so Python's `isinstance(int)` cap checks are enforced
+    // upstream and need no runtime check here.
+    let mut validity_errors: Vec<String> = Vec::new();
+    if crate::behavior_domain::behavior_position(&behavior_upper).is_none() {
+        validity_errors.push(format!(
+            "Invalid behavior code '{behavior_upper}'. Valid codes: {}",
+            crate::behavior_domain::BEHAVIOR_CODES.join(", ")
+        ));
+    }
+    let redo_canonical = match send_to_redo_canonical(send_to_redo) {
+        Ok(v) => Some(v),
+        Err(e) => {
+            validity_errors.push(e.to_string());
+            None
+        }
+    };
+    if !validity_errors.is_empty() {
+        return Err(SzConfigError::InvalidInput(validity_errors.join("; ")));
+    }
+    let redo_canonical = redo_canonical.expect("no validity errors implies redo canonicalised");
 
     // Build a complete row via GenericThresholdRow so every
     // CFG_GENERIC_THRESHOLD key is present.
@@ -1139,8 +1276,9 @@ mod tests {
             "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}]
         }}"#;
 
-        // Only the required fields supplied; the seed-then-null fields must
-        // surface as null, never dropped.
+        // Only the required fields supplied. EXEC_ORDER is now auto-allocated
+        // (never null): with no tier row and an empty (CFUNC_ID 5, FTYPE_ID 0)
+        // scope, the first order is 1. The score fields remain seed-then-null.
         let params = AddComparisonThresholdParams::new("GNR_COMP", "NAME", "FULL_SCORE");
         let modified = add_comparison_threshold(config, params).unwrap();
         let value: Value = serde_json::from_str(&modified).unwrap();
@@ -1150,9 +1288,57 @@ mod tests {
         assert_eq!(row["CFUNC_ID"], json!(5));
         assert_eq!(row["FTYPE_ID"], json!(3));
         assert_eq!(row["CFUNC_RTNVAL"], json!("FULL_SCORE"));
-        assert_eq!(row["EXEC_ORDER"], Value::Null);
+        assert_eq!(row["EXEC_ORDER"], json!(1));
         assert_eq!(row["SAME_SCORE"], Value::Null);
         assert_eq!(row["UN_LIKELY_SCORE"], Value::Null);
+    }
+
+    // Tier reuse (synthetic): a per-feature override reuses the all-features
+    // tier row's EXEC_ORDER verbatim, even when a different order is requested.
+    #[test]
+    fn test_add_comparison_threshold_reuses_all_features_tier_order() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_CFUNC": [{"CFUNC_ID": 5, "CFUNC_CODE": "GNR_COMP"}],
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_CFRTN": [
+                {"CFRTN_ID": 1, "CFUNC_ID": 5, "FTYPE_ID": 0, "CFUNC_RTNVAL": "GNR_SN", "EXEC_ORDER": 4}
+            ]
+        }}"#;
+
+        // Adding a NAME-specific GNR_SN row must reuse the tier order (4), NOT
+        // honour the requested 99 (tier reuse takes precedence — scoring
+        // invariant).
+        let mut params = AddComparisonThresholdParams::new("GNR_COMP", "NAME", "GNR_SN");
+        params.exec_order = Some(99);
+        let modified = add_comparison_threshold(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let new_row = value["G2_CONFIG"]["CFG_CFRTN"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["FTYPE_ID"].as_i64() == Some(3))
+            .unwrap();
+        assert_eq!(new_row["EXEC_ORDER"], json!(4));
+    }
+
+    // Reject-if-taken (Q1): with no tier row, an explicit order already used in
+    // the (CFUNC_ID, FTYPE_ID=0) scope is rejected rather than reallocated.
+    #[test]
+    fn test_add_comparison_threshold_rejects_taken_explicit_order() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_CFUNC": [{"CFUNC_ID": 5, "CFUNC_CODE": "GNR_COMP"}],
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_CFRTN": [
+                {"CFRTN_ID": 1, "CFUNC_ID": 5, "FTYPE_ID": 0, "CFUNC_RTNVAL": "GNR_FN", "EXEC_ORDER": 1}
+            ]
+        }}"#;
+
+        // New rtnval (no tier row), explicit order 1 already taken in the
+        // (5, 0) scope -> AlreadyExists.
+        let mut params = AddComparisonThresholdParams::new("GNR_COMP", "all", "GNR_SN");
+        params.exec_order = Some(1);
+        let err = add_comparison_threshold(config, params).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
     }
 
     #[test]

@@ -16,21 +16,47 @@ use std::fmt;
 ///
 /// The variant set will not be restructured without a version bump. The enum is
 /// deliberately **not** `#[non_exhaustive]`, so downstream `match` expressions
-/// can be exhaustive today; adding a variant is therefore a breaking change and
-/// will be released as such.
+/// can be exhaustive today. Under this crate's stability policy a new variant
+/// may be introduced to split a previously-conflated sub-case out of an existing
+/// one (as [`NotOnCall`](SzConfigError::NotOnCall) and
+/// [`AlreadyPresent`](SzConfigError::AlreadyPresent) were carved out of the
+/// broader "not found" / "already exists" families); such an addition is
+/// released with a version bump and called out in the changelog so exhaustive
+/// downstream matches can be updated.
 ///
 /// Note that [`kind`](SzConfigError::kind) and
 /// [`reason_code`](SzConfigError::reason_code) are variant-level only: two
-/// distinct "not found" situations both classify as [`SzErrorKind::NotFound`].
-/// Sub-case discrimination within a variant is not part of this surface.
+/// distinct "not found" situations that share a variant both classify the same
+/// way (e.g. two [`NotFound`](SzConfigError::NotFound) cases both report
+/// [`SzErrorKind::NotFound`]). Where a sub-case is common enough to branch on it
+/// is promoted to its own variant with its own stable
+/// [`reason_code`](SzConfigError::reason_code); otherwise, finer discrimination
+/// within a variant is not part of this surface.
 #[derive(Debug)]
 pub enum SzConfigError {
     /// JSON parsing error
     JsonParse(String),
     /// Item not found
     NotFound(String), // Generic not found with description
+    /// A call-element delete targeted an element that is not on the given call.
+    ///
+    /// This is the benign single-call "not on call" sub-case carved out of the
+    /// broader [`NotFound`](Self::NotFound) family: the call exists (or is
+    /// addressed by id) but the requested feature/element is not one of its BOM
+    /// rows, so there is nothing to delete. Its
+    /// [`reason_code`](Self::reason_code) is `"NOT_ON_CALL"`.
+    NotOnCall(String),
     /// Item already exists
     AlreadyExists(String), // Generic already exists with description
+    /// A call or call-element add targeted something that is already present.
+    ///
+    /// This is the benign single-call "already there" sub-case carved out of the
+    /// broader [`AlreadyExists`](Self::AlreadyExists) family: a per-feature call
+    /// is already set, or the feature/element is already a BOM row of the call,
+    /// so the add is a no-op rather than a hard collision (contrast a taken
+    /// explicit id or exec-order, which remain [`AlreadyExists`](Self::AlreadyExists)).
+    /// Its [`reason_code`](Self::reason_code) is `"ALREADY_PRESENT"`.
+    AlreadyPresent(String),
     /// Invalid input
     InvalidInput(String),
     /// Missing required section
@@ -56,17 +82,25 @@ pub enum SzConfigError {
 ///
 /// This is a **variant-level** discriminant only. It intentionally does not
 /// distinguish sub-cases *within* a variant — for example, two different
-/// "not found" situations both report [`SzErrorKind::NotFound`]. Callers that
-/// need to tell those apart must still inspect the message (or a future
-/// structured field); this method does not discharge that need.
+/// "not found" situations that share the [`NotFound`](SzConfigError::NotFound)
+/// variant both report [`SzErrorKind::NotFound`]. Where a sub-case is worth
+/// branching on it is promoted to its own variant with its own discriminant
+/// (see [`NotOnCall`](SzErrorKind::NotOnCall) and
+/// [`AlreadyPresent`](SzErrorKind::AlreadyPresent)); callers needing finer
+/// discrimination than the variant set provides must still inspect the message,
+/// and this method does not discharge that need.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SzErrorKind {
     /// JSON could not be parsed. Corresponds to [`SzConfigError::JsonParse`].
     JsonParse,
     /// A requested item was not found. Corresponds to [`SzConfigError::NotFound`].
     NotFound,
+    /// A call-element delete targeted an element not on the call. Corresponds to [`SzConfigError::NotOnCall`].
+    NotOnCall,
     /// An item already exists. Corresponds to [`SzConfigError::AlreadyExists`].
     AlreadyExists,
+    /// A call or call-element add targeted something already present. Corresponds to [`SzConfigError::AlreadyPresent`].
+    AlreadyPresent,
     /// Input failed validation. Corresponds to [`SzConfigError::InvalidInput`].
     InvalidInput,
     /// A required config section is missing. Corresponds to [`SzConfigError::MissingSection`].
@@ -100,7 +134,9 @@ impl SzConfigError {
         match self {
             Self::JsonParse(_) => SzErrorKind::JsonParse,
             Self::NotFound(_) => SzErrorKind::NotFound,
+            Self::NotOnCall(_) => SzErrorKind::NotOnCall,
             Self::AlreadyExists(_) => SzErrorKind::AlreadyExists,
+            Self::AlreadyPresent(_) => SzErrorKind::AlreadyPresent,
             Self::InvalidInput(_) => SzErrorKind::InvalidInput,
             Self::MissingSection(_) => SzErrorKind::MissingSection,
             Self::InvalidStructure(_) => SzErrorKind::InvalidStructure,
@@ -132,7 +168,9 @@ impl SzConfigError {
         match self {
             Self::JsonParse(_) => "JSON_PARSE",
             Self::NotFound(_) => "NOT_FOUND",
+            Self::NotOnCall(_) => "NOT_ON_CALL",
             Self::AlreadyExists(_) => "ALREADY_EXISTS",
+            Self::AlreadyPresent(_) => "ALREADY_PRESENT",
             Self::InvalidInput(_) => "INVALID_INPUT",
             Self::MissingSection(_) => "MISSING_SECTION",
             Self::InvalidStructure(_) => "INVALID_STRUCTURE",
@@ -152,9 +190,19 @@ impl SzConfigError {
         Self::NotFound(msg.into())
     }
 
+    /// Create a not-on-call error (call-element delete found nothing to remove)
+    pub fn not_on_call<S: Into<String>>(msg: S) -> Self {
+        Self::NotOnCall(msg.into())
+    }
+
     /// Create an already exists error
     pub fn already_exists<S: Into<String>>(msg: S) -> Self {
         Self::AlreadyExists(msg.into())
+    }
+
+    /// Create an already-present error (call or call-element add is a no-op)
+    pub fn already_present<S: Into<String>>(msg: S) -> Self {
+        Self::AlreadyPresent(msg.into())
     }
 
     /// Create an invalid input error (validation)
@@ -166,6 +214,42 @@ impl SzConfigError {
     pub fn not_implemented<S: Into<String>>(msg: S) -> Self {
         Self::NotImplemented(msg.into())
     }
+
+    /// Return the bare inner message payload carried by this error.
+    ///
+    /// Every variant wraps a single `String`; this returns that string directly,
+    /// without any of the category prefixes that
+    /// [`Display`](std::fmt::Display) prepends for some variants (e.g. the
+    /// `"Invalid input: "` in front of an [`InvalidInput`](Self::InvalidInput)).
+    /// It is the complement of [`kind`](Self::kind)/[`reason_code`](Self::reason_code):
+    /// those classify the error, this recovers its human-readable detail without
+    /// re-parsing the formatted string.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use sz_configtool_lib::SzConfigError;
+    ///
+    /// let err = SzConfigError::validation("DISPLAY_LEVEL must be >= 0");
+    /// // Display prefixes the category; message() is the bare payload.
+    /// assert_eq!(err.to_string(), "Invalid input: DISPLAY_LEVEL must be >= 0");
+    /// assert_eq!(err.message(), "DISPLAY_LEVEL must be >= 0");
+    /// ```
+    pub fn message(&self) -> &str {
+        match self {
+            Self::JsonParse(msg)
+            | Self::NotFound(msg)
+            | Self::NotOnCall(msg)
+            | Self::AlreadyExists(msg)
+            | Self::AlreadyPresent(msg)
+            | Self::InvalidInput(msg)
+            | Self::MissingSection(msg)
+            | Self::InvalidStructure(msg)
+            | Self::MissingField(msg)
+            | Self::InvalidConfig(msg)
+            | Self::NotImplemented(msg) => msg,
+        }
+    }
 }
 
 impl fmt::Display for SzConfigError {
@@ -173,7 +257,9 @@ impl fmt::Display for SzConfigError {
         match self {
             Self::JsonParse(msg) => write!(f, "JSON parse error: {msg}"),
             Self::NotFound(msg) => write!(f, "{msg}"),
+            Self::NotOnCall(msg) => write!(f, "{msg}"),
             Self::AlreadyExists(msg) => write!(f, "{msg}"),
+            Self::AlreadyPresent(msg) => write!(f, "{msg}"),
             Self::InvalidInput(msg) => write!(f, "Invalid input: {msg}"),
             Self::MissingSection(section) => write!(f, "Missing config section: {section}"),
             Self::InvalidStructure(msg) => write!(f, "Invalid config structure: {msg}"),
@@ -201,7 +287,7 @@ mod tests {
 
     #[test]
     fn test_kind_and_reason_code_cover_all_variants() {
-        let cases: [(SzConfigError, SzErrorKind, &str); 9] = [
+        let cases: [(SzConfigError, SzErrorKind, &str); 11] = [
             (
                 SzConfigError::JsonParse("x".into()),
                 SzErrorKind::JsonParse,
@@ -213,9 +299,19 @@ mod tests {
                 "NOT_FOUND",
             ),
             (
+                SzConfigError::NotOnCall("x".into()),
+                SzErrorKind::NotOnCall,
+                "NOT_ON_CALL",
+            ),
+            (
                 SzConfigError::AlreadyExists("x".into()),
                 SzErrorKind::AlreadyExists,
                 "ALREADY_EXISTS",
+            ),
+            (
+                SzConfigError::AlreadyPresent("x".into()),
+                SzErrorKind::AlreadyPresent,
+                "ALREADY_PRESENT",
             ),
             (
                 SzConfigError::InvalidInput("x".into()),
@@ -253,6 +349,43 @@ mod tests {
             assert_eq!(err.kind(), kind, "kind mismatch for {err:?}");
             assert_eq!(err.reason_code(), code, "reason_code mismatch for {err:?}");
         }
+    }
+
+    #[test]
+    fn test_message_returns_bare_payload_for_all_variants() {
+        // message() is the raw inner payload for every variant, with none of the
+        // category prefixes Display prepends.
+        let variants: [SzConfigError; 11] = [
+            SzConfigError::JsonParse("p".into()),
+            SzConfigError::NotFound("p".into()),
+            SzConfigError::NotOnCall("p".into()),
+            SzConfigError::AlreadyExists("p".into()),
+            SzConfigError::AlreadyPresent("p".into()),
+            SzConfigError::InvalidInput("p".into()),
+            SzConfigError::MissingSection("p".into()),
+            SzConfigError::InvalidStructure("p".into()),
+            SzConfigError::MissingField("p".into()),
+            SzConfigError::InvalidConfig("p".into()),
+            SzConfigError::NotImplemented("p".into()),
+        ];
+        for err in &variants {
+            assert_eq!(err.message(), "p", "message mismatch for {err:?}");
+        }
+    }
+
+    #[test]
+    fn test_display_wording_unchanged_for_new_variants() {
+        // The new sub-case variants render the BARE message, exactly like their
+        // parent NotFound/AlreadyExists variants (no added prefix).
+        assert_eq!(
+            SzConfigError::NotOnCall("Comparison call element not found".into()).to_string(),
+            "Comparison call element not found"
+        );
+        assert_eq!(
+            SzConfigError::AlreadyPresent("Feature/element already exists for call".into())
+                .to_string(),
+            "Feature/element already exists for call"
+        );
     }
 
     #[test]

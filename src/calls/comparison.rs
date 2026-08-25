@@ -3,7 +3,7 @@
 //! Functions for managing CFG_CFCALL (comparison calls) and CFG_CFBOM
 //! (comparison bill of materials) configuration sections.
 
-use crate::calls::{CallSelector, derive_bom_exec_order, resolve_call_id};
+use crate::calls::{CallSelector, derive_bom_exec_order, ensure_call_exists, resolve_call_id};
 use crate::config_rows::{CfbomRow, CfcallRow};
 use crate::error::{Result, SzConfigError};
 use crate::helpers::{
@@ -65,7 +65,12 @@ pub struct AddComparisonCallElementParams {
     pub cfcall_id: i64,
     pub ftype_id: i64,
     pub felem_id: i64,
-    pub exec_order: i64,
+    /// Execution order, allocated per `CFCALL_ID` (see the "Execution-order
+    /// policy" in [`crate::calls`]). `None` auto-allocates the next order on the
+    /// call; `Some(n > 0)` requests that exact order and fails with
+    /// `AlreadyExists` if already taken. The written BOM row always carries a
+    /// concrete order.
+    pub exec_order: Option<i64>,
 }
 
 impl TryFrom<&Value> for AddComparisonCallElementParams {
@@ -85,10 +90,8 @@ impl TryFrom<&Value> for AddComparisonCallElementParams {
                 .get("felemId")
                 .and_then(|v| v.as_i64())
                 .ok_or_else(|| SzConfigError::MissingField("felemId".to_string()))?,
-            exec_order: json
-                .get("execOrder")
-                .and_then(|v| v.as_i64())
-                .ok_or_else(|| SzConfigError::MissingField("execOrder".to_string()))?,
+            // execOrder is optional: absent -> auto-allocate per call.
+            exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
         })
     }
 }
@@ -172,7 +175,7 @@ pub fn add_comparison_call(
         .unwrap_or(false);
 
     if call_exists {
-        return Err(SzConfigError::AlreadyExists(format!(
+        return Err(SzConfigError::AlreadyPresent(format!(
             "Comparison call for feature {} already set",
             params.ftype_code
         )));
@@ -529,20 +532,36 @@ pub fn add_comparison_call_element(
             // ↑ Commented out: Python excludes EXEC_ORDER from duplicate check (sz_configtool line 2941)
             // Reason: Same element in same call is duplicate regardless of position/order
             {
-                return Err(SzConfigError::AlreadyExists(
+                return Err(SzConfigError::AlreadyPresent(
                     "Feature/element already exists for call".to_string(),
                 ));
             }
         }
     }
 
-    // Create new CBOM record via CfbomRow (use params.exec_order directly - no
-    // auto-assignment) so every key is always present.
+    // Allocate EXEC_ORDER per CFCALL_ID (the scope Python addCallElement numbers
+    // BOM execution order within: getDesiredValueOrNext(bom_table,
+    // [call_id_field, "EXEC_ORDER"], ...)). `None` auto-allocates; a supplied
+    // order is honoured or rejected if taken. Never left null.
+    let exec_order = {
+        let empty: Vec<Value> = Vec::new();
+        let cfbom_rows = config_data["G2_CONFIG"]["CFG_CFBOM"]
+            .as_array()
+            .unwrap_or(&empty);
+        crate::helpers::get_desired_or_next_order(
+            cfbom_rows,
+            "EXEC_ORDER",
+            &[("CFCALL_ID", params.cfcall_id)],
+            params.exec_order,
+        )?
+    };
+
+    // Create new CBOM record via CfbomRow so every key is always present.
     let row = CfbomRow {
         cfcall_id: params.cfcall_id,
         ftype_id: params.ftype_id,
         felem_id: params.felem_id,
-        exec_order: params.exec_order,
+        exec_order,
     };
     let new_record = serde_json::to_value(&row)?;
 
@@ -575,7 +594,8 @@ pub fn add_comparison_call_element(
 /// Modified configuration JSON string
 ///
 /// # Errors
-/// - `NotFound` if the element is not on the call (or the call/element codes don't resolve)
+/// - `NotFound` if the call id does not exist, or the call/element codes don't resolve
+/// - `NotOnCall` if the call exists but the element is not one of its BOM rows
 /// - `InvalidInput` if a feature code matches more than one call, or the element
 ///   matches more than one BOM row on the call (ambiguous)
 ///
@@ -604,6 +624,15 @@ pub fn delete_comparison_call_element(
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
     let cfcall_id = resolve_call_id(config, &config_data, call, resolve_cfcall_id_for_feature)?;
+    // A non-existent call id is a hard NotFound (Python parity); only a missing
+    // element on an *existing* call is the benign NotOnCall from derive below.
+    ensure_call_exists(
+        &config_data,
+        "CFG_CFCALL",
+        "CFCALL_ID",
+        cfcall_id,
+        "Comparison",
+    )?;
     let felem_id = lookup_element_id(config, element_code)?;
     // When the element appears under multiple features in this call, the
     // element's feature disambiguates to the correct BOM row (Python parity).
@@ -715,11 +744,12 @@ mod tests {
     #[test]
     fn test_add_comparison_call_element_emits_all_keys() {
         let config = base_config();
+        // A specific free order is honoured (exec_order now Option).
         let params = AddComparisonCallElementParams {
             cfcall_id: 1000,
             ftype_id: 5,
             felem_id: 11,
-            exec_order: 2,
+            exec_order: Some(2),
         };
 
         let (modified, new_record) = add_comparison_call_element(&config, params).unwrap();
@@ -729,6 +759,54 @@ mod tests {
         assert_all_keys(cfbom, &CFBOM_KEYS);
         assert_all_keys(&new_record, &CFBOM_KEYS);
         assert_eq!(cfbom["EXEC_ORDER"], json!(2));
+    }
+
+    #[test]
+    fn test_add_comparison_call_element_auto_allocates_and_rejects_taken() {
+        // A call carrying one BOM row at order 1; a second element auto-allocates
+        // to 2, an explicit free order is honoured, and a taken order is rejected.
+        let config = r#"{"G2_CONFIG": {
+            "CFG_CFBOM": [
+                {"CFCALL_ID": 1000, "FTYPE_ID": 5, "FELEM_ID": 11, "EXEC_ORDER": 1}
+            ],
+            "CFG_CFCALL": [{"CFCALL_ID": 1000, "FTYPE_ID": 5, "CFUNC_ID": 7}],
+            "CFG_FTYPE": [{"FTYPE_ID": 5, "FTYPE_CODE": "NAME"}],
+            "CFG_CFUNC": [{"CFUNC_ID": 7, "CFUNC_CODE": "GNR_COMP"}],
+            "CFG_FELEM": [{"FELEM_ID": 12, "FELEM_CODE": "LAST_NAME"}]
+        }}"#;
+
+        // None -> max (1) + 1 = 2.
+        let (modified, _) = add_comparison_call_element(
+            config,
+            AddComparisonCallElementParams {
+                cfcall_id: 1000,
+                ftype_id: 5,
+                felem_id: 12,
+                exec_order: None,
+            },
+        )
+        .unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let new_row = value["G2_CONFIG"]["CFG_CFBOM"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["FELEM_ID"].as_i64() == Some(12))
+            .unwrap();
+        assert_eq!(new_row["EXEC_ORDER"], json!(2));
+
+        // A taken order on the same call -> AlreadyExists.
+        let err = add_comparison_call_element(
+            config,
+            AddComparisonCallElementParams {
+                cfcall_id: 1000,
+                ftype_id: 5,
+                felem_id: 12,
+                exec_order: Some(1),
+            },
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
     }
 
     #[test]
@@ -829,14 +907,37 @@ mod tests {
     }
 
     #[test]
-    fn test_delete_comparison_call_element_not_found() {
+    fn test_delete_comparison_call_element_missing_call_is_not_found() {
+        // A call id that does not exist at all is a hard NotFound (Python's
+        // prepCallElement errors on the missing call record before touching the
+        // BOM), NOT the benign NotOnCall.
         let config = populated_config();
-        let err = delete_comparison_call_element(&config, CallSelector::Id(7), "LAST_NAME", None);
-        assert!(err.is_ok());
-        // Element on a call that has no such BOM row -> NotFound.
         let err =
-            delete_comparison_call_element(&config, CallSelector::Id(999), "FIRST_NAME", None);
-        assert_eq!(err.unwrap_err().kind(), crate::error::SzErrorKind::NotFound);
+            delete_comparison_call_element(&config, CallSelector::Id(999), "FIRST_NAME", None)
+                .unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::NotFound);
+        assert_eq!(err.to_string(), "Comparison call ID 999 does not exist");
+    }
+
+    #[test]
+    fn test_delete_comparison_call_element_not_on_existing_call_is_not_on_call() {
+        // The call exists, but this element is not among its BOM rows -> the
+        // benign NotOnCall sub-case (step D). MIDDLE_NAME exists as an element
+        // but is not on call 7.
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}],
+            "CFG_FELEM": [
+                {"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"},
+                {"FELEM_ID": 13, "FELEM_CODE": "MIDDLE_NAME"}
+            ],
+            "CFG_CFCALL": [{"CFCALL_ID": 7, "FTYPE_ID": 3, "CFUNC_ID": 1}],
+            "CFG_CFBOM": [
+                {"CFCALL_ID": 7, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1}
+            ]
+        }}"#;
+        let err = delete_comparison_call_element(config, CallSelector::Id(7), "MIDDLE_NAME", None)
+            .unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::NotOnCall);
     }
 
     // #41: stored order deliberately differs from the sorted (FTYPE_ID, CFCALL_ID)

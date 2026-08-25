@@ -5,6 +5,169 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-08-25
+
+SDK-surface wave resolving issues #49, #50, #52, #53, #54, #55 and #56, developed on
+`feat/v0.7.0-sdk-surface` in six reviewed steps and coordinated with the downstream
+`sz_configtool` CLI. Every write/validate/delete-path change is verified against
+`tests/fixtures/g2config_template.json` (the real Senzing v4 template), not synthetic
+data. Gates green: 376 test cases (247 unit + 47 integration + 82 doc), clippy
+`-D warnings` / `cargo fmt` clean.
+
+**Breaking changes** (folded into a single minor bump under the crate's stability
+policy — details in the sections below):
+
+1. **`settings::set_setting` value type + FFI value semantics (#52).** The `value`
+   parameter is now `impl Into<serde_json::Value>` (was `&str`) and is stored verbatim;
+   the `SzConfigTool_setSetting` FFI now parses `value` as JSON and rejects invalid JSON,
+   so a bare string must be passed as quoted JSON (`"\"hello\""`).
+2. **`*CallElementParams::exec_order` is now `Option<i64>` (was `i64`) (#55).** Affects
+   `AddComparisonCallElementParams`, `ExpressionCallElementParams` (and its `new()`
+   signature) and `AddDistinctCallElementParams`; `None` auto-allocates the next order.
+3. **New `SzConfigError` variants `NotOnCall` / `AlreadyPresent` (#53, #54).**
+   `SzConfigError` is not `#[non_exhaustive]`, so this breaks exhaustive downstream matches.
+
+### Added
+
+- **Error sub-case surface: `SzConfigError::NotOnCall` / `AlreadyPresent`
+  (#53, #54).** Two benign single-call sub-cases are carved out of the broader
+  `NotFound` / `AlreadyExists` families and given their own stable
+  `SzErrorKind` discriminants and `reason_code()` strings (`"NOT_ON_CALL"` /
+  `"ALREADY_PRESENT"`, both a permanent machine contract):
+  - **`NotOnCall`** — a call-element delete against an **existing** call found
+    the element is not one of its BOM rows. Re-pointed site: the shared
+    `derive_bom_exec_order` "not found" arm (comparison/expression/distinct
+    delete). The three delete paths first call a new `ensure_call_exists` guard
+    so a **non-existent call id** (which `CallSelector::Id` does not otherwise
+    validate) stays a hard `NotFound` — "call ID N does not exist" — matching
+    Python `prepCallElement`, which errors on a missing call record before ever
+    looking at the BOM. `delete_standardize_call_element` is **not** re-pointed:
+    standardize has no call/BOM split (the `CFG_SFCALL` row *is* the element) and
+    no benign "not on call" concept, so any miss stays `NotFound` (its nearest
+    Python parity, `deleteStandardizeCall`, hard-errors on a miss).
+  - **`AlreadyPresent`** — a call/call-element add is a no-op: a per-feature
+    comparison/distinct call is already set, or the element is already on the
+    call (all four `add_*_call_element` duplicate checks).
+  - Hard collisions are deliberately **unchanged**: a taken explicit id and a
+    taken exec-order stay `AlreadyExists`; a genuinely missing id/lookup stays
+    `NotFound`.
+  - New `SzConfigError::message(&self) -> &str` returns the bare inner payload
+    for every variant; `Display` output is byte-for-byte unchanged (both new
+    variants render the bare message, exactly like their parents). New
+    `not_on_call` / `already_present` constructors mirror the sibling variants.
+  - **Breaking:** `SzConfigError` is not `#[non_exhaustive]`, so adding these
+    variants breaks exhaustive downstream matches.
+  - Verified against `tests/fixtures/g2config_template.json` (real Senzing v4
+    template): the `NotOnCall` split across the three BOM-backed families, the
+    `NotFound` guard for a missing call id (all families, standardize included),
+    and a delete-path regression guard that a delete of an on-call element
+    removes exactly one BOM row.
+  - *Note (behavioural, Python-consistent):* a call-element delete now requires
+    the `CFG_?CALL` section to contain the call id, so a delete against a
+    BOM-only config fragment (no owning call row) now returns `NotFound` where it
+    previously proceeded. This also closes an orphan-BOM bug where such a row
+    could be deleted without its call existing.
+- **`FilterSubstrate::ValuesJoin` filter substrate (#56)** reproducing Python
+  `do_listComparisonThresholds`' filter rendering: the record's **values only**
+  (keys dropped) are each rendered via Python `str()` semantics — bare unquoted
+  strings, `None`/`True`/`False`, decimal numbers — and joined with a single
+  space (`" ".join(str(v).lower() for v in record.values())`). New public
+  `to_values_join_string(&Value)` renders a value under this substrate;
+  `matches_filter` gains the corresponding arm. `JsonDumps` remains the default.
+  Verified against real `CFG_CFRTN` rows from `tests/fixtures/g2config_template.json`.
+
+### Fixed
+
+- **Threshold cap fields now reject present-but-wrong-type values (#50).** A new
+  module-private `optional_i64` helper backs every threshold param `TryFrom`:
+  a missing or `null` field parses to `None`, an integer to `Some(n)`, but a
+  present-but-wrong-type value (JSON string/float/bool) is now rejected as
+  `InvalidInput` instead of being silently coerced to `None`. Previously
+  `{"candidateCap": "500"}` was dropped by `.and_then(Value::as_i64)` and the
+  update became a silent no-op. Wired into `AddComparisonThresholdParams`,
+  `SetComparisonThresholdParams`, `AddGenericThresholdParams` and
+  `SetGenericThresholdParams` `TryFrom<&Value>` (all their i64 fields —
+  `execOrder`, the score fields, and the `candidateCap`/`scoringCap` caps). The
+  `SzConfigTool_setGenericThreshold` FFI, which bypassed `TryFrom` with inline
+  `.and_then(as_i64)` cap parsing, now routes through
+  `SetGenericThresholdParams::try_from` so it inherits the same strict typing.
+  - *Deliberate parity divergence:* for the **comparison-threshold** score/exec
+    fields this is stricter than the Python CLI, which coerces digit-strings
+    (`{"sameScore": "100"}` → `100`) via `validate_parms`; the SDK rejects a
+    quoted number there as `InvalidInput`. Generic-threshold caps match Python
+    exactly (Python also rejects non-int for those). A typed JSON library
+    rejecting quoted numbers is the intended contract; pass JSON numbers.
+- **`add_generic_threshold` aggregates validation like Python `sz_configtool`
+  (#49).** Missing required fields (`plan`, `behavior`, `scoring_cap`,
+  `candidate_cap`, `send_to_redo`) are now collected into a single
+  `MissingField` error rather than reported one at a time, mirroring Python
+  `do_addGenericThreshold`'s up-front `validate_parms`. The plan / feature /
+  duplicate checks keep their fail-fast ordering, then a collect-all validity
+  block (mirroring `validateGenericThreshold`) validates the `BEHAVIOR` code
+  against the canonical 17-code set via `behavior_domain::behavior_position`
+  (`BEHAVIOR_CODES`) — the exact set Python's `lookupBehaviorCode` checks, not
+  the broader `parse_behavior_code` — and `SEND_TO_REDO` via
+  `send_to_redo_canonical`, joining any failures into one `InvalidInput`. A
+  bogus behaviour code on an existing plan is now rejected instead of written.
+  All four changes are exercised against `tests/fixtures/g2config_template.json`
+  (bogus-behaviour rejection, a valid new per-feature add, a no-op check that
+  every shipped behaviour passes the new validator, and wrong-typed-cap
+  rejection).
+- **`thresholds::add_comparison_threshold` no longer regresses the CFRTN scoring
+  tier order (part of #55).** It (and the FFI-facing
+  `add_comparison_threshold_by_id`) now implement Python
+  `do_addComparisonThreshold`'s three-step order logic via
+  `resolve_cfrtn_exec_order`: an existing all-features (`FTYPE_ID = 0`)
+  return-value tier row's `EXEC_ORDER` is **reused verbatim** (load-bearing
+  scoring invariant — a naive max+1 there was a silent regression), else an
+  explicit order is honoured-or-rejected, else the next free order within
+  `(CFUNC_ID, FTYPE_ID = 0)` is allocated. `EXEC_ORDER` is never emitted as
+  `null`. Verified against CFRTN tier reuse across the 20 shipped all-features
+  tier rows in the real Senzing v4 template.
+- **`command_processor` `addComparisonCallElement` scope bug fixed (part of
+  #55).** It drops its manual next-order calc and passes `exec_order: None`,
+  fixing a per-`(call, feature)` scope bug — it now numbers the whole call,
+  per-`CFCALL_ID`.
+
+### Changed
+
+- **Execution-order auto-allocation policy across all add paths (#55).** Every
+  add path that writes an `EXEC_ORDER` now resolves it through one shared helper,
+  `helpers::get_desired_or_next_order(array, order_field, scope, desired)`
+  (mirroring Python `getDesiredValueOrNext` with its default `seed_order` of 0):
+  `None` auto-allocates the next free order within the row's scope, `Some(n > 0)`
+  is honoured when free and **rejected with `AlreadyExists` when already taken**
+  (SDK-wide reject-if-taken), and a value is always written as a concrete order,
+  never `null`. Scopes: `(FTYPE_ID, FELEM_ID)` for `add_standardize_call` /
+  `add_standardize_call_element` / `add_expression_call`; the call id for the
+  comparison / expression / distinct `add_*_call_element` BOM rows; the whole
+  table for `features::add_feature_comparison`.
+  - **Breaking:** the **comparison call-element** (`AddComparisonCallElementParams`),
+    **expression call-element** (`ExpressionCallElementParams`, and its `new()`
+    signature) and **distinct call-element** (`AddDistinctCallElementParams`)
+    `exec_order` fields changed from `i64` to `Option<i64>`; passing `None` now
+    auto-allocates instead of the field being mandatory.
+  - **`calls::distinct::add_distinct_call_element`** duplicate detection realigned
+    to `(DFCALL_ID, FTYPE_ID, FELEM_ID)` (dropping `EXEC_ORDER` from the identity),
+    matching the comparison/expression siblings and Python `addCallElement`.
+  - The `add_feature` bulk builder and positional BOM loops (`EXEC_ORDER` by
+    1-based list position) are deliberately outside this policy and unchanged.
+  - New `calls` module "Execution-order policy" doc section (with a scope table)
+    and a README mirror. Verified end-to-end against the real Senzing v4 template
+    (`tests/fixtures/g2config_template.json`).
+- **`settings::set_setting` now stores typed JSON values (#52).** *(Breaking —
+  API + FFI.)* The `value` parameter changed from `&str` to
+  `impl Into<serde_json::Value>` and the value is inserted verbatim (no
+  `json!(value)` stringification), matching Python `do_setSetting` which stores
+  the parsed value as-is (e.g. `setSetting {"name": "metaphone_version", "value": 3}`
+  stores the integer `3`). A `&str` value still stores a JSON string, so most
+  Rust callers are unaffected. The `SzConfigTool_setSetting` FFI now parses its
+  `value` C-string as JSON and **returns an error on invalid JSON** — no string
+  fallback; a bare string must be quoted JSON (`"\"hello\""`). The C ABI (3×
+  `char*`) is unchanged; the header comment documents the new value semantics.
+  Verified against `tests/fixtures/g2config_template.json`
+  (`SETTINGS.METAPHONE_VERSION`).
+
 ## [0.6.3] - 2026-08-25
 
 Patch: two parity/robustness fixes raised during the CLI's Wave-2 read-path re-delegation, verified

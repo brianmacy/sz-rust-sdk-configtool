@@ -4887,17 +4887,17 @@ pub extern "C" fn SzConfigTool_setGenericThreshold(
         }
     };
 
-    handle_result!(crate::thresholds::set_generic_threshold(
-        config,
-        crate::thresholds::SetGenericThresholdParams {
-            plan: Some(&plan_code_str),
-            behavior: Some(behavior_str),
-            feature: updates_value.get("feature").and_then(|v| v.as_str()),
-            candidate_cap: updates_value.get("candidateCap").and_then(|v| v.as_i64()),
-            scoring_cap: updates_value.get("scoringCap").and_then(|v| v.as_i64()),
-            send_to_redo: updates_value.get("sendToRedo").and_then(|v| v.as_str()),
-        },
-    ))
+    // Parse the cap fields via the params' TryFrom so the FFI path applies the
+    // SAME strict integer typing as the Rust API: a present-but-wrong-type cap
+    // (e.g. {"candidateCap": "500"}) is rejected as InvalidInput rather than
+    // silently coerced to None and no-op'd. The FFI supplies plan/behavior out
+    // of band (gplan_id + behavior C-strings), so overwrite those two after.
+    handle_result!((|| -> crate::error::Result<String> {
+        let mut params = crate::thresholds::SetGenericThresholdParams::try_from(&updates_value)?;
+        params.plan = Some(&plan_code_str);
+        params.behavior = Some(behavior_str);
+        crate::thresholds::set_generic_threshold(config, params)
+    })())
 }
 
 /// List all generic thresholds
@@ -9854,6 +9854,12 @@ pub extern "C" fn SzConfigTool_deleteElementFromFeature(
 
 /// Set (create or overwrite) a named configuration setting.
 ///
+/// The `value` parameter is a JSON-encoded value: it is parsed with
+/// `serde_json` and stored verbatim as its typed value (an integer stays an
+/// integer, a JSON string stays a string). A bare string must therefore be
+/// quoted JSON (e.g. `"\"hello\""`). Invalid JSON returns an error — there is
+/// no string fallback.
+///
 /// # Safety
 /// All pointers must be valid null-terminated C strings.
 #[unsafe(no_mangle)]
@@ -9865,7 +9871,12 @@ pub extern "C" fn SzConfigTool_setSetting(
     let config = ffi_required_str!(config_json, "config_json");
     let name = ffi_required_str!(name, "name");
     let value = ffi_required_str!(value, "value");
-    handle_result!(crate::settings::set_setting(config, name, value))
+    handle_result!((|| {
+        let value: serde_json::Value = serde_json::from_str(value).map_err(|e| {
+            crate::error::SzConfigError::InvalidInput(format!("value is not valid JSON: {e}"))
+        })?;
+        crate::settings::set_setting(config, name, value)
+    })())
 }
 
 /// Delete a comparison function and all dependent rows (cascade).
@@ -10145,7 +10156,7 @@ pub extern "C" fn SzConfigTool_deleteExpressionCallElement(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::Value;
+    use serde_json::{Value, json};
 
     /// Read (and free) the response string of an FFI result, asserting success.
     fn take_response(result: SzConfigTool_result) -> String {
@@ -10159,7 +10170,8 @@ mod tests {
         s
     }
 
-    /// #38.3: setSetting FFI round-trips and uppercases the name.
+    /// #52: setSetting FFI parses the value as JSON — an integer is stored as a
+    /// JSON number, not a quoted string — and uppercases the name.
     #[test]
     fn test_ffi_set_setting() {
         let config = CString::new(r#"{"G2_CONFIG": {}}"#).unwrap();
@@ -10168,7 +10180,32 @@ mod tests {
         let result = SzConfigTool_setSetting(config.as_ptr(), name.as_ptr(), value.as_ptr());
         let modified = take_response(result);
         let v: Value = serde_json::from_str(&modified).unwrap();
-        assert_eq!(v["G2_CONFIG"]["SETTINGS"]["MY_SETTING"], "42");
+        assert_eq!(v["G2_CONFIG"]["SETTINGS"]["MY_SETTING"], json!(42));
+        assert_ne!(v["G2_CONFIG"]["SETTINGS"]["MY_SETTING"], json!("42"));
+    }
+
+    /// #52: a quoted JSON string value is stored as a JSON string.
+    #[test]
+    fn test_ffi_set_setting_quoted_string() {
+        let config = CString::new(r#"{"G2_CONFIG": {}}"#).unwrap();
+        let name = CString::new("greeting").unwrap();
+        let value = CString::new(r#""hello""#).unwrap();
+        let result = SzConfigTool_setSetting(config.as_ptr(), name.as_ptr(), value.as_ptr());
+        let modified = take_response(result);
+        let v: Value = serde_json::from_str(&modified).unwrap();
+        assert_eq!(v["G2_CONFIG"]["SETTINGS"]["GREETING"], json!("hello"));
+    }
+
+    /// #52: an unparseable value returns an error (no string fallback).
+    #[test]
+    fn test_ffi_set_setting_invalid_json_errors() {
+        let config = CString::new(r#"{"G2_CONFIG": {}}"#).unwrap();
+        let name = CString::new("bad").unwrap();
+        // Bare unquoted text is not valid JSON.
+        let value = CString::new("not json").unwrap();
+        let result = SzConfigTool_setSetting(config.as_ptr(), name.as_ptr(), value.as_ptr());
+        assert_ne!(result.returnCode, 0);
+        assert!(result.response.is_null());
     }
 
     /// #38.1/#38.2: addElementToFeature then deleteElementFromFeature round-trip.

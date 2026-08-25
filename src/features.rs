@@ -143,6 +143,11 @@ impl<'a> TryFrom<&'a Value> for SetFeatureParams<'a> {
 pub struct AddFeatureComparisonParams<'a> {
     pub feature_code: Option<&'a str>,
     pub element_code: Option<&'a str>,
+    /// Execution order of the new `CFG_FBOM` row (whole-table scope; see the
+    /// "Execution-order policy" in [`crate::calls`]). `None` auto-allocates the
+    /// next order across the whole table; `Some(n > 0)` requests that exact
+    /// order and fails with `AlreadyExists` if already taken. It is never left
+    /// null on the written row.
     pub exec_order: Option<i64>,
     pub display_level: Option<i64>,
     pub display_delim: Option<&'a str>,
@@ -1415,12 +1420,19 @@ pub fn add_feature_comparison(
         )));
     }
 
-    // Build record via FbomRow so every CFG_FBOM key is present; unset optional
-    // fields serialize as null (seed-then-null preserved).
+    // Allocate EXEC_ORDER over the whole CFG_FBOM table (empty scope), honouring
+    // a caller-supplied value or rejecting it if taken (mirrors Python
+    // do_addElementToFeature: getDesiredValueOrNext("CFG_FBOM", "EXEC_ORDER", ...)).
+    // An order is always resolved to a concrete value here, never left null.
+    let exec_order =
+        helpers::get_desired_or_next_order(fbom_array, "EXEC_ORDER", &[], params.exec_order)?;
+
+    // Build record via FbomRow so every CFG_FBOM key is present; the remaining
+    // optional fields serialize as null (seed-then-null preserved).
     let record = serde_json::to_value(&FbomRow {
         ftype_id,
         felem_id,
-        exec_order: params.exec_order,
+        exec_order: Some(exec_order),
         display_level: params.display_level,
         display_delim: params.display_delim.map(str::to_string),
         derived: params.derived.map(str::to_string),
@@ -1963,8 +1975,9 @@ mod tests {
         );
     }
 
-    /// add_feature_comparison must write a complete CFG_FBOM row with all keys
-    /// present as null when the optional params are not supplied.
+    /// add_feature_comparison must write a complete CFG_FBOM row: every key
+    /// present, EXEC_ORDER now auto-allocated (whole-table scope, never null),
+    /// and the remaining unset optionals present as null.
     #[test]
     fn test_add_feature_comparison_emits_all_keys() {
         let config = r#"{"G2_CONFIG": {
@@ -1981,11 +1994,46 @@ mod tests {
         assert_all_keys(fbom, &FBOM_KEYS);
         assert_eq!(fbom["FTYPE_ID"], json!(1));
         assert_eq!(fbom["FELEM_ID"], json!(5));
-        // Optionals not supplied -> present as null.
-        assert_eq!(fbom["EXEC_ORDER"], Value::Null);
+        // EXEC_ORDER auto-allocated over an empty table -> 1 (never null).
+        assert_eq!(fbom["EXEC_ORDER"], json!(1));
+        // The remaining unset optionals are present as null.
         assert_eq!(fbom["DISPLAY_LEVEL"], Value::Null);
         assert_eq!(fbom["DISPLAY_DELIM"], Value::Null);
         assert_eq!(fbom["DERIVED"], Value::Null);
+    }
+
+    /// add_feature_comparison honours a free EXEC_ORDER and rejects a taken one
+    /// (whole-table scope), mirroring Python do_addElementToFeature.
+    #[test]
+    fn test_add_feature_comparison_honours_and_rejects_exec_order() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "PERSON"}],
+            "CFG_FELEM": [
+                {"FELEM_ID": 5, "FELEM_CODE": "MYELEM"},
+                {"FELEM_ID": 6, "FELEM_CODE": "OTHERELEM"}
+            ],
+            "CFG_FBOM": [
+                {"FTYPE_ID": 1, "FELEM_ID": 5, "EXEC_ORDER": 3,
+                 "DISPLAY_LEVEL": 1, "DISPLAY_DELIM": null, "DERIVED": "No"}
+            ]
+        }}"#;
+
+        // A free order is honoured.
+        let params = AddFeatureComparisonParams::new("PERSON", "OTHERELEM").with_exec_order(7);
+        let modified = add_feature_comparison(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let new_row = value["G2_CONFIG"]["CFG_FBOM"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["FELEM_ID"].as_i64() == Some(6))
+            .unwrap();
+        assert_eq!(new_row["EXEC_ORDER"], json!(7));
+
+        // A taken order (3, used whole-table) is rejected.
+        let params = AddFeatureComparisonParams::new("PERSON", "OTHERELEM").with_exec_order(3);
+        let err = add_feature_comparison(config, params).unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
     }
 
     /// add_feature_distinct_call_element must write a CFG_DFCALL row with exactly

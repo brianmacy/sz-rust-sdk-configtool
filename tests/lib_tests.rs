@@ -255,3 +255,41 @@ fn test_add_feature_fbom_display_delim_multiple_elements() {
         "DISPLAY_DELIM should be null for element without display_delim"
     );
 }
+
+/// #52: `set_setting` against the real Senzing v4 template.
+///
+/// The template ships `SETTINGS.METAPHONE_VERSION` as the integer `3`. Setting
+/// it to the integer `4` must store a JSON number (not a quoted string) and the
+/// whole document must still round-trip through serde as valid JSON.
+#[test]
+fn test_set_setting_template_metaphone_version() {
+    let path = format!(
+        "{}/tests/fixtures/g2config_template.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let raw = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("cannot read config fixture '{path}': {e}"));
+
+    // Sanity: the template really does carry an integer METAPHONE_VERSION of 3.
+    let before: Value = serde_json::from_str(&raw).expect("template is not valid JSON");
+    assert_eq!(
+        before["G2_CONFIG"]["SETTINGS"]["METAPHONE_VERSION"],
+        json!(3),
+        "template precondition: METAPHONE_VERSION should be integer 3"
+    );
+
+    let updated = sz_configtool_lib::set_setting(&raw, "metaphone_version", 4)
+        .expect("set_setting should succeed on the real template");
+
+    // Whole doc round-trips as valid JSON...
+    let after: Value = serde_json::from_str(&updated).expect("updated config is not valid JSON");
+    // ...and the setting is stored as a JSON number, not a quoted string.
+    assert_eq!(
+        after["G2_CONFIG"]["SETTINGS"]["METAPHONE_VERSION"],
+        json!(4)
+    );
+    assert_ne!(
+        after["G2_CONFIG"]["SETTINGS"]["METAPHONE_VERSION"],
+        json!("4")
+    );
+}

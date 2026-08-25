@@ -3,7 +3,7 @@
 //! Functions for managing CFG_EFCALL (expression calls) and CFG_EFBOM
 //! (expression bill of materials) configuration sections.
 
-use crate::calls::{CallSelector, derive_bom_exec_order, resolve_call_id};
+use crate::calls::{CallSelector, derive_bom_exec_order, ensure_call_exists, resolve_call_id};
 use crate::config_rows::{EfbomRow, EfcallRow};
 use crate::error::{Result, SzConfigError};
 use crate::helpers::{
@@ -47,12 +47,17 @@ impl<'a> AddExpressionCallParams<'a> {
 pub struct ExpressionCallElementParams {
     pub ftype_id: i64,
     pub felem_id: i64,
-    pub exec_order: i64,
+    /// Execution order, allocated per `EFCALL_ID` (see the "Execution-order
+    /// policy" in [`crate::calls`]). `None` auto-allocates the next order on the
+    /// call; `Some(n > 0)` requests that exact order and fails with
+    /// `AlreadyExists` if already taken. The written BOM row always carries a
+    /// concrete order.
+    pub exec_order: Option<i64>,
     pub felem_req: String,
 }
 
 impl ExpressionCallElementParams {
-    pub fn new(ftype_id: i64, felem_id: i64, exec_order: i64, felem_req: String) -> Self {
+    pub fn new(ftype_id: i64, felem_id: i64, exec_order: Option<i64>, felem_req: String) -> Self {
         Self {
             ftype_id,
             felem_id,
@@ -133,42 +138,20 @@ pub fn add_expression_call(
         ));
     }
 
-    // Determine exec_order
-    let final_exec_order = if let Some(order) = params.exec_order {
-        // Check if this exec_order is already taken for this feature/element
-        let order_taken = config_data["G2_CONFIG"]["CFG_EFCALL"]
+    // Determine exec_order per (FTYPE_ID, FELEM_ID) via the shared helper: a
+    // supplied value is honoured or rejected if taken, otherwise the next free
+    // order is allocated (Scheme C — same policy as the standardize call path).
+    let final_exec_order = {
+        let empty: Vec<Value> = Vec::new();
+        let efcall_rows = config_data["G2_CONFIG"]["CFG_EFCALL"]
             .as_array()
-            .map(|arr| {
-                arr.iter().any(|call| {
-                    call["FTYPE_ID"].as_i64() == Some(ftype_id)
-                        && call["FELEM_ID"].as_i64() == Some(felem_id)
-                        && call["EXEC_ORDER"].as_i64() == Some(order)
-                })
-            })
-            .unwrap_or(false);
-
-        if order_taken {
-            return Err(SzConfigError::AlreadyExists(format!(
-                "Execution order {order} already taken for this feature/element"
-            )));
-        }
-        order
-    } else {
-        // Get next available exec_order for this feature/element combination
-        config_data["G2_CONFIG"]["CFG_EFCALL"]
-            .as_array()
-            .map(|arr| {
-                arr.iter()
-                    .filter(|call| {
-                        call["FTYPE_ID"].as_i64() == Some(ftype_id)
-                            && call["FELEM_ID"].as_i64() == Some(felem_id)
-                    })
-                    .filter_map(|call| call["EXEC_ORDER"].as_i64())
-                    .max()
-                    .map(|max| max + 1)
-                    .unwrap_or(1)
-            })
-            .unwrap_or(1)
+            .unwrap_or(&empty);
+        crate::helpers::get_desired_or_next_order(
+            efcall_rows,
+            "EXEC_ORDER",
+            &[("FTYPE_ID", ftype_id), ("FELEM_ID", felem_id)],
+            params.exec_order,
+        )?
     };
 
     // Lookup expression feature ID if specified
@@ -537,20 +520,35 @@ pub fn add_expression_call_element(
             // ↑ Commented out: Python excludes EXEC_ORDER from duplicate check (sz_configtool line 2941)
             // Reason: Same element in same call is duplicate regardless of position/order
             {
-                return Err(SzConfigError::AlreadyExists(
+                return Err(SzConfigError::AlreadyPresent(
                     "Feature/element already exists for call".to_string(),
                 ));
             }
         }
     }
 
-    // Create new EBOM record via EfbomRow (use params.exec_order directly - no
-    // auto-assignment) so every key is always present.
+    // Allocate EXEC_ORDER per EFCALL_ID (the scope Python addCallElement numbers
+    // BOM execution order within). `None` auto-allocates; a supplied order is
+    // honoured or rejected if taken. Never left null.
+    let exec_order = {
+        let empty: Vec<Value> = Vec::new();
+        let efbom_rows = config_data["G2_CONFIG"]["CFG_EFBOM"]
+            .as_array()
+            .unwrap_or(&empty);
+        crate::helpers::get_desired_or_next_order(
+            efbom_rows,
+            "EXEC_ORDER",
+            &[("EFCALL_ID", efcall_id)],
+            params.exec_order,
+        )?
+    };
+
+    // Create new EBOM record via EfbomRow so every key is always present.
     let row = EfbomRow {
         efcall_id,
         ftype_id: params.ftype_id,
         felem_id: params.felem_id,
-        exec_order: params.exec_order,
+        exec_order,
         felem_req: params.felem_req,
     };
     let new_record = serde_json::to_value(&row)?;
@@ -588,7 +586,8 @@ pub fn add_expression_call_element(
 /// Modified configuration JSON string
 ///
 /// # Errors
-/// - `NotFound` if the element is not on the call (or the call/element codes don't resolve)
+/// - `NotFound` if the call id does not exist, or the call/element codes don't resolve
+/// - `NotOnCall` if the call exists but the element is not one of its BOM rows
 /// - `InvalidInput` if a feature code matches more than one call, or the element
 ///   matches more than one BOM row on the call (ambiguous)
 ///
@@ -598,6 +597,7 @@ pub fn add_expression_call_element(
 /// use sz_configtool_lib::calls::expression::delete_expression_call_element;
 /// let config = r#"{"G2_CONFIG": {
 ///     "CFG_FELEM": [{"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"}],
+///     "CFG_EFCALL": [{"EFCALL_ID": 9, "FTYPE_ID": 3, "EFUNC_ID": 1, "EXEC_ORDER": 1}],
 ///     "CFG_EFBOM": [{"EFCALL_ID": 9, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1, "FELEM_REQ": "No"}]
 /// }}"#;
 /// let out = delete_expression_call_element(
@@ -615,6 +615,15 @@ pub fn delete_expression_call_element(
         serde_json::from_str(config).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
     let efcall_id = resolve_call_id(config, &config_data, call, resolve_efcall_id_for_feature)?;
+    // A non-existent call id is a hard NotFound (Python parity); only a missing
+    // element on an *existing* call is the benign NotOnCall from derive below.
+    ensure_call_exists(
+        &config_data,
+        "CFG_EFCALL",
+        "EFCALL_ID",
+        efcall_id,
+        "Expression",
+    )?;
     let felem_id = lookup_element_id(config, element_code)?;
     // When the element appears under multiple features in this call, the
     // element's feature disambiguates to the correct BOM row (Python parity).
@@ -741,7 +750,8 @@ mod tests {
     #[test]
     fn test_add_expression_call_element_emits_all_keys() {
         let config = base_config();
-        let params = ExpressionCallElementParams::new(5, 11, 2, "Yes".to_string());
+        // A specific free order is honoured (exec_order now Option).
+        let params = ExpressionCallElementParams::new(5, 11, Some(2), "Yes".to_string());
 
         let (modified, new_record) = add_expression_call_element(&config, 1000, params).unwrap();
         let value: Value = serde_json::from_str(&modified).unwrap();
@@ -751,6 +761,39 @@ mod tests {
         assert_all_keys(&new_record, &EFBOM_KEYS);
         assert_eq!(efbom["FELEM_REQ"], json!("Yes"));
         assert_eq!(efbom["EXEC_ORDER"], json!(2));
+    }
+
+    #[test]
+    fn test_add_expression_call_element_auto_allocates_and_rejects_taken() {
+        // One BOM row at order 1 on call 1000; auto-alloc gives 2, taken -> reject.
+        let config = r#"{"G2_CONFIG": {
+            "CFG_EFBOM": [
+                {"EFCALL_ID": 1000, "FTYPE_ID": 5, "FELEM_ID": 11, "EXEC_ORDER": 1, "FELEM_REQ": "No"}
+            ]
+        }}"#;
+
+        let (modified, _) = add_expression_call_element(
+            config,
+            1000,
+            ExpressionCallElementParams::new(5, 12, None, "No".to_string()),
+        )
+        .unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let new_row = value["G2_CONFIG"]["CFG_EFBOM"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|r| r["FELEM_ID"].as_i64() == Some(12))
+            .unwrap();
+        assert_eq!(new_row["EXEC_ORDER"], json!(2));
+
+        let err = add_expression_call_element(
+            config,
+            1000,
+            ExpressionCallElementParams::new(5, 12, Some(1), "No".to_string()),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::AlreadyExists);
     }
 
     // #40 fixtures: two expression calls bound to the same feature (legitimate —
