@@ -624,10 +624,15 @@ pub fn delete_comparison_call_element(
     )?;
 
     if let Some(cbom_array) = config_data["G2_CONFIG"]["CFG_CFBOM"].as_array_mut() {
+        // Mirror the derive predicate: when a feature disambiguated the target
+        // row, constrain the retain by FTYPE too. Otherwise a sibling row sharing
+        // (call, felem, exec) under another feature would be over-deleted.
         cbom_array.retain(|item| {
             !(item.get("CFCALL_ID").and_then(|v| v.as_i64()) == Some(cfcall_id)
                 && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order))
+                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
+                && element_ftype_id
+                    .is_none_or(|ft| item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ft)))
         });
     }
 
