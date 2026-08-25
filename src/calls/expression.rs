@@ -3,7 +3,10 @@
 //! Functions for managing CFG_EFCALL (expression calls) and CFG_EFBOM
 //! (expression bill of materials) configuration sections.
 
-use crate::calls::{CallSelector, derive_bom_exec_order, ensure_call_exists, resolve_call_id};
+use crate::calls::{
+    CallSelector, derive_bom_exec_order, ensure_call_exists, resolve_call_id,
+    resolve_feature_element_id,
+};
 use crate::config_rows::{EfbomRow, EfcallRow};
 use crate::error::{Result, SzConfigError};
 use crate::helpers::{
@@ -624,12 +627,19 @@ pub fn delete_expression_call_element(
         efcall_id,
         "Expression",
     )?;
-    let felem_id = lookup_element_id(config, element_code)?;
-    // When the element appears under multiple features in this call, the
-    // element's feature disambiguates to the correct BOM row (Python parity).
-    let element_ftype_id = match element_feature {
-        Some(f) => Some(lookup_feature_id(config, f)?),
-        None => None,
+    // When an element feature is given it (a) disambiguates the target BOM row
+    // and (b) requires the element to be a member of that feature — a non-member
+    // is a hard NotInFeature, not the benign NotOnCall (Python parity). Resolve
+    // the feature first, then the element scoped to it.
+    let (felem_id, element_ftype_id) = match element_feature {
+        Some(f) => {
+            let ftype_id = lookup_feature_id(config, f)?;
+            (
+                resolve_feature_element_id(&config_data, config, ftype_id, element_code, f)?,
+                Some(ftype_id),
+            )
+        }
+        None => (lookup_element_id(config, element_code)?, None),
     };
 
     // Derive EXEC_ORDER from the located BOM row (also validates existence).
@@ -904,6 +914,10 @@ mod tests {
                 {"FTYPE_ID": 59, "FTYPE_CODE": "EMPLOYER"}
             ],
             "CFG_EFCALL": [{"EFCALL_ID": 97}],
+            "CFG_FBOM": [
+                {"FTYPE_ID": 57, "FELEM_ID": 118, "EXEC_ORDER": 1},
+                {"FTYPE_ID": 59, "FELEM_ID": 118, "EXEC_ORDER": 1}
+            ],
             "CFG_EFBOM": [
                 {"EFCALL_ID": 97, "FTYPE_ID": 57, "FELEM_ID": 118, "EXEC_ORDER": 13},
                 {"EFCALL_ID": 97, "FTYPE_ID": 59, "FELEM_ID": 118, "EXEC_ORDER": 14}
@@ -960,6 +974,10 @@ mod tests {
                 {"FTYPE_ID": 59, "FTYPE_CODE": "EMPLOYER"}
             ],
             "CFG_EFCALL": [{"EFCALL_ID": 97}],
+            "CFG_FBOM": [
+                {"FTYPE_ID": 57, "FELEM_ID": 118, "EXEC_ORDER": 1},
+                {"FTYPE_ID": 59, "FELEM_ID": 118, "EXEC_ORDER": 1}
+            ],
             "CFG_EFBOM": [
                 {"EFCALL_ID": 97, "FTYPE_ID": 57, "FELEM_ID": 118, "EXEC_ORDER": 13},
                 {"EFCALL_ID": 97, "FTYPE_ID": 59, "FELEM_ID": 118, "EXEC_ORDER": 13}

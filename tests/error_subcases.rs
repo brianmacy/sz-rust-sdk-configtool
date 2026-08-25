@@ -85,6 +85,43 @@ fn unique_bom_target(v: &Value, bom_section: &str, id_field: &str) -> (i64, i64,
     panic!("no unique (call, felem) BOM row in {bom_section}");
 }
 
+/// A real feature (FTYPE_ID > 0) that has at least one `CFG_FBOM` member.
+fn a_feature_with_fbom(v: &Value) -> (i64, String) {
+    let fbom = rows(v, "CFG_FBOM");
+    for f in v["G2_CONFIG"]["CFG_FTYPE"].as_array().unwrap() {
+        let ftype_id = f["FTYPE_ID"].as_i64().unwrap();
+        if ftype_id > 0
+            && fbom
+                .iter()
+                .any(|r| r["FTYPE_ID"].as_i64() == Some(ftype_id))
+        {
+            return (ftype_id, f["FTYPE_CODE"].as_str().unwrap().to_string());
+        }
+    }
+    panic!("no feature with a CFG_FBOM member");
+}
+
+/// A `felem_id` that exists in `CFG_FELEM` but is NOT a `CFG_FBOM` member of
+/// `ftype_id` — i.e. "not an element of that feature", for the NotInFeature path.
+fn felem_not_in_feature(v: &Value, ftype_id: i64) -> i64 {
+    let members: Vec<i64> = rows(v, "CFG_FBOM")
+        .iter()
+        .filter(|r| r["FTYPE_ID"].as_i64() == Some(ftype_id))
+        .filter_map(|r| r["FELEM_ID"].as_i64())
+        .collect();
+    v["G2_CONFIG"]["CFG_FELEM"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|r| r["FELEM_ID"].as_i64())
+        .find(|id| *id >= 0 && !members.contains(id))
+        .expect("a FELEM not in the chosen feature")
+}
+
+fn first_call_id(v: &Value, section: &str, id_field: &str) -> i64 {
+    rows(v, section)[0][id_field].as_i64().unwrap()
+}
+
 /// A `felem_id` that exists in `CFG_FELEM` but is NOT a BOM row of `call_id`
 /// within `bom_section` — the "not on this call" element used to drive delete.
 fn felem_not_on_call(v: &Value, bom_section: &str, id_field: &str, call_id: i64) -> i64 {
@@ -187,6 +224,55 @@ fn delete_element_missing_call_id_is_not_found_all_families() {
     )
     .unwrap_err();
     assert_eq!(err.kind(), SzErrorKind::NotFound, "standardize");
+}
+
+// ============================================================================
+// NotInFeature (#58): when a call-element delete is addressed WITH an element
+// feature, an element that is not a member of that feature is a hard error
+// (Python "X is not an element of FEATURE"), distinct from the benign NotOnCall
+// used when the element IS a feature member but simply not on the call.
+// ============================================================================
+
+#[test]
+fn delete_element_not_in_feature_is_not_in_feature_all_families() {
+    let config = template();
+    let v = parse(&config);
+    let (ftype_id, fcode) = a_feature_with_fbom(&v);
+    let ecode = felem_code(&v, felem_not_in_feature(&v, ftype_id));
+
+    // The element feature is supplied but the element is not one of its members,
+    // so resolution fails before the call BOM is even consulted.
+    let err = delete_comparison_call_element(
+        &config,
+        CallSelector::Id(first_call_id(&v, "CFG_CFCALL", "CFCALL_ID")),
+        &ecode,
+        Some(&fcode),
+    )
+    .unwrap_err();
+    assert_eq!(err.kind(), SzErrorKind::NotInFeature, "comparison");
+    assert_eq!(err.reason_code(), "NOT_IN_FEATURE");
+    assert!(
+        err.to_string().contains("is not an element of"),
+        "message: {err}"
+    );
+
+    let err = delete_expression_call_element(
+        &config,
+        CallSelector::Id(first_call_id(&v, "CFG_EFCALL", "EFCALL_ID")),
+        &ecode,
+        Some(&fcode),
+    )
+    .unwrap_err();
+    assert_eq!(err.kind(), SzErrorKind::NotInFeature, "expression");
+
+    let err = delete_distinct_call_element(
+        &config,
+        CallSelector::Id(first_call_id(&v, "CFG_DFCALL", "DFCALL_ID")),
+        &ecode,
+        Some(&fcode),
+    )
+    .unwrap_err();
+    assert_eq!(err.kind(), SzErrorKind::NotInFeature, "distinct");
 }
 
 // ============================================================================

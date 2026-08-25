@@ -46,6 +46,17 @@ pub enum SzConfigError {
     /// rows, so there is nothing to delete. Its
     /// [`reason_code`](Self::reason_code) is `"NOT_ON_CALL"`.
     NotOnCall(String),
+    /// A call-element operation named an element that is not part of the
+    /// (element-)feature it was addressed under.
+    ///
+    /// This is the hard-error counterpart to [`NotOnCall`](Self::NotOnCall),
+    /// distinguishing Python's two-tier check: when a call-element delete is
+    /// addressed with an element feature, the element must first be an element of
+    /// that feature (a `CFG_FBOM` member) — if it is not, that is a genuine error
+    /// (mirroring Python's `"{element} is not an element of {feature}"`), not the
+    /// benign "the element is valid but not on this call" ([`NotOnCall`](Self::NotOnCall)).
+    /// Its [`reason_code`](Self::reason_code) is `"NOT_IN_FEATURE"`.
+    NotInFeature(String),
     /// Item already exists
     AlreadyExists(String), // Generic already exists with description
     /// A call or call-element add targeted something that is already present.
@@ -97,6 +108,8 @@ pub enum SzErrorKind {
     NotFound,
     /// A call-element delete targeted an element not on the call. Corresponds to [`SzConfigError::NotOnCall`].
     NotOnCall,
+    /// A call-element operation named an element not in the addressed feature. Corresponds to [`SzConfigError::NotInFeature`].
+    NotInFeature,
     /// An item already exists. Corresponds to [`SzConfigError::AlreadyExists`].
     AlreadyExists,
     /// A call or call-element add targeted something already present. Corresponds to [`SzConfigError::AlreadyPresent`].
@@ -135,6 +148,7 @@ impl SzConfigError {
             Self::JsonParse(_) => SzErrorKind::JsonParse,
             Self::NotFound(_) => SzErrorKind::NotFound,
             Self::NotOnCall(_) => SzErrorKind::NotOnCall,
+            Self::NotInFeature(_) => SzErrorKind::NotInFeature,
             Self::AlreadyExists(_) => SzErrorKind::AlreadyExists,
             Self::AlreadyPresent(_) => SzErrorKind::AlreadyPresent,
             Self::InvalidInput(_) => SzErrorKind::InvalidInput,
@@ -169,6 +183,7 @@ impl SzConfigError {
             Self::JsonParse(_) => "JSON_PARSE",
             Self::NotFound(_) => "NOT_FOUND",
             Self::NotOnCall(_) => "NOT_ON_CALL",
+            Self::NotInFeature(_) => "NOT_IN_FEATURE",
             Self::AlreadyExists(_) => "ALREADY_EXISTS",
             Self::AlreadyPresent(_) => "ALREADY_PRESENT",
             Self::InvalidInput(_) => "INVALID_INPUT",
@@ -193,6 +208,11 @@ impl SzConfigError {
     /// Create a not-on-call error (call-element delete found nothing to remove)
     pub fn not_on_call<S: Into<String>>(msg: S) -> Self {
         Self::NotOnCall(msg.into())
+    }
+
+    /// Create a not-in-feature error (element is not a member of the addressed feature)
+    pub fn not_in_feature<S: Into<String>>(msg: S) -> Self {
+        Self::NotInFeature(msg.into())
     }
 
     /// Create an already exists error
@@ -240,6 +260,7 @@ impl SzConfigError {
             Self::JsonParse(msg)
             | Self::NotFound(msg)
             | Self::NotOnCall(msg)
+            | Self::NotInFeature(msg)
             | Self::AlreadyExists(msg)
             | Self::AlreadyPresent(msg)
             | Self::InvalidInput(msg)
@@ -258,6 +279,7 @@ impl fmt::Display for SzConfigError {
             Self::JsonParse(msg) => write!(f, "JSON parse error: {msg}"),
             Self::NotFound(msg) => write!(f, "{msg}"),
             Self::NotOnCall(msg) => write!(f, "{msg}"),
+            Self::NotInFeature(msg) => write!(f, "{msg}"),
             Self::AlreadyExists(msg) => write!(f, "{msg}"),
             Self::AlreadyPresent(msg) => write!(f, "{msg}"),
             Self::InvalidInput(msg) => write!(f, "Invalid input: {msg}"),
@@ -287,7 +309,7 @@ mod tests {
 
     #[test]
     fn test_kind_and_reason_code_cover_all_variants() {
-        let cases: [(SzConfigError, SzErrorKind, &str); 11] = [
+        let cases: [(SzConfigError, SzErrorKind, &str); 12] = [
             (
                 SzConfigError::JsonParse("x".into()),
                 SzErrorKind::JsonParse,
@@ -302,6 +324,11 @@ mod tests {
                 SzConfigError::NotOnCall("x".into()),
                 SzErrorKind::NotOnCall,
                 "NOT_ON_CALL",
+            ),
+            (
+                SzConfigError::NotInFeature("x".into()),
+                SzErrorKind::NotInFeature,
+                "NOT_IN_FEATURE",
             ),
             (
                 SzConfigError::AlreadyExists("x".into()),
