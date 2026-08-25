@@ -3,7 +3,10 @@
 //! Functions for managing CFG_DFCALL (distinct calls) and CFG_DFBOM
 //! (distinct bill of materials) configuration sections.
 
-use crate::calls::{CallSelector, derive_bom_exec_order, ensure_call_exists, resolve_call_id};
+use crate::calls::{
+    CallSelector, derive_bom_exec_order, ensure_call_exists, resolve_call_id,
+    resolve_feature_element_id,
+};
 use crate::config_rows::{DfbomRow, DfcallRow};
 use crate::error::{Result, SzConfigError};
 use crate::helpers::{
@@ -595,12 +598,19 @@ pub fn delete_distinct_call_element(
         dfcall_id,
         "Distinct",
     )?;
-    let felem_id = lookup_element_id(config, element_code)?;
-    // When the element appears under multiple features in this call, the
-    // element's feature disambiguates to the correct BOM row (Python parity).
-    let element_ftype_id = match element_feature {
-        Some(f) => Some(lookup_feature_id(config, f)?),
-        None => None,
+    // When an element feature is given it (a) disambiguates the target BOM row
+    // and (b) requires the element to be a member of that feature — a non-member
+    // is a hard NotInFeature, not the benign NotOnCall (Python parity). Resolve
+    // the feature first, then the element scoped to it.
+    let (felem_id, element_ftype_id) = match element_feature {
+        Some(f) => {
+            let ftype_id = lookup_feature_id(config, f)?;
+            (
+                resolve_feature_element_id(&config_data, config, ftype_id, element_code, f)?,
+                Some(ftype_id),
+            )
+        }
+        None => (lookup_element_id(config, element_code)?, None),
     };
 
     // Derive EXEC_ORDER from the located BOM row (also validates existence).

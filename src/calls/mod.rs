@@ -194,6 +194,53 @@ pub(crate) fn ensure_call_exists(
     }
 }
 
+/// Resolve an element to its `FELEM_ID`, requiring it to be a member of
+/// `feature_code`'s definition (`CFG_FBOM` for `ftype_id`).
+///
+/// This mirrors Python `prepCallElement`'s feature-scoped branch: when a
+/// call-element op names an element *feature*, the element must first be an
+/// element of that feature (`lookupFeatureElement`). If it is not — whether the
+/// element code does not exist at all, or exists but is not in this feature's
+/// `CFG_FBOM` — that is a hard [`SzConfigError::NotInFeature`]
+/// (`"{element} is not an element of {feature}"`), distinct from the benign
+/// [`SzConfigError::NotOnCall`] returned when the element *is* a feature member
+/// but simply not on this particular call.
+///
+/// (The feature-less path — no element feature given — keeps a plain global
+/// [`crate::helpers::lookup_element_id`] and cannot produce this error, matching
+/// Python's `ftype_id < 0` branch.)
+pub(crate) fn resolve_feature_element_id(
+    root: &Value,
+    config: &str,
+    ftype_id: i64,
+    element_code: &str,
+    feature_code: &str,
+) -> Result<i64> {
+    let not_in_feature = || {
+        SzConfigError::NotInFeature(format!(
+            "{element_code} is not an element of {feature_code}"
+        ))
+    };
+    // The element must exist globally AND be a CFG_FBOM member of the feature.
+    let felem_id =
+        crate::helpers::lookup_element_id(config, element_code).map_err(|_| not_in_feature())?;
+    let in_feature = root
+        .get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_FBOM"))
+        .and_then(|v| v.as_array())
+        .is_some_and(|rows| {
+            rows.iter().any(|r| {
+                r.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ftype_id)
+                    && r.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
+            })
+        });
+    if in_feature {
+        Ok(felem_id)
+    } else {
+        Err(not_in_feature())
+    }
+}
+
 // `CallSelector` is exported at the module root so callers can write
 // `calls::CallSelector` regardless of which call family they are addressing.
 

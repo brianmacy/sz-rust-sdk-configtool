@@ -3,7 +3,10 @@
 //! Functions for managing CFG_CFCALL (comparison calls) and CFG_CFBOM
 //! (comparison bill of materials) configuration sections.
 
-use crate::calls::{CallSelector, derive_bom_exec_order, ensure_call_exists, resolve_call_id};
+use crate::calls::{
+    CallSelector, derive_bom_exec_order, ensure_call_exists, resolve_call_id,
+    resolve_feature_element_id,
+};
 use crate::config_rows::{CfbomRow, CfcallRow};
 use crate::error::{Result, SzConfigError};
 use crate::helpers::{
@@ -633,12 +636,19 @@ pub fn delete_comparison_call_element(
         cfcall_id,
         "Comparison",
     )?;
-    let felem_id = lookup_element_id(config, element_code)?;
-    // When the element appears under multiple features in this call, the
-    // element's feature disambiguates to the correct BOM row (Python parity).
-    let element_ftype_id = match element_feature {
-        Some(f) => Some(lookup_feature_id(config, f)?),
-        None => None,
+    // When an element feature is given it (a) disambiguates the target BOM row
+    // and (b) requires the element to be a member of that feature — a non-member
+    // is a hard NotInFeature, not the benign NotOnCall (Python parity). Resolve
+    // the feature first, then the element scoped to it.
+    let (felem_id, element_ftype_id) = match element_feature {
+        Some(f) => {
+            let ftype_id = lookup_feature_id(config, f)?;
+            (
+                resolve_feature_element_id(&config_data, config, ftype_id, element_code, f)?,
+                Some(ftype_id),
+            )
+        }
+        None => (lookup_element_id(config, element_code)?, None),
     };
 
     // Derive EXEC_ORDER from the located BOM row (also validates existence).
@@ -917,6 +927,52 @@ mod tests {
                 .unwrap_err();
         assert_eq!(err.kind(), crate::error::SzErrorKind::NotFound);
         assert_eq!(err.to_string(), "Comparison call ID 999 does not exist");
+    }
+
+    #[test]
+    fn test_delete_comparison_call_element_in_feature_not_on_call_is_not_on_call() {
+        // #58: element feature supplied, MIDDLE_NAME IS a member of NAME's FBOM
+        // but is not on call 7 -> the benign NotOnCall, NOT NotInFeature.
+        let config = r#"{"G2_CONFIG": {
+            "CFG_FTYPE": [
+                {"FTYPE_ID": 3, "FTYPE_CODE": "NAME"},
+                {"FTYPE_ID": 4, "FTYPE_CODE": "ADDRESS"}
+            ],
+            "CFG_FELEM": [
+                {"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"},
+                {"FELEM_ID": 13, "FELEM_CODE": "MIDDLE_NAME"},
+                {"FELEM_ID": 20, "FELEM_CODE": "STREET"}
+            ],
+            "CFG_FBOM": [
+                {"FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1},
+                {"FTYPE_ID": 3, "FELEM_ID": 13, "EXEC_ORDER": 2},
+                {"FTYPE_ID": 4, "FELEM_ID": 20, "EXEC_ORDER": 1}
+            ],
+            "CFG_CFCALL": [{"CFCALL_ID": 7, "FTYPE_ID": 3, "CFUNC_ID": 1}],
+            "CFG_CFBOM": [
+                {"CFCALL_ID": 7, "FTYPE_ID": 3, "FELEM_ID": 11, "EXEC_ORDER": 1}
+            ]
+        }}"#;
+        let err = delete_comparison_call_element(
+            config,
+            CallSelector::Id(7),
+            "MIDDLE_NAME",
+            Some("NAME"),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::NotOnCall);
+
+        // The same element under a real feature it is NOT a member of (ADDRESS
+        // has no MIDDLE_NAME) -> the hard NotInFeature, with Python's wording.
+        let err = delete_comparison_call_element(
+            config,
+            CallSelector::Id(7),
+            "MIDDLE_NAME",
+            Some("ADDRESS"),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), crate::error::SzErrorKind::NotInFeature);
+        assert_eq!(err.to_string(), "MIDDLE_NAME is not an element of ADDRESS");
     }
 
     #[test]

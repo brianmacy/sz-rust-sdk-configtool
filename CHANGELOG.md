@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-08-25
+
+Resolves #58 from the CLI's v0.7.0 delete re-delegation. Verified against Python `sz_configtool`
+4.4.0 (`prepCallElement`) and the stock Senzing v4 template, and adversarially reviewed by subagents
+(no classification defect found). Gates green: 380 test cases + 82 doctests, clippy/fmt clean.
+
+### Added
+
+- **`SzConfigError::NotInFeature` / `SzErrorKind::NotInFeature` (`reason_code` `"NOT_IN_FEATURE"`) —
+  the hard-error counterpart to `NotOnCall` (#58).** A call-element delete addressed *with* an element
+  feature now distinguishes Python's two-tier check: the element must first be a member of that
+  feature (a `CFG_FBOM` element) — a non-member (or a nonexistent element code) is a hard
+  `NotInFeature` (`"{element} is not an element of {feature}"`), mirroring Python's
+  `lookupFeatureElement` error, rather than the benign `NotOnCall` ("the element is valid but not on
+  this call"). Previously both collapsed into `NotOnCall`, so a consumer could not tell an error from
+  a warning off `kind()` alone. `delete_{comparison,expression,distinct}_call_element` gained a shared
+  `resolve_feature_element_id` guard for this; the feature-less path (`element_feature: None`) keeps a
+  plain global element lookup and cannot raise it, matching Python's `ftype_id < 0` branch.
+  - The delete paths now resolve the element feature **before** the element (Python's order), so a
+    delete naming both a missing feature and a missing element reports the feature first.
+  - The library emits the core `"{element} is not an element of {feature}"`; the CLI-specific
+    `(use command "getFeature ...")` hint Python appends is left to the CLI (no display logic in the
+    library).
+  - **Breaking:** `SzConfigError` is not `#[non_exhaustive]`, so the new variant adds an arm to
+    exhaustive downstream matches.
+  - Verified against `tests/fixtures/g2config_template.json` (every real-feature BOM element is a
+    `CFG_FBOM` member; only `FTYPE_ID = -1` sentinel rows are not, and those take the `None` path).
+
 ## [0.7.0] - 2026-08-25
 
 SDK-surface wave resolving issues #49, #50, #52, #53, #54, #55 and #56, developed on
