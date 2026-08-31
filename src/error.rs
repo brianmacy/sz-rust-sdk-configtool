@@ -80,6 +80,102 @@ pub enum SzConfigError {
     InvalidConfig(String),
     /// Not implemented
     NotImplemented(String),
+    /// One or more field-level validation failures collected together.
+    ///
+    /// This mirrors Python `validateGenericThreshold`'s aggregated `errorList`:
+    /// rather than failing fast on the first bad field, every failure is
+    /// collected into one [`ValidationFailure`] per offending field and reported
+    /// together. Each failure carries the field tag and a machine-readable
+    /// [`ValidationReason`] as **data**, so a caller (notably the CLI) can
+    /// reproduce its own user-facing wording without sniffing prose. Its
+    /// [`reason_code`](Self::reason_code) is `"VALIDATION_ERRORS"`; use
+    /// [`validation_failures`](Self::validation_failures) to recover the vector.
+    ///
+    /// The `Display` text re-creates a `"; "`-joined summary for logs/FFI, but
+    /// that wording is **not** part of the stable contract — branch on
+    /// [`kind`](Self::kind)/[`validation_failures`](Self::validation_failures).
+    ValidationErrors(Vec<ValidationFailure>),
+}
+
+/// Stable, DATA-only taxonomy of *why* a single field failed validation.
+///
+/// This is a machine-readable classifier, never user-facing wording: a consumer
+/// (notably the CLI adapter) maps a `(field, reason_code)` pair to its own
+/// display text. The enum is `#[non_exhaustive]` so future reason codes can be
+/// added without a breaking change.
+///
+/// Only [`OutOfDomain`](Self::OutOfDomain) (a `sendToRedo` outside `[Yes, No]`)
+/// and [`UnknownReferenceCode`](Self::UnknownReferenceCode) (a behaviour not in
+/// the canonical set) are emitted today; the remaining codes are reserved for a
+/// stable taxonomy (presence is caller-owned, plan/feature stay fatal-first
+/// [`NotFound`](SzConfigError::NotFound), duplicates stay warning-success, and
+/// caps are rejected strictly upstream as scalar [`InvalidInput`](SzConfigError::InvalidInput)).
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ValidationReason {
+    /// A required field was absent (reserved — presence is caller-owned).
+    Missing,
+    /// A field was present but of the wrong scalar type (reserved — caps are
+    /// rejected strictly upstream today).
+    WrongType,
+    /// A value fell outside a fixed enumerated domain (e.g. `sendToRedo` not in
+    /// `[Yes, No]`).
+    OutOfDomain,
+    /// A value was not a member of a canonical reference-code set (e.g. a
+    /// behaviour not in the canonical behaviour codes).
+    UnknownReferenceCode,
+    /// A referenced entity was not found (reserved — plan/feature lookups stay
+    /// fatal-first [`NotFound`](SzConfigError::NotFound)).
+    NotFound,
+    /// A duplicate was detected (reserved — duplicates stay warning-success).
+    Duplicate,
+}
+
+impl ValidationReason {
+    /// Return the stable `SCREAMING_SNAKE_CASE` reason-code string.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Missing => "MISSING",
+            Self::WrongType => "WRONG_TYPE",
+            Self::OutOfDomain => "OUT_OF_DOMAIN",
+            Self::UnknownReferenceCode => "UNKNOWN_REFERENCE_CODE",
+            Self::NotFound => "NOT_FOUND",
+            Self::Duplicate => "DUPLICATE",
+        }
+    }
+}
+
+/// A single field-level validation failure, carried as DATA (never prose).
+///
+/// Aggregated inside [`SzConfigError::ValidationErrors`]. The struct is
+/// `#[non_exhaustive]` so future fields (e.g. a row index) can be added without
+/// a breaking change.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ValidationFailure {
+    /// Canonical camelCase field tag, e.g. `"behavior"`, `"sendToRedo"` — the
+    /// CLI/JSON attribute name, not the on-disk column.
+    pub field: &'static str,
+    /// The stable reason this field failed.
+    pub reason_code: ValidationReason,
+    /// The offending value verbatim, for echoing; `None` when the failure is not
+    /// tied to a specific scalar value.
+    pub offending_value: Option<String>,
+}
+
+impl ValidationFailure {
+    /// Construct a validation failure from its parts.
+    pub fn new(
+        field: &'static str,
+        reason_code: ValidationReason,
+        offending_value: Option<String>,
+    ) -> Self {
+        Self {
+            field,
+            reason_code,
+            offending_value,
+        }
+    }
 }
 
 /// Stable, variant-level discriminant for [`SzConfigError`].
@@ -126,6 +222,9 @@ pub enum SzErrorKind {
     InvalidConfig,
     /// The operation is not implemented. Corresponds to [`SzConfigError::NotImplemented`].
     NotImplemented,
+    /// One or more field-level validation failures were aggregated. Corresponds
+    /// to [`SzConfigError::ValidationErrors`].
+    ValidationErrors,
 }
 
 impl SzConfigError {
@@ -157,6 +256,7 @@ impl SzConfigError {
             Self::MissingField(_) => SzErrorKind::MissingField,
             Self::InvalidConfig(_) => SzErrorKind::InvalidConfig,
             Self::NotImplemented(_) => SzErrorKind::NotImplemented,
+            Self::ValidationErrors(_) => SzErrorKind::ValidationErrors,
         }
     }
 
@@ -192,6 +292,7 @@ impl SzConfigError {
             Self::MissingField(_) => "MISSING_FIELD",
             Self::InvalidConfig(_) => "INVALID_CONFIG",
             Self::NotImplemented(_) => "NOT_IMPLEMENTED",
+            Self::ValidationErrors(_) => "VALIDATION_ERRORS",
         }
     }
 
@@ -269,6 +370,37 @@ impl SzConfigError {
             | Self::MissingField(msg)
             | Self::InvalidConfig(msg)
             | Self::NotImplemented(msg) => msg,
+            // ValidationErrors carries a Vec, not a single String payload, so it
+            // cannot join into a borrowed &str. Return a fixed summary; callers
+            // wanting detail use validation_failures() or Display.
+            Self::ValidationErrors(_) => "one or more validation failures",
+        }
+    }
+
+    /// Return the aggregated [`ValidationFailure`]s when this is a
+    /// [`ValidationErrors`](Self::ValidationErrors), else `None`.
+    ///
+    /// This lets Rust callers recover the structured, DATA-only failures without
+    /// matching on the variant or parsing the `Display` text.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use sz_configtool_lib::{SzConfigError, error::{ValidationFailure, ValidationReason}};
+    ///
+    /// let err = SzConfigError::ValidationErrors(vec![ValidationFailure::new(
+    ///     "sendToRedo",
+    ///     ValidationReason::OutOfDomain,
+    ///     Some("perhaps".into()),
+    /// )]);
+    /// let failures = err.validation_failures().unwrap();
+    /// assert_eq!(failures[0].field, "sendToRedo");
+    /// assert_eq!(failures[0].reason_code, ValidationReason::OutOfDomain);
+    /// ```
+    pub fn validation_failures(&self) -> Option<&[ValidationFailure]> {
+        match self {
+            Self::ValidationErrors(failures) => Some(failures),
+            _ => None,
         }
     }
 }
@@ -288,6 +420,19 @@ impl fmt::Display for SzConfigError {
             Self::MissingField(field) => write!(f, "Missing required field: {field}"),
             Self::InvalidConfig(msg) => write!(f, "Invalid configuration: {msg}"),
             Self::NotImplemented(msg) => write!(f, "Not implemented: {msg}"),
+            // Re-create the old `"; "`-joined summary so logs/FFI stay readable.
+            // This wording is explicitly NOT part of the stable contract.
+            Self::ValidationErrors(failures) => {
+                let joined = failures
+                    .iter()
+                    .map(|fail| match &fail.offending_value {
+                        Some(v) => format!("{} {} '{v}'", fail.field, fail.reason_code.as_str()),
+                        None => format!("{} {}", fail.field, fail.reason_code.as_str()),
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                write!(f, "Invalid input: {joined}")
+            }
         }
     }
 }
@@ -309,7 +454,7 @@ mod tests {
 
     #[test]
     fn test_kind_and_reason_code_cover_all_variants() {
-        let cases: [(SzConfigError, SzErrorKind, &str); 12] = [
+        let cases: [(SzConfigError, SzErrorKind, &str); 13] = [
             (
                 SzConfigError::JsonParse("x".into()),
                 SzErrorKind::JsonParse,
@@ -370,6 +515,15 @@ mod tests {
                 SzErrorKind::NotImplemented,
                 "NOT_IMPLEMENTED",
             ),
+            (
+                SzConfigError::ValidationErrors(vec![ValidationFailure::new(
+                    "behavior",
+                    ValidationReason::UnknownReferenceCode,
+                    Some("BOGUS".into()),
+                )]),
+                SzErrorKind::ValidationErrors,
+                "VALIDATION_ERRORS",
+            ),
         ];
 
         for (err, kind, code) in cases {
@@ -380,8 +534,9 @@ mod tests {
 
     #[test]
     fn test_message_returns_bare_payload_for_all_variants() {
-        // message() is the raw inner payload for every variant, with none of the
-        // category prefixes Display prepends.
+        // message() is the raw inner payload for every single-String variant,
+        // with none of the category prefixes Display prepends. ValidationErrors
+        // carries a Vec (no bare payload) and is asserted separately below.
         let variants: [SzConfigError; 11] = [
             SzConfigError::JsonParse("p".into()),
             SzConfigError::NotFound("p".into()),
@@ -413,6 +568,67 @@ mod tests {
                 .to_string(),
             "Feature/element already exists for call"
         );
+    }
+
+    #[test]
+    fn test_validation_errors_accessor_and_display_join() {
+        let err = SzConfigError::ValidationErrors(vec![
+            ValidationFailure::new(
+                "behavior",
+                ValidationReason::UnknownReferenceCode,
+                Some("BOGUS".into()),
+            ),
+            ValidationFailure::new(
+                "sendToRedo",
+                ValidationReason::OutOfDomain,
+                Some("perhaps".into()),
+            ),
+        ]);
+
+        // validation_failures() recovers the structured DATA in canonical order.
+        let failures = err.validation_failures().expect("is ValidationErrors");
+        assert_eq!(failures.len(), 2);
+        assert_eq!(failures[0].field, "behavior");
+        assert_eq!(
+            failures[0].reason_code,
+            ValidationReason::UnknownReferenceCode
+        );
+        assert_eq!(failures[0].offending_value.as_deref(), Some("BOGUS"));
+        assert_eq!(failures[1].field, "sendToRedo");
+        assert_eq!(failures[1].reason_code, ValidationReason::OutOfDomain);
+
+        // Display re-creates a "; "-joined summary (wording is non-contract).
+        let text = err.to_string();
+        assert!(
+            text.contains("behavior UNKNOWN_REFERENCE_CODE 'BOGUS'"),
+            "{text}"
+        );
+        assert!(text.contains("; "), "failures should be joined: {text}");
+        assert!(
+            text.contains("sendToRedo OUT_OF_DOMAIN 'perhaps'"),
+            "{text}"
+        );
+
+        // message() is a fixed summary; other variants return None from the accessor.
+        assert_eq!(err.message(), "one or more validation failures");
+        assert!(
+            SzConfigError::not_found("x")
+                .validation_failures()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn test_validation_reason_as_str_stable() {
+        assert_eq!(ValidationReason::Missing.as_str(), "MISSING");
+        assert_eq!(ValidationReason::WrongType.as_str(), "WRONG_TYPE");
+        assert_eq!(ValidationReason::OutOfDomain.as_str(), "OUT_OF_DOMAIN");
+        assert_eq!(
+            ValidationReason::UnknownReferenceCode.as_str(),
+            "UNKNOWN_REFERENCE_CODE"
+        );
+        assert_eq!(ValidationReason::NotFound.as_str(), "NOT_FOUND");
+        assert_eq!(ValidationReason::Duplicate.as_str(), "DUPLICATE");
     }
 
     #[test]

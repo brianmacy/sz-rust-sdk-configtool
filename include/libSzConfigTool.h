@@ -52,6 +52,34 @@ const char *SzConfigTool_getLastError(void);
 int64_t SzConfigTool_getLastErrorCode(void);
 
 /**
+ * Get the last error's stable reason code (e.g. "VALIDATION_ERRORS").
+ *
+ * Callers should discriminate the error KIND on this string FIRST, and only
+ * fetch structured details (below) when it is "VALIDATION_ERRORS".
+ *
+ * # Returns
+ * Pointer to the reason-code string (do not free), or null if there is no
+ * error or no classified reason.
+ */
+const char *SzConfigTool_getLastErrorReasonCode(void);
+
+/**
+ * Get versioned, namespaced JSON details for the last error.
+ *
+ * Populated only when the last error is a validation-errors aggregate (reason
+ * code "VALIDATION_ERRORS"); null otherwise. Payload shape:
+ *   {"schema":"sz-configtool.validation-errors/v1",
+ *    "failures":[{"field":...,"reasonCode":...,"offendingValue":...}]}
+ * The "schema" string is the stability contract: a future field addition bumps
+ * it to /v2 rather than silently breaking the parse.
+ *
+ * # Returns
+ * Pointer to the JSON string (do not free), or null if the last error carries
+ * no structured details.
+ */
+const char *SzConfigTool_getLastErrorDetails(void);
+
+/**
  * Clear the last error
  */
 void SzConfigTool_clearLastError(void);
@@ -472,6 +500,17 @@ struct SzConfigTool_result SzConfigTool_addGenericThreshold(
     const char *behavior,
     int64_t scoring_cap,
     int64_t candidate_cap,
+    const char *send_to_redo,
+    const char *feature  // NULL = "ALL"
+);
+// Validate a generic-threshold ADD without mutating the config. Returns the
+// staged check as versioned JSON (schema "sz-configtool.generic-threshold-check/v1")
+// in `response` with returnCode 0; returnCode is negative only for a
+// boundary/internal error (null/invalid-UTF-8 argument or unparseable config).
+struct SzConfigTool_result SzConfigTool_validateGenericThreshold(
+    const char *config_json,
+    const char *plan,
+    const char *behavior,
     const char *send_to_redo,
     const char *feature  // NULL = "ALL"
 );

@@ -929,13 +929,33 @@ fn resolve_call_id_for_feature(
         .filter_map(|row| row.get(id_field).and_then(|v| v.as_i64()))
         .collect();
 
+    // Reverse-map ftype_id -> FTYPE_CODE for human-facing messages (#61), so the
+    // error names the feature ("feature NAME") instead of leaking the internal
+    // numeric id. The "feature id {ftype_id}" fallback is defensive: real callers
+    // derive `ftype_id` from a prior successful feature lookup, so a matching
+    // CFG_FTYPE row normally exists — it only fires for a config that lacks the
+    // matching row (e.g. a partial or synthetic config).
+    let feature_label = config
+        .get("G2_CONFIG")
+        .and_then(|g| g.get("CFG_FTYPE"))
+        .and_then(|v| v.as_array())
+        .and_then(|ftypes| {
+            ftypes
+                .iter()
+                .find(|r| r.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ftype_id))
+        })
+        .and_then(|r| r.get("FTYPE_CODE"))
+        .and_then(|v| v.as_str())
+        .map(|code| format!("feature {code}"))
+        .unwrap_or_else(|| format!("feature id {ftype_id}"));
+
     match matches.as_slice() {
         [] => Err(SzConfigError::NotFound(format!(
-            "No {label} call found for feature id {ftype_id}"
+            "No {label} call found for {feature_label}"
         ))),
         [id] => Ok(*id),
         many => Err(SzConfigError::InvalidInput(format!(
-            "Ambiguous {label} call for feature id {ftype_id}: {} calls match; address the call by id instead",
+            "Ambiguous {label} call for {feature_label}: {} calls match; address the call by id instead",
             many.len()
         ))),
     }
@@ -1110,6 +1130,58 @@ mod tests {
         let err = resolve_sfcall_id_for_feature(&cfg, 1).unwrap_err();
         assert_eq!(err.kind(), SzConfigError::validation("").kind());
         assert!(err.to_string().contains("Ambiguous"));
+    }
+
+    #[test]
+    fn test_resolvers_zero_match_names_feature_code() {
+        // With a CFG_FTYPE row, the NotFound message names the FEATURE CODE
+        // (#61) rather than leaking the internal ftype_id.
+        let cfg = json!({"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 7, "FTYPE_CODE": "NAME"}],
+            "CFG_CFCALL": []
+        }});
+        let err = resolve_cfcall_id_for_feature(&cfg, 7).unwrap_err();
+        assert_eq!(err.kind(), SzConfigError::not_found("").kind());
+        assert!(
+            err.to_string().contains("feature NAME"),
+            "message should name the feature code: {err}"
+        );
+        assert!(
+            !err.to_string().contains("feature id"),
+            "message must not leak the numeric id: {err}"
+        );
+    }
+
+    #[test]
+    fn test_resolvers_ambiguous_names_feature_code() {
+        // Two standardize calls for the same feature -> ambiguous, message names
+        // the FEATURE CODE (#61).
+        let cfg = json!({"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 7, "FTYPE_CODE": "ADDRESS"}],
+            "CFG_SFCALL": [
+                {"SFCALL_ID": 1, "FTYPE_ID": 7, "SFUNC_ID": 1},
+                {"SFCALL_ID": 2, "FTYPE_ID": 7, "SFUNC_ID": 2}
+            ]
+        }});
+        let err = resolve_sfcall_id_for_feature(&cfg, 7).unwrap_err();
+        assert!(err.to_string().contains("feature ADDRESS"), "{err}");
+        assert!(err.to_string().contains("Ambiguous"), "{err}");
+    }
+
+    #[test]
+    fn test_resolvers_zero_match_falls_back_to_feature_id() {
+        // No CFG_FTYPE row matches the ftype_id -> the message falls back to the
+        // numeric id rather than a code. Defensive branch: real callers always
+        // have a matching row, so this only exercises the fallback formatting.
+        let cfg = json!({"G2_CONFIG": {
+            "CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "DOB"}],
+            "CFG_CFCALL": []
+        }});
+        let err = resolve_cfcall_id_for_feature(&cfg, 7).unwrap_err();
+        assert!(
+            err.to_string().contains("feature id 7"),
+            "unmatched ftype_id should fall back to the numeric id: {err}"
+        );
     }
 
     #[test]

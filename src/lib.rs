@@ -104,7 +104,7 @@ pub mod calls;
 pub mod functions;
 
 // Re-export commonly used types
-pub use error::{Result, SzConfigError, SzErrorKind};
+pub use error::{Result, SzConfigError, SzErrorKind, ValidationFailure, ValidationReason};
 
 // Re-export shared domain items so consumers can use them without the
 // fully-qualified module path.
@@ -124,6 +124,7 @@ pub use helpers::{
     resolve_sfcall_id_for_feature,
 };
 pub use settings::set_setting;
+pub use thresholds::{GenericThresholdCheck, GenericThresholdRef, validate_generic_threshold};
 pub use validation::validate_config;
 
 // C FFI module

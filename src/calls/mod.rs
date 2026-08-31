@@ -14,7 +14,7 @@
 //! # Execution-order policy
 //!
 //! Every add path that writes an `EXEC_ORDER` resolves it through one shared
-//! helper, [`crate::helpers::get_desired_or_next_order`], so the behaviour is
+//! helper, `crate::helpers::get_desired_or_next_order`, so the behaviour is
 //! uniform across the SDK. The three intents are:
 //!
 //! - **Auto-allocate** (`exec_order: None`): the next free order *within the

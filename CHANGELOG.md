@@ -5,6 +5,62 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-08-31
+
+Structured generic-threshold validation errors (#59, **breaking**) plus a cosmetic
+resolver-message fix (#61), coordinated with the downstream `sz_configtool` CLI. Verified
+against Python `sz_configtool` 4.4.0 (`validateGenericThreshold`, `do_addGenericThreshold`,
+`do_setGenericThreshold`, `lookupBehaviorCode`) and the stock Senzing v4 template.
+
+### Added
+
+- **`SzConfigError::ValidationErrors(Vec<ValidationFailure>)` / `SzErrorKind::ValidationErrors`
+  (`reason_code` `"VALIDATION_ERRORS"`) — structured, aggregated field validation (#59).**
+  Generic-threshold add/set no longer flatten field failures into a lossy `"; "`-joined
+  `InvalidInput` string. Instead every failure is carried as DATA in a `ValidationFailure`
+  (`field`, `reason_code`, `offending_value`), aggregated in canonical order
+  `[behavior, sendToRedo]`, so a consumer reproduces its own wording without sniffing prose.
+  - New public types `ValidationFailure` and `ValidationReason` (a `#[non_exhaustive]`,
+    DATA-only taxonomy: `Missing | WrongType | OutOfDomain | UnknownReferenceCode | NotFound |
+    Duplicate`; only `UnknownReferenceCode` for a non-canonical behaviour and `OutOfDomain` for
+    a `sendToRedo` outside `[Yes, No]` are emitted today). `SzConfigError::validation_failures()`
+    recovers the vector. `Display` re-creates a `"; "`-joined summary for logs/FFI (wording is
+    **not** contract).
+  - **`thresholds::validate_generic_threshold(...) -> Result<GenericThresholdCheck>`** — a
+    validate-only orchestration surface returning every staged outcome as `Ok(..)` DATA
+    (`NotFound { which: GenericThresholdRef, value }` fatal-first for plan/feature, `Duplicate`
+    warning-success, `Invalid(Vec<ValidationFailure>)`, `Ok`), mirroring Python's staging order
+    (plan → feature → duplicate → behaviour+`sendToRedo` aggregate). Reserves `Err` for genuine
+    internal errors (unparseable config).
+  - `add_generic_threshold` now returns `ValidationErrors` for behaviour/`sendToRedo` failures
+    (plan/feature stay `NotFound`; duplicate stays `AlreadyExists` on the direct-call path).
+    `set_generic_threshold` now validates `sendToRedo` **after** the row lookup (Python order: a
+    missing row wins over a bad `sendToRedo`) and aggregates it into `ValidationErrors` — a
+    behaviour change from the previous scalar `InvalidInput`. An unknown behaviour on SET remains
+    `NotFound` (behaviour is part of the lookup key, never re-validated as a reference code —
+    matching Python, whose merged-record behaviour is always canonical).
+  - Caps stay strictly typed `i64` at both the Rust (`optional_i64`) and FFI boundaries; a
+    non-numeric or boolean cap remains a scalar `InvalidInput("... must be an integer")` and is
+    **never** folded into `ValidationErrors` (bool-as-int rejection is a deliberate divergence
+    from Python — Ant 17/08/2026).
+  - **FFI:** new `SzConfigTool_getLastErrorReasonCode()` (discriminate the error kind at the C
+    boundary — match this first, only then fetch details) and `SzConfigTool_getLastErrorDetails()`
+    (versioned, namespaced JSON: `{"schema":"sz-configtool.validation-errors/v1","failures":[...]}`).
+    New `SzConfigTool_validateGenericThreshold(...)` returns the staged `GenericThresholdCheck` as
+    versioned JSON (`schema` `"sz-configtool.generic-threshold-check/v1"`). Every library error
+    now also populates the reason code across the boundary.
+  - **Breaking:** `SzConfigError` is not `#[non_exhaustive]`, so the new variant adds an arm to
+    exhaustive downstream matches (minor bump under 0.x semver).
+
+### Changed
+
+- **Resolver error messages name the feature CODE, not the internal `ftype_id` (#61).**
+  `resolve_call_id_for_feature` (comparison/distinct/standardize/expression) now reverse-maps
+  `FTYPE_ID` to `FTYPE_CODE` via `CFG_FTYPE`, emitting `"No comparison call found for feature NAME"`
+  / `"Ambiguous ... for feature NAME"`, falling back to `"feature id {n}"` only when no `CFG_FTYPE`
+  row matches. Non-breaking: the variant (`NotFound` / `InvalidInput`), `kind()`, and
+  `reason_code()` are unchanged; only the (non-contract) `Display` wording improves.
+
 ## [0.8.0] - 2026-08-25
 
 Resolves #58 from the CLI's v0.7.0 delete re-delegation. Verified against Python `sz_configtool`

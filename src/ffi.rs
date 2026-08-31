@@ -22,6 +22,16 @@ use crate::error::SzConfigError;
 // Thread-safe error storage
 static LAST_ERROR: Mutex<Option<String>> = Mutex::new(None);
 static LAST_ERROR_CODE: Mutex<i64> = Mutex::new(0);
+/// Stable `reason_code()` string of the last error (e.g. "VALIDATION_ERRORS"),
+/// so a C caller can discriminate the error KIND at the boundary — matching on
+/// this FIRST and only parsing structured details when it is "VALIDATION_ERRORS"
+/// — without string-sniffing the human message. Stored NUL-terminated so the
+/// borrowed pointer handed to C is a valid C string.
+static LAST_ERROR_REASON: Mutex<Option<CString>> = Mutex::new(None);
+/// Versioned, namespaced JSON details for the last error when it is a
+/// `ValidationErrors`, else `None`. See [`validation_details_json`]. Stored
+/// NUL-terminated for the same reason as [`LAST_ERROR_REASON`].
+static LAST_ERROR_DETAILS: Mutex<Option<CString>> = Mutex::new(None);
 
 /// Platform-specific export macro
 #[cfg(target_os = "windows")]
@@ -83,11 +93,47 @@ pub extern "C" fn SzConfigTool_getLastErrorCode() -> i64 {
     *LAST_ERROR_CODE.lock().unwrap()
 }
 
+/// Get the last error's stable reason code (e.g. "VALIDATION_ERRORS")
+///
+/// # Returns
+/// Pointer to the reason-code string (do not free), or null if no error / no
+/// classified reason. Callers discriminate on THIS before fetching details.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_getLastErrorReasonCode() -> *const c_char {
+    let reason = LAST_ERROR_REASON.lock().unwrap();
+    match reason.as_ref() {
+        Some(r) => r.as_ptr(),
+        None => std::ptr::null(),
+    }
+}
+
+/// Get versioned, namespaced JSON details for the last error.
+///
+/// Populated only when the last error is a `ValidationErrors` (reason code
+/// "VALIDATION_ERRORS"); returns null otherwise. The payload is:
+/// `{"schema":"sz-configtool.validation-errors/v1","failures":[{"field":...,
+/// "reasonCode":...,"offendingValue":...}]}`. The `schema` string is the FFI
+/// stability contract — a future field addition bumps it to /v2.
+///
+/// # Returns
+/// Pointer to the JSON string (do not free), or null if the last error carries
+/// no structured details.
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_getLastErrorDetails() -> *const c_char {
+    let details = LAST_ERROR_DETAILS.lock().unwrap();
+    match details.as_ref() {
+        Some(d) => d.as_ptr(),
+        None => std::ptr::null(),
+    }
+}
+
 /// Clear the last error
 #[unsafe(no_mangle)]
 pub extern "C" fn SzConfigTool_clearLastError() {
     *LAST_ERROR.lock().unwrap() = None;
     *LAST_ERROR_CODE.lock().unwrap() = 0;
+    *LAST_ERROR_REASON.lock().unwrap() = None;
+    *LAST_ERROR_DETAILS.lock().unwrap() = None;
 }
 
 // ============================================================================
@@ -114,7 +160,7 @@ macro_rules! handle_result {
                 }
             }
             Err(e) => {
-                set_error(format!("{}", e), -2);
+                set_error_from(&e);
                 SzConfigTool_result {
                     response: std::ptr::null_mut(),
                     returnCode: -2,
@@ -127,11 +173,53 @@ macro_rules! handle_result {
 fn set_error(msg: String, code: i64) {
     *LAST_ERROR.lock().unwrap() = Some(msg);
     *LAST_ERROR_CODE.lock().unwrap() = code;
+    // Scalar/boundary errors (null pointer, bad UTF-8) carry no classified
+    // reason or structured details.
+    *LAST_ERROR_REASON.lock().unwrap() = None;
+    *LAST_ERROR_DETAILS.lock().unwrap() = None;
+}
+
+/// Record a library `SzConfigError`: the flattened `Display` message (code -2,
+/// unchanged), plus its stable `reason_code()` for boundary discrimination and,
+/// when it is a `ValidationErrors`, the versioned structured details JSON.
+fn set_error_from(e: &SzConfigError) {
+    *LAST_ERROR.lock().unwrap() = Some(e.to_string());
+    *LAST_ERROR_CODE.lock().unwrap() = -2;
+    // Store NUL-terminated so the borrowed pointers handed to C are valid C
+    // strings. reason_code() is a fixed SCREAMING_SNAKE literal and the details
+    // JSON never contains an interior NUL, so CString::new cannot fail here.
+    *LAST_ERROR_REASON.lock().unwrap() = CString::new(e.reason_code()).ok();
+    *LAST_ERROR_DETAILS.lock().unwrap() = e
+        .validation_failures()
+        .map(validation_details_json)
+        .and_then(|json| CString::new(json).ok());
+}
+
+/// Build the versioned, namespaced JSON details payload for a set of
+/// validation failures (see [`SzConfigTool_getLastErrorDetails`]).
+fn validation_details_json(failures: &[crate::error::ValidationFailure]) -> String {
+    let arr: Vec<serde_json::Value> = failures
+        .iter()
+        .map(|f| {
+            serde_json::json!({
+                "field": f.field,
+                "reasonCode": f.reason_code.as_str(),
+                "offendingValue": f.offending_value,
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "schema": "sz-configtool.validation-errors/v1",
+        "failures": arr,
+    })
+    .to_string()
 }
 
 fn clear_error() {
     *LAST_ERROR.lock().unwrap() = None;
     *LAST_ERROR_CODE.lock().unwrap() = 0;
+    *LAST_ERROR_REASON.lock().unwrap() = None;
+    *LAST_ERROR_DETAILS.lock().unwrap() = None;
 }
 
 // ============================================================================
@@ -4699,6 +4787,114 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
             feature: feature_opt,
         },
     ))
+}
+
+/// Render a [`GenericThresholdCheck`](crate::thresholds::GenericThresholdCheck)
+/// as a versioned, namespaced JSON payload for the C boundary.
+fn generic_threshold_check_json(check: &crate::thresholds::GenericThresholdCheck) -> String {
+    use crate::thresholds::{GenericThresholdCheck, GenericThresholdRef};
+    let body = match check {
+        GenericThresholdCheck::Ok => serde_json::json!({"result": "ok"}),
+        GenericThresholdCheck::Duplicate => serde_json::json!({"result": "duplicate"}),
+        GenericThresholdCheck::NotFound { which, value } => {
+            let which_str = match which {
+                GenericThresholdRef::Plan => "plan",
+                GenericThresholdRef::Feature => "feature",
+            };
+            serde_json::json!({"result": "notFound", "which": which_str, "value": value})
+        }
+        GenericThresholdCheck::Invalid(failures) => {
+            let arr: Vec<serde_json::Value> = failures
+                .iter()
+                .map(|f| {
+                    serde_json::json!({
+                        "field": f.field,
+                        "reasonCode": f.reason_code.as_str(),
+                        "offendingValue": f.offending_value,
+                    })
+                })
+                .collect();
+            serde_json::json!({"result": "invalid", "failures": arr})
+        }
+    };
+    let mut obj = serde_json::json!({"schema": "sz-configtool.generic-threshold-check/v1"});
+    if let (Some(dst), Some(src)) = (obj.as_object_mut(), body.as_object()) {
+        for (k, v) in src {
+            dst.insert(k.clone(), v.clone());
+        }
+    }
+    obj.to_string()
+}
+
+/// Validate a generic-threshold ADD without mutating the config.
+///
+/// Returns the staged [`GenericThresholdCheck`](crate::thresholds::GenericThresholdCheck)
+/// as a versioned JSON payload (`schema` = "sz-configtool.generic-threshold-check/v1")
+/// in `response` with `returnCode` 0. `returnCode` is negative only for a
+/// boundary/internal error (null/invalid-UTF-8 argument or unparseable config).
+#[unsafe(no_mangle)]
+pub extern "C" fn SzConfigTool_validateGenericThreshold(
+    config_json: *const c_char,
+    plan: *const c_char,
+    behavior: *const c_char,
+    send_to_redo: *const c_char,
+    feature: *const c_char, // Null = "ALL"
+) -> SzConfigTool_result {
+    macro_rules! required_str {
+        ($ptr:expr, $name:expr) => {
+            unsafe {
+                if $ptr.is_null() {
+                    set_error(format!("{} is null", $name), -1);
+                    return SzConfigTool_result {
+                        response: std::ptr::null_mut(),
+                        returnCode: -1,
+                    };
+                }
+                match CStr::from_ptr($ptr).to_str() {
+                    Ok(s) => s,
+                    Err(e) => {
+                        set_error(format!("Invalid UTF-8 in {}: {e}", $name), -2);
+                        return SzConfigTool_result {
+                            response: std::ptr::null_mut(),
+                            returnCode: -2,
+                        };
+                    }
+                }
+            }
+        };
+    }
+
+    let config = required_str!(config_json, "config_json");
+    let plan_str = required_str!(plan, "plan");
+    let behavior_str = required_str!(behavior, "behavior");
+    let redo_str = required_str!(send_to_redo, "send_to_redo");
+    let feature_opt = if feature.is_null() {
+        None
+    } else {
+        unsafe {
+            match CStr::from_ptr(feature).to_str() {
+                Ok(s) => Some(s),
+                Err(e) => {
+                    set_error(format!("Invalid UTF-8 in feature: {e}"), -2);
+                    return SzConfigTool_result {
+                        response: std::ptr::null_mut(),
+                        returnCode: -2,
+                    };
+                }
+            }
+        }
+    };
+
+    handle_result!(
+        crate::thresholds::validate_generic_threshold(
+            config,
+            plan_str,
+            behavior_str,
+            redo_str,
+            feature_opt,
+        )
+        .map(|check| generic_threshold_check_json(&check))
+    )
 }
 
 /// Delete a generic threshold

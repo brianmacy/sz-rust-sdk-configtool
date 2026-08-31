@@ -1,4 +1,4 @@
-use crate::error::{Result, SzConfigError};
+use crate::error::{Result, SzConfigError, ValidationFailure, ValidationReason};
 use crate::helpers;
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -814,6 +814,178 @@ pub fn list_comparison_thresholds(config_json: &str) -> Result<Vec<Value>> {
 
 // ===== Generic Thresholds (CFG_GENERIC_THRESHOLD) =====
 
+/// Which reference lookup failed while staging a generic-threshold validation.
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GenericThresholdRef {
+    /// The generic plan (`CFG_GPLAN`) was not found.
+    Plan,
+    /// The feature (`CFG_FTYPE`) was not found.
+    Feature,
+}
+
+/// The staged outcome of [`validate_generic_threshold`] for the ADD path.
+///
+/// Every variant is returned as `Ok(..)` DATA — only a genuinely internal error
+/// (e.g. unparseable config JSON) is an `Err`. This mirrors Python
+/// `do_addGenericThreshold`'s staging order: a fatal-first plan lookup, then a
+/// fatal-first feature lookup, then a warning-success duplicate check, and only
+/// then the aggregated behaviour + `sendToRedo` field validation.
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GenericThresholdCheck {
+    /// A plan or feature reference was not found (fatal-first): the command must
+    /// stop here (Python emits only "Plan/Feature X not found" and never runs
+    /// the field validator).
+    NotFound {
+        /// Which reference lookup failed.
+        which: GenericThresholdRef,
+        /// The (upper-cased) code that was not found.
+        value: String,
+    },
+    /// The `(plan, behavior, feature)` tuple already exists. Python treats this
+    /// as a warning and the command still *succeeds* (a no-op add), so this is
+    /// deliberately NOT an error.
+    Duplicate,
+    /// One or more of the aggregated fields (`behavior`, `sendToRedo`) failed
+    /// validation, in canonical order `[behavior, sendToRedo]`.
+    Invalid(Vec<ValidationFailure>),
+    /// All checks passed; the add would succeed.
+    Ok,
+}
+
+/// Build the aggregated behaviour + `sendToRedo` validation failures for a
+/// generic-threshold ADD, in canonical order `[behavior, sendToRedo]`.
+///
+/// Shared by [`validate_generic_threshold`] and [`add_generic_threshold`] so the
+/// two never drift. Mirrors Python `validateGenericThreshold`'s two SDK-relevant
+/// checks (the two cap checks are enforced strictly upstream as scalar
+/// [`SzConfigError::InvalidInput`], never folded in here):
+///
+///   1. `behavior_upper` must be one of the canonical behaviour codes
+///      (`behavior_domain::behavior_position`, the exact set Python's
+///      `lookupBehaviorCode` checks) -> `UnknownReferenceCode`.
+///   2. `send_to_redo` must canonicalise to `"Yes"`/`"No"` -> `OutOfDomain`.
+///
+/// `behavior_upper` must already be upper-cased by the caller; its verbatim
+/// (upper-cased) value is echoed as the offending value.
+fn collect_generic_threshold_failures(
+    behavior_upper: &str,
+    send_to_redo: &str,
+) -> Vec<ValidationFailure> {
+    let mut failures = Vec::new();
+    if crate::behavior_domain::behavior_position(behavior_upper).is_none() {
+        failures.push(ValidationFailure::new(
+            "behavior",
+            ValidationReason::UnknownReferenceCode,
+            Some(behavior_upper.to_string()),
+        ));
+    }
+    if send_to_redo_canonical(send_to_redo).is_err() {
+        failures.push(ValidationFailure::new(
+            "sendToRedo",
+            ValidationReason::OutOfDomain,
+            Some(send_to_redo.to_string()),
+        ));
+    }
+    failures
+}
+
+/// Validate a generic-threshold ADD without mutating the config.
+///
+/// This is the CLI's orchestration surface: it stages the checks in Python
+/// `do_addGenericThreshold` order and returns every staged outcome as
+/// [`GenericThresholdCheck`] DATA (`Ok(..)`), reserving `Err` for genuinely
+/// internal failures (e.g. unparseable config JSON):
+///
+/// 1. **plan lookup** (fatal-first) -> [`GenericThresholdCheck::NotFound`]
+///    with [`GenericThresholdRef::Plan`].
+/// 2. **feature lookup** (fatal-first, unless the feature is absent or `"all"`)
+///    -> [`GenericThresholdCheck::NotFound`] with [`GenericThresholdRef::Feature`].
+/// 3. **duplicate** `(plan, behavior, feature)` -> [`GenericThresholdCheck::Duplicate`]
+///    (warning-success; the command still succeeds as a no-op).
+/// 4. **field aggregate** (`behavior` + `sendToRedo`) -> [`GenericThresholdCheck::Invalid`],
+///    else [`GenericThresholdCheck::Ok`].
+///
+/// Caps are deliberately not taken here: they are typed `i64` at the API/FFI
+/// boundary and rejected strictly upstream, so they never reach this staging.
+pub fn validate_generic_threshold(
+    config_json: &str,
+    plan: &str,
+    behavior: &str,
+    send_to_redo: &str,
+    feature: Option<&str>,
+) -> Result<GenericThresholdCheck> {
+    let config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
+    let plan_upper = plan.to_uppercase();
+    let behavior_upper = behavior.to_uppercase();
+    let feature_upper = feature.unwrap_or("ALL").to_uppercase();
+
+    // Stage 1: plan lookup (fatal-first).
+    let gplan_id = match config["G2_CONFIG"]["CFG_GPLAN"]
+        .as_array()
+        .and_then(|rows| {
+            rows.iter()
+                .find(|p| p["GPLAN_CODE"].as_str() == Some(plan_upper.as_str()))
+        })
+        .and_then(|p| p["GPLAN_ID"].as_i64())
+    {
+        Some(id) => id,
+        None => {
+            return Ok(GenericThresholdCheck::NotFound {
+                which: GenericThresholdRef::Plan,
+                value: plan_upper,
+            });
+        }
+    };
+
+    // Stage 2: feature lookup (fatal-first); "ALL" is the 0 sentinel.
+    let ftype_id = if feature_upper == "ALL" {
+        0
+    } else {
+        match config["G2_CONFIG"]["CFG_FTYPE"]
+            .as_array()
+            .and_then(|rows| {
+                rows.iter()
+                    .find(|f| f["FTYPE_CODE"].as_str() == Some(feature_upper.as_str()))
+                    .and_then(|f| f["FTYPE_ID"].as_i64())
+            }) {
+            Some(id) => id,
+            None => {
+                return Ok(GenericThresholdCheck::NotFound {
+                    which: GenericThresholdRef::Feature,
+                    value: feature_upper,
+                });
+            }
+        }
+    };
+
+    // Stage 3: duplicate (warning-success).
+    let is_duplicate = config["G2_CONFIG"]["CFG_GENERIC_THRESHOLD"]
+        .as_array()
+        .map(|rows| {
+            rows.iter().any(|record| {
+                record["GPLAN_ID"].as_i64() == Some(gplan_id)
+                    && record["BEHAVIOR"].as_str() == Some(behavior_upper.as_str())
+                    && record["FTYPE_ID"].as_i64() == Some(ftype_id)
+            })
+        })
+        .unwrap_or(false);
+    if is_duplicate {
+        return Ok(GenericThresholdCheck::Duplicate);
+    }
+
+    // Stage 4: aggregated field validation (behavior + sendToRedo).
+    let failures = collect_generic_threshold_failures(&behavior_upper, send_to_redo);
+    if failures.is_empty() {
+        Ok(GenericThresholdCheck::Ok)
+    } else {
+        Ok(GenericThresholdCheck::Invalid(failures))
+    }
+}
+
 /// Add a new generic threshold (CFG_GENERIC_THRESHOLD record)
 ///
 /// # Arguments
@@ -822,6 +994,14 @@ pub fn list_comparison_thresholds(config_json: &str) -> Result<Vec<Value>> {
 ///
 /// # Returns
 /// Modified configuration JSON string
+///
+/// # Duplicates
+/// A duplicate `(plan, behavior, feature)` tuple is rejected here with
+/// [`SzConfigError::AlreadyExists`]. This differs from Python's
+/// `do_addGenericThreshold`, which treats a duplicate as a warning and succeeds
+/// without writing. Callers wanting that Python-parity behaviour should call
+/// [`validate_generic_threshold`] first and skip the add when it returns
+/// [`GenericThresholdCheck::Duplicate`].
 pub fn add_generic_threshold(
     config_json: &str,
     params: AddGenericThresholdParams,
@@ -904,39 +1084,23 @@ pub fn add_generic_threshold(
         )));
     }
 
-    // Collect-all validity block, mirroring Python `validateGenericThreshold`
+    // Aggregated validity block, mirroring Python `validateGenericThreshold`
     // (which appends every failure to one `errorList` and reports them together
-    // AFTER the plan/feature/duplicate checks). Two things are validated here:
-    //
-    //   1. BEHAVIOR must be one of the canonical 17 codes. We use
-    //      `behavior_domain::behavior_position` (backed by `BEHAVIOR_CODES`),
-    //      the EXACT set Python's `lookupBehaviorCode` checks against — NOT the
-    //      broader `parse_behavior_code`, which also accepts variants that are
-    //      not valid generic-threshold behaviours.
-    //   2. SEND_TO_REDO must canonicalise to "Yes"/"No" via
-    //      `send_to_redo_canonical`.
-    //
-    // The caps are already `i64` (typed at the API/FFI boundary via
+    // AFTER the plan/feature/duplicate checks). The two SDK-relevant checks —
+    // BEHAVIOR against the canonical domain and SEND_TO_REDO against [Yes, No] —
+    // are built by the shared `collect_generic_threshold_failures` so this
+    // producer and `validate_generic_threshold` never drift. Each failure is
+    // carried as structured DATA in `SzConfigError::ValidationErrors`
+    // (canonical order [behavior, sendToRedo]) rather than a lossy joined
+    // string. The caps are already `i64` (typed at the API/FFI boundary via
     // `optional_i64`), so Python's `isinstance(int)` cap checks are enforced
     // upstream and need no runtime check here.
-    let mut validity_errors: Vec<String> = Vec::new();
-    if crate::behavior_domain::behavior_position(&behavior_upper).is_none() {
-        validity_errors.push(format!(
-            "Invalid behavior code '{behavior_upper}'. Valid codes: {}",
-            crate::behavior_domain::BEHAVIOR_CODES.join(", ")
-        ));
+    let failures = collect_generic_threshold_failures(&behavior_upper, send_to_redo);
+    if !failures.is_empty() {
+        return Err(SzConfigError::ValidationErrors(failures));
     }
-    let redo_canonical = match send_to_redo_canonical(send_to_redo) {
-        Ok(v) => Some(v),
-        Err(e) => {
-            validity_errors.push(e.to_string());
-            None
-        }
-    };
-    if !validity_errors.is_empty() {
-        return Err(SzConfigError::InvalidInput(validity_errors.join("; ")));
-    }
-    let redo_canonical = redo_canonical.expect("no validity errors implies redo canonicalised");
+    let redo_canonical = send_to_redo_canonical(send_to_redo)
+        .expect("no validity errors implies redo canonicalised");
 
     // Build a complete row via GenericThresholdRow so every
     // CFG_GENERIC_THRESHOLD key is present.
@@ -1049,13 +1213,6 @@ pub fn set_generic_threshold(
     // never a value to write. Defaults to the all-features (0) sentinel.
     let ftype_id = resolve_ftype_id_or_all(config_json, params.feature.unwrap_or("ALL"))?;
 
-    // Canonicalise sendToRedo up front so an invalid value is rejected before
-    // any mutation (case-insensitive validation, title-case storage).
-    let redo_canonical = match params.send_to_redo {
-        Some(v) => Some(send_to_redo_canonical(v)?),
-        None => None,
-    };
-
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
@@ -1066,10 +1223,16 @@ pub fn set_generic_threshold(
         .ok_or_else(|| SzConfigError::MissingSection("CFG_GENERIC_THRESHOLD".to_string()))?;
 
     // Match on the FULL triple (GPLAN_ID, BEHAVIOR, FTYPE_ID) so per-feature
-    // rows that share a (plan, behaviour) are distinguished by feature.
-    let gthresh = gthresh_array
-        .iter_mut()
-        .find(|item| {
+    // rows that share a (plan, behaviour) are distinguished by feature. BEHAVIOR
+    // is part of this lookup KEY, so an unknown/non-canonical behaviour surfaces
+    // here as NotFound (row absent) — it is NOT re-validated as a reference
+    // code. This mirrors Python `do_setGenericThreshold`, which looks the row up
+    // by (plan, behavior, feature) BEFORE running `validateGenericThreshold` on
+    // the merged record (whose BEHAVIOR is copied from the found row and is
+    // therefore always canonical). Only `sendToRedo` is genuinely re-validated.
+    let idx = gthresh_array
+        .iter()
+        .position(|item| {
             item["GPLAN_ID"].as_i64() == Some(gplan_id)
                 && item["BEHAVIOR"].as_str() == Some(behavior_upper.as_str())
                 && item["FTYPE_ID"].as_i64() == Some(ftype_id)
@@ -1079,6 +1242,28 @@ pub fn set_generic_threshold(
                 "Generic threshold not found: GPLAN_ID={gplan_id}, BEHAVIOR={behavior_upper}, FTYPE_ID={ftype_id}"
             ))
         })?;
+
+    // Validate sendToRedo AFTER the row lookup (Python ordering: a missing row
+    // wins over a bad sendToRedo). A bad value aggregates into ValidationErrors
+    // — one uniform structured surface across ADD and SET for the CLI — rather
+    // than the old scalar InvalidInput.
+    let redo_canonical = match params.send_to_redo {
+        Some(v) => match send_to_redo_canonical(v) {
+            Ok(canonical) => Some(canonical),
+            Err(_) => {
+                return Err(SzConfigError::ValidationErrors(vec![
+                    ValidationFailure::new(
+                        "sendToRedo",
+                        ValidationReason::OutOfDomain,
+                        Some(v.to_string()),
+                    ),
+                ]));
+            }
+        },
+        None => None,
+    };
+
+    let gthresh = &mut gthresh_array[idx];
 
     // In-place update of a complete existing row; all keys preserved.
     // FTYPE_ID is a lookup key and must never be overwritten here.
@@ -1419,7 +1604,14 @@ mod tests {
 
         let params = AddGenericThresholdParams::new("INGEST", "NAME", 20, 10, "maybe");
         let err = add_generic_threshold(config, params).unwrap_err();
-        assert_eq!(err.kind(), crate::error::SzErrorKind::InvalidInput);
+        assert_eq!(err.kind(), crate::error::SzErrorKind::ValidationErrors);
+        let failures = err.validation_failures().unwrap();
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].field, "sendToRedo");
+        assert_eq!(
+            failures[0].reason_code,
+            crate::error::ValidationReason::OutOfDomain
+        );
     }
 
     /// Rows sharing (GPLAN_ID, BEHAVIOR) but differing by FTYPE_ID must be
@@ -1511,7 +1703,10 @@ mod tests {
             send_to_redo: Some("nope"),
         };
         let err = set_generic_threshold(config, params).unwrap_err();
-        assert_eq!(err.kind(), crate::error::SzErrorKind::InvalidInput);
+        assert_eq!(err.kind(), crate::error::SzErrorKind::ValidationErrors);
+        let failures = err.validation_failures().unwrap();
+        assert_eq!(failures.len(), 1);
+        assert_eq!(failures[0].field, "sendToRedo");
     }
 
     /// delete_comparison_threshold must match the full 3-key identity and leave
