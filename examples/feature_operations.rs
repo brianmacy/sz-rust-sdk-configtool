@@ -12,6 +12,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Start with config that has some elements
     let mut config = r#"{
   "G2_CONFIG": {
+    "CFG_FBOM": [],
     "CFG_FELEM": [
       {
         "FELEM_ID": 1,

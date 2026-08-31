@@ -649,7 +649,7 @@ pub fn set_feature_element_derived(
 /// Resolves the feature and element codes to their ids, rejects a duplicate
 /// `(FTYPE_ID, FELEM_ID)` mapping with `AlreadyExists`, allocates a fresh
 /// `EXEC_ORDER` from the whole CFG_FBOM table, and writes a complete
-/// [`FbomRow`](crate::config_rows) (every key present). `DISPLAY_LEVEL` and
+/// `FbomRow` (internal `config_rows` module; every key present). `DISPLAY_LEVEL` and
 /// `DERIVED` are checked with the canonical validators (D25).
 ///
 /// # Arguments

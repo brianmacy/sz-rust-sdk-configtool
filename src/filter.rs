@@ -130,7 +130,7 @@ fn python_repr_str(s: &str) -> String {
 /// Render a JSON value the way CPython's `repr` renders the equivalent object.
 ///
 /// `null`/`true`/`false` become `None`/`True`/`False`; strings are
-/// single-quoted (see [`python_repr_str`]); containers use `", "`/`": "`
+/// single-quoted (see the internal `python_repr_str` helper); containers use `", "`/`": "`
 /// spacing. Nesting is handled recursively.
 ///
 /// # Example
@@ -192,7 +192,7 @@ fn python_str_string(value: &Value) -> String {
 /// `do_listComparisonThresholds` filters against.
 ///
 /// For an object, its **values** (keys dropped) are each rendered via Python
-/// `str()` semantics (see [`python_str_string`]) and joined with a single space,
+/// `str()` semantics (see the internal `python_str_string` helper) and joined with a single space,
 /// reproducing `" ".join(str(v) for v in record.values())`. Any non-object value
 /// renders as a single `str()`-rendered value.
 ///
