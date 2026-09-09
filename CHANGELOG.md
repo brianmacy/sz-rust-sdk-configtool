@@ -21,9 +21,9 @@ JSON itself. Exercised against the stock Senzing v4 template.
   - `add_search_profile(config_json, AddSearchProfileParams) -> Result<String>` — resolves the
     generic plan and each feature, builds the mini-format, allocates `SPROFILE_ID`, and appends a
     complete row. **Creates the `CFG_SPROFILE` section if absent** (unlike `add_data_source`).
-    `AddSearchProfileParams` (with `TryFrom<&Value>` for the FFI/CLI boundary) takes the profile
-    code, generic-plan code, `candidates` (`Normal`/`Off`, default `Normal`), optional
-    description, and `elements: Vec<(feature_code, "Yes"|"No")>`.
+    `AddSearchProfileParams` (constructed via builder methods) takes the profile code,
+    generic-plan code, `candidates` (`Normal`/`Off`, default `Normal`), optional description, and
+    `elements: Vec<(feature_code, "Yes"|"No")>`.
   - `get_search_profile(config_json, code) -> Result<Value>` — raw row, case-insensitive,
     `NotFound` (including when the optional section is absent).
   - `list_search_profiles(config_json, filter: Option<&str>) -> Result<Vec<Value>>` — display

@@ -121,47 +121,11 @@ impl<'a> AddSearchProfileParams<'a> {
     }
 }
 
-impl<'a> TryFrom<&'a Value> for AddSearchProfileParams<'a> {
-    type Error = SzConfigError;
-
-    /// Marshal params from a JSON object (FFI/CLI boundary).
-    ///
-    /// Reads: `code` (required), `genericPlan` (required), `candidates`
-    /// (optional), `description` (optional), and `elements` (optional array of
-    /// objects `{"feature": <code>, "flag": "Yes"|"No"}`).
-    fn try_from(json: &'a Value) -> Result<Self> {
-        let code = json
-            .get("code")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| SzConfigError::MissingField("code".to_string()))?;
-        let generic_plan = json
-            .get("genericPlan")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| SzConfigError::MissingField("genericPlan".to_string()))?;
-
-        let elements = json
-            .get("elements")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|e| {
-                        let feature = e.get("feature").and_then(|v| v.as_str())?;
-                        let flag = e.get("flag").and_then(|v| v.as_str())?;
-                        Some((feature, flag))
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .unwrap_or_default();
-
-        Ok(Self {
-            code,
-            generic_plan,
-            candidates: json.get("candidates").and_then(|v| v.as_str()),
-            description: json.get("description").and_then(|v| v.as_str()),
-            elements,
-        })
-    }
-}
+// Note: no `TryFrom<&Value>` marshaller is provided. Every current consumer
+// (the CLI) builds `AddSearchProfileParams` via the builder methods above.
+// A JSON marshaller is intentionally deferred until a real FFI wrapper needs
+// one, so its key vocabulary can be aligned to the confirmed command schema and
+// tested against that consumer rather than guessed at here.
 
 // ============================================================================
 // Public API
@@ -754,30 +718,5 @@ mod tests {
     fn list_empty_when_section_absent() {
         let no_section = json!({"G2_CONFIG": {}}).to_string();
         assert!(list_search_profiles(&no_section, None).unwrap().is_empty());
-    }
-
-    #[test]
-    fn try_from_json_marshals_all_fields() {
-        let j = json!({
-            "code": "EMB",
-            "genericPlan": "SEARCH",
-            "candidates": "Off",
-            "description": "d",
-            "elements": [{"feature": "NAME", "flag": "Yes"}]
-        });
-        let params = AddSearchProfileParams::try_from(&j).unwrap();
-        assert_eq!(params.code, "EMB");
-        assert_eq!(params.generic_plan, "SEARCH");
-        assert_eq!(params.candidates, Some("Off"));
-        assert_eq!(params.elements, vec![("NAME", "Yes")]);
-    }
-
-    #[test]
-    fn try_from_json_missing_required_is_missing_field() {
-        let j = json!({ "genericPlan": "SEARCH" });
-        assert_eq!(
-            AddSearchProfileParams::try_from(&j).unwrap_err().kind(),
-            SzErrorKind::MissingField
-        );
     }
 }
