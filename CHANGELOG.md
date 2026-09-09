@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-09-09
+
+Greenfield `CFG_SPROFILE` (search profile) support (#63), modelled on `CFG_DSRC`, coordinated
+with the downstream `sz_configtool` CLI (new `addSearchProfile` / `listSearchProfiles` commands).
+The CLI delegates all `CFG_SPROFILE` reads and writes to this library; it never mutates config
+JSON itself. Exercised against the stock Senzing v4 template.
+
+### Added
+
+- **New module `search_profiles` with three public functions (#63).** Code-based API: callers
+  pass `SPROFILE_CODE`, `GPLAN_CODE`, and feature `FTYPE_CODE`s; the library resolves them to the
+  numeric ids stored on disk and owns the `FTYPE_OVERRIDES` mini-format
+  (`"[]"` / `"[{<ftypeId>,<Y|N>},...]"`, ascending by id).
+  - `add_search_profile(config_json, AddSearchProfileParams) -> Result<String>` — resolves the
+    generic plan and each feature, builds the mini-format, allocates `SPROFILE_ID`, and appends a
+    complete row. **Creates the `CFG_SPROFILE` section if absent** (unlike `add_data_source`).
+    `AddSearchProfileParams` (with `TryFrom<&Value>` for the FFI/CLI boundary) takes the profile
+    code, generic-plan code, `candidates` (`Normal`/`Off`, default `Normal`), optional
+    description, and `elements: Vec<(feature_code, "Yes"|"No")>`.
+  - `get_search_profile(config_json, code) -> Result<Value>` — raw row, case-insensitive,
+    `NotFound` (including when the optional section is absent).
+  - `list_search_profiles(config_json, filter: Option<&str>) -> Result<Vec<Value>>` — display
+    projection resolving ids to codes (`profile`, `genericPlan`, structured `overrides`), plus the
+    raw `overridesRaw` mini-format; sorted by id, tolerant of a missing section.
+  - Error mapping reuses existing variants: duplicate profile code → `AlreadyExists`; unknown
+    generic plan / feature → `NotFound`; bad `candidates`, bad `Yes`/`No` flag, or a duplicated
+    feature → structured `ValidationErrors` (`candidates`/`overrides` field with `OutOfDomain` /
+    `Duplicate` reason). No new `SzConfigError` variant — the public surface is purely additive.
+  - `ValidationReason::Duplicate` is now emitted (search-profile override dedup); the
+    generic-threshold path's "duplicates stay warning-success" policy is unchanged (per-context).
+
 ## [0.9.0] - 2026-08-31
 
 Structured generic-threshold validation errors (#59, **breaking**) plus a cosmetic
