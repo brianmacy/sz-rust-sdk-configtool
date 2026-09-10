@@ -555,11 +555,14 @@ fn parse_overrides(raw: &str) -> Vec<(i64, char)> {
         .filter(|s| !s.is_empty())
         .collect();
 
+    // Pair up [id, flag, ...]. `chunks` (not `chunks_exact`) keeps this on the
+    // MSRV without the `as_chunks` clippy lint; a short trailing chunk from a
+    // malformed value is dropped by the length-guarded `get`s.
     tokens
-        .chunks_exact(2)
+        .chunks(2)
         .filter_map(|pair| {
-            let id = pair[0].parse::<i64>().ok()?;
-            let yn = pair[1].chars().next()?.to_ascii_uppercase();
+            let id = pair.first()?.parse::<i64>().ok()?;
+            let yn = pair.get(1)?.chars().next()?.to_ascii_uppercase();
             Some((id, yn))
         })
         .collect()
