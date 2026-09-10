@@ -94,6 +94,7 @@ pub mod fragments;
 pub mod generic_plans;
 pub mod hashes;
 pub mod rules;
+pub mod search_profiles;
 pub mod settings;
 pub mod system_params;
 pub mod validation;
@@ -122,6 +123,10 @@ pub use helpers::FieldUpdate;
 pub use helpers::{
     resolve_cfcall_id_for_feature, resolve_dfcall_id_for_feature, resolve_efcall_id_for_feature,
     resolve_sfcall_id_for_feature,
+};
+pub use search_profiles::{
+    AddSearchProfileParams, add_search_profile, delete_search_profile, get_search_profile,
+    list_search_profiles,
 };
 pub use settings::set_setting;
 pub use thresholds::{GenericThresholdCheck, GenericThresholdRef, validate_generic_threshold};

@@ -104,12 +104,16 @@ pub enum SzConfigError {
 /// display text. The enum is `#[non_exhaustive]` so future reason codes can be
 /// added without a breaking change.
 ///
-/// Only [`OutOfDomain`](Self::OutOfDomain) (a `sendToRedo` outside `[Yes, No]`)
-/// and [`UnknownReferenceCode`](Self::UnknownReferenceCode) (a behaviour not in
-/// the canonical set) are emitted today; the remaining codes are reserved for a
-/// stable taxonomy (presence is caller-owned, plan/feature stay fatal-first
-/// [`NotFound`](SzConfigError::NotFound), duplicates stay warning-success, and
-/// caps are rejected strictly upstream as scalar [`InvalidInput`](SzConfigError::InvalidInput)).
+/// [`OutOfDomain`](Self::OutOfDomain) (a `sendToRedo` outside `[Yes, No]`, or a
+/// search-profile `candidates`/override flag outside its domain),
+/// [`UnknownReferenceCode`](Self::UnknownReferenceCode) (a behaviour not in the
+/// canonical set), and [`Duplicate`](Self::Duplicate) (a feature listed more
+/// than once in a search-profile's overrides) are emitted today; the remaining
+/// codes are reserved for a stable taxonomy. Note the emitter decides policy per
+/// context: within `validateGenericThreshold`, presence is caller-owned,
+/// plan/feature stay fatal-first [`NotFound`](SzConfigError::NotFound),
+/// duplicates stay warning-success, and caps are rejected strictly upstream as
+/// scalar [`InvalidInput`](SzConfigError::InvalidInput).
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ValidationReason {
