@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.10.0] - 2026-09-09
+## [0.10.0] - 2026-09-10
 
 Greenfield `CFG_SPROFILE` (search profile) support (#63), modelled on `CFG_DSRC`, coordinated
 with the downstream `sz_configtool` CLI (new `addSearchProfile` / `listSearchProfiles` commands).
@@ -14,7 +14,7 @@ JSON itself. Exercised against the stock Senzing v4 template.
 
 ### Added
 
-- **New module `search_profiles` with three public functions (#63).** Code-based API: callers
+- **New module `search_profiles` with four public functions (#63).** Code-based API: callers
   pass `SPROFILE_CODE`, `GPLAN_CODE`, and feature `FTYPE_CODE`s; the library resolves them to the
   numeric ids stored on disk and owns the `FTYPE_OVERRIDES` mini-format
   (`"[]"` / `"[{<ftypeId>,<Y|N>},...]"`, ascending by id).

@@ -9,7 +9,7 @@ Pure Rust library for manipulating Senzing configuration JSON documents.
 
 ## Overview
 
-`sz_configtool_lib` provides 146 functions across 30 modules for programmatic manipulation of Senzing configuration documents (g2config.json). The library contains only pure business logic with no display formatting, making it ideal for automation scripts, migration tools, and external integrations.
+`sz_configtool_lib` provides 150 functions across 31 modules for programmatic manipulation of Senzing configuration documents (g2config.json). The library contains only pure business logic with no display formatting, making it ideal for automation scripts, migration tools, and external integrations.
 
 ### ⚠️ Important Note on Usage
 
@@ -179,7 +179,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - **`error`** - Custom error types (`SzConfigError`)
 - **`helpers`** - Shared utilities (ID generation, array operations, lookups)
 
-### Core Entities (87 functions)
+### Core Entities (91 functions)
 
 #### Data Management
 
@@ -198,6 +198,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - **`rules`** (5 functions) - Entity resolution rules (CFG_ERRULE)
 - **`fragments`** (5 functions) - Rule fragments (CFG_ERFRAG)
 - **`generic_plans`** (4 functions) - Generic plan management (CFG_GPLAN)
+- **`search_profiles`** (4 functions) - Search profile add/get/list/delete (CFG_SPROFILE); `INGEST`/`SEARCH` are delete-protected
 - **`hashes`** (4 functions) - Name and SSN hash management
 
 #### System Management

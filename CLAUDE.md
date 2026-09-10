@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-This is a pure Rust library for manipulating Senzing configuration JSON documents (g2config.json). It provides 147 functions across 30 modules for programmatic configuration management without any display logic or CLI dependencies.
+This is a pure Rust library for manipulating Senzing configuration JSON documents (g2config.json). It provides 150 functions across 31 modules for programmatic configuration management without any display logic or CLI dependencies.
 
 ### ⚠️ Important Context
 
@@ -73,6 +73,7 @@ src/
 ├── generic_plans.rs    # CFG_GPLAN operations
 ├── hashes.rs           # Hash management
 ├── rules.rs            # CFG_ERRULE operations
+├── search_profiles.rs  # CFG_SPROFILE operations (4 functions; INGEST/SEARCH delete-protected)
 ├── system_params.rs    # System parameters
 ├── versioning.rs       # Version management
 ├── ffi.rs              # C FFI wrapper (294KB, 98 functions)

@@ -315,7 +315,7 @@ pub fn list_search_profiles(config_json: &str, filter: Option<&str>) -> Result<V
 /// then against `SPROFILE_ID`, so both `"EMBEDDED_SEARCH"` and `"3"` address the
 /// same row (mirroring `delete_feature`'s code-then-id resolution).
 ///
-/// The shipped profiles in [`RESERVED_PROFILES`] (`INGEST`, `SEARCH`) are
+/// The shipped profiles in `RESERVED_PROFILES` (`INGEST`, `SEARCH`) are
 /// protected and cannot be deleted, matching the `deleteFeature`
 /// `LOCKED_FEATURES` precedent. As in `delete_feature`, existence is resolved
 /// **before** the protected check, so a truly-absent value reports `NotFound`
