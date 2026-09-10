@@ -26,6 +26,11 @@ JSON itself. Exercised against the stock Senzing v4 template.
     `elements: Vec<(feature_code, "Yes"|"No")>`.
   - `get_search_profile(config_json, code) -> Result<Value>` — raw row, case-insensitive,
     `NotFound` (including when the optional section is absent).
+  - `delete_search_profile(config_json, search_value) -> Result<String>` — removes a profile
+    resolved by `SPROFILE_CODE` (case-insensitive) or `SPROFILE_ID`. The shipped profiles
+    `INGEST`/`SEARCH` are protected (`RESERVED_PROFILES`) and refused with `InvalidInput`, mirroring
+    the `deleteFeature` `LOCKED_FEATURES` precedent; existence is resolved before the guard, so a
+    truly-absent value reports `NotFound`.
   - `list_search_profiles(config_json, filter: Option<&str>) -> Result<Vec<Value>>` — display
     projection resolving ids to codes (`profile`, `genericPlan`, structured `overrides`), plus the
     raw `overridesRaw` mini-format; sorted by id, tolerant of a missing section.

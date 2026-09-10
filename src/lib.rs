@@ -125,7 +125,8 @@ pub use helpers::{
     resolve_sfcall_id_for_feature,
 };
 pub use search_profiles::{
-    AddSearchProfileParams, add_search_profile, get_search_profile, list_search_profiles,
+    AddSearchProfileParams, add_search_profile, delete_search_profile, get_search_profile,
+    list_search_profiles,
 };
 pub use settings::set_setting;
 pub use thresholds::{GenericThresholdCheck, GenericThresholdRef, validate_generic_threshold};

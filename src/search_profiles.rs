@@ -33,6 +33,13 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::HashSet;
 
+/// Reserved (shipped) search profiles that must never be deleted.
+///
+/// Mirrors the `deleteFeature` `LOCKED_FEATURES` precedent (`features.rs`): the
+/// protected set lives SDK-side so every consumer refuses consistently. Checked
+/// case-insensitively against the resolved `SPROFILE_CODE`.
+const RESERVED_PROFILES: &[&str] = &["INGEST", "SEARCH"];
+
 // ============================================================================
 // Row Struct
 // ============================================================================
@@ -300,6 +307,92 @@ pub fn list_search_profiles(config_json: &str, filter: Option<&str>) -> Result<V
 
     result.sort_by_key(|item| item.get("id").and_then(|v| v.as_i64()).unwrap_or(0));
     Ok(result)
+}
+
+/// Delete a search profile by code or id.
+///
+/// `search_value` is resolved against `SPROFILE_CODE` (case-insensitive) first,
+/// then against `SPROFILE_ID`, so both `"EMBEDDED_SEARCH"` and `"3"` address the
+/// same row (mirroring `delete_feature`'s code-then-id resolution).
+///
+/// The shipped profiles in [`RESERVED_PROFILES`] (`INGEST`, `SEARCH`) are
+/// protected and cannot be deleted, matching the `deleteFeature`
+/// `LOCKED_FEATURES` precedent. As in `delete_feature`, existence is resolved
+/// **before** the protected check, so a truly-absent value reports `NotFound`
+/// (not "protected").
+///
+/// # Errors
+/// - `NotFound` if no profile matches the code or id
+/// - `InvalidInput` if the resolved profile is reserved (`INGEST`/`SEARCH`)
+/// - `JsonParse` if `config_json` is invalid
+///
+/// # Example
+/// ```
+/// use sz_configtool_lib::search_profiles::{add_search_profile, delete_search_profile,
+///     AddSearchProfileParams};
+///
+/// let config = r#"{"G2_CONFIG":{"CFG_GPLAN":[{"GPLAN_ID":2,"GPLAN_CODE":"SEARCH"}],
+///     "CFG_FTYPE":[],"CFG_SPROFILE":[]}}"#;
+/// let config = add_search_profile(config, AddSearchProfileParams::new("EMBEDDED", "SEARCH")).unwrap();
+/// let config = delete_search_profile(&config, "EMBEDDED").unwrap();
+/// assert!(!config.contains("EMBEDDED"));
+/// ```
+pub fn delete_search_profile(config_json: &str, search_value: &str) -> Result<String> {
+    let mut config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
+    // Resolve the target row: SPROFILE_CODE (case-insensitive), then SPROFILE_ID.
+    let as_id = search_value.trim().parse::<i64>().ok();
+    let matched: Option<(i64, String)> = config
+        .pointer("/G2_CONFIG/CFG_SPROFILE")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            arr.iter()
+                .find(|r| {
+                    let code_match = r
+                        .get("SPROFILE_CODE")
+                        .and_then(|v| v.as_str())
+                        .is_some_and(|s| s.eq_ignore_ascii_case(search_value));
+                    let id_match =
+                        as_id.is_some() && r.get("SPROFILE_ID").and_then(|v| v.as_i64()) == as_id;
+                    code_match || id_match
+                })
+                .map(|r| {
+                    let id = r.get("SPROFILE_ID").and_then(|v| v.as_i64()).unwrap_or(0);
+                    let code = r
+                        .get("SPROFILE_CODE")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                    (id, code)
+                })
+        });
+
+    // Existence first (matches delete_feature): absent -> NotFound, even for a
+    // reserved code.
+    let (id, code) = matched.ok_or_else(|| {
+        SzConfigError::NotFound(format!("Search profile not found: {search_value}"))
+    })?;
+
+    // Protected guard, on the resolved canonical code.
+    if RESERVED_PROFILES
+        .iter()
+        .any(|&reserved| reserved.eq_ignore_ascii_case(&code))
+    {
+        return Err(SzConfigError::InvalidInput(format!(
+            "The search profile {code} cannot be deleted (it is a protected system profile)"
+        )));
+    }
+
+    // Remove the row by its (unique) id.
+    if let Some(arr) = config
+        .pointer_mut("/G2_CONFIG/CFG_SPROFILE")
+        .and_then(|v| v.as_array_mut())
+    {
+        arr.retain(|r| r.get("SPROFILE_ID").and_then(|v| v.as_i64()) != Some(id));
+    }
+
+    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
 }
 
 // ============================================================================
@@ -718,5 +811,77 @@ mod tests {
     fn list_empty_when_section_absent() {
         let no_section = json!({"G2_CONFIG": {}}).to_string();
         assert!(list_search_profiles(&no_section, None).unwrap().is_empty());
+    }
+
+    /// base_config plus a reserved INGEST (id 1) and a user profile (id 3), for
+    /// exercising the delete paths.
+    fn config_for_delete() -> String {
+        let out = add_search_profile(
+            &base_config(),
+            AddSearchProfileParams::new("EMBEDDED_SEARCH", "SEARCH"),
+        )
+        .unwrap();
+        // Inject a reserved INGEST row (the base fixture only ships SEARCH).
+        let mut v: Value = serde_json::from_str(&out).unwrap();
+        v["G2_CONFIG"]["CFG_SPROFILE"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({
+                "SPROFILE_ID": 1, "SPROFILE_CODE": "INGEST", "SPROFILE_DESC": "Ingest",
+                "GPLAN_ID": 1, "DEFAULT_USED_FOR_CAND": "Normal", "FTYPE_OVERRIDES": "[]"
+            }));
+        v.to_string()
+    }
+
+    #[test]
+    fn delete_user_profile_by_code_succeeds() {
+        let out = delete_search_profile(&config_for_delete(), "embedded_search").unwrap();
+        let rows = sprofiles(&out);
+        assert!(!rows.iter().any(|r| r["SPROFILE_CODE"] == "EMBEDDED_SEARCH"));
+        // Reserved rows untouched.
+        assert!(rows.iter().any(|r| r["SPROFILE_CODE"] == "SEARCH"));
+        assert!(rows.iter().any(|r| r["SPROFILE_CODE"] == "INGEST"));
+    }
+
+    #[test]
+    fn delete_user_profile_by_id_succeeds() {
+        // EMBEDDED_SEARCH is allocated id 3 on the base fixture (max was 2).
+        let out = delete_search_profile(&config_for_delete(), "3").unwrap();
+        assert!(!sprofiles(&out).iter().any(|r| r["SPROFILE_ID"] == 3));
+    }
+
+    #[test]
+    fn delete_reserved_search_refused() {
+        let err = delete_search_profile(&config_for_delete(), "SEARCH").unwrap_err();
+        assert_eq!(err.kind(), SzErrorKind::InvalidInput);
+        // .message() is the bare sentence the CLI surfaces (no "Invalid input:" prefix).
+        assert_eq!(
+            err.message(),
+            "The search profile SEARCH cannot be deleted (it is a protected system profile)"
+        );
+    }
+
+    #[test]
+    fn delete_reserved_ingest_refused_case_insensitive() {
+        let err = delete_search_profile(&config_for_delete(), "ingest").unwrap_err();
+        assert_eq!(err.kind(), SzErrorKind::InvalidInput);
+        // Message uses the canonical stored code, not the input casing.
+        assert!(
+            err.message()
+                .contains("The search profile INGEST cannot be deleted")
+        );
+    }
+
+    #[test]
+    fn delete_unknown_code_or_id_not_found() {
+        let config = config_for_delete();
+        assert_eq!(
+            delete_search_profile(&config, "NOPE").unwrap_err().kind(),
+            SzErrorKind::NotFound
+        );
+        assert_eq!(
+            delete_search_profile(&config, "999").unwrap_err().kind(),
+            SzErrorKind::NotFound
+        );
     }
 }

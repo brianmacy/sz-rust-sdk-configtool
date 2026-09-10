@@ -6,7 +6,8 @@
 use serde_json::Value;
 use sz_configtool_lib::error::SzErrorKind;
 use sz_configtool_lib::search_profiles::{
-    AddSearchProfileParams, add_search_profile, get_search_profile, list_search_profiles,
+    AddSearchProfileParams, add_search_profile, delete_search_profile, get_search_profile,
+    list_search_profiles,
 };
 
 fn template() -> String {
@@ -125,4 +126,59 @@ fn create_if_missing_path_on_section_removed_template() {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0]["SPROFILE_ID"], 1);
     assert_eq!(rows[0]["SPROFILE_CODE"], "FIRST");
+}
+
+#[test]
+fn delete_user_added_profile_on_template_succeeds() {
+    // Add EMBEDDED_SEARCH (id 3) to the stock template, then delete it by code.
+    let with_added = add_search_profile(
+        &template(),
+        AddSearchProfileParams::new("EMBEDDED_SEARCH", "SEARCH"),
+    )
+    .unwrap();
+    let before = sprofiles(&with_added).len();
+
+    let out = delete_search_profile(&with_added, "embedded_search").unwrap();
+    assert_eq!(sprofiles(&out).len(), before - 1);
+    assert_eq!(
+        get_search_profile(&out, "EMBEDDED_SEARCH")
+            .unwrap_err()
+            .kind(),
+        SzErrorKind::NotFound
+    );
+    // The shipped SEARCH profile is untouched.
+    assert!(get_search_profile(&out, "SEARCH").is_ok());
+}
+
+#[test]
+fn delete_reserved_search_refused_on_template() {
+    // The stock template ships SEARCH (a reserved profile) — deletion must refuse.
+    let err = delete_search_profile(&template(), "SEARCH").unwrap_err();
+    assert_eq!(err.kind(), SzErrorKind::InvalidInput);
+    assert_eq!(
+        err.message(),
+        "The search profile SEARCH cannot be deleted (it is a protected system profile)"
+    );
+    // Case-insensitive on the input.
+    assert_eq!(
+        delete_search_profile(&template(), "search")
+            .unwrap_err()
+            .kind(),
+        SzErrorKind::InvalidInput
+    );
+}
+
+#[test]
+fn delete_unknown_profile_not_found_on_template() {
+    let config = template();
+    assert_eq!(
+        delete_search_profile(&config, "NOT_A_PROFILE")
+            .unwrap_err()
+            .kind(),
+        SzErrorKind::NotFound
+    );
+    assert_eq!(
+        delete_search_profile(&config, "9999").unwrap_err().kind(),
+        SzErrorKind::NotFound
+    );
 }
