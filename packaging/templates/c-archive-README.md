@@ -36,8 +36,14 @@ Link (Linux/macOS):
 
 ```sh
 cc app.c -Iinclude -Llib -lSzConfigTool -Wl,-rpath,'$ORIGIN/../lib'      # shared
-cc app.c -Iinclude lib/libSzConfigTool.a $(cat lib/native-static-libs.txt) # static
+cc app.c -Iinclude -DSZCONFIGTOOL_STATIC lib/libSzConfigTool.a $(cat lib/native-static-libs.txt) # static
 ```
+
+Static linking: define `SZCONFIGTOOL_STATIC` (`-DSZCONFIGTOOL_STATIC`,
+`/DSZCONFIGTOOL_STATIC`) for every file that includes the header. On Windows
+it is required: without it the header declares the functions
+`__declspec(dllimport)` and linking `SzConfigTool_static.lib` fails with
+unresolved `__imp_SzConfigTool_*` symbols.
 
 Windows: `SzConfigTool.dll` uses the static MSVC runtime, so it needs no VC++
 Redistributable (it imports only Windows system DLLs). `SzConfigTool_static.lib`

@@ -65,6 +65,10 @@ function(sz_c_test name source link_kind)
     endif()
     target_link_libraries(${name} PRIVATE Threads::Threads)
     if(link_kind STREQUAL "static")
+        # The header's static opt-out: without it, Windows compiles the calls
+        # as __declspec(dllimport) (__imp_SzConfigTool_*), which the static
+        # archive does not define (LNK2019).
+        target_compile_definitions(${name} PRIVATE SZCONFIGTOOL_STATIC)
         target_link_libraries(${name} PRIVATE "${_static}" ${_static_deps})
     elseif(WIN32)
         target_link_libraries(${name} PRIVATE "${_shared_imp}")
