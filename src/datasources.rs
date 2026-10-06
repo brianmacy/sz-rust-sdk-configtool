@@ -161,9 +161,9 @@ pub fn add_data_source(config_json: &str, params: AddDataSourceParams) -> Result
         dsrc_desc: code_upper,
         retention_level: retention.to_string(),
     };
-    dsrcs.push(serde_json::to_value(&row)?);
+    dsrcs.push(crate::helpers::row_value(&row));
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 /// Delete a data source from the configuration
@@ -207,17 +207,10 @@ pub fn delete_data_source(config_json: &str, code: &str) -> Result<String> {
         )));
     }
 
-    // Safe to delete
-    let original_len = dsrcs.len();
+    // Safe to delete (the find above proved the row is present)
     dsrcs.retain(|d| d["DSRC_CODE"].as_str() != Some(&code_upper));
 
-    if dsrcs.len() == original_len {
-        return Err(SzConfigError::NotFound(format!(
-            "Data source not found: {code_upper}"
-        )));
-    }
-
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 /// Get a specific data source by code
@@ -319,7 +312,7 @@ pub fn set_data_source(config_json: &str, params: SetDataSourceParams) -> Result
         dsrc_obj.insert("RETENTION_LEVEL".to_string(), json!(retention));
     }
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 #[cfg(test)]

@@ -39,7 +39,7 @@ namespace Sz.ConfigTool.Native
                 NativeMethods.SzConfigTool_free(r.Response);
             }
 
-            return ParseEnvelope(envelope ?? throw Protocol("null response with returnCode 0"));
+            return ParseEnvelope(Require(envelope, "null response with returnCode 0"));
         }
 
         /// <summary>Invoke and require the envelope kind to be <paramref name="kind"/>.</summary>
@@ -56,28 +56,19 @@ namespace Sz.ConfigTool.Native
 
         /// <summary>A <c>config</c> function's modified configuration.</summary>
         public static string Config(string name, string config, string argsJson) =>
-            Expect("config", name, config, argsJson).Config ?? throw Protocol($"{name}: envelope without config");
+            Require(Expect("config", name, config, argsJson).Config, $"{name}: envelope without config");
 
         /// <summary>A <c>json</c> function's result, as JSON text.</summary>
         public static string Json(string name, string config, string argsJson) =>
-            Expect("json", name, config, argsJson).Result ?? throw Protocol($"{name}: envelope without result");
+            Require(Expect("json", name, config, argsJson).Result, $"{name}: envelope without result");
 
         /// <summary>A <c>config_and_json</c> function's configuration and record.</summary>
         public static ConfigAndJson ConfigAndJson(string name, string config, string argsJson)
         {
             InvokeResult r = Expect("config_and_json", name, config, argsJson);
             return new ConfigAndJson(
-                r.Config ?? throw Protocol($"{name}: envelope without config"),
-                r.Result ?? throw Protocol($"{name}: envelope without result"));
-        }
-
-        /// <summary>An <c>int</c> function's result.</summary>
-        public static long Int(string name, string config, string argsJson)
-        {
-            string raw = Expect("int", name, config, argsJson).Result ?? throw Protocol($"{name}: envelope without result");
-            return long.TryParse(raw, System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture, out long v)
-                ? v
-                : throw Protocol($"{name}: int result '{raw}' is not an integer");
+                Require(r.Config, $"{name}: envelope without config"),
+                Require(r.Result, $"{name}: envelope without result"));
         }
 
         /// <summary>A <c>unit</c> function (success has no value).</summary>
@@ -108,7 +99,12 @@ namespace Sz.ConfigTool.Native
             return values;
         }
 
-        private static InvokeResult ParseEnvelope(string envelope)
+        /// <summary>
+        /// Decode a success envelope (<c>api/src/output.rs</c> <c>to_envelope</c>):
+        /// a JSON object with a string <c>kind</c> and the optional <c>config</c>
+        /// (a JSON string) and <c>result</c> (raw JSON text) members.
+        /// </summary>
+        internal static InvokeResult ParseEnvelope(string envelope)
         {
             try
             {
@@ -124,13 +120,25 @@ namespace Sz.ConfigTool.Native
             }
         }
 
-        private static SzConfigToolException LastError(long returnCode)
-        {
-            string? reason = Utf8.FromNative(NativeMethods.SzConfigTool_getLastErrorReasonCode());
-            string message = Utf8.FromNative(NativeMethods.SzConfigTool_getLastError()) ?? $"SzConfigTool_invoke failed ({returnCode})";
-            string? details = Utf8.FromNative(NativeMethods.SzConfigTool_getLastErrorDetails());
-            return new SzConfigToolException(reason, message, details, returnCode);
-        }
+        private static SzConfigToolException LastError(long returnCode) =>
+            ErrorFrom(
+                Utf8.FromNative(NativeMethods.SzConfigTool_getLastErrorReasonCode()),
+                Utf8.FromNative(NativeMethods.SzConfigTool_getLastError()),
+                Utf8.FromNative(NativeMethods.SzConfigTool_getLastErrorDetails()),
+                returnCode);
+
+        /// <summary>
+        /// The exception for a failed call from its last-error slots; a missing
+        /// message (the library always sets one) falls back to the return code.
+        /// </summary>
+        internal static SzConfigToolException ErrorFrom(string? reason, string? message, string? details, long returnCode) =>
+            new SzConfigToolException(reason, message ?? $"SzConfigTool_invoke failed ({returnCode})", details, returnCode);
+
+        /// <summary>
+        /// <paramref name="value"/>, which the wire contract guarantees is
+        /// present; null is a protocol error naming <paramref name="what"/>.
+        /// </summary>
+        internal static string Require(string? value, string what) => value ?? throw Protocol(what);
 
         // A broken wire contract between this binding and the native library.
         private static SzConfigToolException Protocol(string message) =>

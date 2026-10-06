@@ -272,34 +272,77 @@ pub extern "C" fn SzConfigTool_getAbiVersion() -> i32 {
 // Helper Macros for Error Handling
 // ============================================================================
 
-macro_rules! handle_result {
-    ($result:expr) => {
-        match $result {
-            Ok(json) => {
-                clear_error();
-                match CString::new(json) {
-                    Ok(c_str) => SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    },
-                    Err(e) => {
-                        set_error(format!("Failed to convert result to C string: {}", e), -1);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -1,
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                set_error_from(&e);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -2,
-                }
+/// FFI result of a library call whose error carries a reason code (-2,
+/// `set_error_from`); success text with an interior NUL is -1.
+fn lib_result<T: Into<Vec<u8>>>(result: Result<T, SzConfigError>) -> SzConfigTool_result {
+    match result {
+        Ok(text) => text_result(text, -1),
+        Err(e) => {
+            set_error_from(&e);
+            error_result(-2)
+        }
+    }
+}
+
+/// FFI result of a library call whose error is reported as a plain message
+/// (`set_error(e.to_string(), err_code)`, no reason code); success text with
+/// an interior NUL is `nul_code`.
+fn plain_result<T: Into<Vec<u8>>>(
+    result: Result<T, SzConfigError>,
+    nul_code: i64,
+    err_code: i64,
+) -> SzConfigTool_result {
+    match result {
+        Ok(text) => text_result(text, nul_code),
+        Err(e) => {
+            set_error(e.to_string(), err_code);
+            error_result(err_code)
+        }
+    }
+}
+
+/// Successful result owning `text` as a C string. JSON output never holds a
+/// raw NUL (serde_json escapes it), but a library STRING result (e.g. a
+/// version value stored as "\u0000" in the config) can: that is `nul_code`
+/// with a "Failed to convert result to C string" error.
+fn text_result(text: impl Into<Vec<u8>>, nul_code: i64) -> SzConfigTool_result {
+    match CString::new(text) {
+        Ok(c_str) => {
+            clear_error();
+            SzConfigTool_result {
+                response: c_str.into_raw(),
+                returnCode: 0,
             }
         }
-    };
+        Err(e) => {
+            set_error(
+                format!("Failed to convert result to C string: {e}"),
+                nul_code,
+            );
+            error_result(nul_code)
+        }
+    }
+}
+
+/// [`plain_result`] of a serializable library result (see [`json_text`]).
+fn plain_json<T: serde::Serialize>(
+    result: Result<T, SzConfigError>,
+    nul_code: i64,
+    err_code: i64,
+) -> SzConfigTool_result {
+    plain_result(result.map(|value| json_text(&value)), nul_code, err_code)
+}
+
+/// [`lib_result`] of a serializable library result (see [`json_text`]).
+fn lib_json<T: serde::Serialize>(result: Result<T, SzConfigError>) -> SzConfigTool_result {
+    lib_result(result.map(|value| json_text(&value)))
+}
+
+/// Compact JSON text of a library result (`Value`, `Vec`/map of values or
+/// strings, or a type whose `Serialize` writes a `Value`): string keys and no
+/// non-finite floats, so serde_json serialization cannot fail.
+fn json_text<T: serde::Serialize>(value: &T) -> String {
+    serde_json::to_string(value).expect("library results always serialize")
 }
 
 /// Record a boundary error (null pointer, bad UTF-8, panic). These carry no
@@ -404,7 +447,7 @@ pub unsafe extern "C" fn SzConfigTool_invoke(
             }
         };
         match sz_configtool_api::invoke(name, config, args) {
-            Ok(out) => handle_result!(Ok::<String, SzConfigError>(out.to_envelope())),
+            Ok(out) => text_result(out.to_envelope(), -1),
             Err(e) => {
                 set_error_from_api(&e);
                 error_result(-2)
@@ -465,7 +508,7 @@ pub unsafe extern "C" fn SzConfigTool_addDataSource(
                 ..Default::default()
             },
         );
-        handle_result!(result)
+        lib_result(result)
     })
 }
 
@@ -510,7 +553,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteDataSource(
         };
 
         let result = sz_configtool_lib::datasources::delete_data_source(config, ds_code);
-        handle_result!(result)
+        lib_result(result)
     })
 }
 
@@ -542,10 +585,7 @@ pub unsafe extern "C" fn SzConfigTool_listDataSources(
             }
         };
 
-        let result = sz_configtool_lib::datasources::list_data_sources(config).and_then(|vec| {
-            serde_json::to_string(&vec).map_err(|e| SzConfigError::JsonParse(e.to_string()))
-        });
-        handle_result!(result)
+        lib_json(sz_configtool_lib::datasources::list_data_sources(config))
     })
 }
 
@@ -700,7 +740,7 @@ pub unsafe extern "C" fn SzConfigTool_addAttribute(
         )
         .map(|(json, _item)| json);
 
-        handle_result!(result)
+        lib_result(result)
     })
 }
 
@@ -745,7 +785,7 @@ pub unsafe extern "C" fn SzConfigTool_deleteAttribute(
         };
 
         let result = sz_configtool_lib::attributes::delete_attribute(config, attr_code);
-        handle_result!(result)
+        lib_result(result)
     })
 }
 
@@ -789,11 +829,9 @@ pub unsafe extern "C" fn SzConfigTool_getAttribute(
             }
         };
 
-        let result =
-            sz_configtool_lib::attributes::get_attribute(config, attr_code).and_then(|val| {
-                serde_json::to_string(&val).map_err(|e| SzConfigError::JsonParse(e.to_string()))
-            });
-        handle_result!(result)
+        lib_json(sz_configtool_lib::attributes::get_attribute(
+            config, attr_code,
+        ))
     })
 }
 
@@ -825,10 +863,7 @@ pub unsafe extern "C" fn SzConfigTool_listAttributes(
             }
         };
 
-        let result = sz_configtool_lib::attributes::list_attributes(config).and_then(|vec| {
-            serde_json::to_string(&vec).map_err(|e| SzConfigError::JsonParse(e.to_string()))
-        });
-        handle_result!(result)
+        lib_json(sz_configtool_lib::attributes::list_attributes(config))
     })
 }
 
@@ -903,7 +938,7 @@ pub unsafe extern "C" fn SzConfigTool_setAttribute(
             default_value: updates.get("default").and_then(|v| v.as_str()),
         };
 
-        handle_result!(sz_configtool_lib::attributes::set_attribute(config, params))
+        lib_result(sz_configtool_lib::attributes::set_attribute(config, params))
     })
 }
 
@@ -953,10 +988,7 @@ pub unsafe extern "C" fn SzConfigTool_getFeature(
             }
         };
 
-        let result = sz_configtool_lib::features::get_feature(config, feat_code).and_then(|val| {
-            serde_json::to_string(&val).map_err(|e| SzConfigError::JsonParse(e.to_string()))
-        });
-        handle_result!(result)
+        lib_json(sz_configtool_lib::features::get_feature(config, feat_code))
     })
 }
 
@@ -988,10 +1020,7 @@ pub unsafe extern "C" fn SzConfigTool_listFeatures(
             }
         };
 
-        let result = sz_configtool_lib::features::list_features(config).and_then(|vec| {
-            serde_json::to_string(&vec).map_err(|e| SzConfigError::JsonParse(e.to_string()))
-        });
-        handle_result!(result)
+        lib_json(sz_configtool_lib::features::list_features(config))
     })
 }
 
@@ -1041,10 +1070,7 @@ pub unsafe extern "C" fn SzConfigTool_getElement(
             }
         };
 
-        let result = sz_configtool_lib::elements::get_element(config, elem_code).and_then(|val| {
-            serde_json::to_string(&val).map_err(|e| SzConfigError::JsonParse(e.to_string()))
-        });
-        handle_result!(result)
+        lib_json(sz_configtool_lib::elements::get_element(config, elem_code))
     })
 }
 
@@ -1076,10 +1102,7 @@ pub unsafe extern "C" fn SzConfigTool_listElements(
             }
         };
 
-        let result = sz_configtool_lib::elements::list_elements(config).and_then(|vec| {
-            serde_json::to_string(&vec).map_err(|e| SzConfigError::JsonParse(e.to_string()))
-        });
-        handle_result!(result)
+        lib_json(sz_configtool_lib::elements::list_elements(config))
     })
 }
 
@@ -1145,20 +1168,13 @@ pub unsafe extern "C" fn SzConfigTool_setFragmentWithJson(
 
         // JSON-based FFI: build a tri-state SetFragmentParams. An absent key ->
         // Leave, an explicit null -> Clear (writes null), a value -> Set.
-        let params =
-            match sz_configtool_lib::fragments::SetFragmentParams::try_from(&fragment_config) {
-                Ok(p) => p,
-                Err(e) => {
-                    set_error(e.to_string(), -3);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    };
-                }
-            };
-
-        let result = sz_configtool_lib::fragments::set_fragment(config, code, params);
-        handle_result!(result)
+        // (try_from never fails today; chaining keeps any future error a
+        // library error with its reason code.)
+        lib_result(
+            sz_configtool_lib::fragments::SetFragmentParams::try_from(&fragment_config).and_then(
+                |params| sz_configtool_lib::fragments::set_fragment(config, code, params),
+            ),
+        )
     })
 }
 
@@ -1227,36 +1243,17 @@ pub unsafe extern "C" fn SzConfigTool_cloneGenericPlan(
             }
         };
 
-        match sz_configtool_lib::generic_plans::clone_generic_plan(
-            config,
-            source_code,
-            new_code,
-            new_desc,
-        ) {
-            Ok((modified_config, _gplan_id)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::generic_plans::clone_generic_plan(
+                config,
+                source_code,
+                new_code,
+                new_desc,
+            )
+            .map(|(modified_config, _gplan_id)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -1309,31 +1306,12 @@ pub unsafe extern "C" fn SzConfigTool_setGenericPlan(
             }
         };
 
-        match sz_configtool_lib::generic_plans::set_generic_plan(config, code, desc) {
-            Ok((modified_config, _gplan_id, _was_created)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::generic_plans::set_generic_plan(config, code, desc)
+                .map(|(modified_config, _gplan_id, _was_created)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -1378,103 +1356,11 @@ pub unsafe extern "C" fn SzConfigTool_listGenericPlans(
             }
         };
 
-        match sz_configtool_lib::generic_plans::list_generic_plans(config, filter_opt) {
-            Ok(list) => match serde_json::to_string(&list) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to convert result: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize result: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Get a threshold by ID
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn SzConfigTool_getThreshold(
-    config_json: *const c_char,
-    threshold_id: i64,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_getThreshold", || {
-        if config_json.is_null() {
-            set_error("Required parameter is null".to_string(), -1);
-            return SzConfigTool_result {
-                response: std::ptr::null_mut(),
-                returnCode: -1,
-            };
-        }
-
-        let config = match unsafe { CStr::from_ptr(config_json) }.to_str() {
-            Ok(s) => s,
-            Err(e) => {
-                set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -2,
-                };
-            }
-        };
-
-        match sz_configtool_lib::thresholds::get_threshold(config, threshold_id) {
-            Ok(record) => match serde_json::to_string(&record) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to convert result: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize result: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::generic_plans::list_generic_plans(config, filter_opt),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -1503,40 +1389,11 @@ pub unsafe extern "C" fn SzConfigTool_listSystemParameters(
             }
         };
 
-        match sz_configtool_lib::system_params::list_system_parameters(config) {
-            Ok(params) => match serde_json::to_string(&params) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to convert result: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize result: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::system_params::list_system_parameters(config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -1605,7 +1462,7 @@ pub unsafe extern "C" fn SzConfigTool_setSystemParameterWithJson(
             param_name,
             &param_value,
         );
-        handle_result!(result)
+        lib_result(result)
     })
 }
 
@@ -1634,31 +1491,7 @@ pub unsafe extern "C" fn SzConfigTool_getVersion(
             }
         };
 
-        match sz_configtool_lib::versioning::get_version(config) {
-            Ok(version) => match CString::new(version) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(sz_configtool_lib::versioning::get_version(config), -4, -5)
     })
 }
 
@@ -1687,31 +1520,11 @@ pub unsafe extern "C" fn SzConfigTool_getCompatibilityVersion(
             }
         };
 
-        match sz_configtool_lib::versioning::get_compatibility_version(config) {
-            Ok(version) => match CString::new(version) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::versioning::get_compatibility_version(config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -1753,7 +1566,7 @@ pub unsafe extern "C" fn SzConfigTool_updateCompatibilityVersion(
         };
 
         let result = sz_configtool_lib::versioning::update_compatibility_version(config, version);
-        handle_result!(result)
+        lib_result(result)
     })
 }
 
@@ -1795,7 +1608,7 @@ pub unsafe extern "C" fn SzConfigTool_updateFeatureVersion(
         };
 
         let result = sz_configtool_lib::features::update_feature_version(config, version_str);
-        handle_result!(result)
+        lib_result(result)
     })
 }
 
@@ -1836,31 +1649,12 @@ pub unsafe extern "C" fn SzConfigTool_verifyCompatibilityVersion(
             }
         };
 
-        match sz_configtool_lib::versioning::verify_compatibility_version(config, version) {
-            Ok((message, _matches)) => match CString::new(message) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::versioning::verify_compatibility_version(config, version)
+                .map(|(message, _matches)| message),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -1902,7 +1696,7 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSection(
         };
 
         let result = sz_configtool_lib::config_sections::add_config_section(config, section);
-        handle_result!(result)
+        lib_result(result)
     })
 }
 
@@ -1944,7 +1738,7 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSection(
         };
 
         let result = sz_configtool_lib::config_sections::remove_config_section(config, section);
-        handle_result!(result)
+        lib_result(result)
     })
 }
 
@@ -2001,40 +1795,11 @@ pub unsafe extern "C" fn SzConfigTool_getConfigSection(
             }
         };
 
-        match sz_configtool_lib::config_sections::get_config_section(config, section, filter_opt) {
-            Ok(section_data) => match serde_json::to_string(&section_data) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to convert result: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize result: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::config_sections::get_config_section(config, section, filter_opt),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -2079,31 +1844,12 @@ pub unsafe extern "C" fn SzConfigTool_configSectionIsEmpty(
             }
         };
 
-        match sz_configtool_lib::config_sections::config_section_is_empty(config, section) {
-            Ok(is_empty) => match CString::new(if is_empty { "true" } else { "false" }) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::config_sections::config_section_is_empty(config, section)
+                .map(|is_empty| if is_empty { "true" } else { "false" }),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -2132,40 +1878,11 @@ pub unsafe extern "C" fn SzConfigTool_listConfigSections(
             }
         };
 
-        match sz_configtool_lib::config_sections::list_config_sections(config) {
-            Ok(sections) => match serde_json::to_string(&sections) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to convert result: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize result: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::config_sections::list_config_sections(config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -2245,36 +1962,17 @@ pub unsafe extern "C" fn SzConfigTool_addConfigSectionField(
             }
         };
 
-        match sz_configtool_lib::config_sections::add_config_section_field(
-            config,
-            section,
-            field,
-            &field_value,
-        ) {
-            Ok((modified_config, _counts)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::config_sections::add_config_section_field(
+                config,
+                section,
+                field,
+                &field_value,
+            )
+            .map(|(modified_config, _counts)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -2327,33 +2025,12 @@ pub unsafe extern "C" fn SzConfigTool_removeConfigSectionField(
             }
         };
 
-        match sz_configtool_lib::config_sections::remove_config_section_field(
-            config, section, field,
-        ) {
-            Ok((modified_config, _count)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::config_sections::remove_config_section_field(config, section, field)
+                .map(|(modified_config, _count)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -2423,31 +2100,12 @@ pub extern "C" fn SzConfigTool_addRule(
             .get("ERRULE_ID")
             .and_then(|v| v.as_i64())
             .unwrap_or(0);
-        match sz_configtool_lib::rules::add_rule(config, id, &rule_value) {
-            Ok((modified_config, _rule_id)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::rules::add_rule(config, id, &rule_value)
+                .map(|(modified_config, _rule_id)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -2498,7 +2156,7 @@ pub extern "C" fn SzConfigTool_deleteRule(
             }
         };
 
-        handle_result!(sz_configtool_lib::rules::delete_rule(config, code))
+        lib_result(sz_configtool_lib::rules::delete_rule(config, code))
     })
 }
 
@@ -2549,35 +2207,11 @@ pub extern "C" fn SzConfigTool_getRule(
             }
         };
 
-        match sz_configtool_lib::rules::get_rule(config, identifier) {
-            Ok(rule_json_value) => {
-                let rule_str = serde_json::to_string(&rule_json_value)
-                    .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
-                match CString::new(rule_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to convert result: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::rules::get_rule(config, identifier),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -2605,35 +2239,7 @@ pub extern "C" fn SzConfigTool_listRules(config_json: *const c_char) -> SzConfig
             }
         };
 
-        match sz_configtool_lib::rules::list_rules(config) {
-            Ok(rules_vec) => {
-                let rules_str = serde_json::to_string(&rules_vec)
-                    .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
-                match CString::new(rules_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to convert result: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(sz_configtool_lib::rules::list_rules(config), -4, -5)
     })
 }
 
@@ -2744,7 +2350,7 @@ pub extern "C" fn SzConfigTool_setRule(
             tier: sz_configtool_lib::helpers::field_update_i64(&rule_value, &["tier", "TIER"]),
         };
 
-        handle_result!(sz_configtool_lib::rules::set_rule(config, params))
+        lib_result(sz_configtool_lib::rules::set_rule(config, params))
     })
 }
 
@@ -2857,39 +2463,20 @@ pub extern "C" fn SzConfigTool_addStandardizeFunction(
             }
         };
 
-        match sz_configtool_lib::functions::standardize::add_standardize_function(
-            config,
-            code,
-            sz_configtool_lib::functions::standardize::AddStandardizeFunctionParams {
-                connect_str: conn_opt,
-                description: desc_opt,
-                language: lang_opt,
-            },
-        ) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::functions::standardize::add_standardize_function(
+                config,
+                code,
+                sz_configtool_lib::functions::standardize::AddStandardizeFunctionParams {
+                    connect_str: conn_opt,
+                    description: desc_opt,
+                    language: lang_opt,
+                },
+            )
+            .map(|(modified_config, _record)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -2940,31 +2527,12 @@ pub extern "C" fn SzConfigTool_deleteStandardizeFunction(
             }
         };
 
-        match sz_configtool_lib::functions::standardize::delete_standardize_function(config, code) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::functions::standardize::delete_standardize_function(config, code)
+                .map(|(modified_config, _record)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -3015,35 +2583,11 @@ pub extern "C" fn SzConfigTool_getStandardizeFunction(
             }
         };
 
-        match sz_configtool_lib::functions::standardize::get_standardize_function(config, code) {
-            Ok(value) => {
-                let json_str = serde_json::to_string(&value)
-                    .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
-                match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to convert result: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::functions::standardize::get_standardize_function(config, code),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -3073,35 +2617,11 @@ pub extern "C" fn SzConfigTool_listStandardizeFunctions(
             }
         };
 
-        match sz_configtool_lib::functions::standardize::list_standardize_functions(config) {
-            Ok(vec) => {
-                let json_str = serde_json::to_string(&vec)
-                    .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
-                match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to convert result: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::functions::standardize::list_standardize_functions(config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -3212,39 +2732,20 @@ pub extern "C" fn SzConfigTool_setStandardizeFunction(
             }
         };
 
-        match sz_configtool_lib::functions::standardize::set_standardize_function(
-            config,
-            code,
-            sz_configtool_lib::functions::standardize::SetStandardizeFunctionParams {
-                connect_str: conn_update,
-                description: desc_opt,
-                language: lang_opt,
-            },
-        ) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::functions::standardize::set_standardize_function(
+                config,
+                code,
+                sz_configtool_lib::functions::standardize::SetStandardizeFunctionParams {
+                    connect_str: conn_update,
+                    description: desc_opt,
+                    language: lang_opt,
+                },
+            )
+            .map(|(modified_config, _record)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -3357,39 +2858,20 @@ pub extern "C" fn SzConfigTool_addExpressionFunction(
             }
         };
 
-        match sz_configtool_lib::functions::expression::add_expression_function(
-            config,
-            code,
-            sz_configtool_lib::functions::expression::AddExpressionFunctionParams {
-                connect_str: conn_opt,
-                description: desc_opt,
-                language: lang_opt,
-            },
-        ) {
-            Ok((modified_config, _)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::functions::expression::add_expression_function(
+                config,
+                code,
+                sz_configtool_lib::functions::expression::AddExpressionFunctionParams {
+                    connect_str: conn_opt,
+                    description: desc_opt,
+                    language: lang_opt,
+                },
+            )
+            .map(|(modified_config, _)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -3440,31 +2922,12 @@ pub extern "C" fn SzConfigTool_deleteExpressionFunction(
             }
         };
 
-        match sz_configtool_lib::functions::expression::delete_expression_function(config, code) {
-            Ok((modified_config, _)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::functions::expression::delete_expression_function(config, code)
+                .map(|(modified_config, _)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -3515,35 +2978,11 @@ pub extern "C" fn SzConfigTool_getExpressionFunction(
             }
         };
 
-        match sz_configtool_lib::functions::expression::get_expression_function(config, code) {
-            Ok(value) => {
-                let json_str = serde_json::to_string(&value)
-                    .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
-                match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to convert result: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::functions::expression::get_expression_function(config, code),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -3573,35 +3012,11 @@ pub extern "C" fn SzConfigTool_listExpressionFunctions(
             }
         };
 
-        match sz_configtool_lib::functions::expression::list_expression_functions(config) {
-            Ok(vec) => {
-                let json_str = serde_json::to_string(&vec)
-                    .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
-                match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to convert result: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::functions::expression::list_expression_functions(config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -3712,39 +3127,20 @@ pub extern "C" fn SzConfigTool_setExpressionFunction(
             }
         };
 
-        match sz_configtool_lib::functions::expression::set_expression_function(
-            config,
-            code,
-            sz_configtool_lib::functions::expression::SetExpressionFunctionParams {
-                connect_str: conn_update,
-                description: desc_opt,
-                language: lang_opt,
-            },
-        ) {
-            Ok((modified_config, _)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::functions::expression::set_expression_function(
+                config,
+                code,
+                sz_configtool_lib::functions::expression::SetExpressionFunctionParams {
+                    connect_str: conn_update,
+                    description: desc_opt,
+                    language: lang_opt,
+                },
+            )
+            .map(|(modified_config, _)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -3876,40 +3272,21 @@ pub extern "C" fn SzConfigTool_addComparisonFunction(
             }
         };
 
-        match sz_configtool_lib::functions::comparison::add_comparison_function(
-            config,
-            code,
-            sz_configtool_lib::functions::comparison::AddComparisonFunctionParams {
-                connect_str: conn_opt,
-                description: desc_opt,
-                language: lang_opt,
-                anon_support: anon_opt,
-            },
-        ) {
-            Ok((modified_config, _)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::functions::comparison::add_comparison_function(
+                config,
+                code,
+                sz_configtool_lib::functions::comparison::AddComparisonFunctionParams {
+                    connect_str: conn_opt,
+                    description: desc_opt,
+                    language: lang_opt,
+                    anon_support: anon_opt,
+                },
+            )
+            .map(|(modified_config, _)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -3960,31 +3337,12 @@ pub extern "C" fn SzConfigTool_deleteComparisonFunction(
             }
         };
 
-        match sz_configtool_lib::functions::comparison::delete_comparison_function(config, code) {
-            Ok((modified_config, _)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::functions::comparison::delete_comparison_function(config, code)
+                .map(|(modified_config, _)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -4035,35 +3393,11 @@ pub extern "C" fn SzConfigTool_getComparisonFunction(
             }
         };
 
-        match sz_configtool_lib::functions::comparison::get_comparison_function(config, code) {
-            Ok(value) => {
-                let json_str = serde_json::to_string(&value)
-                    .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
-                match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to convert result: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::functions::comparison::get_comparison_function(config, code),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -4093,35 +3427,11 @@ pub extern "C" fn SzConfigTool_listComparisonFunctions(
             }
         };
 
-        match sz_configtool_lib::functions::comparison::list_comparison_functions(config) {
-            Ok(vec) => {
-                let json_str = serde_json::to_string(&vec)
-                    .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
-                match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to convert result: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::functions::comparison::list_comparison_functions(config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -4251,40 +3561,21 @@ pub extern "C" fn SzConfigTool_setComparisonFunction(
             }
         };
 
-        match sz_configtool_lib::functions::comparison::set_comparison_function(
-            config,
-            code,
-            sz_configtool_lib::functions::comparison::SetComparisonFunctionParams {
-                connect_str: conn_update,
-                description: desc_opt,
-                language: lang_opt,
-                anon_support: anon_opt,
-            },
-        ) {
-            Ok((modified_config, _)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::functions::comparison::set_comparison_function(
+                config,
+                code,
+                sz_configtool_lib::functions::comparison::SetComparisonFunctionParams {
+                    connect_str: conn_update,
+                    description: desc_opt,
+                    language: lang_opt,
+                    anon_support: anon_opt,
+                },
+            )
+            .map(|(modified_config, _)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -4391,31 +3682,12 @@ pub extern "C" fn SzConfigTool_addStandardizeCall(
             sfunc_code: sfunc,
         };
 
-        match sz_configtool_lib::calls::standardize::add_standardize_call(config, params) {
-            Ok((modified_config, _)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to convert result: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::calls::standardize::add_standardize_call(config, params)
+                .map(|(modified_config, _)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -4446,8 +3718,8 @@ pub extern "C" fn SzConfigTool_deleteStandardizeCall(
             }
         };
 
-        handle_result!(
-            sz_configtool_lib::calls::standardize::delete_standardize_call(config, sfcall_id)
+        lib_result(
+            sz_configtool_lib::calls::standardize::delete_standardize_call(config, sfcall_id),
         )
     })
 }
@@ -4479,38 +3751,14 @@ pub extern "C" fn SzConfigTool_getStandardizeCall(
             }
         };
 
-        match sz_configtool_lib::calls::standardize::get_standardize_call(
-            config,
-            sz_configtool_lib::calls::CallSelector::Id(sfcall_id),
-        ) {
-            Ok(value) => {
-                let json_str = serde_json::to_string(&value)
-                    .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
-                match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to convert result: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::calls::standardize::get_standardize_call(
+                config,
+                sz_configtool_lib::calls::CallSelector::Id(sfcall_id),
+            ),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -4540,105 +3788,11 @@ pub extern "C" fn SzConfigTool_listStandardizeCalls(
             }
         };
 
-        match sz_configtool_lib::calls::standardize::list_standardize_calls(config) {
-            Ok(vec) => {
-                let json_str = serde_json::to_string(&vec)
-                    .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));
-                match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to convert result: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Set (update) a standardize call
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_setStandardizeCall(
-    config_json: *const c_char,
-    sfcall_id: i64,
-    updates_json: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_setStandardizeCall", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let updates = unsafe {
-            if updates_json.is_null() {
-                set_error("updates_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(updates_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in updates_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let updates_value: serde_json::Value = match serde_json::from_str(updates) {
-            Ok(v) => v,
-            Err(e) => {
-                set_error(format!("Invalid JSON in updates_json: {e}"), -3);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -3,
-                };
-            }
-        };
-
-        let params = sz_configtool_lib::calls::standardize::SetStandardizeCallParams {
-            sfcall_id,
-            exec_order: updates_value.get("execOrder").and_then(|v| v.as_i64()),
-        };
-
-        handle_result!(sz_configtool_lib::calls::standardize::set_standardize_call(
-            config, params
-        ))
+        plain_json(
+            sz_configtool_lib::calls::standardize::list_standardize_calls(config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -4736,7 +3890,7 @@ pub extern "C" fn SzConfigTool_addComparisonThreshold(
             Some(un_likely_score)
         };
 
-        handle_result!(
+        lib_result(
             sz_configtool_lib::thresholds::add_comparison_threshold_by_id(
                 config,
                 cfunc_id,
@@ -4748,7 +3902,7 @@ pub extern "C" fn SzConfigTool_addComparisonThreshold(
                 likely_opt,
                 plausible_opt,
                 unlikely_opt,
-            )
+            ),
         )
     })
 }
@@ -4780,8 +3934,8 @@ pub extern "C" fn SzConfigTool_deleteComparisonThreshold(
             }
         };
 
-        handle_result!(
-            sz_configtool_lib::thresholds::delete_comparison_threshold_by_id(config, cfrtn_id)
+        lib_result(
+            sz_configtool_lib::thresholds::delete_comparison_threshold_by_id(config, cfrtn_id),
         )
     })
 }
@@ -4845,7 +3999,7 @@ pub extern "C" fn SzConfigTool_setComparisonThreshold(
             }
         };
 
-        handle_result!(
+        lib_result(
             sz_configtool_lib::thresholds::set_comparison_threshold_by_id(
                 config,
                 cfrtn_id,
@@ -4854,7 +4008,7 @@ pub extern "C" fn SzConfigTool_setComparisonThreshold(
                 updates_value.get("likelyScore").and_then(|v| v.as_i64()),
                 updates_value.get("plausibleScore").and_then(|v| v.as_i64()),
                 updates_value.get("unlikelyScore").and_then(|v| v.as_i64()),
-            )
+            ),
         )
     })
 }
@@ -4885,40 +4039,11 @@ pub extern "C" fn SzConfigTool_listComparisonThresholds(
             }
         };
 
-        match sz_configtool_lib::thresholds::list_comparison_thresholds(config) {
-            Ok(list) => match serde_json::to_string(&list) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize list: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::thresholds::list_comparison_thresholds(config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -5033,7 +4158,7 @@ pub extern "C" fn SzConfigTool_addGenericThreshold(
             }
         };
 
-        handle_result!(sz_configtool_lib::thresholds::add_generic_threshold(
+        lib_result(sz_configtool_lib::thresholds::add_generic_threshold(
             config,
             sz_configtool_lib::thresholds::AddGenericThresholdParams {
                 plan: Some(plan_str),
@@ -5107,7 +4232,7 @@ pub extern "C" fn SzConfigTool_validateGenericThreshold(
             }
         };
 
-        handle_result!(
+        lib_result(
             sz_configtool_lib::thresholds::validate_generic_threshold(
                 config,
                 plan_str,
@@ -5115,11 +4240,7 @@ pub extern "C" fn SzConfigTool_validateGenericThreshold(
                 redo_str,
                 feature_opt,
             )
-            .and_then(|check| {
-                // One serializer for every surface: the root library's
-                // `Serialize for GenericThresholdCheck` (schema v1).
-                serde_json::to_string(&check).map_err(sz_configtool_lib::SzConfigError::from)
-            })
+            .map(|check| json_text(&check)),
         )
     })
 }
@@ -5210,7 +4331,7 @@ pub extern "C" fn SzConfigTool_deleteGenericThreshold(
             }
         };
 
-        handle_result!(sz_configtool_lib::thresholds::delete_generic_threshold(
+        lib_result(sz_configtool_lib::thresholds::delete_generic_threshold(
             config,
             sz_configtool_lib::thresholds::DeleteGenericThresholdParams {
                 plan: Some(plan_str),
@@ -5318,7 +4439,7 @@ pub extern "C" fn SzConfigTool_setGenericThreshold(
         // (e.g. {"candidateCap": "500"}) is rejected as InvalidInput rather than
         // silently coerced to None and no-op'd. The FFI supplies plan/behavior out
         // of band (gplan_id + behavior C-strings), so overwrite those two after.
-        handle_result!((|| -> sz_configtool_lib::error::Result<String> {
+        lib_result((|| -> sz_configtool_lib::error::Result<String> {
             let mut params =
                 sz_configtool_lib::thresholds::SetGenericThresholdParams::try_from(&updates_value)?;
             params.plan = Some(&plan_code_str);
@@ -5354,40 +4475,11 @@ pub extern "C" fn SzConfigTool_listGenericThresholds(
             }
         };
 
-        match sz_configtool_lib::thresholds::list_generic_thresholds(config) {
-            Ok(list) => match serde_json::to_string(&list) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize list: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::thresholds::list_generic_thresholds(config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -5444,40 +4536,11 @@ pub extern "C" fn SzConfigTool_getFragment(
             }
         };
 
-        match sz_configtool_lib::fragments::get_fragment(config, code) {
-            Ok(fragment) => match serde_json::to_string(&fragment) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize fragment: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::fragments::get_fragment(config, code),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -5505,40 +4568,7 @@ pub extern "C" fn SzConfigTool_listFragments(config_json: *const c_char) -> SzCo
             }
         };
 
-        match sz_configtool_lib::fragments::list_fragments(config) {
-            Ok(list) => match serde_json::to_string(&list) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize list: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(sz_configtool_lib::fragments::list_fragments(config), -4, -5)
     })
 }
 
@@ -5600,31 +4630,12 @@ pub extern "C" fn SzConfigTool_addFragment(
             }
         };
 
-        match sz_configtool_lib::fragments::add_fragment(config, &fragment_value) {
-            Ok((modified_config, _frag_id)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::fragments::add_fragment(config, &fragment_value)
+                .map(|(modified_config, _frag_id)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -5675,7 +4686,7 @@ pub extern "C" fn SzConfigTool_deleteFragment(
             }
         };
 
-        handle_result!(sz_configtool_lib::fragments::delete_fragment(config, code))
+        lib_result(sz_configtool_lib::fragments::delete_fragment(config, code))
     })
 }
 
@@ -5728,40 +4739,11 @@ pub extern "C" fn SzConfigTool_getDataSource(
             }
         };
 
-        match sz_configtool_lib::datasources::get_data_source(config, ds_code) {
-            Ok(data_source) => match serde_json::to_string(&data_source) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize data source: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::datasources::get_data_source(config, ds_code),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -5850,8 +4832,8 @@ pub extern "C" fn SzConfigTool_setDataSource(
             retention_level: updates_value.get("retentionLevel").and_then(|v| v.as_str()),
         };
 
-        handle_result!(sz_configtool_lib::datasources::set_data_source(
-            config, params
+        lib_result(sz_configtool_lib::datasources::set_data_source(
+            config, params,
         ))
     })
 }
@@ -5988,51 +4970,31 @@ pub extern "C" fn SzConfigTool_addFeature(
             .or_else(|| feature_config.get("rtypeId"))
             .and_then(|v| v.as_i64());
 
-        match sz_configtool_lib::features::add_feature(
-            config,
-            sz_configtool_lib::features::AddFeatureParams {
-                feature: code,
-                element_list,
-                class,
-                behavior,
-                candidates,
-                anonymize,
-                derived,
-                history,
-                matchkey,
-                standardize,
-                expression,
-                comparison,
-                version,
-                rtype_id,
-                // #37: honour a caller-supplied FTYPE_ID from the feature JSON.
-                id: feature_config.get("id").and_then(|v| v.as_i64()),
-            },
-        ) {
-            Ok(modified_config) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::features::add_feature(
+                config,
+                sz_configtool_lib::features::AddFeatureParams {
+                    feature: code,
+                    element_list,
+                    class,
+                    behavior,
+                    candidates,
+                    anonymize,
+                    derived,
+                    history,
+                    matchkey,
+                    standardize,
+                    expression,
+                    comparison,
+                    version,
+                    rtype_id,
+                    // #37: honour a caller-supplied FTYPE_ID from the feature JSON.
+                    id: feature_config.get("id").and_then(|v| v.as_i64()),
+                },
+            ),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -6083,8 +5045,8 @@ pub extern "C" fn SzConfigTool_deleteFeature(
             }
         };
 
-        handle_result!(sz_configtool_lib::features::delete_feature(
-            config, code_or_id
+        lib_result(sz_configtool_lib::features::delete_feature(
+            config, code_or_id,
         ))
     })
 }
@@ -6186,7 +5148,7 @@ pub extern "C" fn SzConfigTool_setFeature(
             .or_else(|| updates_config.get("RTYPE_ID"))
             .and_then(|v| v.as_i64());
 
-        handle_result!(sz_configtool_lib::features::set_feature(
+        lib_result(sz_configtool_lib::features::set_feature(
             config,
             sz_configtool_lib::features::SetFeatureParams {
                 feature: code_or_id,
@@ -6199,7 +5161,7 @@ pub extern "C" fn SzConfigTool_setFeature(
                 class,
                 version,
                 rtype_id,
-            }
+            },
         ))
     })
 }
@@ -6295,13 +5257,13 @@ pub extern "C" fn SzConfigTool_addBehaviorOverride(
             }
         };
 
-        handle_result!(
+        lib_result(
             sz_configtool_lib::behavior_overrides::add_behavior_override(
                 config,
                 sz_configtool_lib::behavior_overrides::AddBehaviorOverrideParams::new(
-                    feature, utype, bhvr
-                )
-            )
+                    feature, utype, bhvr,
+                ),
+            ),
         )
     })
 }
@@ -6374,8 +5336,8 @@ pub extern "C" fn SzConfigTool_deleteBehaviorOverride(
             }
         };
 
-        handle_result!(
-            sz_configtool_lib::behavior_overrides::delete_behavior_override(config, feature, utype)
+        lib_result(
+            sz_configtool_lib::behavior_overrides::delete_behavior_override(config, feature, utype),
         )
     })
 }
@@ -6406,11 +5368,7 @@ pub extern "C" fn SzConfigTool_listBehaviorOverrides(
             }
         };
 
-        let result = sz_configtool_lib::behavior_overrides::list_behavior_overrides(config)
-            .and_then(|vec| {
-                serde_json::to_string(&vec).map_err(|e| SzConfigError::JsonParse(e.to_string()))
-            });
-        handle_result!(result)
+        lib_json(sz_configtool_lib::behavior_overrides::list_behavior_overrides(config))
     })
 }
 
@@ -6443,12 +5401,7 @@ pub extern "C" fn SzConfigTool_listBehaviorOverridesResolved(
             }
         };
 
-        let result =
-            sz_configtool_lib::behavior_overrides::list_behavior_overrides_resolved(config)
-                .and_then(|vec| {
-                    serde_json::to_string(&vec).map_err(|e| SzConfigError::JsonParse(e.to_string()))
-                });
-        handle_result!(result)
+        lib_json(sz_configtool_lib::behavior_overrides::list_behavior_overrides_resolved(config))
     })
 }
 
@@ -6481,7 +5434,7 @@ pub extern "C" fn SzConfigTool_validateConfig(config_json: *const c_char) -> SzC
 
         let result =
             sz_configtool_lib::validation::validate_config(config).map(|()| "OK".to_string());
-        handle_result!(result)
+        lib_result(result)
     })
 }
 
@@ -6517,7 +5470,7 @@ pub extern "C" fn SzConfigTool_renderConfig(
 
         let indent = if indent < 0 { 0usize } else { indent as usize };
         let result = sz_configtool_lib::export::render_config(config, indent);
-        handle_result!(result)
+        lib_result(result)
     })
 }
 
@@ -6617,7 +5570,7 @@ pub extern "C" fn SzConfigTool_addElement(
             id: element_config.get("id").and_then(|v| v.as_i64()),
         };
 
-        handle_result!(sz_configtool_lib::elements::add_element(config, params))
+        lib_result(sz_configtool_lib::elements::add_element(config, params))
     })
 }
 
@@ -6668,7 +5621,7 @@ pub extern "C" fn SzConfigTool_deleteElement(
             }
         };
 
-        handle_result!(sz_configtool_lib::elements::delete_element(config, code))
+        lib_result(sz_configtool_lib::elements::delete_element(config, code))
     })
 }
 
@@ -6764,7 +5717,7 @@ pub extern "C" fn SzConfigTool_setElement(
                 .or_else(|| updates_config.get("DATA_TYPE").and_then(|v| v.as_str())),
         };
 
-        handle_result!(sz_configtool_lib::elements::set_element(config, params))
+        lib_result(sz_configtool_lib::elements::set_element(config, params))
     })
 }
 
@@ -7001,31 +5954,12 @@ pub extern "C" fn SzConfigTool_addExpressionCall(
             is_virtual: virtual_str,
         };
 
-        match sz_configtool_lib::calls::expression::add_expression_call(config, call_params) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::calls::expression::add_expression_call(config, call_params)
+                .map(|(modified_config, _record)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -7056,9 +5990,7 @@ pub extern "C" fn SzConfigTool_deleteExpressionCall(
             }
         };
 
-        handle_result!(
-            sz_configtool_lib::calls::expression::delete_expression_call(config, efcall_id)
-        )
+        lib_result(sz_configtool_lib::calls::expression::delete_expression_call(config, efcall_id))
     })
 }
 
@@ -7089,43 +6021,14 @@ pub extern "C" fn SzConfigTool_getExpressionCall(
             }
         };
 
-        match sz_configtool_lib::calls::expression::get_expression_call(
-            config,
-            sz_configtool_lib::calls::CallSelector::Id(efcall_id),
-        ) {
-            Ok(record) => match serde_json::to_string(&record) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize record: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::calls::expression::get_expression_call(
+                config,
+                sz_configtool_lib::calls::CallSelector::Id(efcall_id),
+            ),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -7155,110 +6058,11 @@ pub extern "C" fn SzConfigTool_listExpressionCalls(
             }
         };
 
-        match sz_configtool_lib::calls::expression::list_expression_calls(config) {
-            Ok(list) => match serde_json::to_string(&list) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize list: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Set (update) an expression call
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_setExpressionCall(
-    config_json: *const c_char,
-    efcall_id: i64,
-    updates_json: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_setExpressionCall", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let updates = unsafe {
-            if updates_json.is_null() {
-                set_error("updates_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(updates_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in updates_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let updates_value: serde_json::Value = match serde_json::from_str(updates) {
-            Ok(v) => v,
-            Err(e) => {
-                set_error(format!("Invalid JSON in updates_json: {e}"), -3);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -3,
-                };
-            }
-        };
-
-        let params = sz_configtool_lib::calls::expression::SetExpressionCallParams {
-            efcall_id,
-            exec_order: updates_value.get("execOrder").and_then(|v| v.as_i64()),
-        };
-
-        handle_result!(sz_configtool_lib::calls::expression::set_expression_call(
-            config, params
-        ))
+        plain_json(
+            sz_configtool_lib::calls::expression::list_expression_calls(config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -7384,41 +6188,22 @@ pub extern "C" fn SzConfigTool_addComparisonCall(
             }
         };
 
-        match sz_configtool_lib::calls::comparison::add_comparison_call(
-            config,
-            sz_configtool_lib::calls::comparison::AddComparisonCallParams {
-                ftype_code: ftype.to_string(),
-                cfunc_code: cfunc.to_string(),
-                element_list,
-                // CFCALL_ID is not exposed over this fixed C signature; always
-                // auto-assign (#37).
-                id: None,
-            },
-        ) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::calls::comparison::add_comparison_call(
+                config,
+                sz_configtool_lib::calls::comparison::AddComparisonCallParams {
+                    ftype_code: ftype.to_string(),
+                    cfunc_code: cfunc.to_string(),
+                    element_list,
+                    // CFCALL_ID is not exposed over this fixed C signature; always
+                    // auto-assign (#37).
+                    id: None,
+                },
+            )
+            .map(|(modified_config, _record)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -7449,9 +6234,7 @@ pub extern "C" fn SzConfigTool_deleteComparisonCall(
             }
         };
 
-        handle_result!(
-            sz_configtool_lib::calls::comparison::delete_comparison_call(config, cfcall_id)
-        )
+        lib_result(sz_configtool_lib::calls::comparison::delete_comparison_call(config, cfcall_id))
     })
 }
 
@@ -7482,43 +6265,14 @@ pub extern "C" fn SzConfigTool_getComparisonCall(
             }
         };
 
-        match sz_configtool_lib::calls::comparison::get_comparison_call(
-            config,
-            sz_configtool_lib::calls::CallSelector::Id(cfcall_id),
-        ) {
-            Ok(record) => match serde_json::to_string(&record) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize record: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::calls::comparison::get_comparison_call(
+                config,
+                sz_configtool_lib::calls::CallSelector::Id(cfcall_id),
+            ),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -7548,110 +6302,11 @@ pub extern "C" fn SzConfigTool_listComparisonCalls(
             }
         };
 
-        match sz_configtool_lib::calls::comparison::list_comparison_calls(config) {
-            Ok(list) => match serde_json::to_string(&list) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize list: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Set (update) a comparison call
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_setComparisonCall(
-    config_json: *const c_char,
-    cfcall_id: i64,
-    updates_json: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_setComparisonCall", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let updates = unsafe {
-            if updates_json.is_null() {
-                set_error("updates_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(updates_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in updates_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let updates_value: serde_json::Value = match serde_json::from_str(updates) {
-            Ok(v) => v,
-            Err(e) => {
-                set_error(format!("Invalid JSON in updates_json: {e}"), -3);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -3,
-                };
-            }
-        };
-
-        let params = sz_configtool_lib::calls::comparison::SetComparisonCallParams {
-            cfcall_id,
-            exec_order: updates_value.get("execOrder").and_then(|v| v.as_i64()),
-        };
-
-        handle_result!(sz_configtool_lib::calls::comparison::set_comparison_call(
-            config, params
-        ))
+        plain_json(
+            sz_configtool_lib::calls::comparison::list_comparison_calls(config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -7790,38 +6445,19 @@ pub extern "C" fn SzConfigTool_addDistinctCall(
             }
         };
 
-        match sz_configtool_lib::calls::distinct::add_distinct_call(
-            config,
-            sz_configtool_lib::calls::distinct::AddDistinctCallParams {
-                ftype_code: ftype.to_string(),
-                dfunc_code: dfunc.to_string(),
-                element_list,
-            },
-        ) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::calls::distinct::add_distinct_call(
+                config,
+                sz_configtool_lib::calls::distinct::AddDistinctCallParams {
+                    ftype_code: ftype.to_string(),
+                    dfunc_code: dfunc.to_string(),
+                    element_list,
+                },
+            )
+            .map(|(modified_config, _record)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -7862,31 +6498,11 @@ pub extern "C" fn SzConfigTool_deleteDistinctCall(
             }
         };
 
-        match sz_configtool_lib::calls::distinct::delete_distinct_call(config, dfcall_id) {
-            Ok(modified_config) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::calls::distinct::delete_distinct_call(config, dfcall_id),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -7929,43 +6545,14 @@ pub extern "C" fn SzConfigTool_getDistinctCall(
             }
         };
 
-        match sz_configtool_lib::calls::distinct::get_distinct_call(
-            config,
-            sz_configtool_lib::calls::CallSelector::Id(dfcall_id),
-        ) {
-            Ok(record) => match serde_json::to_string(&record) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize record: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::calls::distinct::get_distinct_call(
+                config,
+                sz_configtool_lib::calls::CallSelector::Id(dfcall_id),
+            ),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -8006,145 +6593,11 @@ pub extern "C" fn SzConfigTool_listDistinctCalls(
             }
         };
 
-        match sz_configtool_lib::calls::distinct::list_distinct_calls(config) {
-            Ok(list) => match serde_json::to_string(&list) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize list: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Set (update) a distinct call
-///
-/// Note: This is a stub function - not implemented in Python version.
-///
-/// # Parameters
-/// - `config_json`: Configuration JSON string
-/// - `dfcall_id`: Distinct call ID to update
-/// - `updates_json`: JSON object with fields to update
-///
-/// # Returns
-/// SzConfigTool_result with modified config or error
-///
-/// # Memory
-/// Caller must free result.response with SzConfigTool_free()
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_setDistinctCall(
-    config_json: *const c_char,
-    dfcall_id: i64,
-    updates_json: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_setDistinctCall", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let updates = unsafe {
-            if updates_json.is_null() {
-                set_error("updates_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(updates_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in updates_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let updates_value: serde_json::Value = match serde_json::from_str(updates) {
-            Ok(v) => v,
-            Err(e) => {
-                set_error(format!("Failed to parse updates_json: {e}"), -3);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -3,
-                };
-            }
-        };
-
-        let params = sz_configtool_lib::calls::distinct::SetDistinctCallParams {
-            dfcall_id,
-            exec_order: updates_value.get("execOrder").and_then(|v| v.as_i64()),
-        };
-
-        match sz_configtool_lib::calls::distinct::set_distinct_call(config, params) {
-            Ok(modified_config) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::calls::distinct::list_distinct_calls(config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -8153,422 +6606,6 @@ pub extern "C" fn SzConfigTool_setDistinctCall(
 // ============================================================================
 
 // --- MATCHING FUNCTIONS (Placeholders) ---
-
-/// Add a matching function (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_addMatchingFunction(
-    config_json: *const c_char,
-    rtype_code: *const c_char,
-    matching_func: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_addMatchingFunction", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let rtype = unsafe {
-            if rtype_code.is_null() {
-                set_error("rtype_code is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(rtype_code).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let matching = unsafe {
-            if matching_func.is_null() {
-                set_error("matching_func is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(matching_func).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in matching_func: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::matching::add_matching_function(config, rtype, matching)
-        {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Delete a matching function (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_deleteMatchingFunction(
-    config_json: *const c_char,
-    rtype_code: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_deleteMatchingFunction", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let rtype = unsafe {
-            if rtype_code.is_null() {
-                set_error("rtype_code is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(rtype_code).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::matching::delete_matching_function(config, rtype) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Get a matching function (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_getMatchingFunction(
-    config_json: *const c_char,
-    rtype_code: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_getMatchingFunction", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let rtype = unsafe {
-            if rtype_code.is_null() {
-                set_error("rtype_code is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(rtype_code).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::matching::get_matching_function(config, rtype) {
-            Ok(record) => match serde_json::to_string(&record) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize record: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// List all matching functions (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_listMatchingFunctions(
-    config_json: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_listMatchingFunctions", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::matching::list_matching_functions(config) {
-            Ok(list) => match serde_json::to_string(&list) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize list: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Set (update) a matching function (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_setMatchingFunction(
-    config_json: *const c_char,
-    rtype_code: *const c_char,
-    matching_func: *const c_char, // NULL allowed
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_setMatchingFunction", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let rtype = unsafe {
-            if rtype_code.is_null() {
-                set_error("rtype_code is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(rtype_code).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let matching_opt = if matching_func.is_null() {
-            None
-        } else {
-            unsafe {
-                match CStr::from_ptr(matching_func).to_str() {
-                    Ok(s) => Some(s),
-                    Err(e) => {
-                        set_error(format!("Invalid UTF-8 in matching_func: {e}"), -2);
-                        return SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -2,
-                        };
-                    }
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::matching::set_matching_function(
-            config,
-            rtype,
-            matching_opt,
-        ) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
 
 // --- DISTINCT FUNCTIONS (Fully Implemented) ---
 
@@ -8675,40 +6712,21 @@ pub extern "C" fn SzConfigTool_addDistinctFunction(
             }
         };
 
-        match sz_configtool_lib::functions::distinct::add_distinct_function(
-            config,
-            dfunc,
-            sz_configtool_lib::functions::distinct::AddDistinctFunctionParams {
-                connect_str: connect,
-                description: desc_opt,
-                language: lang_opt,
-                anon_support: None,
-            },
-        ) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::functions::distinct::add_distinct_function(
+                config,
+                dfunc,
+                sz_configtool_lib::functions::distinct::AddDistinctFunctionParams {
+                    connect_str: connect,
+                    description: desc_opt,
+                    language: lang_opt,
+                    anon_support: None,
+                },
+            )
+            .map(|(modified_config, _record)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -8759,31 +6777,12 @@ pub extern "C" fn SzConfigTool_deleteDistinctFunction(
             }
         };
 
-        match sz_configtool_lib::functions::distinct::delete_distinct_function(config, dfunc) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::functions::distinct::delete_distinct_function(config, dfunc)
+                .map(|(modified_config, _record)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -8834,40 +6833,11 @@ pub extern "C" fn SzConfigTool_getDistinctFunction(
             }
         };
 
-        match sz_configtool_lib::functions::distinct::get_distinct_function(config, dfunc) {
-            Ok(record) => match serde_json::to_string(&record) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize record: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::functions::distinct::get_distinct_function(config, dfunc),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -8897,40 +6867,11 @@ pub extern "C" fn SzConfigTool_listDistinctFunctions(
             }
         };
 
-        match sz_configtool_lib::functions::distinct::list_distinct_functions(config) {
-            Ok(list) => match serde_json::to_string(&list) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize list: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_json(
+            sz_configtool_lib::functions::distinct::list_distinct_functions(config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -9039,40 +6980,21 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
             }
         };
 
-        match sz_configtool_lib::functions::distinct::set_distinct_function(
-            config,
-            dfunc,
-            sz_configtool_lib::functions::distinct::SetDistinctFunctionParams {
-                connect_str: connect_update,
-                description: desc_opt,
-                language: lang_opt,
-                anon_support: None,
-            },
-        ) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
+        plain_result(
+            sz_configtool_lib::functions::distinct::set_distinct_function(
+                config,
+                dfunc,
+                sz_configtool_lib::functions::distinct::SetDistinctFunctionParams {
+                    connect_str: connect_update,
+                    description: desc_opt,
+                    language: lang_opt,
+                    anon_support: None,
+                },
+            )
+            .map(|(modified_config, _record)| modified_config),
+            -4,
+            -5,
+        )
     })
 }
 
@@ -9082,1260 +7004,11 @@ pub extern "C" fn SzConfigTool_setDistinctFunction(
 
 // --- CANDIDATE FUNCTIONS ---
 
-/// Add a candidate function (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_addCandidateFunction(
-    config_json: *const c_char,
-    rtype_code: *const c_char,
-    candidate_func: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_addCandidateFunction", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let rtype = unsafe {
-            if rtype_code.is_null() {
-                set_error("rtype_code is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(rtype_code).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let candidate = unsafe {
-            if candidate_func.is_null() {
-                set_error("candidate_func is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(candidate_func).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in candidate_func: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::candidate::add_candidate_function(
-            config, rtype, candidate,
-        ) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Delete a candidate function (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_deleteCandidateFunction(
-    config_json: *const c_char,
-    rtype_code: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_deleteCandidateFunction", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let rtype = unsafe {
-            if rtype_code.is_null() {
-                set_error("rtype_code is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(rtype_code).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::candidate::delete_candidate_function(config, rtype) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Get a candidate function (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_getCandidateFunction(
-    config_json: *const c_char,
-    rtype_code: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_getCandidateFunction", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let rtype = unsafe {
-            if rtype_code.is_null() {
-                set_error("rtype_code is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(rtype_code).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::candidate::get_candidate_function(config, rtype) {
-            Ok(record) => match serde_json::to_string(&record) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize record: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// List all candidate functions (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_listCandidateFunctions(
-    config_json: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_listCandidateFunctions", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::candidate::list_candidate_functions(config) {
-            Ok(list) => match serde_json::to_string(&list) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize list: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Set (update) a candidate function (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_setCandidateFunction(
-    config_json: *const c_char,
-    rtype_code: *const c_char,
-    candidate_func: *const c_char, // NULL allowed
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_setCandidateFunction", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let rtype = unsafe {
-            if rtype_code.is_null() {
-                set_error("rtype_code is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(rtype_code).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let candidate_opt = if candidate_func.is_null() {
-            None
-        } else {
-            unsafe {
-                match CStr::from_ptr(candidate_func).to_str() {
-                    Ok(s) => Some(s),
-                    Err(e) => {
-                        set_error(format!("Invalid UTF-8 in candidate_func: {e}"), -2);
-                        return SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -2,
-                        };
-                    }
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::candidate::set_candidate_function(
-            config,
-            rtype,
-            candidate_opt,
-        ) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
 // --- VALIDATION FUNCTIONS ---
-
-/// Add a validation function (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_addValidationFunction(
-    config_json: *const c_char,
-    attr_code: *const c_char,
-    validation_func: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_addValidationFunction", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let attr = unsafe {
-            if attr_code.is_null() {
-                set_error("attr_code is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(attr_code).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in attr_code: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let validation = unsafe {
-            if validation_func.is_null() {
-                set_error("validation_func is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(validation_func).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in validation_func: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::validation::add_validation_function(
-            config, attr, validation,
-        ) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Delete a validation function (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_deleteValidationFunction(
-    config_json: *const c_char,
-    attr_code: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_deleteValidationFunction", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let attr = unsafe {
-            if attr_code.is_null() {
-                set_error("attr_code is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(attr_code).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in attr_code: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::validation::delete_validation_function(config, attr) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Get a validation function (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_getValidationFunction(
-    config_json: *const c_char,
-    attr_code: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_getValidationFunction", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let attr = unsafe {
-            if attr_code.is_null() {
-                set_error("attr_code is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(attr_code).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in attr_code: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::validation::get_validation_function(config, attr) {
-            Ok(record) => match serde_json::to_string(&record) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize record: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// List all validation functions (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_listValidationFunctions(
-    config_json: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_listValidationFunctions", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::validation::list_validation_functions(config) {
-            Ok(list) => match serde_json::to_string(&list) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize list: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Set (update) a validation function (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_setValidationFunction(
-    config_json: *const c_char,
-    attr_code: *const c_char,
-    validation_func: *const c_char, // NULL allowed
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_setValidationFunction", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let attr = unsafe {
-            if attr_code.is_null() {
-                set_error("attr_code is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(attr_code).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in attr_code: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let validation_opt = if validation_func.is_null() {
-            None
-        } else {
-            unsafe {
-                match CStr::from_ptr(validation_func).to_str() {
-                    Ok(s) => Some(s),
-                    Err(e) => {
-                        set_error(format!("Invalid UTF-8 in validation_func: {e}"), -2);
-                        return SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -2,
-                        };
-                    }
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::validation::set_validation_function(
-            config,
-            attr,
-            validation_opt,
-        ) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
 
 // ============================================================================
 // BATCH 14: SCORING FUNCTION OPERATIONS (Placeholders) - FINAL BATCH!
 // ============================================================================
-
-/// Add a scoring function (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_addScoringFunction(
-    config_json: *const c_char,
-    rtype_code: *const c_char,
-    scoring_func: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_addScoringFunction", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let rtype = unsafe {
-            if rtype_code.is_null() {
-                set_error("rtype_code is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(rtype_code).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let scoring = unsafe {
-            if scoring_func.is_null() {
-                set_error("scoring_func is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(scoring_func).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in scoring_func: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::scoring::add_scoring_function(config, rtype, scoring) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Delete a scoring function (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_deleteScoringFunction(
-    config_json: *const c_char,
-    rtype_code: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_deleteScoringFunction", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let rtype = unsafe {
-            if rtype_code.is_null() {
-                set_error("rtype_code is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(rtype_code).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::scoring::delete_scoring_function(config, rtype) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Get a scoring function (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_getScoringFunction(
-    config_json: *const c_char,
-    rtype_code: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_getScoringFunction", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let rtype = unsafe {
-            if rtype_code.is_null() {
-                set_error("rtype_code is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(rtype_code).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::scoring::get_scoring_function(config, rtype) {
-            Ok(record) => match serde_json::to_string(&record) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize record: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// List all scoring functions (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_listScoringFunctions(
-    config_json: *const c_char,
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_listScoringFunctions", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::scoring::list_scoring_functions(config) {
-            Ok(list) => match serde_json::to_string(&list) {
-                Ok(json_str) => match CString::new(json_str) {
-                    Ok(c_str) => {
-                        clear_error();
-                        SzConfigTool_result {
-                            response: c_str.into_raw(),
-                            returnCode: 0,
-                        }
-                    }
-                    Err(e) => {
-                        set_error(format!("Failed to create C string: {e}"), -4);
-                        SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -4,
-                        }
-                    }
-                },
-                Err(e) => {
-                    set_error(format!("Failed to serialize list: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
-
-/// Set (update) a scoring function (placeholder - not implemented)
-#[unsafe(no_mangle)]
-pub extern "C" fn SzConfigTool_setScoringFunction(
-    config_json: *const c_char,
-    rtype_code: *const c_char,
-    scoring_func: *const c_char, // NULL allowed
-) -> SzConfigTool_result {
-    ffi_guard("SzConfigTool_setScoringFunction", || {
-        let config = unsafe {
-            if config_json.is_null() {
-                set_error("config_json is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(config_json).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in config_json: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let rtype = unsafe {
-            if rtype_code.is_null() {
-                set_error("rtype_code is null".to_string(), -1);
-                return SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -1,
-                };
-            }
-            match CStr::from_ptr(rtype_code).to_str() {
-                Ok(s) => s,
-                Err(e) => {
-                    set_error(format!("Invalid UTF-8 in rtype_code: {e}"), -2);
-                    return SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -2,
-                    };
-                }
-            }
-        };
-
-        let scoring_opt = if scoring_func.is_null() {
-            None
-        } else {
-            unsafe {
-                match CStr::from_ptr(scoring_func).to_str() {
-                    Ok(s) => Some(s),
-                    Err(e) => {
-                        set_error(format!("Invalid UTF-8 in scoring_func: {e}"), -2);
-                        return SzConfigTool_result {
-                            response: std::ptr::null_mut(),
-                            returnCode: -2,
-                        };
-                    }
-                }
-            }
-        };
-
-        match sz_configtool_lib::functions::scoring::set_scoring_function(
-            config,
-            rtype,
-            scoring_opt,
-        ) {
-            Ok((modified_config, _record)) => match CString::new(modified_config) {
-                Ok(c_str) => {
-                    clear_error();
-                    SzConfigTool_result {
-                        response: c_str.into_raw(),
-                        returnCode: 0,
-                    }
-                }
-                Err(e) => {
-                    set_error(format!("Failed to create C string: {e}"), -4);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -4,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(e.to_string(), -5);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -5,
-                }
-            }
-        }
-    })
-}
 
 // ============================================================================
 // Wave 4A additions (#38): feature-element mutators, settings, cascade deletes
@@ -10410,8 +7083,8 @@ pub extern "C" fn SzConfigTool_addElementToFeature(
             derived: options.get("derived").and_then(|v| v.as_str()),
         };
 
-        handle_result!(sz_configtool_lib::elements::add_element_to_feature(
-            config, params
+        lib_result(sz_configtool_lib::elements::add_element_to_feature(
+            config, params,
         ))
     })
 }
@@ -10430,8 +7103,8 @@ pub extern "C" fn SzConfigTool_deleteElementFromFeature(
         let config = ffi_required_str!(config_json, "config_json");
         let feature = ffi_required_str!(feature_code, "feature_code");
         let element = ffi_required_str!(element_code, "element_code");
-        handle_result!(sz_configtool_lib::elements::delete_element_from_feature(
-            config, feature, element
+        lib_result(sz_configtool_lib::elements::delete_element_from_feature(
+            config, feature, element,
         ))
     })
 }
@@ -10456,7 +7129,7 @@ pub extern "C" fn SzConfigTool_setSetting(
         let config = ffi_required_str!(config_json, "config_json");
         let name = ffi_required_str!(name, "name");
         let value = ffi_required_str!(value, "value");
-        handle_result!((|| {
+        lib_result((|| {
             let value: serde_json::Value = serde_json::from_str(value).map_err(|e| {
                 sz_configtool_lib::error::SzConfigError::InvalidInput(format!(
                     "value is not valid JSON: {e}"
@@ -10479,11 +7152,11 @@ pub extern "C" fn SzConfigTool_deleteComparisonFunctionCascade(
     ffi_guard("SzConfigTool_deleteComparisonFunctionCascade", || {
         let config = ffi_required_str!(config_json, "config_json");
         let code = ffi_required_str!(cfunc_code, "cfunc_code");
-        handle_result!(
+        lib_result(
             sz_configtool_lib::functions::comparison::delete_comparison_function_cascade(
-                config, code
+                config, code,
             )
-            .map(|(json, _)| json)
+            .map(|(json, _)| json),
         )
     })
 }
@@ -10500,11 +7173,11 @@ pub extern "C" fn SzConfigTool_deleteExpressionFunctionCascade(
     ffi_guard("SzConfigTool_deleteExpressionFunctionCascade", || {
         let config = ffi_required_str!(config_json, "config_json");
         let code = ffi_required_str!(efunc_code, "efunc_code");
-        handle_result!(
+        lib_result(
             sz_configtool_lib::functions::expression::delete_expression_function_cascade(
-                config, code
+                config, code,
             )
-            .map(|(json, _)| json)
+            .map(|(json, _)| json),
         )
     })
 }
@@ -10521,11 +7194,11 @@ pub extern "C" fn SzConfigTool_deleteStandardizeFunctionCascade(
     ffi_guard("SzConfigTool_deleteStandardizeFunctionCascade", || {
         let config = ffi_required_str!(config_json, "config_json");
         let code = ffi_required_str!(sfunc_code, "sfunc_code");
-        handle_result!(
+        lib_result(
             sz_configtool_lib::functions::standardize::delete_standardize_function_cascade(
-                config, code
+                config, code,
             )
-            .map(|(json, _)| json)
+            .map(|(json, _)| json),
         )
     })
 }
@@ -10542,29 +7215,9 @@ pub extern "C" fn SzConfigTool_deleteStandardizeFunctionCascade(
 // call-element deletes are new FFI surface (there were no prior wrappers).
 // ============================================================================
 
-/// Serialize a single call `Value` result into an FFI result.
-macro_rules! ffi_json_value {
-    ($result:expr) => {
-        match $result {
-            Ok(value) => match serde_json::to_string(&value) {
-                Ok(s) => handle_result!(Ok::<String, sz_configtool_lib::error::SzConfigError>(s)),
-                Err(e) => {
-                    set_error(format!("Failed to serialize result: {e}"), -3);
-                    SzConfigTool_result {
-                        response: std::ptr::null_mut(),
-                        returnCode: -3,
-                    }
-                }
-            },
-            Err(e) => {
-                set_error(format!("{e}"), -2);
-                SzConfigTool_result {
-                    response: std::ptr::null_mut(),
-                    returnCode: -2,
-                }
-            }
-        }
-    };
+/// FFI result of a single call `Value` (error: plain message, -2).
+fn json_value_result(result: Result<serde_json::Value, SzConfigError>) -> SzConfigTool_result {
+    plain_result(result.map(|value| value.to_string()), -1, -2)
 }
 
 /// Get the comparison call bound to a feature (by feature code).
@@ -10579,9 +7232,9 @@ pub extern "C" fn SzConfigTool_getComparisonCallByFeature(
     ffi_guard("SzConfigTool_getComparisonCallByFeature", || {
         let config = ffi_required_str!(config_json, "config_json");
         let feature = ffi_required_str!(feature_code, "feature_code");
-        ffi_json_value!(sz_configtool_lib::calls::comparison::get_comparison_call(
+        json_value_result(sz_configtool_lib::calls::comparison::get_comparison_call(
             config,
-            sz_configtool_lib::calls::CallSelector::Feature(feature)
+            sz_configtool_lib::calls::CallSelector::Feature(feature),
         ))
     })
 }
@@ -10598,9 +7251,9 @@ pub extern "C" fn SzConfigTool_getDistinctCallByFeature(
     ffi_guard("SzConfigTool_getDistinctCallByFeature", || {
         let config = ffi_required_str!(config_json, "config_json");
         let feature = ffi_required_str!(feature_code, "feature_code");
-        ffi_json_value!(sz_configtool_lib::calls::distinct::get_distinct_call(
+        json_value_result(sz_configtool_lib::calls::distinct::get_distinct_call(
             config,
-            sz_configtool_lib::calls::CallSelector::Feature(feature)
+            sz_configtool_lib::calls::CallSelector::Feature(feature),
         ))
     })
 }
@@ -10619,9 +7272,9 @@ pub extern "C" fn SzConfigTool_getStandardizeCallByFeature(
     ffi_guard("SzConfigTool_getStandardizeCallByFeature", || {
         let config = ffi_required_str!(config_json, "config_json");
         let feature = ffi_required_str!(feature_code, "feature_code");
-        ffi_json_value!(sz_configtool_lib::calls::standardize::get_standardize_call(
+        json_value_result(sz_configtool_lib::calls::standardize::get_standardize_call(
             config,
-            sz_configtool_lib::calls::CallSelector::Feature(feature)
+            sz_configtool_lib::calls::CallSelector::Feature(feature),
         ))
     })
 }
@@ -10640,9 +7293,9 @@ pub extern "C" fn SzConfigTool_getExpressionCallByFeature(
     ffi_guard("SzConfigTool_getExpressionCallByFeature", || {
         let config = ffi_required_str!(config_json, "config_json");
         let feature = ffi_required_str!(feature_code, "feature_code");
-        ffi_json_value!(sz_configtool_lib::calls::expression::get_expression_call(
+        json_value_result(sz_configtool_lib::calls::expression::get_expression_call(
             config,
-            sz_configtool_lib::calls::CallSelector::Feature(feature)
+            sz_configtool_lib::calls::CallSelector::Feature(feature),
         ))
     })
 }
@@ -10678,13 +7331,13 @@ pub extern "C" fn SzConfigTool_deleteComparisonCallElement(
                 }
             }
         };
-        handle_result!(
+        lib_result(
             sz_configtool_lib::calls::comparison::delete_comparison_call_element(
                 config,
                 sz_configtool_lib::calls::CallSelector::Feature(feature),
                 element,
                 elem_feature,
-            )
+            ),
         )
     })
 }
@@ -10720,13 +7373,13 @@ pub extern "C" fn SzConfigTool_deleteDistinctCallElement(
                 }
             }
         };
-        handle_result!(
+        lib_result(
             sz_configtool_lib::calls::distinct::delete_distinct_call_element(
                 config,
                 sz_configtool_lib::calls::CallSelector::Feature(feature),
                 element,
                 elem_feature,
-            )
+            ),
         )
     })
 }
@@ -10762,13 +7415,13 @@ pub extern "C" fn SzConfigTool_deleteExpressionCallElement(
                 }
             }
         };
-        handle_result!(
+        lib_result(
             sz_configtool_lib::calls::expression::delete_expression_call_element(
                 config,
                 sz_configtool_lib::calls::CallSelector::Id(efcall_id),
                 element,
                 elem_feature,
-            )
+            ),
         )
     })
 }
@@ -11232,7 +7885,7 @@ where
     let result = parse_function_updates(&updates_value, desc_key, anon_supported)
         .and_then(|updates| set(config, code, updates))
         .map(|(modified, _)| modified);
-    handle_result!(result)
+    lib_result(result)
 }
 
 /// Set/update a standardize function from JSON (`CONNECT_STR`, `SFUNC_DESC`,
@@ -11386,10 +8039,12 @@ mod poison_alloc {
         }
 
         unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-            // Infallible: the same padded layout was valid in `alloc`.
-            if let Ok(padded) = Layout::from_size_align(layout.size() + PAD, layout.align()) {
-                unsafe { System.dealloc(ptr, padded) };
-            }
+            // SAFETY: `ptr` came from `alloc` with this `layout`, which only
+            // returns non-null after `from_size_align` accepted exactly this
+            // padded size and alignment.
+            let padded =
+                unsafe { Layout::from_size_align_unchecked(layout.size() + PAD, layout.align()) };
+            unsafe { System.dealloc(ptr, padded) };
         }
     }
 

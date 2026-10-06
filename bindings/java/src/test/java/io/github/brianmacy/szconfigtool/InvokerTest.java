@@ -26,7 +26,6 @@ class InvokerTest {
         Map<String, Executable> helpers = Map.of(
                 "config", () -> Invoker.config(JSON_FN, CFG, new Args()),
                 "config_and_json", () -> Invoker.configAndJson(JSON_FN, CFG, new Args()),
-                "int", () -> Invoker.integer(JSON_FN, CFG, new Args()),
                 "unit", () -> Invoker.unit(JSON_FN, CFG, new Args()));
         helpers.forEach((kind, call) -> internal(
                 JSON_FN + ": expected result kind " + kind + " but got json", call));

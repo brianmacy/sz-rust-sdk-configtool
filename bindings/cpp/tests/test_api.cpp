@@ -60,7 +60,7 @@ TEST(Naming, TypedApiCoversExactlyTheImplementedFunctions) {
         typed.insert(name);
     }
     EXPECT_EQ(typed, implemented);
-    EXPECT_GT(Manifest().Find("functions")->items.size(), typed.size());
+    EXPECT_EQ(Manifest().Find("functions")->items.size(), typed.size());  // no not_implemented functions
 }
 
 TEST(Naming, PascalCaseFunctionsSnakeCaseArgs) {
@@ -271,28 +271,6 @@ TEST(Errors, WireErrorsAreInvalidInput) {
               ErrorKind::InvalidInput);
     EXPECT_EQ(Throws([] { (void)sz::Invoke("get_data_source", Fixture(), R"({"code":1})"); }).Kind(),
               ErrorKind::InvalidInput);
-}
-
-TEST(Errors, NotImplementedStaysReachableThroughInvoke) {
-    for (const auto& f : Manifest().Find("functions")->items) {
-        if (f.Find("status")->text != "not_implemented") {
-            continue;
-        }
-        const std::string& name = f.Find("name")->text;
-        EXPECT_FALSE(TypedFunctions().contains(name)) << name;
-        std::string args = "{";
-        for (const auto& a : f.Find("args")->items) {
-            if (!a.Find("optional")->boolean && !a.Find("tristate")->boolean) {
-                const bool is_int = a.Find("type")->text == "int";
-                args += (args.size() > 1 ? "," : "") + std::string("\"") + a.Find("name")->text +
-                        "\":" + (is_int ? "1" : "\"X\"");
-            }
-        }
-        args += "}";
-        EXPECT_EQ(Throws([&] { (void)sz::Invoke(name, Fixture(), args); }).Kind(),
-                  ErrorKind::NotImplemented)
-            << name << " " << args;
-    }
 }
 
 TEST(Errors, ValidationErrorsCarryDetails) {

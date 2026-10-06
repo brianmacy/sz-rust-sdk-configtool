@@ -302,7 +302,7 @@ config = tool.set_standardize_function(
 
 ## Available FFI Functions
 
-The C library exports 149 functions. See [`ffi/include/libSzConfigTool.h`](../ffi/include/libSzConfigTool.h) for complete declarations.
+The C library exports 124 functions. See [`ffi/include/libSzConfigTool.h`](../ffi/include/libSzConfigTool.h) for complete declarations.
 
 ### Function Categories
 
@@ -314,11 +314,11 @@ The C library exports 149 functions. See [`ffi/include/libSzConfigTool.h`](../ff
 | Elements | 7 |
 | Features | 6 |
 | Behavior overrides | 4 |
-| Thresholds (comparison + generic) | 10 |
-| Functions (standardize 7, expression 7, comparison 7, distinct 6, candidate 5, matching 5, scoring 5, validation 5) | 47 |
-| Calls (standardize 6, expression 7, comparison 7, distinct 7) | 27 |
+| Thresholds (comparison + generic) | 9 |
+| Functions (standardize 7, expression 7, comparison 7, distinct 6) | 27 |
+| Calls (standardize 5, expression 6, comparison 6, distinct 6) | 23 |
 | Config sections 7, rules 5, fragments 5, generic plans 3, system parameters 2, versioning 4, settings 1, export 1, validation 1 | 29 |
-| **Total** | **149** |
+| **Total** | **124** |
 
 ## Best Practices
 

@@ -12,6 +12,44 @@ namespace Sz.ConfigTool.Tests
     /// <summary>Error mapping and per-thread isolation of the native last-error slot.</summary>
     public class ErrorTests
     {
+        // Wire-contract guards, exercised directly on crafted input (the native
+        // library never produces it: api/src/output.rs to_envelope always
+        // writes kind and its members, and every failure sets a message).
+        [Theory]
+        [InlineData("not json", "Sz.ConfigTool protocol error: malformed envelope: ")]
+        [InlineData("{\"config\":\"x\"}", "Sz.ConfigTool protocol error: malformed envelope: no 'kind'")]
+        public void Malformed_envelope_is_a_protocol_error(string envelope, string messagePrefix)
+        {
+            SzConfigToolException e = Assert.Throws<SzConfigToolException>(() => NativeCall.ParseEnvelope(envelope));
+            Assert.Equal(SzConfigToolErrorKind.Internal, e.Kind);
+            Assert.StartsWith(messagePrefix, e.Message);
+        }
+
+        [Fact]
+        public void Envelope_members_decode()
+        {
+            Assert.Equal(new InvokeResult("config", "c", null), NativeCall.ParseEnvelope("{\"kind\":\"config\",\"config\":\"c\"}"));
+            Assert.Equal(new InvokeResult("json", null, "[1]"), NativeCall.ParseEnvelope("{\"kind\":\"json\",\"result\":[1]}"));
+        }
+
+        [Fact]
+        public void Missing_required_member_is_a_protocol_error()
+        {
+            Assert.Equal("v", NativeCall.Require("v", "unused"));
+            SzConfigToolException e = Assert.Throws<SzConfigToolException>(() => NativeCall.Require(null, "f: envelope without config"));
+            Assert.Equal("INTERNAL", e.ReasonCode);
+            Assert.Equal("Sz.ConfigTool protocol error: f: envelope without config", e.Message);
+        }
+
+        [Fact]
+        public void Error_without_message_names_the_return_code()
+        {
+            SzConfigToolException none = NativeCall.ErrorFrom("NOT_FOUND", null, null, -2);
+            Assert.Equal("SzConfigTool_invoke failed (-2)", none.Message);
+            Assert.Equal("NOT_FOUND", none.ReasonCode);
+            Assert.Equal("m", NativeCall.ErrorFrom(null, "m", "d", -2).Message);
+        }
+
         [Fact]
         public void Every_reason_code_has_a_kind_and_round_trips()
         {
@@ -50,7 +88,6 @@ namespace Sz.ConfigTool.Tests
             // A real `json` function read through each other typed seam.
             { "config", config => NativeCall.Config("list_data_sources", config, "{}") },
             { "config_and_json", config => NativeCall.ConfigAndJson("list_data_sources", config, "{}") },
-            { "int", config => NativeCall.Int("list_data_sources", config, "{}") },
             { "unit", config => NativeCall.Unit("list_data_sources", config, "{}") },
         };
 
@@ -78,13 +115,15 @@ namespace Sz.ConfigTool.Tests
         public void Every_reachable_reason_code_is_raised_by_the_real_library()
         {
             // Codes the conformance suite expects (each case asserts the exact
-            // code); INTERNAL is not reachable from valid input.
+            // code); INTERNAL is not reachable from valid input, and
+            // NOT_IMPLEMENTED only from `status: not_implemented` functions,
+            // of which the manifest has none.
             var expected = Repo.Conformance.GetProperty("cases").EnumerateArray()
                 .SelectMany(c => c.GetProperty("steps").EnumerateArray())
                 .Where(s => s.GetProperty("expect").TryGetProperty("error", out _))
                 .Select(s => s.GetProperty("expect").GetProperty("error").GetString()!)
                 .ToHashSet();
-            Assert.Equal(new[] { "INTERNAL" }, Repo.ReasonCodes.Except(expected));
+            Assert.Equal(new[] { "NOT_IMPLEMENTED", "INTERNAL" }, Repo.ReasonCodes.Except(expected));
         }
 
         [Fact]
@@ -143,18 +182,6 @@ namespace Sz.ConfigTool.Tests
         {
             var e = Assert.Throws<SzConfigToolException>(() => SzConfigTool.Invoke(name, Repo.Fixture, args));
             Assert.Equal(SzConfigToolErrorKind.InvalidInput, e.Kind);
-        }
-
-        [Fact]
-        public void Not_implemented_placeholders_stay_reachable_through_invoke()
-        {
-            var stubs = Repo.Functions.Where(f => !f.Implemented).Select(f => f.Name).ToHashSet();
-            JsonElement step = Repo.Conformance.GetProperty("cases").EnumerateArray()
-                .SelectMany(c => c.GetProperty("steps").EnumerateArray())
-                .First(s => stubs.Contains(s.GetProperty("fn").GetString()!));
-            var e = Assert.Throws<SzConfigToolException>(() => SzConfigTool.Invoke(
-                step.GetProperty("fn").GetString()!, Repo.Fixture, step.GetProperty("args").GetRawText()));
-            Assert.Equal(SzConfigToolErrorKind.NotImplemented, e.Kind);
         }
 
         [Fact]

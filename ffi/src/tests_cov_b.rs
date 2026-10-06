@@ -806,35 +806,6 @@ fn test_list_standardize_calls() {
     );
 }
 
-#[test]
-fn test_set_standardize_call() {
-    check_boundaries(
-        &[
-            (Arg::Req("config_json"), "{}"),
-            (Arg::Req("updates_json"), "{}"),
-        ],
-        |p| SzConfigTool_setStandardizeCall(p[0], 1, p[1]),
-    );
-    let config_str = fixture();
-    let config = cs(&config_str);
-    let updates = cs(r#"{"execOrder":5}"#);
-    // The library operation is a documented no-op: the config round-trips.
-    assert_eq!(
-        ok(SzConfigTool_setStandardizeCall(
-            config.as_ptr(),
-            1,
-            updates.as_ptr()
-        )),
-        config_str
-    );
-    let not_json = cs("{");
-    fails(
-        SzConfigTool_setStandardizeCall(config.as_ptr(), 1, not_json.as_ptr()),
-        -3,
-        "Invalid JSON in updates_json",
-    );
-}
-
 // ============================================================================
 // Comparison thresholds
 // ============================================================================

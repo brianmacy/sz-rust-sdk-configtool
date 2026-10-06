@@ -389,7 +389,14 @@ fn call_expr(f: &Function, args: &str) -> String {
         Returns::Config => "Config",
         Returns::Json => "Json",
         Returns::ConfigAndJson => "ConfigAndJson",
-        Returns::Int => "Int",
+        // Emitted inline: no runtime helper that only int functions would use.
+        Returns::Int => {
+            return format!(
+                "long.Parse(NativeCall.Require(NativeCall.Expect(\"int\", \"{name}\", {CONFIG_PARAM}, {args}).Result, \"{name}: envelope without result\"), \
+                 System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture)",
+                name = f.name
+            );
+        }
         Returns::Unit => "Unit",
     };
     format!(
@@ -612,6 +619,7 @@ mod tests {
             notes: None,
             c_notes: None,
             status: Status::Implemented,
+            requires_options: false,
         }
     }
 
@@ -796,6 +804,15 @@ mod tests {
         assert!(out.contains("public static void CheckIt(string configJson)"));
         assert!(out.contains("NativeCall.Unit(\"check_it\", configJson, \"{}\");"));
         assert!(out.contains("public static ConfigAndJson AddIt(string configJson)"));
+    }
+
+    #[test]
+    fn test_int_body_parses_the_result_inline() {
+        let out = api_file(&[func("count_it", vec![], Returns::Int)]);
+        assert!(out.contains("public static long CountIt(string configJson)"));
+        assert!(out.contains(
+            "return long.Parse(NativeCall.Require(NativeCall.Expect(\"int\", \"count_it\", configJson, \"{}\").Result, \"count_it: envelope without result\"), System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture);"
+        ));
     }
 
     #[test]

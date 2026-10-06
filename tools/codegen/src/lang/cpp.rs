@@ -746,6 +746,17 @@ mod tests {
     use super::*;
     use std::path::Path;
 
+    /// Every character lit() escapes, and the IntOrStr parameter type (the
+    /// generator expands int_or_str per overload, so no manifest reaches it).
+    #[test]
+    fn test_lit_escapes_and_int_or_str_param_type() {
+        assert_eq!(lit("a\"b\\c\nd"), "\"a\\\"b\\\\c\\nd\"");
+        assert_eq!(
+            param_type(ArgType::IntOrStr),
+            "const std::variant<std::int64_t, std::string>&"
+        );
+    }
+
     fn real_inputs() -> Inputs {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .ancestors()
@@ -786,6 +797,7 @@ mod tests {
             notes: None,
             c_notes: None,
             status: Status::Implemented,
+            requires_options: false,
         }
     }
 

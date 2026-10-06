@@ -1016,18 +1016,3 @@ fn list_generic_thresholds_paths() {
         rows(&template(), "CFG_GENERIC_THRESHOLD").len()
     );
 }
-
-#[test]
-fn threshold_placeholders_are_unimplemented() {
-    assert_err(
-        get_threshold(&template(), 1),
-        SzErrorKind::InvalidInput,
-        "get_threshold not yet implemented",
-    );
-    assert_err(
-        set_threshold(&template(), SetThresholdParams { threshold_id: 1 }),
-        SzErrorKind::InvalidInput,
-        "set_threshold not yet implemented",
-    );
-    assert_eq!(SetThresholdParams::default().threshold_id, 0);
-}

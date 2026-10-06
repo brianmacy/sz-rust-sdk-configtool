@@ -69,6 +69,49 @@ fn codes_after(body: &str, needle: &str) -> BTreeSet<i64> {
         .collect()
 }
 
+/// The trailing integer arguments of every `<fname>(..)` call in `body`
+/// (`plain_result(r, nul_code, err_code)`, `text_result(t, nul_code)`).
+fn call_codes(body: &str, fname: &str, take: usize) -> Vec<Vec<i64>> {
+    body.match_indices(fname)
+        .map(|(at, _)| {
+            let call = balanced(&body[at + fname.len() - 1..], '(', ')');
+            // rustfmt may leave a trailing comma: skip the empty last arg.
+            call[1..call.len() - 1]
+                .rsplit(',')
+                .map(str::trim)
+                .filter(|a| !a.is_empty())
+                .take(take)
+                .filter_map(|a| a.parse().ok())
+                .collect()
+        })
+        .collect()
+}
+
+/// The text of the `open..close` group starting at `s[0]`.
+fn balanced(s: &str, open: char, close: char) -> &str {
+    let mut depth = 0usize;
+    for (i, c) in s.char_indices() {
+        if c == open {
+            depth += 1;
+        } else if c == close {
+            depth -= 1;
+            if depth == 0 {
+                return &s[..=i];
+            }
+        }
+    }
+    panic!("unbalanced {open}{close}")
+}
+
+/// Error codes of the `plain_result(..)` / `plain_json(..)` calls in `body` (last argument).
+fn plain_err_codes(body: &str) -> BTreeSet<i64> {
+    ["plain_result(", "plain_json("]
+        .iter()
+        .flat_map(|f| call_codes(body, f, 1))
+        .flatten()
+        .collect()
+}
+
 /// Every literal return code (`returnCode: -N`, `error_result(-N)`,
 /// `set_error(.., -N)`) in the file.
 fn all_codes(src: &str) -> BTreeSet<i64> {
@@ -81,6 +124,13 @@ fn all_codes(src: &str) -> BTreeSet<i64> {
                 codes.insert(code);
             }
         }
+    }
+    for (fname, take) in [
+        ("plain_result(", 2),
+        ("plain_json(", 2),
+        ("text_result(", 1),
+    ] {
+        codes.extend(call_codes(src, fname, take).into_iter().flatten());
     }
     codes
 }
@@ -123,14 +173,17 @@ fn test_header_return_code_families_match_source() {
         "a new return code needs a header 'Return codes' entry"
     );
 
-    // Library errors: -5 without a reason code, -2 without one (ffi_json_value),
-    // or -2 with one (handle_result! / set_error_from). Exactly one each.
-    let lib5 = names(&exports, |b| b.contains("set_error(e.to_string(), -5)"));
-    let lib2_bare = names(&exports, |b| b.contains("ffi_json_value!("));
+    // Library errors: -5 without a reason code (plain_result(.., -5)), -2
+    // without one (json_value_result / plain_result(.., -2)), or -2 with one
+    // (lib_result / set_error_from). Exactly one each.
+    let lib5 = names(&exports, |b| {
+        b.contains("set_error(e.to_string(), -5)") || plain_err_codes(b).contains(&-5)
+    });
+    let lib2_bare = names(&exports, |b| {
+        b.contains("json_value_result(") || plain_err_codes(b).contains(&-2)
+    });
     let lib2_reason = names(&exports, |b| {
-        b.contains("set_error_from")
-            || b.replace("handle_result!(Ok", "")
-                .contains("handle_result!(")
+        b.contains("set_error_from") || b.contains("lib_result(") || b.contains("lib_json(")
     });
     for name in &all {
         let n = [&lib5, &lib2_bare, &lib2_reason]

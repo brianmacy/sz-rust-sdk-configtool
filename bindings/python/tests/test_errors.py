@@ -10,7 +10,9 @@ from conftest import CONFORMANCE, FUNCTIONS
 
 # Raised only for result-serialization failures or caught panics, which no
 # valid input can trigger.
-UNREACHABLE = {"INTERNAL"}
+# NOT_IMPLEMENTED is kept for `status: not_implemented` functions, of which
+# the manifest has none.
+UNREACHABLE = {"INTERNAL", "NOT_IMPLEMENTED"}
 
 
 def expected_errors() -> set[str]:

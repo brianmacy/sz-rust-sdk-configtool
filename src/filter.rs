@@ -72,13 +72,7 @@ pub fn to_json_dumps_string(value: &Value) -> String {
         Value::Object(map) => {
             let inner: Vec<String> = map
                 .iter()
-                .map(|(k, v)| {
-                    format!(
-                        "{}: {}",
-                        serde_json::to_string(k).unwrap_or_else(|_| String::from("\"\"")),
-                        to_json_dumps_string(v)
-                    )
-                })
+                .map(|(k, v)| format!("{}: {}", Value::String(k.clone()), to_json_dumps_string(v)))
                 .collect();
             format!("{{{}}}", inner.join(", "))
         }
@@ -88,7 +82,7 @@ pub fn to_json_dumps_string(value: &Value) -> String {
         }
         // Scalars (null/bool/number/string) render identically to JSON; serde
         // keeps non-ASCII as UTF-8, which is exactly the limitation we want.
-        other => serde_json::to_string(other).unwrap_or_default(),
+        other => other.to_string(),
     }
 }
 
@@ -248,7 +242,7 @@ pub fn to_values_join_string(value: &Value) -> String {
 /// ```
 pub fn matches_filter(record: &Value, filter: &str, substrate: FilterSubstrate) -> bool {
     let haystack = match substrate {
-        FilterSubstrate::Compact => serde_json::to_string(record).unwrap_or_default(),
+        FilterSubstrate::Compact => record.to_string(),
         FilterSubstrate::JsonDumps => to_json_dumps_string(record),
         FilterSubstrate::PythonRepr => to_python_repr_string(record),
         FilterSubstrate::ValuesJoin => to_values_join_string(record),

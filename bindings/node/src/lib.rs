@@ -80,21 +80,24 @@ where
 
 /// Build the JS error object, throw it, and return the matching Rust error.
 fn throw_failure(env: &Env, f: &Failure) -> Error {
-    let thrown = env
-        .create_error(Error::from_reason(f.message.clone()))
+    // napi_create_error / napi_set_named_property / napi_throw fail only with
+    // an invalid env or handle scope; such a failure is returned as is.
+    let props = [
+        Some(("code", f.reason_code)),
+        Some(("reasonCode", f.reason_code)),
+        Some(("kind", f.reason_code)),
+        f.details.as_deref().map(|d| ("details", d)),
+    ];
+    env.create_error(Error::from_reason(f.message.clone()))
         .and_then(|mut obj| {
-            obj.set_named_property("code", f.reason_code)?;
-            obj.set_named_property("reasonCode", f.reason_code)?;
-            obj.set_named_property("kind", f.reason_code)?;
-            if let Some(d) = &f.details {
-                obj.set_named_property("details", d.as_str())?;
-            }
-            env.throw(obj)
-        });
-    match thrown {
-        Ok(()) => Error::from_status(Status::PendingException),
-        Err(e) => e,
-    }
+            props
+                .into_iter()
+                .flatten()
+                .try_for_each(|(key, value)| obj.set_named_property(key, value))
+                .and_then(|()| env.throw(obj))
+        })
+        .err()
+        .unwrap_or_else(|| Error::from_status(Status::PendingException))
 }
 
 /// Call manifest function `name` on `config` with `argsJson` (a JSON object

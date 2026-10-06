@@ -119,7 +119,7 @@ describe("procedures", () => {
 });
 
 describe("error mapping", () => {
-  // NOT_IMPLEMENTED only comes from the skipped placeholders (no procedure).
+  // Steps whose function has no procedure (wire-only) are skipped.
   // The caller is a Proxy (any key is callable), so filter on the router.
   const routable = [...errorExamples()].filter(([, { step }]) => camel(step.fn) in procedures);
   for (const [code, { config, step }] of routable) {

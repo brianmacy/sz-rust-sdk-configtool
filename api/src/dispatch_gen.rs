@@ -85,11 +85,6 @@ pub const FUNCTION_NAMES: &[&str] = &[
     "get_fragment",
     "list_fragments",
     "set_fragment",
-    "add_candidate_function",
-    "delete_candidate_function",
-    "get_candidate_function",
-    "list_candidate_functions",
-    "set_candidate_function",
     "add_comparison_function",
     "delete_comparison_function",
     "delete_comparison_function_cascade",
@@ -107,27 +102,12 @@ pub const FUNCTION_NAMES: &[&str] = &[
     "get_expression_function",
     "list_expression_functions",
     "set_expression_function",
-    "add_matching_function",
-    "delete_matching_function",
-    "get_matching_function",
-    "list_matching_functions",
-    "set_matching_function",
-    "add_scoring_function",
-    "delete_scoring_function",
-    "get_scoring_function",
-    "list_scoring_functions",
-    "set_scoring_function",
     "add_standardize_function",
     "delete_standardize_function",
     "delete_standardize_function_cascade",
     "get_standardize_function",
     "list_standardize_functions",
     "set_standardize_function",
-    "add_validation_function",
-    "delete_validation_function",
-    "get_validation_function",
-    "list_validation_functions",
-    "set_validation_function",
     "clone_generic_plan",
     "delete_generic_plan",
     "list_generic_plans",
@@ -236,11 +216,6 @@ pub(crate) fn lookup(name: &str) -> Option<Handler> {
         "get_fragment" => Some(call_get_fragment),
         "list_fragments" => Some(call_list_fragments),
         "set_fragment" => Some(call_set_fragment),
-        "add_candidate_function" => Some(call_add_candidate_function),
-        "delete_candidate_function" => Some(call_delete_candidate_function),
-        "get_candidate_function" => Some(call_get_candidate_function),
-        "list_candidate_functions" => Some(call_list_candidate_functions),
-        "set_candidate_function" => Some(call_set_candidate_function),
         "add_comparison_function" => Some(call_add_comparison_function),
         "delete_comparison_function" => Some(call_delete_comparison_function),
         "delete_comparison_function_cascade" => Some(call_delete_comparison_function_cascade),
@@ -258,27 +233,12 @@ pub(crate) fn lookup(name: &str) -> Option<Handler> {
         "get_expression_function" => Some(call_get_expression_function),
         "list_expression_functions" => Some(call_list_expression_functions),
         "set_expression_function" => Some(call_set_expression_function),
-        "add_matching_function" => Some(call_add_matching_function),
-        "delete_matching_function" => Some(call_delete_matching_function),
-        "get_matching_function" => Some(call_get_matching_function),
-        "list_matching_functions" => Some(call_list_matching_functions),
-        "set_matching_function" => Some(call_set_matching_function),
-        "add_scoring_function" => Some(call_add_scoring_function),
-        "delete_scoring_function" => Some(call_delete_scoring_function),
-        "get_scoring_function" => Some(call_get_scoring_function),
-        "list_scoring_functions" => Some(call_list_scoring_functions),
-        "set_scoring_function" => Some(call_set_scoring_function),
         "add_standardize_function" => Some(call_add_standardize_function),
         "delete_standardize_function" => Some(call_delete_standardize_function),
         "delete_standardize_function_cascade" => Some(call_delete_standardize_function_cascade),
         "get_standardize_function" => Some(call_get_standardize_function),
         "list_standardize_functions" => Some(call_list_standardize_functions),
         "set_standardize_function" => Some(call_set_standardize_function),
-        "add_validation_function" => Some(call_add_validation_function),
-        "delete_validation_function" => Some(call_delete_validation_function),
-        "get_validation_function" => Some(call_get_validation_function),
-        "list_validation_functions" => Some(call_list_validation_functions),
-        "set_validation_function" => Some(call_set_validation_function),
         "clone_generic_plan" => Some(call_clone_generic_plan),
         "delete_generic_plan" => Some(call_delete_generic_plan),
         "list_generic_plans" => Some(call_list_generic_plans),
@@ -1122,47 +1082,6 @@ fn call_set_fragment(config: &str, args: &Args<'_>) -> Result<Output, ApiError> 
     Ok(Output::Config(result))
 }
 
-fn call_add_candidate_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&["rtype_code", "candidate_func"])?;
-    crate::output::not_implemented("add_candidate_function", sz_configtool_lib::functions::candidate::add_candidate_function(
-        config,
-        args.req_str("rtype_code")?,
-        args.req_str("candidate_func")?,
-    ))
-}
-
-fn call_delete_candidate_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&["rtype_code"])?;
-    crate::output::not_implemented("delete_candidate_function", sz_configtool_lib::functions::candidate::delete_candidate_function(
-        config,
-        args.req_str("rtype_code")?,
-    ))
-}
-
-fn call_get_candidate_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&["rtype_code"])?;
-    crate::output::not_implemented("get_candidate_function", sz_configtool_lib::functions::candidate::get_candidate_function(
-        config,
-        args.req_str("rtype_code")?,
-    ))
-}
-
-fn call_list_candidate_functions(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&[])?;
-    crate::output::not_implemented("list_candidate_functions", sz_configtool_lib::functions::candidate::list_candidate_functions(
-        config,
-    ))
-}
-
-fn call_set_candidate_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&["rtype_code", "candidate_func"])?;
-    crate::output::not_implemented("set_candidate_function", sz_configtool_lib::functions::candidate::set_candidate_function(
-        config,
-        args.req_str("rtype_code")?,
-        args.opt_str("candidate_func")?,
-    ))
-}
-
 fn call_add_comparison_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["code", "connect_str", "description", "language", "anon_support"])?;
     let result = sz_configtool_lib::functions::comparison::add_comparison_function(
@@ -1358,88 +1277,6 @@ fn call_set_expression_function(config: &str, args: &Args<'_>) -> Result<Output,
     crate::output::config_and_json(config, record)
 }
 
-fn call_add_matching_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&["rtype_code", "matching_func"])?;
-    crate::output::not_implemented("add_matching_function", sz_configtool_lib::functions::matching::add_matching_function(
-        config,
-        args.req_str("rtype_code")?,
-        args.req_str("matching_func")?,
-    ))
-}
-
-fn call_delete_matching_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&["rtype_code"])?;
-    crate::output::not_implemented("delete_matching_function", sz_configtool_lib::functions::matching::delete_matching_function(
-        config,
-        args.req_str("rtype_code")?,
-    ))
-}
-
-fn call_get_matching_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&["rtype_code"])?;
-    crate::output::not_implemented("get_matching_function", sz_configtool_lib::functions::matching::get_matching_function(
-        config,
-        args.req_str("rtype_code")?,
-    ))
-}
-
-fn call_list_matching_functions(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&[])?;
-    crate::output::not_implemented("list_matching_functions", sz_configtool_lib::functions::matching::list_matching_functions(
-        config,
-    ))
-}
-
-fn call_set_matching_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&["rtype_code", "matching_func"])?;
-    crate::output::not_implemented("set_matching_function", sz_configtool_lib::functions::matching::set_matching_function(
-        config,
-        args.req_str("rtype_code")?,
-        args.opt_str("matching_func")?,
-    ))
-}
-
-fn call_add_scoring_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&["rtype_code", "scoring_func"])?;
-    crate::output::not_implemented("add_scoring_function", sz_configtool_lib::functions::scoring::add_scoring_function(
-        config,
-        args.req_str("rtype_code")?,
-        args.req_str("scoring_func")?,
-    ))
-}
-
-fn call_delete_scoring_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&["rtype_code"])?;
-    crate::output::not_implemented("delete_scoring_function", sz_configtool_lib::functions::scoring::delete_scoring_function(
-        config,
-        args.req_str("rtype_code")?,
-    ))
-}
-
-fn call_get_scoring_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&["rtype_code"])?;
-    crate::output::not_implemented("get_scoring_function", sz_configtool_lib::functions::scoring::get_scoring_function(
-        config,
-        args.req_str("rtype_code")?,
-    ))
-}
-
-fn call_list_scoring_functions(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&[])?;
-    crate::output::not_implemented("list_scoring_functions", sz_configtool_lib::functions::scoring::list_scoring_functions(
-        config,
-    ))
-}
-
-fn call_set_scoring_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&["rtype_code", "scoring_func"])?;
-    crate::output::not_implemented("set_scoring_function", sz_configtool_lib::functions::scoring::set_scoring_function(
-        config,
-        args.req_str("rtype_code")?,
-        args.opt_str("scoring_func")?,
-    ))
-}
-
 fn call_add_standardize_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["code", "connect_str", "description", "language"])?;
     let result = sz_configtool_lib::functions::standardize::add_standardize_function(
@@ -1505,47 +1342,6 @@ fn call_set_standardize_function(config: &str, args: &Args<'_>) -> Result<Output
     )?;
     let (config, record) = result;
     crate::output::config_and_json(config, record)
-}
-
-fn call_add_validation_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&["attr_code", "validation_func"])?;
-    crate::output::not_implemented("add_validation_function", sz_configtool_lib::functions::validation::add_validation_function(
-        config,
-        args.req_str("attr_code")?,
-        args.req_str("validation_func")?,
-    ))
-}
-
-fn call_delete_validation_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&["attr_code"])?;
-    crate::output::not_implemented("delete_validation_function", sz_configtool_lib::functions::validation::delete_validation_function(
-        config,
-        args.req_str("attr_code")?,
-    ))
-}
-
-fn call_get_validation_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&["attr_code"])?;
-    crate::output::not_implemented("get_validation_function", sz_configtool_lib::functions::validation::get_validation_function(
-        config,
-        args.req_str("attr_code")?,
-    ))
-}
-
-fn call_list_validation_functions(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&[])?;
-    crate::output::not_implemented("list_validation_functions", sz_configtool_lib::functions::validation::list_validation_functions(
-        config,
-    ))
-}
-
-fn call_set_validation_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
-    args.check_known(&["attr_code", "validation_func"])?;
-    crate::output::not_implemented("set_validation_function", sz_configtool_lib::functions::validation::set_validation_function(
-        config,
-        args.req_str("attr_code")?,
-        args.opt_str("validation_func")?,
-    ))
 }
 
 fn call_clone_generic_plan(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {

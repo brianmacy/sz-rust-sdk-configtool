@@ -56,11 +56,10 @@ pub fn set_setting(config_json: &str, name: &str, value: impl Into<Value>) -> Re
     if !settings.is_object() {
         *settings = json!({});
     }
-    if let Value::Object(settings) = settings {
-        settings.insert(name.to_uppercase(), value);
-    }
+    // An object now, so indexing inserts the key.
+    settings[name.to_uppercase()] = value;
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 #[cfg(test)]

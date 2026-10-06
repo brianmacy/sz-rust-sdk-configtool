@@ -82,13 +82,17 @@ impl<'a> TryFrom<&'a Value> for SetFragmentParams<'a> {
 /// let config = r#"{"G2_CONFIG": {"CFG_ERFRAG": []}}"#;
 /// // Note: validate_fragment_source is private, used internally by add_fragment
 /// ```
-fn validate_fragment_source(config_json: &str, source_string: &str) -> (Vec<String>, String) {
-    // Validate JSON parses correctly
-    if let Err(e) = serde_json::from_str::<Value>(config_json) {
-        return (vec![], format!("Invalid JSON: {e}"));
-    }
-
+fn validate_fragment_source(config: &Value, source_string: &str) -> (Vec<String>, String) {
     let mut dependency_list = Vec::new();
+    // Record a fragment reference's ERFRAG_ID; an unknown code is an error.
+    let mut reference = |code: &str| -> std::result::Result<(), String> {
+        let frag = helpers::find_in_section(config, "CFG_ERFRAG", "ERFRAG_CODE", code)
+            .ok_or_else(|| format!("Invalid fragment reference: {code}"))?;
+        if let Some(frag_id) = frag.get("ERFRAG_ID").and_then(|v| v.as_i64()) {
+            dependency_list.push(frag_id.to_string());
+        }
+        Ok(())
+    };
     let mut source = source_string.to_string();
 
     // Find all FRAGMENT[...] patterns
@@ -105,34 +109,11 @@ fn validate_fragment_source(config_json: &str, source_string: &str) -> (Vec<Stri
             for ch in fragment_string.chars() {
                 if ch == '/' {
                     // Start or continue parsing fragment name
-                    if in_fragment && !current_frag.is_empty() {
-                        // End of previous fragment, lookup and validate
-                        match helpers::find_in_config_array(
-                            config_json,
-                            "CFG_ERFRAG",
-                            "ERFRAG_CODE",
-                            &current_frag,
-                        ) {
-                            Ok(Some(frag_record)) => {
-                                if let Some(frag_id) =
-                                    frag_record.get("ERFRAG_ID").and_then(|v| v.as_i64())
-                                {
-                                    dependency_list.push(frag_id.to_string());
-                                }
-                            }
-                            Ok(None) => {
-                                return (
-                                    vec![],
-                                    format!("Invalid fragment reference: {current_frag}"),
-                                );
-                            }
-                            Err(_) => {
-                                return (
-                                    vec![],
-                                    format!("Invalid fragment reference: {current_frag}"),
-                                );
-                            }
-                        }
+                    if in_fragment
+                        && !current_frag.is_empty()
+                        && let Err(msg) = reference(&current_frag)
+                    {
+                        return (vec![], msg);
                     }
                     current_frag.clear();
                     in_fragment = true;
@@ -140,32 +121,8 @@ fn validate_fragment_source(config_json: &str, source_string: &str) -> (Vec<Stri
                     // Check for delimiters that end fragment name
                     if "|=><)] ".contains(ch) {
                         if !current_frag.is_empty() {
-                            // Lookup fragment
-                            match helpers::find_in_config_array(
-                                config_json,
-                                "CFG_ERFRAG",
-                                "ERFRAG_CODE",
-                                &current_frag,
-                            ) {
-                                Ok(Some(frag_record)) => {
-                                    if let Some(frag_id) =
-                                        frag_record.get("ERFRAG_ID").and_then(|v| v.as_i64())
-                                    {
-                                        dependency_list.push(frag_id.to_string());
-                                    }
-                                }
-                                Ok(None) => {
-                                    return (
-                                        vec![],
-                                        format!("Invalid fragment reference: {current_frag}"),
-                                    );
-                                }
-                                Err(_) => {
-                                    return (
-                                        vec![],
-                                        format!("Invalid fragment reference: {current_frag}"),
-                                    );
-                                }
+                            if let Err(msg) = reference(&current_frag) {
+                                return (vec![], msg);
                             }
                             current_frag.clear();
                         }
@@ -225,23 +182,22 @@ pub fn add_fragment(config_json: &str, fragment_config: &Value) -> Result<(Strin
         .and_then(|v| v.as_str())
         .ok_or_else(|| SzConfigError::MissingField("ERFRAG_SOURCE".to_string()))?;
 
+    let mut config_data: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
     // Check if fragment already exists (Python line 4520-4522)
     let code_upper = code.to_uppercase();
-    if helpers::find_in_config_array(config_json, "CFG_ERFRAG", "ERFRAG_CODE", &code_upper)?
-        .is_some()
-    {
+    if helpers::find_in_section(&config_data, "CFG_ERFRAG", "ERFRAG_CODE", &code_upper).is_some() {
         return Err(SzConfigError::AlreadyExists(
             "Fragment already exists".to_string(),
         ));
     }
 
     // Validate source and compute dependencies
-    let (dependency_list, error_message) = validate_fragment_source(config_json, source);
+    let (dependency_list, error_message) = validate_fragment_source(&config_data, source);
     if !error_message.is_empty() {
         return Err(SzConfigError::InvalidInput(error_message));
     }
-
-    let config_data: Value = serde_json::from_str(config_json)?;
 
     // Caller-supplied ERFRAG_ID (#37/D19): previously the add path computed
     // max+1 unconditionally and *ignored* any ERFRAG_ID present in the input
@@ -271,12 +227,16 @@ pub fn add_fragment(config_json: &str, fragment_config: &Value) -> Result<(Strin
             Some(dependency_list.join(","))
         },
     };
-    let new_item = serde_json::to_value(&row)?;
+    let new_item = crate::helpers::row_value(&row);
 
     // Add to config
-    let modified_json = helpers::add_to_config_array(config_json, "CFG_ERFRAG", new_item)?;
+    config_data
+        .pointer_mut("/G2_CONFIG/CFG_ERFRAG")
+        .and_then(Value::as_array_mut)
+        .ok_or_else(|| SzConfigError::MissingSection("CFG_ERFRAG".to_string()))?
+        .push(new_item);
 
-    Ok((modified_json, next_id))
+    Ok((config_data.to_string(), next_id))
 }
 
 /// Delete a fragment from the configuration
@@ -332,29 +292,21 @@ pub fn get_fragment(config_json: &str, code_or_id: &str) -> Result<Value> {
     let search_value = code_or_id.to_uppercase();
 
     // Try to find by CODE first, then by ID
-    let item = if let Some(item) =
-        helpers::find_in_config_array(config_json, "CFG_ERFRAG", "ERFRAG_CODE", &search_value)?
-    {
-        item
-    } else if let Some(item) =
-        helpers::find_in_config_array(config_json, "CFG_ERFRAG", "ERFRAG_ID", &search_value)?
-    {
-        item
-    } else {
-        return Err(SzConfigError::NotFound(format!(
-            "Fragment not found: {search_value}"
-        )));
-    };
+    let config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let item = helpers::find_in_section(&config, "CFG_ERFRAG", "ERFRAG_CODE", &search_value)
+        .or_else(|| helpers::find_in_section(&config, "CFG_ERFRAG", "ERFRAG_ID", &search_value))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Fragment not found: {search_value}")))?;
 
     // Transform to lowercase format (matching list_fragments for consistency).
     // ERFRAG_SOURCE and ERFRAG_DEPENDS are stored-nullable, so they are projected
     // null-preserving (stored null stays null, stored "" stays "", absent ->
     // null) via helpers::field_or_null rather than coerced to "".
     Ok(json!({
-        "id": helpers::field_or_null(&item, "ERFRAG_ID"),
+        "id": helpers::field_or_null(item, "ERFRAG_ID"),
         "fragment": item.get("ERFRAG_CODE").and_then(|v| v.as_str()).unwrap_or(""),
-        "source": helpers::field_or_null(&item, "ERFRAG_SOURCE"),
-        "depends": helpers::field_or_null(&item, "ERFRAG_DEPENDS")
+        "source": helpers::field_or_null(item, "ERFRAG_SOURCE"),
+        "depends": helpers::field_or_null(item, "ERFRAG_DEPENDS")
     }))
 }
 
@@ -441,7 +393,9 @@ pub fn set_fragment(
     // Fetch the existing row so fields not part of the update (ERFRAG_ID, and any
     // Leave field) are carried forward rather than dropped by the full-row
     // replace.
-    let existing = helpers::find_in_config_array(config_json, "CFG_ERFRAG", "ERFRAG_CODE", &code)?
+    let config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let existing = helpers::find_in_section(&config, "CFG_ERFRAG", "ERFRAG_CODE", &code)
         .ok_or_else(|| SzConfigError::NotFound(format!("Fragment not found: {code}")))?;
 
     let erfrag_id = existing
@@ -455,13 +409,12 @@ pub fn set_fragment(
     // - Set: validate the new SOURCE and recompute DEPENDS.
     let (erfrag_source, erfrag_depends) = match params.source {
         FieldUpdate::Leave => (
-            helpers::field_as_string(&existing, "ERFRAG_SOURCE"),
-            helpers::field_as_string(&existing, "ERFRAG_DEPENDS"),
+            helpers::field_as_string(existing, "ERFRAG_SOURCE"),
+            helpers::field_as_string(existing, "ERFRAG_DEPENDS"),
         ),
         FieldUpdate::Clear => (None, None),
         FieldUpdate::Set(new_source) => {
-            let (dependency_list, error_message) =
-                validate_fragment_source(config_json, new_source);
+            let (dependency_list, error_message) = validate_fragment_source(&config, new_source);
             if !error_message.is_empty() {
                 return Err(SzConfigError::InvalidInput(error_message));
             }
@@ -476,7 +429,7 @@ pub fn set_fragment(
 
     // ERFRAG_DESC tri-state: Leave preserves, Clear nulls, Set writes.
     let erfrag_desc = match params.description {
-        FieldUpdate::Leave => helpers::field_as_string(&existing, "ERFRAG_DESC"),
+        FieldUpdate::Leave => helpers::field_as_string(existing, "ERFRAG_DESC"),
         FieldUpdate::Clear => None,
         FieldUpdate::Set(desc) => Some(desc.to_string()),
     };
@@ -488,7 +441,7 @@ pub fn set_fragment(
         erfrag_source,
         erfrag_depends,
     };
-    let updated_item = serde_json::to_value(&row)?;
+    let updated_item = crate::helpers::row_value(&row);
 
     // Update the item in the config
     helpers::update_in_config_array(
@@ -686,15 +639,5 @@ mod tests {
         assert_eq!(frag["ERFRAG_DESC"], Value::Null);
         // Source untouched (Leave).
         assert_eq!(frag["ERFRAG_SOURCE"], json!("NAME"));
-    }
-
-    /// The validator reports an unparseable config as an error message rather
-    /// than panicking (its public callers parse the config first, so this is
-    /// only reachable directly).
-    #[test]
-    fn test_validate_fragment_source_invalid_json() {
-        let (deps, err) = validate_fragment_source("{not json", "./FRAGMENT[./A>0]");
-        assert!(deps.is_empty());
-        assert!(err.starts_with("Invalid JSON: "), "{err}");
     }
 }

@@ -406,9 +406,9 @@ fn call_body(f: &Function) -> String {
              return new {rec}(r.config(), {fields});\n",
             rec = record_name(f),
         ),
-        (Returns::Int, _) => {
-            format!("        return Invoker.integer(\"{name}\", configJson, wire);\n")
-        }
+        (Returns::Int, _) => format!(
+            "        return Long.parseLong(Invoker.call(\"{name}\", \"int\", configJson, wire)[2]);\n"
+        ),
         (Returns::Unit, _) => format!("        Invoker.unit(\"{name}\", configJson, wire);\n"),
     }
 }
@@ -425,7 +425,7 @@ fn overload_methods(out: &mut String, f: &Function, ov: &Overload) {
     let ret = return_type(f);
     let java = camel(&f.name);
     let opts = has_options(f);
-    if opts {
+    if opts && !f.requires_options {
         method_doc(out, f, false);
         let forwarded: Vec<String> = std::iter::once("configJson".to_string())
             .chain(
@@ -499,9 +499,8 @@ fn options_class(out: &mut String, f: &Function) {
             );
         }
     }
-    if out.ends_with("\n\n") {
-        out.pop();
-    }
+    // Both the header and every builder method end with a blank line: drop it.
+    out.pop();
     out.push_str("    }\n\n");
 }
 
@@ -720,15 +719,18 @@ fn dispatch_method(out: &mut String, f: &Function) {
         camel(&f.name)
     );
     if has_options(f) {
-        let absent: Vec<String> = f
-            .args
-            .iter()
-            .filter(|a| !is_positional(a))
-            .map(|a| format!("!in.containsKey(\"{}\")", a.name))
-            .collect();
-        let _ = writeln!(out, "        if ({}) {{", absent.join(" && "));
-        dispatch_calls(out, f, false, "            ");
-        out.push_str("        }\n");
+        // (requires_options: no options-less overload; an empty Options is sent.)
+        if !f.requires_options {
+            let absent: Vec<String> = f
+                .args
+                .iter()
+                .filter(|a| !is_positional(a))
+                .map(|a| format!("!in.containsKey(\"{}\")", a.name))
+                .collect();
+            let _ = writeln!(out, "        if ({}) {{", absent.join(" && "));
+            dispatch_calls(out, f, false, "            ");
+            out.push_str("        }\n");
+        }
         let _ = writeln!(
             out,
             "        SzConfigTool.{0} o = new SzConfigTool.{0}();",
@@ -824,7 +826,37 @@ mod tests {
             notes: Some("A note.".into()),
             c_notes: None,
             status: Status::Implemented,
+            requires_options: false,
         }
+    }
+
+    /// int_or_str args are expanded into per-type overloads before these
+    /// per-arg mappings run; reaching one with IntOrStr is a generator bug.
+    #[test]
+    #[should_panic(expected = "int_or_str is typed per overload")]
+    fn test_positional_type_rejects_int_or_str() {
+        positional_type(&arg("x", ArgType::IntOrStr));
+    }
+
+    #[test]
+    #[should_panic(expected = "int_or_str is typed per overload")]
+    fn test_args_method_rejects_int_or_str() {
+        args_method(&arg("x", ArgType::IntOrStr));
+    }
+
+    #[test]
+    #[should_panic(expected = "int_or_str is dispatched per overload")]
+    fn test_conv_rejects_int_or_str() {
+        conv(&arg("x", ArgType::IntOrStr));
+    }
+
+    /// Blank doc text writes no line; a unit return has no @return text.
+    #[test]
+    fn test_doc_lines_blank_and_unit_return_doc() {
+        let mut out = String::new();
+        doc_lines(&mut out, "    ", "   ");
+        assert_eq!(out, "");
+        assert_eq!(return_doc(&func("f", Returns::Unit, vec![])), "");
     }
 
     fn inputs(functions: Vec<Function>) -> Inputs {
@@ -946,6 +978,9 @@ mod tests {
             out.contains("public record CheckVerResult(String currentVersion, String matches)")
         );
         assert!(out.contains("public static long getN(String configJson)"));
+        assert!(out.contains(
+            "        return Long.parseLong(Invoker.call(\"get_n\", \"int\", configJson, wire)[2]);"
+        ));
         assert!(out.contains("public static void check(String configJson)"));
         assert!(out.contains("        Invoker.unit(\"check\", configJson, wire);"));
         assert!(out.contains("public static String listX(String configJson)"));

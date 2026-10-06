@@ -25,12 +25,11 @@ fn is_fn_path(s: &str) -> bool {
 
 /// `module::Struct` (snake modules, CamelCase last segment).
 fn is_type_path(s: &str) -> bool {
-    let segs: Vec<&str> = s.split("::").collect();
-    let Some((last, modules)) = segs.split_last() else {
+    // At least one module segment before the type name.
+    let Some((modules, last)) = s.rsplit_once("::") else {
         return false;
     };
-    !modules.is_empty()
-        && modules.iter().all(|m| is_snake(m))
+    modules.split("::").all(is_snake)
         && last.chars().next().is_some_and(|c| c.is_ascii_uppercase())
         && last.chars().all(|c| c.is_ascii_alphanumeric())
 }
@@ -126,6 +125,9 @@ fn check_function(f: &Function, reason_codes: &BTreeSet<&str>, errs: &mut Vec<St
         errs.push(format!(
             "{n}: rust_params_struct '{s}' must be module::Type"
         ));
+    }
+    if f.requires_options && !f.args.iter().any(|a| a.is_optional() && !a.required) {
+        errs.push(format!("{n}: requires_options needs an optional argument"));
     }
     check_c_abi_free(n, "doc", Some(&f.doc), errs);
     check_c_abi_free(n, "notes", f.notes.as_deref(), errs);

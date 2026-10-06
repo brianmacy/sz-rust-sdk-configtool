@@ -25,4 +25,5 @@ path = "src/lib.rs"
 # equals the root library's version.
 sz_configtool_lib = { path = ".." }
 sz-configtool-api = { path = "../api" }
+serde = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"] }

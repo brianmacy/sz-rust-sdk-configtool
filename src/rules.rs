@@ -392,7 +392,7 @@ pub fn add_rule(config_json: &str, id: i64, rule_config: &Value) -> Result<(Stri
     // fragment/disqualifier existence, RESOLVE/RELATE domain + exclusivity,
     // RTYPE_ID coherence). Returns the normalised row.
     let validated = validate_rule_row(&config_data, &row, true)?;
-    let new_item = serde_json::to_value(&validated)?;
+    let new_item = crate::helpers::row_value(&validated);
 
     // Add to config
     let modified_json = helpers::add_to_config_array(config_json, "CFG_ERRULE", new_item)?;
@@ -453,19 +453,11 @@ pub fn get_rule(config_json: &str, code_or_id: &str) -> Result<Value> {
     let search_value = code_or_id.to_uppercase();
 
     // Try to find by CODE first, then by ID
-    let item = if let Some(item) =
-        helpers::find_in_config_array(config_json, "CFG_ERRULE", "ERRULE_CODE", &search_value)?
-    {
-        item
-    } else if let Some(item) =
-        helpers::find_in_config_array(config_json, "CFG_ERRULE", "ERRULE_ID", &search_value)?
-    {
-        item
-    } else {
-        return Err(SzConfigError::NotFound(format!(
-            "Rule not found: {search_value}"
-        )));
-    };
+    let config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let item = helpers::find_in_section(&config, "CFG_ERRULE", "ERRULE_CODE", &search_value)
+        .or_else(|| helpers::find_in_section(&config, "CFG_ERRULE", "ERRULE_ID", &search_value))
+        .ok_or_else(|| SzConfigError::NotFound(format!("Rule not found: {search_value}")))?;
 
     // Transform to lowercase format (matching list_rules for consistency).
     // Stored-nullable columns are projected null-preserving (stored null stays
@@ -474,19 +466,19 @@ pub fn get_rule(config_json: &str, code_or_id: &str) -> Result<Value> {
     // when RESOLVE == "Yes", otherwise null.
     let resolve_is_yes = item.get("RESOLVE").and_then(|v| v.as_str()) == Some("Yes");
     let tier = if resolve_is_yes {
-        helpers::field_or_null(&item, "ERRULE_TIER")
+        helpers::field_or_null(item, "ERRULE_TIER")
     } else {
         Value::Null
     };
 
     Ok(json!({
-        "id": helpers::field_or_null(&item, "ERRULE_ID"),
-        "rule": helpers::field_or_null(&item, "ERRULE_CODE"),
-        "resolve": helpers::field_or_null(&item, "RESOLVE"),
-        "relate": helpers::field_or_null(&item, "RELATE"),
-        "rtype_id": helpers::field_or_null(&item, "RTYPE_ID"),
-        "fragment": helpers::field_or_null(&item, "QUAL_ERFRAG_CODE"),
-        "disqualifier": helpers::field_or_null(&item, "DISQ_ERFRAG_CODE"),
+        "id": helpers::field_or_null(item, "ERRULE_ID"),
+        "rule": helpers::field_or_null(item, "ERRULE_CODE"),
+        "resolve": helpers::field_or_null(item, "RESOLVE"),
+        "relate": helpers::field_or_null(item, "RELATE"),
+        "rtype_id": helpers::field_or_null(item, "RTYPE_ID"),
+        "fragment": helpers::field_or_null(item, "QUAL_ERFRAG_CODE"),
+        "disqualifier": helpers::field_or_null(item, "DISQ_ERFRAG_CODE"),
         "tier": tier
     }))
 }
@@ -599,9 +591,9 @@ pub fn set_rule(config_json: &str, params: SetRuleParams) -> Result<String> {
     let config_data: Value = serde_json::from_str(config_json)?;
 
     // Get existing rule to validate and merge updates
-    let existing_rule =
-        helpers::find_in_config_array(config_json, "CFG_ERRULE", "ERRULE_CODE", &code)?
-            .ok_or_else(|| SzConfigError::NotFound(format!("Rule not found: {code}")))?;
+    let existing_rule = helpers::find_in_section(&config_data, "CFG_ERRULE", "ERRULE_CODE", &code)
+        .cloned()
+        .ok_or_else(|| SzConfigError::NotFound(format!("Rule not found: {code}")))?;
 
     // Validate ONLY the fragment/disqualifier being Set. A code carried over
     // unchanged (Leave) or cleared (Clear) is never validated, preserving the
@@ -665,7 +657,7 @@ pub fn set_rule(config_json: &str, params: SetRuleParams) -> Result<String> {
     // Enforce/normalise the non-fragment invariants (is_new=false skips the
     // duplicate-code check, since an update targets an existing code).
     let validated = validate_rule_row_core(&config_data, &row, false)?;
-    let updated_item = serde_json::to_value(&validated)?;
+    let updated_item = crate::helpers::row_value(&validated);
 
     // Update the item in the config
     helpers::update_in_config_array(

@@ -341,9 +341,6 @@ final class TypedDispatch {
 
     private static String[] addExpressionCall(String config, Map<String, Object> in)
             throws SzConfigToolException {
-        if (!in.containsKey("ftype_code") && !in.containsKey("felem_code") && !in.containsKey("exec_order") && !in.containsKey("expression_feature")) {
-            return Conv.configAndJson(SzConfigTool.addExpressionCall(config, Conv.str(in.get("efunc_code")), Conv.json(in.get("element_list")), Conv.str(in.get("is_virtual"))));
-        }
         SzConfigTool.AddExpressionCallOptions o = new SzConfigTool.AddExpressionCallOptions();
         if (in.containsKey("ftype_code")) {
             o.ftypeCode(Conv.str(in.get("ftype_code")));
@@ -410,9 +407,6 @@ final class TypedDispatch {
 
     private static String[] addStandardizeCall(String config, Map<String, Object> in)
             throws SzConfigToolException {
-        if (!in.containsKey("ftype_code") && !in.containsKey("felem_code") && !in.containsKey("exec_order")) {
-            return Conv.configAndJson(SzConfigTool.addStandardizeCall(config, Conv.str(in.get("sfunc_code"))));
-        }
         SzConfigTool.AddStandardizeCallOptions o = new SzConfigTool.AddStandardizeCallOptions();
         if (in.containsKey("ftype_code")) {
             o.ftypeCode(Conv.str(in.get("ftype_code")));
@@ -717,9 +711,6 @@ final class TypedDispatch {
 
     private static String[] setFeature(String config, Map<String, Object> in)
             throws SzConfigToolException {
-        if (!in.containsKey("candidates") && !in.containsKey("anonymize") && !in.containsKey("derived") && !in.containsKey("history") && !in.containsKey("matchkey") && !in.containsKey("behavior") && !in.containsKey("class") && !in.containsKey("version") && !in.containsKey("rtype_id")) {
-            return Conv.config(SzConfigTool.setFeature(config, Conv.str(in.get("feature"))));
-        }
         SzConfigTool.SetFeatureOptions o = new SzConfigTool.SetFeatureOptions();
         if (in.containsKey("candidates")) {
             o.candidates(Conv.str(in.get("candidates")));

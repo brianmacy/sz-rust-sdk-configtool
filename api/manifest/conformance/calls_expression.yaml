@@ -374,6 +374,15 @@ cases:
           contains:
             - {id: 1, elementList: []}
 
+  - name: delete_element_by_feature_selector_and_element_feature
+    steps:
+      - fn: delete_expression_call_element
+        args: {call: PHONE, element_code: PHONE_LAST_10, element_feature: PHONE}
+      - fn: list_expression_calls
+        expect:
+          contains:
+            - {id: 1, elementList: []}
+
   - name: delete_element_disambiguated_by_element_feature
     steps:
       - fn: delete_expression_call_element

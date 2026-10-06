@@ -1,6 +1,6 @@
 //! C-boundary coverage for the fragment, data-source, feature, behavior-override,
 //! validate/render, element, expression/comparison/distinct call and matching
-//! function exports (`SzConfigTool_getFragment` .. `SzConfigTool_setMatchingFunction`).
+//! function exports (`SzConfigTool_getFragment` .. `SzConfigTool_listDistinctCalls`).
 //!
 //! Every export is driven through the real library against the real Senzing
 //! template fixture: the success path (response JSON / config effect), a NULL
@@ -215,10 +215,6 @@ fn boundaries() -> Vec<Boundary> {
             args: &[CFG],
         },
         Boundary {
-            call: |a| SzConfigTool_setExpressionCall(a[0], 1, a[1]),
-            args: &[CFG, ("updates_json", true)],
-        },
-        Boundary {
             call: |a| SzConfigTool_addComparisonCall(a[0], a[1], a[2], a[3]),
             args: &[
                 CFG,
@@ -240,10 +236,6 @@ fn boundaries() -> Vec<Boundary> {
             args: &[CFG],
         },
         Boundary {
-            call: |a| SzConfigTool_setComparisonCall(a[0], 1, a[1]),
-            args: &[CFG, ("updates_json", true)],
-        },
-        Boundary {
             call: |a| SzConfigTool_addDistinctCall(a[0], a[1], a[2], a[3]),
             args: &[
                 CFG,
@@ -263,30 +255,6 @@ fn boundaries() -> Vec<Boundary> {
         Boundary {
             call: |a| SzConfigTool_listDistinctCalls(a[0]),
             args: &[CFG],
-        },
-        Boundary {
-            call: |a| SzConfigTool_setDistinctCall(a[0], 1, a[1]),
-            args: &[CFG, ("updates_json", true)],
-        },
-        Boundary {
-            call: |a| SzConfigTool_addMatchingFunction(a[0], a[1], a[2]),
-            args: &[CFG, ("rtype_code", true), ("matching_func", true)],
-        },
-        Boundary {
-            call: |a| SzConfigTool_deleteMatchingFunction(a[0], a[1]),
-            args: &[CFG, ("rtype_code", true)],
-        },
-        Boundary {
-            call: |a| SzConfigTool_getMatchingFunction(a[0], a[1]),
-            args: &[CFG, ("rtype_code", true)],
-        },
-        Boundary {
-            call: |a| SzConfigTool_listMatchingFunctions(a[0]),
-            args: &[CFG],
-        },
-        Boundary {
-            call: |a| SzConfigTool_setMatchingFunction(a[0], a[1], a[2]),
-            args: &[CFG, ("rtype_code", true), ("matching_func", false)],
         },
     ]
 }
@@ -899,7 +867,6 @@ fn test_add_expression_call_errors() {
 
 type IdCall = extern "C" fn(*const c_char, i64) -> SzConfigTool_result;
 type ListCall = extern "C" fn(*const c_char) -> SzConfigTool_result;
-type SetCall = extern "C" fn(*const c_char, i64, *const c_char) -> SzConfigTool_result;
 
 /// One call family's id-based exports, its section, and the code the library
 /// error paths return for get/delete (delete via `handle_result!` is -2).
@@ -910,8 +877,6 @@ struct CallFamily {
     list: ListCall,
     delete: IdCall,
     delete_err: i64,
-    set: SetCall,
-    set_parse_msg: &'static str,
 }
 
 fn call_families() -> [CallFamily; 3] {
@@ -923,8 +888,6 @@ fn call_families() -> [CallFamily; 3] {
             list: SzConfigTool_listExpressionCalls,
             delete: SzConfigTool_deleteExpressionCall,
             delete_err: -2,
-            set: SzConfigTool_setExpressionCall,
-            set_parse_msg: "Invalid JSON in updates_json",
         },
         CallFamily {
             section: "CFG_CFCALL",
@@ -933,8 +896,6 @@ fn call_families() -> [CallFamily; 3] {
             list: SzConfigTool_listComparisonCalls,
             delete: SzConfigTool_deleteComparisonCall,
             delete_err: -2,
-            set: SzConfigTool_setComparisonCall,
-            set_parse_msg: "Invalid JSON in updates_json",
         },
         CallFamily {
             section: "CFG_DFCALL",
@@ -943,14 +904,12 @@ fn call_families() -> [CallFamily; 3] {
             list: SzConfigTool_listDistinctCalls,
             delete: SzConfigTool_deleteDistinctCall,
             delete_err: -5,
-            set: SzConfigTool_setDistinctCall,
-            set_parse_msg: "Failed to parse updates_json",
         },
     ]
 }
 
 #[test]
-fn test_call_get_list_delete_set() {
+fn test_call_get_list_delete() {
     let template = template();
     let config = cs(&template);
     let bogus = cs("not json");
@@ -975,20 +934,6 @@ fn test_call_get_list_delete_set() {
         assert_eq!(remaining.len(), rows.len() - 1);
         assert!(remaining.iter().all(|r| r[fam.id_key] != 1));
         err((fam.delete)(config.as_ptr(), 999_999), fam.delete_err);
-
-        // The set-call library functions are documented stubs: the config is
-        // returned unchanged.
-        for updates in [r#"{"execOrder":5}"#, "{}"] {
-            let u = cs(updates);
-            let out = ok((fam.set)(config.as_ptr(), 1, u.as_ptr()));
-            assert_eq!(out, template);
-        }
-        let bad_json = cs("{");
-        err_has(
-            (fam.set)(config.as_ptr(), 1, bad_json.as_ptr()),
-            -3,
-            fam.set_parse_msg,
-        );
     }
 }
 
@@ -1065,28 +1010,5 @@ fn test_add_comparison_and_distinct_calls() {
             add(config.as_ptr(), name.as_ptr(), f.as_ptr(), list.as_ptr()),
             -5,
         );
-    }
-}
-
-// ============================================================================
-// Matching functions (library placeholders: always "not implemented")
-// ============================================================================
-
-#[test]
-fn test_matching_functions_report_not_implemented() {
-    let config = cs(&template());
-    let (rtype, func) = (cs("RESOLVED"), cs("x"));
-    let (c, r, f) = (config.as_ptr(), rtype.as_ptr(), func.as_ptr());
-    let calls: [&dyn Fn() -> SzConfigTool_result; 6] = [
-        &|| SzConfigTool_addMatchingFunction(c, r, f),
-        &|| SzConfigTool_deleteMatchingFunction(c, r),
-        &|| SzConfigTool_getMatchingFunction(c, r),
-        &|| SzConfigTool_listMatchingFunctions(c),
-        &|| SzConfigTool_setMatchingFunction(c, r, f),
-        &|| SzConfigTool_setMatchingFunction(c, r, std::ptr::null()),
-    ];
-    for call in calls {
-        let msg = err(call(), -5);
-        assert!(msg.to_lowercase().contains("not implemented"), "{msg}");
     }
 }

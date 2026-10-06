@@ -63,13 +63,21 @@ final class Args {
     }
 
     private <T> Args update(String key, FieldUpdate<T> update, java.util.function.Consumer<T> set) {
-        switch (Objects.requireNonNull(update, key).getState()) {
-            case LEAVE -> fragments.remove(key);
-            case CLEAR -> fragments.put(key, "null");
-            case SET -> set.accept(update.getValue());
-            default -> throw new IllegalStateException(update.toString());
-        }
-        return this;
+        // Exhaustive over FieldUpdate.State: a new state is a compile error.
+        return switch (Objects.requireNonNull(update, key).getState()) {
+            case LEAVE -> {
+                fragments.remove(key);
+                yield this;
+            }
+            case CLEAR -> {
+                fragments.put(key, "null");
+                yield this;
+            }
+            case SET -> {
+                set.accept(update.getValue());
+                yield this;
+            }
+        };
     }
 
     String toJson() {

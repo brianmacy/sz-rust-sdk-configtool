@@ -19,6 +19,27 @@ matters only to range resolvers (README, "Versioning").
 
 ### Removed
 
+- **BREAKING (Rust API and C ABI; covered by the `SZCONFIGTOOL_ABI_VERSION` 2 bump below):**
+  the never-functional placeholder functions, 34 in all. Reason: none ever did anything (they
+  always returned `NotImplemented` / a "not yet implemented" `InvalidInput`, or returned the
+  config unchanged ignoring their arguments) and nothing calls them: G2's `sz-tools` and the
+  Python `sz_configtool` do not.
+  - Modules `functions::{matching, scoring, candidate, validation}` entirely:
+    `add_/delete_/get_/set_/remove_*_function` and `list_*_functions` for each (24
+    functions), their re-exports from `functions`, the manifest groups
+    `functions_{matching,scoring,candidate,validation}` (20 `status: not_implemented`
+    functions) and their conformance cases.
+  - `thresholds::get_threshold`, `thresholds::set_threshold` and `SetThresholdParams` (the
+    comparison- and generic-threshold functions are unchanged).
+  - The no-op setters `calls::{standardize,expression,comparison,distinct}::set_*_call` and
+    `set_*_call_element`, with `Set{Standardize,Expression,Comparison,Distinct}CallParams` and
+    `Set{Standardize,Comparison,Distinct}CallElementParams` (`ExpressionCallElementParams`
+    stays: `add_expression_call_element` uses it).
+  - C exports (25): `SzConfigTool_{add,delete,get,set}{Matching,Scoring,Candidate,Validation}Function`,
+    `SzConfigTool_list{Matching,Scoring,Candidate,Validation}Functions`, `SzConfigTool_getThreshold`
+    and `SzConfigTool_set{Standardize,Expression,Comparison,Distinct}Call` (header
+    declarations, `ffi/expected-exports`, return-code lists updated). The manifest no longer
+    has a `status: not_implemented` function; the schema keeps supporting it.
 - **BREAKING (Rust API and C ABI; `SZCONFIGTOOL_ABI_VERSION` 1 -> 2):** the SYS_OOM hash
   functions. Rust `hashes` module (`add_to_name_hash`, `delete_from_name_hash`,
   `add_to_ssn_last4_hash`, `delete_from_ssn_last4_hash`), the C exports
@@ -49,7 +70,7 @@ matters only to range resolvers (README, "Versioning").
 ### Added
 
 - Binding manifest (`api/manifest/*.yaml`, one file per group; see `api/manifest/schema.md`):
-  146 functions in 28 groups (126 implemented; coverage enforced by the drift test) and 742
+  126 functions in 24 groups (coverage enforced by the drift test) and 717
   conformance cases run against the real template config by Rust and every binding. New
   workspace crates: `sz-configtool-api` (`invoke(name, config, args_json)` dynamic dispatcher,
   generated `dispatch_gen.rs`, and the shared `validation_details_json` used by the C ABI and
@@ -116,6 +137,13 @@ matters only to range resolvers (README, "Versioning").
 
 ### Fixed
 
+- `features::update_feature_version` panicked on a config whose top level is not an object
+  (e.g. `[]`: JSON `IndexMut` on an array); it now returns `MissingSection("COMPATIBILITY_VERSION")`,
+  the error it already returned for any config lacking that path (bindings: `MISSING_SECTION`
+  instead of `INTERNAL`).
+- `command_processor`: `addComparisonThreshold` with feature `ALL` (any case) always failed
+  with `MissingField("ftype_code")` (the processor turned `ALL` into `None`). It now passes the
+  code through, so the library stores the all-features sentinel `FTYPE_ID 0`, as G2's CLI does.
 - `calls::expression::add_expression_call` stored BOM `FTYPE_ID -1` for an element-list item
   with feature `"PARENT"`: a `.filter(!"PARENT")` dropped it before the intended `parent -> 0`
   branch ran. It now stores `0` (case-insensitive), the G2 parent feature link
@@ -188,6 +216,25 @@ matters only to range resolvers (README, "Versioning").
   `bindings/CONTRACT.md`.
 - JNI: the strict modified-UTF-8 decoder accepted overlong encodings other than `C0 80` (the
   modified-UTF-8 NUL), e.g. `C0 81` or `E0 80 80`; they are now rejected.
+
+### Coverage
+
+- Coverage exclusions cut from 46 to 3 by removing the code shapes that needed them, not by
+  hiding code: infallible serialization (`Value` Display; one `row_value` helper for derived
+  row structs), each config parsed once (Value-based lookups instead of re-parsing),
+  verified sections fetched with one `verified_section_mut` instead of `if let` with a dead
+  `else`, the FFI result plumbing as shared functions (`lib_result` / `plain_result` /
+  `text_result`) instead of per-export macro copies, placeholder functions removed, panic
+  guards factored into tested `guarded` helpers, and host-independent C# platform mapping.
+  Behaviour-neutral except as listed under Fixed and here: C ABI C-string conversion failures
+  share one message ("Failed to convert result to C string: ..."; codes unchanged, -3
+  "serialize failed" can no longer occur); Java `addExpressionCall`, `addStandardizeCall` and
+  `setFeature` lose their options-less overload, which the library always rejected (new
+  manifest field `requires_options`); C# `LibraryVersion` reports a NULL from the native
+  library as an `INTERNAL` protocol error instead of `""`. The never-functional placeholder
+  functions were removed (see Removed) rather than covered. The remaining exclusions
+  (`coverage/policy.yaml`) are a JVM allocation failure, napi-derive's registration error arm
+  and a cross-process extraction race.
 
 ### Documented
 

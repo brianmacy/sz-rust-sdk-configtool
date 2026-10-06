@@ -64,79 +64,65 @@
  *
  *  -1  A required pointer is NULL (every export). Invalid UTF-8 in an input
  *      for the exports in List A. SzConfigTool_setAttribute also returns -1
- *      when updates_json is not valid JSON. (Also: the result could not be
- *      converted to a C string; JSON output never contains a raw NUL, so this
- *      does not occur in practice.)
+ *      when updates_json is not valid JSON. Also: the result of an export
+ *      whose library errors carry a reason code contains a NUL, so it cannot
+ *      be a C string (its results are JSON, which never holds a raw NUL).
  *  -2  Library error WITH a reason code, for every export not in List B or
  *      List C. Library error WITHOUT a reason code (message only) for List C.
  *      Invalid UTF-8 in an input for every export not in List A. An internal
  *      panic ("internal panic in <function>: ...", no reason code), any export.
  *  -3  An argument that must be JSON (updates_json, rule_json, feature_json,
  *      element_list_json, options_json, ...) does not parse or has the wrong
- *      shape (no reason code). Also: serializing a result failed (does not
- *      occur in practice).
+ *      shape (no reason code).
  *  -4  SzConfigTool_setGenericThreshold: gplan_id does not resolve to a plan
- *      (or config_json is not JSON), message only. Otherwise: the result could
- *      not be converted to a C string (does not occur in practice).
+ *      (or config_json is not JSON), message only. Otherwise: a plain-text
+ *      result (e.g. a version string stored with a JSON-escaped NUL in the
+ *      config) contains a NUL, so it cannot be a C string.
  *  -5  Library error WITHOUT a reason code (message only) for List B.
  *
  * List A (invalid UTF-8 => -1; for the three *CallElement deletes only in
- * element_feature, their other inputs => -2):
  *   SzConfigTool_addAttribute SzConfigTool_addDataSource
  *   SzConfigTool_deleteAttribute SzConfigTool_deleteComparisonCallElement
  *   SzConfigTool_deleteDataSource SzConfigTool_deleteDistinctCallElement
  *   SzConfigTool_deleteExpressionCallElement SzConfigTool_getAttribute
- *   SzConfigTool_getElement SzConfigTool_getFeature SzConfigTool_invoke
- *   SzConfigTool_listAttributes SzConfigTool_listDataSources
- *   SzConfigTool_listElements SzConfigTool_listFeatures
- *   SzConfigTool_setAttribute
+ *   SzConfigTool_getElement SzConfigTool_getFeature
+ *   SzConfigTool_invoke SzConfigTool_listAttributes
+ *   SzConfigTool_listDataSources SzConfigTool_listElements
+ *   SzConfigTool_listFeatures SzConfigTool_setAttribute
  *
  * List B (library error => -5, no reason code):
- *   SzConfigTool_addCandidateFunction SzConfigTool_addComparisonCall
- *   SzConfigTool_addComparisonFunction SzConfigTool_addConfigSectionField
- *   SzConfigTool_addDistinctCall SzConfigTool_addDistinctFunction
- *   SzConfigTool_addExpressionCall SzConfigTool_addExpressionFunction
- *   SzConfigTool_addFeature SzConfigTool_addFragment
- *   SzConfigTool_addMatchingFunction SzConfigTool_addRule
- *   SzConfigTool_addScoringFunction SzConfigTool_addStandardizeCall
- *   SzConfigTool_addStandardizeFunction SzConfigTool_addValidationFunction
+ *   SzConfigTool_addComparisonCall SzConfigTool_addComparisonFunction
+ *   SzConfigTool_addConfigSectionField SzConfigTool_addDistinctCall
+ *   SzConfigTool_addDistinctFunction SzConfigTool_addExpressionCall
+ *   SzConfigTool_addExpressionFunction SzConfigTool_addFeature
+ *   SzConfigTool_addFragment SzConfigTool_addRule
+ *   SzConfigTool_addStandardizeCall SzConfigTool_addStandardizeFunction
  *   SzConfigTool_cloneGenericPlan SzConfigTool_configSectionIsEmpty
- *   SzConfigTool_deleteCandidateFunction SzConfigTool_deleteComparisonFunction
- *   SzConfigTool_deleteDistinctCall SzConfigTool_deleteDistinctFunction
- *   SzConfigTool_deleteExpressionFunction SzConfigTool_deleteMatchingFunction
- *   SzConfigTool_deleteScoringFunction SzConfigTool_deleteStandardizeFunction
- *   SzConfigTool_deleteValidationFunction SzConfigTool_getCandidateFunction
- *   SzConfigTool_getComparisonCall SzConfigTool_getComparisonFunction
- *   SzConfigTool_getCompatibilityVersion SzConfigTool_getConfigSection
- *   SzConfigTool_getDataSource SzConfigTool_getDistinctCall
- *   SzConfigTool_getDistinctFunction SzConfigTool_getExpressionCall
- *   SzConfigTool_getExpressionFunction SzConfigTool_getFragment
- *   SzConfigTool_getMatchingFunction SzConfigTool_getRule
- *   SzConfigTool_getScoringFunction SzConfigTool_getStandardizeCall
- *   SzConfigTool_getStandardizeFunction SzConfigTool_getThreshold
- *   SzConfigTool_getValidationFunction SzConfigTool_getVersion
- *   SzConfigTool_listCandidateFunctions SzConfigTool_listComparisonCalls
+ *   SzConfigTool_deleteComparisonFunction SzConfigTool_deleteDistinctCall
+ *   SzConfigTool_deleteDistinctFunction SzConfigTool_deleteExpressionFunction
+ *   SzConfigTool_deleteStandardizeFunction SzConfigTool_getComparisonCall
+ *   SzConfigTool_getComparisonFunction SzConfigTool_getCompatibilityVersion
+ *   SzConfigTool_getConfigSection SzConfigTool_getDataSource
+ *   SzConfigTool_getDistinctCall SzConfigTool_getDistinctFunction
+ *   SzConfigTool_getExpressionCall SzConfigTool_getExpressionFunction
+ *   SzConfigTool_getFragment SzConfigTool_getRule
+ *   SzConfigTool_getStandardizeCall SzConfigTool_getStandardizeFunction
+ *   SzConfigTool_getVersion SzConfigTool_listComparisonCalls
  *   SzConfigTool_listComparisonFunctions SzConfigTool_listComparisonThresholds
  *   SzConfigTool_listConfigSections SzConfigTool_listDistinctCalls
  *   SzConfigTool_listDistinctFunctions SzConfigTool_listExpressionCalls
  *   SzConfigTool_listExpressionFunctions SzConfigTool_listFragments
  *   SzConfigTool_listGenericPlans SzConfigTool_listGenericThresholds
- *   SzConfigTool_listMatchingFunctions SzConfigTool_listRules
- *   SzConfigTool_listScoringFunctions SzConfigTool_listStandardizeCalls
+ *   SzConfigTool_listRules SzConfigTool_listStandardizeCalls
  *   SzConfigTool_listStandardizeFunctions SzConfigTool_listSystemParameters
- *   SzConfigTool_listValidationFunctions SzConfigTool_removeConfigSectionField
- *   SzConfigTool_setCandidateFunction SzConfigTool_setComparisonFunction
- *   SzConfigTool_setDistinctCall SzConfigTool_setDistinctFunction
- *   SzConfigTool_setExpressionFunction SzConfigTool_setGenericPlan
- *   SzConfigTool_setMatchingFunction SzConfigTool_setScoringFunction
- *   SzConfigTool_setStandardizeFunction SzConfigTool_setValidationFunction
+ *   SzConfigTool_removeConfigSectionField SzConfigTool_setComparisonFunction
+ *   SzConfigTool_setDistinctFunction SzConfigTool_setExpressionFunction
+ *   SzConfigTool_setGenericPlan SzConfigTool_setStandardizeFunction
  *   SzConfigTool_verifyCompatibilityVersion
  *
  * List C (library error => -2, no reason code):
- *   SzConfigTool_getComparisonCallByFeature
- *   SzConfigTool_getDistinctCallByFeature
- *   SzConfigTool_getExpressionCallByFeature
- *   SzConfigTool_getStandardizeCallByFeature
+ *   SzConfigTool_getComparisonCallByFeature SzConfigTool_getDistinctCallByFeature
+ *   SzConfigTool_getExpressionCallByFeature SzConfigTool_getStandardizeCallByFeature
  */
 
 #ifdef __cplusplus
@@ -488,22 +474,6 @@ SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_setComparisonFunctionWi
                                                                        const char *updates_json);
 
 /* ============================================================================
- * Matching Function Operations
- * ============================================================================ */
-
-/**
- * List all matching functions (returns JSON array string)
- */
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_listMatchingFunctions(const char *config_json);
-
-/**
- * Get a matching function (returns JSON object string)
- */
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_getMatchingFunction(const char *config_json,
-                                                            const char *mfunc_code);
-
-
-/* ============================================================================
  * Distinct Function Operations
  * ============================================================================ */
 
@@ -533,54 +503,6 @@ SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_setDistinctFunctionWith
                                                                      const char *updates_json);
 
 /* ============================================================================
- * Candidate Function Operations
- * ============================================================================ */
-
-/**
- * List all candidate functions (returns JSON array string)
- */
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_listCandidateFunctions(const char *config_json);
-
-/**
- * Get a candidate function (returns JSON object string)
- */
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_getCandidateFunction(const char *config_json,
-                                                             const char *rtype_code);
-
-
-/* ============================================================================
- * Validation Function Operations
- * ============================================================================ */
-
-/**
- * List all validation functions (returns JSON array string)
- */
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_listValidationFunctions(const char *config_json);
-
-/**
- * Get a validation function (returns JSON object string)
- */
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_getValidationFunction(const char *config_json,
-                                                              const char *attr_code);
-
-
-/* ============================================================================
- * Scoring Function Operations
- * ============================================================================ */
-
-/**
- * List all scoring functions (returns JSON array string)
- */
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_listScoringFunctions(const char *config_json);
-
-/**
- * Get a scoring function (returns JSON object string)
- */
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_getScoringFunction(const char *config_json,
-                                                           const char *rtype_code);
-
-
-/* ============================================================================
  * Batch 1-4: System, Generic Plans, Rules, Config Sections
  * ============================================================================ */
 
@@ -594,7 +516,6 @@ SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_setFragmentWithJson(con
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_cloneGenericPlan(const char *config_json, const char *source_code, const char *new_code, const char *new_desc);
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_setGenericPlan(const char *config_json, const char *gplan_code, const char *gplan_desc);
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_listGenericPlans(const char *config_json, const char *filter_code);
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_getThreshold(const char *config_json, int64_t threshold_id);
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_listSystemParameters(const char *config_json);
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_setSystemParameterWithJson(const char *config_json, const char *param_name, const char *param_value_json);
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_getVersion(const char *config_json);
@@ -658,7 +579,6 @@ SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_addStandardizeCall(cons
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_deleteStandardizeCall(const char *config_json, int64_t sfcall_id);
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_getStandardizeCall(const char *config_json, int64_t sfcall_id);
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_listStandardizeCalls(const char *config_json);
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_setStandardizeCall(const char *config_json, int64_t sfcall_id, const char *updates_json);
 
 /* ============================================================================
  * Threshold Operations (Batch 7)
@@ -753,7 +673,6 @@ SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_addExpressionCall(const
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_deleteExpressionCall(const char *config_json, int64_t efcall_id);
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_getExpressionCall(const char *config_json, int64_t efcall_id);
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_listExpressionCalls(const char *config_json);
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_setExpressionCall(const char *config_json, int64_t efcall_id, const char *updates_json);
 
 // Comparison Call Operations (Batch 10)
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_addComparisonCall(const char *config_json,
@@ -763,7 +682,6 @@ SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_addComparisonCall(const
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_deleteComparisonCall(const char *config_json, int64_t cfcall_id);
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_getComparisonCall(const char *config_json, int64_t cfcall_id);
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_listComparisonCalls(const char *config_json);
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_setComparisonCall(const char *config_json, int64_t cfcall_id, const char *updates_json);
 
 // Distinct Call Operations (Batch 11)
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_addDistinctCall(const char *config_json,
@@ -773,21 +691,11 @@ SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_addDistinctCall(const c
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_deleteDistinctCall(const char *config_json, int64_t dfcall_id);
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_getDistinctCall(const char *config_json, int64_t dfcall_id);
 SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_listDistinctCalls(const char *config_json);
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_setDistinctCall(const char *config_json, int64_t dfcall_id, const char *updates_json);
 
 
 /* ============================================================================
- * Function Type Operations (Batch 12, 13, 14)
+ * Function Type Operations (Batch 12)
  * ============================================================================ */
-
-// Matching Function Operations (Batch 12 - Placeholders)
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_addMatchingFunction(const char *config_json,
-                                                            const char *rtype_code,
-                                                            const char *matching_func);
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_deleteMatchingFunction(const char *config_json, const char *rtype_code);
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_setMatchingFunction(const char *config_json,
-                                                            const char *rtype_code,
-                                                            const char *matching_func);
 
 // Distinct Function Operations (Batch 12)
 /* Direct-arg add: connect_str NULL stores JSON null; a non-null pointer
@@ -806,33 +714,6 @@ SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_setDistinctFunction(con
                                                             const char *connect_str,
                                                             const char *dfunc_desc,
                                                             const char *language);
-
-// Candidate Function Operations (Batch 13 - Placeholders)
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_addCandidateFunction(const char *config_json,
-                                                             const char *rtype_code,
-                                                             const char *candidate_func);
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_deleteCandidateFunction(const char *config_json, const char *rtype_code);
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_setCandidateFunction(const char *config_json,
-                                                             const char *rtype_code,
-                                                             const char *candidate_func);
-
-// Validation Function Operations (Batch 13 - Placeholders)
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_addValidationFunction(const char *config_json,
-                                                              const char *attr_code,
-                                                              const char *validation_func);
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_deleteValidationFunction(const char *config_json, const char *attr_code);
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_setValidationFunction(const char *config_json,
-                                                              const char *attr_code,
-                                                              const char *validation_func);
-
-// Scoring Function Operations (Batch 14 - Placeholders)
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_addScoringFunction(const char *config_json,
-                                                           const char *rtype_code,
-                                                           const char *scoring_func);
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_deleteScoringFunction(const char *config_json, const char *rtype_code);
-SZCONFIGTOOL_API struct SzConfigTool_result SzConfigTool_setScoringFunction(const char *config_json,
-                                                           const char *rtype_code,
-                                                           const char *scoring_func);
 
 // Wave 4A additions (#38): feature-element mutators, settings, cascade deletes
 

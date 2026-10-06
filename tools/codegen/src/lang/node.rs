@@ -515,6 +515,7 @@ mod tests {
             notes: None,
             c_notes: None,
             status: Status::Implemented,
+            requires_options: false,
         }
     }
 

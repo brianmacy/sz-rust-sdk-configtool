@@ -9,7 +9,7 @@ Pure Rust library for manipulating Senzing configuration JSON documents.
 
 ## Overview
 
-`sz_configtool_lib` provides 203 public functions across 35 modules (146 configuration functions in the binding manifest) for programmatic manipulation of Senzing configuration documents (g2config.json). The library contains only pure business logic with no display formatting, making it ideal for automation scripts, migration tools, and external integrations.
+`sz_configtool_lib` provides 169 public functions across 31 modules (126 configuration functions in the binding manifest) for programmatic manipulation of Senzing configuration documents (g2config.json). The library contains only pure business logic with no display formatting, making it ideal for automation scripts, migration tools, and external integrations.
 
 ### ⚠️ Important Note on Usage
 
@@ -224,10 +224,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Module Organization
 
 Counts are public free functions (`pub fn`) per module; the crate has
-203 in 35 public modules (23 top-level, 4 under `calls`, 8 under
+169 in 31 public modules (23 top-level, 4 under `calls`, 4 under
 `functions`). The binding manifest (`api/manifest/`) covers the configuration
-functions among them: 146 functions in 28 groups (126 implemented, 20
-`NOT_IMPLEMENTED` placeholders).
+functions among them: 126 functions in 24 groups.
 
 ### Core Infrastructure
 
@@ -246,7 +245,7 @@ functions among them: 146 functions in 28 groups (126 implemented, 20
 
 ### Configuration
 
-- **`thresholds`** (14) - Comparison and generic thresholds (CFG_CFRTN, CFG_GENERIC_THRESHOLD)
+- **`thresholds`** (12) - Comparison and generic thresholds (CFG_CFRTN, CFG_GENERIC_THRESHOLD)
 - **`rules`** (5) - Entity resolution rules (CFG_ERRULE)
 - **`fragments`** (5) - Rule fragments (CFG_ERFRAG)
 - **`generic_plans`** (4) - Generic plans (CFG_GPLAN)
@@ -265,17 +264,13 @@ functions among them: 146 functions in 28 groups (126 implemented, 20
 - **`functions/expression`** (6) - Expression functions (CFG_EFUNC)
 - **`functions/comparison`** (6) - Comparison functions (CFG_CFUNC)
 - **`functions/distinct`** (5) - Distinct functions (CFG_DFUNC)
-- **`functions/matching`** (6) - Matching functions (CFG_RTYPE; placeholders)
-- **`functions/scoring`** (6) - Scoring functions (placeholders)
-- **`functions/candidate`** (6) - Candidate functions (placeholders)
-- **`functions/validation`** (6) - Validation functions (placeholders)
 
 ### Call Modules
 
-- **`calls/standardize`** (8) - Standardize calls with BOM (CFG_SFCALL, CFG_SBOM)
-- **`calls/expression`** (8) - Expression calls with BOM (CFG_EFCALL, CFG_EFBOM)
-- **`calls/comparison`** (8) - Comparison calls with BOM (CFG_CFCALL, CFG_CFBOM)
-- **`calls/distinct`** (8) - Distinct calls with BOM (CFG_DFCALL, CFG_DFBOM)
+- **`calls/standardize`** (6) - Standardize calls with BOM (CFG_SFCALL, CFG_SBOM)
+- **`calls/expression`** (6) - Expression calls with BOM (CFG_EFCALL, CFG_EFBOM)
+- **`calls/comparison`** (6) - Comparison calls with BOM (CFG_CFCALL, CFG_CFBOM)
+- **`calls/distinct`** (6) - Distinct calls with BOM (CFG_DFCALL, CFG_DFBOM)
 
 ## API Examples
 
@@ -657,7 +652,7 @@ target/release/SzConfigTool.dll        # Windows shared (+ SzConfigTool.dll.lib 
 target/release/libSzConfigTool.a       # static archive (Linux/macOS)
 ```
 
-Only `SzConfigTool_*` symbols are exported (149 functions). The header is
+Only `SzConfigTool_*` symbols are exported (124 functions). The header is
 [`ffi/include/libSzConfigTool.h`](ffi/include/libSzConfigTool.h); define
 `SZCONFIGTOOL_STATIC` before including it when linking the static archive.
 

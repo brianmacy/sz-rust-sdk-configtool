@@ -47,19 +47,35 @@ class NoOptionsOverloadTest {
                 SzConfigTool.setGenericThreshold(T, "INGEST", "FM"));
     }
 
+    /**
+     * Functions the library rejects without an optional argument
+     * ({@code requires_options} in the manifest) get no options-less overload.
+     */
+    @Test
+    void functionsThatNeedAnOptionalArgumentHaveNoOverloadWithoutOptions() {
+        for (String name : new String[] {"addExpressionCall", "addStandardizeCall", "setFeature"}) {
+            long withoutOptions = java.util.Arrays.stream(SzConfigTool.class.getMethods())
+                    .filter(m -> m.getName().equals(name))
+                    .filter(m -> !m.getParameterTypes()[m.getParameterCount() - 1].getSimpleName()
+                            .endsWith("Options"))
+                    .count();
+            assertEquals(0, withoutOptions, name);
+        }
+    }
+
     private static void invalidInput(String message, Executable call) {
         SzConfigToolException e = assertThrows(SzConfigToolException.class, call);
         assertEquals("INVALID_INPUT", e.getReasonCode());
         assertEquals(message, e.getMessage());
     }
 
-    /** The library rejects these without an optional argument (so the overload only throws). */
+    /** For those functions a null Options is "none", which the library rejects. */
     @Test
-    void functionsThatNeedAnOptionalArgument() {
+    void nullOptionsOfARequiresOptionsFunctionIsRejected() {
         String either = "Invalid input: Either a feature or an element must be specified, but not both";
         invalidInput(either, () -> SzConfigTool.addExpressionCall(T, "EXPRESS_BOM",
-                "[{\"element\":\"PHONE_NUM\",\"required\":\"Yes\",\"feature\":\"PHONE\"}]", "No"));
-        invalidInput(either, () -> SzConfigTool.addStandardizeCall(T, "PARSE_ID"));
-        invalidInput("Invalid input: No changes detected", () -> SzConfigTool.setFeature(T, "EMAIL"));
+                "[{\"element\":\"PHONE_NUM\",\"required\":\"Yes\",\"feature\":\"PHONE\"}]", "No", null));
+        invalidInput(either, () -> SzConfigTool.addStandardizeCall(T, "PARSE_ID", null));
+        invalidInput("Invalid input: No changes detected", () -> SzConfigTool.setFeature(T, "EMAIL", null));
     }
 }

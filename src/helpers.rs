@@ -141,14 +141,33 @@ impl<T> FieldUpdate<T> {
 /// # Returns
 /// Next available ID value
 pub fn get_next_id_from_array(array: &[Value], id_field: &str) -> Result<i64> {
-    let max_id = array
-        .iter()
-        .filter_map(|item| item.get(id_field))
-        .filter_map(|v| v.as_i64())
-        .max()
-        .unwrap_or(0);
+    Ok(next_id_after_max(array, id_field))
+}
 
-    Ok(max_id + 1)
+/// Infallible core of [`get_next_id_from_array`]: max(id_field) + 1, or 1
+/// when no row has an integer `id_field`.
+pub(crate) fn next_id_after_max(array: &[Value], id_field: &str) -> i64 {
+    max_id(array, id_field).map_or(1, |max_id| max_id + 1)
+}
+
+fn max_id(array: &[Value], id_field: &str) -> Option<i64> {
+    array
+        .iter()
+        .filter_map(|item| item.get(id_field).and_then(Value::as_i64))
+        .max()
+}
+
+/// Infallible core of [`get_next_id_with_min`]: `max(max(id_field) + 1, min_value)`
+/// over the rows that have an integer `id_field` (`min_value` when none do).
+pub(crate) fn next_id(array: &[Value], id_field: &str, min_value: i64) -> i64 {
+    max_id(array, id_field).map_or(min_value, |max_id| std::cmp::max(max_id + 1, min_value))
+}
+
+/// `Value` of a CFG_* row struct. Row structs derive `Serialize` with only
+/// named fields of `String`/`&str`/`i64`/`bool`/`Option` of those (string
+/// keys, no floats), so serde_json serialization cannot fail.
+pub(crate) fn row_value<T: serde::Serialize>(row: &T) -> Value {
+    serde_json::to_value(row).expect("CFG_* row structs always serialize")
 }
 
 /// Get the next available ID for a config section with optional seed value
@@ -210,14 +229,7 @@ pub fn get_next_id(
 /// # Returns
 /// Next available ID value, at least min_value
 pub fn get_next_id_with_min(array: &[Value], id_field: &str, min_value: i64) -> Result<i64> {
-    let max_id = array
-        .iter()
-        .filter_map(|item| item.get(id_field))
-        .filter_map(|v| v.as_i64())
-        .max()
-        .unwrap_or(min_value - 1);
-
-    Ok(std::cmp::max(max_id + 1, min_value))
+    Ok(next_id(array, id_field, min_value))
 }
 
 /// Check if an ID is already taken in a config array
@@ -271,7 +283,7 @@ pub fn get_desired_or_next_id(
     }
 
     // No desired ID or invalid, get next available
-    get_next_id_with_min(array, id_field, min_value)
+    Ok(next_id(array, id_field, min_value))
 }
 
 /// Resolve an execution-order value within a scope, honouring a desired value or
@@ -427,6 +439,18 @@ pub fn find_in_array_mut<'a>(
     })
 }
 
+/// The `G2_CONFIG.<section>` array of a config whose caller has already
+/// proved the section is an array (it looked the section up, matched a row in
+/// it, or validated it). Breaking that invariant is a library bug: it panics,
+/// which every binding reports as `INTERNAL` instead of a misleading error.
+pub(crate) fn verified_section_mut<'a>(config: &'a mut Value, section: &str) -> &'a mut Vec<Value> {
+    config
+        .get_mut("G2_CONFIG")
+        .and_then(|g| g.get_mut(section))
+        .and_then(Value::as_array_mut)
+        .expect("caller verified this G2_CONFIG section is an array")
+}
+
 /// Add item to config array (generic)
 ///
 /// # Arguments
@@ -452,7 +476,7 @@ pub fn add_to_config_array(config_json: &str, section: &str, item: Value) -> Res
 
     array.push(item);
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 /// Delete item from config array by field value
@@ -499,7 +523,7 @@ pub fn delete_from_config_array(
         )));
     }
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 /// Find item in config array by field value (returns owned value)
@@ -524,13 +548,24 @@ pub fn find_in_config_array(
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
-    let array = config
+    Ok(find_in_section(&config, section, field, value).cloned())
+}
+
+/// [`find_in_config_array`] on an already-parsed config: the row of
+/// `G2_CONFIG.<section>` whose `field` equals `value` (as a string, or as an
+/// integer when `value` parses as one); `None` when absent.
+pub(crate) fn find_in_section<'a>(
+    config: &'a Value,
+    section: &str,
+    field: &str,
+    value: &str,
+) -> Option<&'a Value> {
+    config
         .get("G2_CONFIG")
         .and_then(|g| g.get(section))
-        .and_then(|v| v.as_array());
-
-    if let Some(arr) = array {
-        let item = arr.iter().find(|item| {
+        .and_then(|v| v.as_array())?
+        .iter()
+        .find(|item| {
             item.get(field)
                 .and_then(|v| v.as_str())
                 .map(|s| s == value)
@@ -541,11 +576,7 @@ pub fn find_in_config_array(
                         .and_then(|id| value.parse::<i64>().ok().map(|val| id == val))
                 })
                 .unwrap_or(false)
-        });
-        Ok(item.cloned())
-    } else {
-        Ok(None)
-    }
+        })
 }
 
 /// Alias for delete_from_config_array for compatibility
@@ -591,7 +622,7 @@ pub fn update_in_config_array(
     // Replace the entire item
     *item = new_item;
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 /// List all items from a config array
@@ -636,7 +667,11 @@ pub fn list_from_config_array(config_json: &str, section: &str) -> Result<Vec<Va
 pub fn lookup_feature_id(config_json: &str, feature_code: &str) -> Result<i64> {
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    feature_id_in(&config, feature_code)
+}
 
+/// [`lookup_feature_id`] on an already-parsed config.
+pub(crate) fn feature_id_in(config: &Value, feature_code: &str) -> Result<i64> {
     config
         .get("G2_CONFIG")
         .and_then(|g| g.get("CFG_FTYPE"))
@@ -772,7 +807,11 @@ pub fn lookup_efunc_id(config_json: &str, func_code: &str) -> Result<i64> {
 pub fn lookup_cfunc_id(config_json: &str, func_code: &str) -> Result<i64> {
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    cfunc_id_in(&config, func_code)
+}
 
+/// [`lookup_cfunc_id`] on an already-parsed config.
+pub(crate) fn cfunc_id_in(config: &Value, func_code: &str) -> Result<i64> {
     config
         .get("G2_CONFIG")
         .and_then(|g| g.get("CFG_CFUNC"))
@@ -1057,6 +1096,26 @@ pub fn resolve_efcall_id_for_feature(config: &Value, ftype_id: i64) -> Result<i6
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn test_next_id_helpers() {
+        let rows = vec![
+            json!({"ID": 3}),
+            json!({"ID": 7}),
+            json!({"ID": "x"}),
+            json!({}),
+        ];
+        assert_eq!(get_next_id_from_array(&rows, "ID").unwrap(), 8);
+        assert_eq!(get_next_id_from_array(&[], "ID").unwrap(), 1);
+        // All-negative ids keep the historical max + 1 (no floor).
+        assert_eq!(
+            get_next_id_from_array(&[json!({"ID": -5})], "ID").unwrap(),
+            -4
+        );
+        assert_eq!(get_next_id_with_min(&rows, "ID", 1000).unwrap(), 1000);
+        assert_eq!(get_next_id_with_min(&rows, "ID", 5).unwrap(), 8);
+        assert_eq!(get_next_id_with_min(&[], "ID", 1000).unwrap(), 1000);
+    }
 
     #[test]
     fn test_field_or_null_present_empty_null_absent() {

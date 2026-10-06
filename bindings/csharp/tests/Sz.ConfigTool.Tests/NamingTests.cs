@@ -28,7 +28,7 @@ namespace Sz.ConfigTool.Tests
         }
 
         [Fact]
-        public void Not_implemented_functions_are_skipped_and_nothing_else_is_added()
+        public void Every_implemented_function_and_nothing_else_is_generated()
         {
             var expected = Repo.Functions.Where(f => f.Implemented).Select(f => Repo.Pascal(f.Name)).ToHashSet();
             var actual = typeof(SzConfigTool).GetMethods(BindingFlags.Public | BindingFlags.Static)
@@ -36,7 +36,6 @@ namespace Sz.ConfigTool.Tests
                 .Select(m => m.Name)
                 .ToHashSet();
             Assert.Equal(expected.OrderBy(n => n), actual.OrderBy(n => n));
-            Assert.Contains(Repo.Functions, f => !f.Implemented);
             foreach (ManifestFunction f in Repo.Functions.Where(f => !f.Implemented))
             {
                 Assert.Null(typeof(SzConfigTool).GetMethod(Repo.Pascal(f.Name)));

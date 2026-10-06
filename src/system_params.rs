@@ -91,16 +91,14 @@ pub fn set_system_parameter(
                 .get_mut("CFG_RTYPE")
                 .and_then(|v| v.as_array_mut())
         {
-            for rtype in rtype_array.iter_mut() {
-                if let Some(rclass_id) = rtype.get("RCLASS_ID").and_then(|v| v.as_i64())
-                    && rclass_id == 2
-                {
-                    if let Some(rtype_obj) = rtype.as_object_mut() {
-                        rtype_obj.insert("BREAK_RES".to_string(), parameter_value.clone());
-                        found = true;
-                    }
-                    break;
-                }
+            // The first RCLASS_ID 2 row (only an object row has the field).
+            if let Some(rtype_obj) = rtype_array
+                .iter_mut()
+                .filter_map(Value::as_object_mut)
+                .find(|r| r.get("RCLASS_ID").and_then(|v| v.as_i64()) == Some(2))
+            {
+                rtype_obj.insert("BREAK_RES".to_string(), parameter_value.clone());
+                found = true;
             }
         }
     } else {
@@ -115,5 +113,5 @@ pub fn set_system_parameter(
         )));
     }
 
-    Ok(serde_json::to_string(&config_data)?)
+    Ok(config_data.to_string())
 }

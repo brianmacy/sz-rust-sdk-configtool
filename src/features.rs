@@ -551,29 +551,27 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
         version: params.version.unwrap_or(1),
         rtype_id: params.rtype_id.unwrap_or(0),
     };
-    let ftype_record = serde_json::to_value(&ftype_row)?;
+    let ftype_record = crate::helpers::row_value(&ftype_row);
 
     // Add to CFG_FTYPE
-    if let Some(ftype_array) = config["G2_CONFIG"]["CFG_FTYPE"].as_array_mut() {
-        ftype_array.push(ftype_record);
-    }
+    let ftype_array = crate::helpers::verified_section_mut(&mut config, "CFG_FTYPE");
+    ftype_array.push(ftype_record);
 
     // Add standardize call if function specified
     if sfunc_id > 0 {
         let sfcall_array = config["G2_CONFIG"]["CFG_SFCALL"]
             .as_array()
             .ok_or_else(|| SzConfigError::MissingSection("CFG_SFCALL".to_string()))?;
-        let id = helpers::get_next_id_with_min(sfcall_array, "SFCALL_ID", 1000)?;
-        let record = serde_json::to_value(&SfcallRow {
+        let id = crate::helpers::next_id(sfcall_array, "SFCALL_ID", 1000);
+        let record = crate::helpers::row_value(&SfcallRow {
             sfcall_id: id,
             sfunc_id,
             exec_order: Some(1),
             ftype_id,
             felem_id: -1,
-        })?;
-        if let Some(array) = config["G2_CONFIG"]["CFG_SFCALL"].as_array_mut() {
-            array.push(record);
-        }
+        });
+        let array = crate::helpers::verified_section_mut(&mut config, "CFG_SFCALL");
+        array.push(record);
     }
 
     // Add expression call if function specified
@@ -581,8 +579,8 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
         let efcall_array = config["G2_CONFIG"]["CFG_EFCALL"]
             .as_array()
             .ok_or_else(|| SzConfigError::MissingSection("CFG_EFCALL".to_string()))?;
-        let id = helpers::get_next_id_with_min(efcall_array, "EFCALL_ID", 1000)?;
-        let record = serde_json::to_value(&EfcallRow {
+        let id = crate::helpers::next_id(efcall_array, "EFCALL_ID", 1000);
+        let record = crate::helpers::row_value(&EfcallRow {
             efcall_id: id,
             efunc_id,
             exec_order: 1,
@@ -590,10 +588,9 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
             felem_id: -1,
             efeat_ftype_id: -1,
             is_virtual: "No".to_string(),
-        })?;
-        if let Some(array) = config["G2_CONFIG"]["CFG_EFCALL"].as_array_mut() {
-            array.push(record);
-        }
+        });
+        let array = crate::helpers::verified_section_mut(&mut config, "CFG_EFCALL");
+        array.push(record);
         id
     } else {
         0
@@ -604,16 +601,15 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
         let cfcall_array = config["G2_CONFIG"]["CFG_CFCALL"]
             .as_array()
             .ok_or_else(|| SzConfigError::MissingSection("CFG_CFCALL".to_string()))?;
-        let id = helpers::get_next_id_with_min(cfcall_array, "CFCALL_ID", 1000)?;
+        let id = crate::helpers::next_id(cfcall_array, "CFCALL_ID", 1000);
         // CFG_CFCALL is exactly CFCALL_ID, FTYPE_ID, CFUNC_ID (no EXEC_ORDER column).
-        let record = serde_json::to_value(&CfcallRow {
+        let record = crate::helpers::row_value(&CfcallRow {
             cfcall_id: id,
             cfunc_id,
             ftype_id,
-        })?;
-        if let Some(array) = config["G2_CONFIG"]["CFG_CFCALL"].as_array_mut() {
-            array.push(record);
-        }
+        });
+        let array = crate::helpers::verified_section_mut(&mut config, "CFG_CFCALL");
+        array.push(record);
         id
     } else {
         0
@@ -725,28 +721,27 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
                 .ok_or_else(|| SzConfigError::InvalidStructure("Invalid FELEM_ID".to_string()))?
         } else {
             // Create new element
-            let new_id = helpers::get_next_id_with_min(felem_array, "FELEM_ID", 1000)?;
-            let new_element = serde_json::to_value(&FelemRow {
+            let new_id = crate::helpers::next_id(felem_array, "FELEM_ID", 1000);
+            let new_element = crate::helpers::row_value(&FelemRow {
                 felem_id: new_id,
                 felem_code: element_code.clone(),
                 felem_desc: element_code.clone(),
                 data_type: "string".to_string(),
-            })?;
-            if let Some(array) = config["G2_CONFIG"]["CFG_FELEM"].as_array_mut() {
-                array.push(new_element);
-            }
+            });
+            let array = crate::helpers::verified_section_mut(&mut config, "CFG_FELEM");
+            array.push(new_element);
             new_id
         };
 
         // Add to EFBOM if expressed
         if efcall_id > 0 && expressed.eq_ignore_ascii_case("yes") {
-            let record = serde_json::to_value(&EfbomRow {
+            let record = crate::helpers::row_value(&EfbomRow {
                 efcall_id,
                 exec_order: fbom_order,
                 ftype_id,
                 felem_id,
                 felem_req: "Yes".to_string(),
-            })?;
+            });
             if let Some(array) = config["G2_CONFIG"]["CFG_EFBOM"].as_array_mut() {
                 array.push(record);
             }
@@ -754,33 +749,33 @@ pub fn add_feature(config_json: &str, params: AddFeatureParams) -> Result<String
 
         // Add to CFBOM if compared
         if cfcall_id > 0 && compared.eq_ignore_ascii_case("yes") {
-            let record = serde_json::to_value(&CfbomRow {
+            let record = crate::helpers::row_value(&CfbomRow {
                 cfcall_id,
                 exec_order: fbom_order,
                 ftype_id,
                 felem_id,
-            })?;
+            });
             if let Some(array) = config["G2_CONFIG"]["CFG_CFBOM"].as_array_mut() {
                 array.push(record);
             }
         }
 
         // Add to FBOM (always). DISPLAY_DELIM is nullable (seed-then-null).
-        let fbom_record = serde_json::to_value(&FbomRow {
+        let fbom_record = crate::helpers::row_value(&FbomRow {
             ftype_id,
             felem_id,
             exec_order: Some(fbom_order),
             display_level: Some(display_level),
             display_delim,
             derived: Some(elem_derived),
-        })?;
+        });
 
         if let Some(array) = config["G2_CONFIG"]["CFG_FBOM"].as_array_mut() {
             array.push(fbom_record);
         }
     }
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 /// Delete a feature from the configuration
@@ -928,11 +923,10 @@ pub fn delete_feature(config_json: &str, feature_code_or_id: &str) -> Result<Str
     }
 
     // Finally, delete the feature itself
-    if let Some(ftype_array) = config["G2_CONFIG"]["CFG_FTYPE"].as_array_mut() {
-        ftype_array.retain(|record| record["FTYPE_ID"].as_i64() != Some(ftype_id));
-    }
+    let ftype_array = crate::helpers::verified_section_mut(&mut config, "CFG_FTYPE");
+    ftype_array.retain(|record| record["FTYPE_ID"].as_i64() != Some(ftype_id));
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 /// Get a specific feature by code or ID
@@ -964,7 +958,7 @@ pub fn get_feature(config_json: &str, feature_code_or_id: &str) -> Result<Value>
             .ok_or_else(|| SzConfigError::NotFound(format!("Feature: {code_upper}")))?
     };
 
-    build_feature_json(&config, ftype)
+    Ok(feature_json(&config, ftype))
 }
 
 /// List all features in the configuration
@@ -984,8 +978,8 @@ pub fn list_features(config_json: &str) -> Result<Vec<Value>> {
 
     let mut result: Vec<Value> = ftype_array
         .iter()
-        .map(|ftype| build_feature_json(&config, ftype))
-        .collect::<Result<Vec<_>>>()?;
+        .map(|ftype| feature_json(&config, ftype))
+        .collect();
 
     // Sort by FTYPE_ID
     result.sort_by_key(|item| item["id"].as_i64().unwrap_or(0));
@@ -1026,6 +1020,9 @@ pub fn set_feature(config_json: &str, params: SetFeatureParams) -> Result<String
     } else {
         lookup_feature_id(&config, params.feature)?
     };
+
+    // CFG_FCLASS is read while a CFG_FTYPE row is borrowed mutably below.
+    let fclasses = config["G2_CONFIG"]["CFG_FCLASS"].clone();
 
     let ftypes = config["G2_CONFIG"]["CFG_FTYPE"]
         .as_array_mut()
@@ -1106,11 +1103,7 @@ pub fn set_feature(config_json: &str, params: SetFeatureParams) -> Result<String
 
     // Lookup and set class (FCLASS_ID) - must do before modifying ftype
     if let Some(class_name) = params.class {
-        // Parse config again to avoid borrow conflict
-        let config_for_lookup: Value = serde_json::from_str(config_json)
-            .map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
-
-        let fclass_array = config_for_lookup["G2_CONFIG"]["CFG_FCLASS"]
+        let fclass_array = fclasses
             .as_array()
             .ok_or_else(|| SzConfigError::MissingSection("CFG_FCLASS".to_string()))?;
 
@@ -1138,7 +1131,7 @@ pub fn set_feature(config_json: &str, params: SetFeatureParams) -> Result<String
         ));
     }
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 /// Validate value is in domain and normalize to proper case
@@ -1158,6 +1151,11 @@ fn validate_and_normalize_domain(value: &str, domain: &[&str], field_name: &str)
 
 /// Build complete feature JSON with elementList for display
 pub fn build_feature_json(config: &Value, ftype: &Value) -> Result<Value> {
+    Ok(feature_json(config, ftype))
+}
+
+/// Infallible core of [`build_feature_json`].
+fn feature_json(config: &Value, ftype: &Value) -> Value {
     let empty_array = vec![];
 
     let fclass_array = config["G2_CONFIG"]["CFG_FCLASS"]
@@ -1314,7 +1312,7 @@ pub fn build_feature_json(config: &Value, ftype: &Value) -> Result<Value> {
     element_list.sort_by_key(|(order, _)| *order);
     let element_list: Vec<Value> = element_list.into_iter().map(|(_, v)| v).collect();
 
-    Ok(json!({
+    json!({
         "id": ftype_id,
         "feature": ftype["FTYPE_CODE"].as_str().unwrap_or(""),
         "class": class_name,
@@ -1327,7 +1325,7 @@ pub fn build_feature_json(config: &Value, ftype: &Value) -> Result<Value> {
         "matchKey": ftype["SHOW_IN_MATCH_KEY"].as_str().unwrap_or(""),
         "version": ftype["VERSION"].as_i64().unwrap_or(0),
         "elementList": element_list
-    }))
+    })
 }
 
 fn lookup_feature_id(config: &Value, feature_code: &str) -> Result<i64> {
@@ -1340,45 +1338,6 @@ fn lookup_feature_id(config: &Value, feature_code: &str) -> Result<i64> {
         })
         .and_then(|f| f["FTYPE_ID"].as_i64())
         .ok_or_else(|| SzConfigError::NotFound("Feature not found".to_string()))
-}
-
-#[allow(dead_code)]
-fn lookup_sfunc_id(config: &Value, func_code: &str) -> Result<i64> {
-    let code_upper = func_code.to_uppercase();
-    config["G2_CONFIG"]["CFG_SFUNC"]
-        .as_array()
-        .and_then(|arr| {
-            arr.iter()
-                .find(|f| f["SFUNC_CODE"].as_str() == Some(code_upper.as_str()))
-        })
-        .and_then(|f| f["SFUNC_ID"].as_i64())
-        .ok_or_else(|| SzConfigError::NotFound(format!("Standardize function: {code_upper}")))
-}
-
-#[allow(dead_code)]
-fn lookup_efunc_id(config: &Value, func_code: &str) -> Result<i64> {
-    let code_upper = func_code.to_uppercase();
-    config["G2_CONFIG"]["CFG_EFUNC"]
-        .as_array()
-        .and_then(|arr| {
-            arr.iter()
-                .find(|f| f["EFUNC_CODE"].as_str() == Some(code_upper.as_str()))
-        })
-        .and_then(|f| f["EFUNC_ID"].as_i64())
-        .ok_or_else(|| SzConfigError::NotFound(format!("Expression function: {code_upper}")))
-}
-
-#[allow(dead_code)]
-fn lookup_cfunc_id(config: &Value, func_code: &str) -> Result<i64> {
-    let code_upper = func_code.to_uppercase();
-    config["G2_CONFIG"]["CFG_CFUNC"]
-        .as_array()
-        .and_then(|arr| {
-            arr.iter()
-                .find(|f| f["CFUNC_CODE"].as_str() == Some(code_upper.as_str()))
-        })
-        .and_then(|f| f["CFUNC_ID"].as_i64())
-        .ok_or_else(|| SzConfigError::NotFound(format!("Comparison function: {code_upper}")))
 }
 
 /// Add a feature comparison element (FBOM record)
@@ -1400,11 +1359,11 @@ pub fn add_feature_comparison(
         .element_code
         .ok_or_else(|| SzConfigError::MissingField("element_code".to_string()))?;
 
-    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
-    let felem_id = helpers::lookup_element_id(config_json, element_code)?;
-
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
+    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
+    let felem_id = helpers::lookup_element_id(config_json, element_code)?;
 
     // Check if already exists
     let fbom_array = config["G2_CONFIG"]["CFG_FBOM"]
@@ -1429,14 +1388,14 @@ pub fn add_feature_comparison(
 
     // Build record via FbomRow so every CFG_FBOM key is present; the remaining
     // optional fields serialize as null (seed-then-null preserved).
-    let record = serde_json::to_value(&FbomRow {
+    let record = crate::helpers::row_value(&FbomRow {
         ftype_id,
         felem_id,
         exec_order: Some(exec_order),
         display_level: params.display_level,
         display_delim: params.display_delim.map(str::to_string),
         derived: params.derived.map(str::to_string),
-    })?;
+    });
 
     helpers::add_to_config_array(config_json, "CFG_FBOM", record)
 }
@@ -1455,11 +1414,11 @@ pub fn delete_feature_comparison(
     feature_code: &str,
     element_code: &str,
 ) -> Result<String> {
-    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
-    let felem_id = helpers::lookup_element_id(config_json, element_code)?;
-
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
+    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
+    let felem_id = helpers::lookup_element_id(config_json, element_code)?;
 
     let mut found = false;
 
@@ -1480,7 +1439,7 @@ pub fn delete_feature_comparison(
         )));
     }
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 /// Get a specific feature comparison element
@@ -1502,11 +1461,11 @@ pub fn get_feature_comparison(
         .element_code
         .ok_or_else(|| SzConfigError::MissingField("element_code".to_string()))?;
 
-    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
-    let felem_id = helpers::lookup_element_id(config_json, element_code)?;
-
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
+    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
+    let felem_id = helpers::lookup_element_id(config_json, element_code)?;
 
     let fbom_array = config["G2_CONFIG"]["CFG_FBOM"]
         .as_array()
@@ -1610,6 +1569,9 @@ pub fn add_feature_distinct_call_element(
         .distinct_func_code
         .ok_or_else(|| SzConfigError::MissingField("distinct_func_code".to_string()))?;
 
+    let config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
     let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
     let dfunc_id = helpers::lookup_dfunc_id(config_json, distinct_func_code)?;
     // Validate the element code if supplied (a DFCALL identifies a feature/function
@@ -1617,9 +1579,6 @@ pub fn add_feature_distinct_call_element(
     if let Some(code) = params.element_code {
         helpers::lookup_element_id(config_json, code)?;
     }
-
-    let config: Value =
-        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
     // Check if already exists (identity is FTYPE_ID + DFUNC_ID)
     let dfcall_array = config["G2_CONFIG"]["CFG_DFCALL"]
@@ -1636,15 +1595,15 @@ pub fn add_feature_distinct_call_element(
     }
 
     // Get next DFCALL_ID
-    let dfcall_id = helpers::get_next_id_with_min(dfcall_array, "DFCALL_ID", 1000)?;
+    let dfcall_id = crate::helpers::next_id(dfcall_array, "DFCALL_ID", 1000);
 
     // Build record via DfcallRow. CFG_DFCALL is exactly DFCALL_ID, FTYPE_ID,
     // DFUNC_ID per the authoritative Senzing v4 schema.
-    let record = serde_json::to_value(&DfcallRow {
+    let record = crate::helpers::row_value(&DfcallRow {
         dfcall_id,
         ftype_id,
         dfunc_id,
-    })?;
+    });
 
     helpers::add_to_config_array(config_json, "CFG_DFCALL", record)
 }
@@ -1720,14 +1679,17 @@ pub fn update_feature_version(config_json: &str, version: &str) -> Result<String
 
     // In-place update of a single scalar field (not a CFG_* section row builder);
     // all other keys preserved. Left as-is per spec.
-    // Navigate to COMPATIBILITY_VERSION
-    let compat_version = config["G2_CONFIG"]["CONFIG_BASE_VERSION"]["COMPATIBILITY_VERSION"]
-        .as_object_mut()
+    // Navigate to COMPATIBILITY_VERSION without IndexMut (which panics on a
+    // non-object such as a top-level array); any missing/non-object step is
+    // the same MissingSection this function reports for an absent path.
+    let compat_version = config
+        .pointer_mut("/G2_CONFIG/CONFIG_BASE_VERSION/COMPATIBILITY_VERSION")
+        .and_then(Value::as_object_mut)
         .ok_or_else(|| SzConfigError::MissingSection("COMPATIBILITY_VERSION".to_string()))?;
 
     compat_version.insert("FEATURE_VERSION".to_string(), json!(version));
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 #[cfg(test)]
@@ -2157,30 +2119,5 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
-    }
-
-    /// The private by-code function lookups resolve a known code
-    /// (case-insensitively) and report NotFound with the upper-cased code.
-    #[test]
-    fn test_private_function_lookups() {
-        let config = json!({"G2_CONFIG": {
-            "CFG_SFUNC": [{"SFUNC_ID": 11, "SFUNC_CODE": "S_FN"}],
-            "CFG_EFUNC": [{"EFUNC_ID": 12, "EFUNC_CODE": "E_FN"}],
-            "CFG_CFUNC": [{"CFUNC_ID": 13, "CFUNC_CODE": "C_FN"}]
-        }});
-        type Lookup = fn(&Value, &str) -> Result<i64>;
-        let cases: [(Lookup, &str, i64, &str); 3] = [
-            (lookup_sfunc_id, "s_fn", 11, "Standardize function: NOPE"),
-            (lookup_efunc_id, "e_fn", 12, "Expression function: NOPE"),
-            (lookup_cfunc_id, "c_fn", 13, "Comparison function: NOPE"),
-        ];
-        for (lookup, code, id, missing_msg) in cases {
-            assert_eq!(lookup(&config, code).unwrap(), id);
-            let err = lookup(&config, "nope").unwrap_err();
-            assert!(
-                matches!(&err, SzConfigError::NotFound(msg) if msg == missing_msg),
-                "{err:?}"
-            );
-        }
     }
 }

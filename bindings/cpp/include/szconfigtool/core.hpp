@@ -488,19 +488,19 @@ inline void RequireNoNul(std::string_view s, const char* what) {
     }
 }
 
-/// Call SzConfigTool_invoke and decode the success envelope.
-[[nodiscard]] inline InvokeResult InvokeRaw(const std::string& name, const std::string& config_json,
-                                            const std::string& args_json) {
-    RequireNoNul(name, "name");
-    RequireNoNul(config_json, "config_json");
-    RequireNoNul(args_json, "args_json");
-    const SzConfigTool_result r =
-        SzConfigTool_invoke(name.c_str(), config_json.c_str(), args_json.c_str());
-    const OwnedCString response(r.response);
-    if (r.returnCode != 0 || response == nullptr) {
-        throw LastError(r.returnCode);
+/// The success response text; the C ABI never returns 0 without one, so a
+/// NULL is a wire-contract violation (INTERNAL).
+[[nodiscard]] inline std::string_view RequireResponse(const char* response) {
+    if (response == nullptr) {
+        ThrowInternal("null response with returnCode 0");
     }
-    const std::string_view text(response.get());
+    return response;
+}
+
+/// Decode a success envelope (api/src/output.rs to_envelope): a JSON object
+/// with a string "kind" and the optional "config" (a JSON string) and
+/// "result" (raw JSON text) members.
+[[nodiscard]] inline InvokeResult DecodeEnvelope(std::string_view text) {
     const json::Value env = json::Parse(text);
     const json::Value* kind = env.Find("kind");
     if (kind == nullptr || kind->type != json::Value::Type::String) {
@@ -514,6 +514,21 @@ inline void RequireNoNul(std::string_view s, const char* what) {
         out.result = std::string(text.substr(res->begin, res->end - res->begin));
     }
     return out;
+}
+
+/// Call SzConfigTool_invoke and decode the success envelope.
+[[nodiscard]] inline InvokeResult InvokeRaw(const std::string& name, const std::string& config_json,
+                                            const std::string& args_json) {
+    RequireNoNul(name, "name");
+    RequireNoNul(config_json, "config_json");
+    RequireNoNul(args_json, "args_json");
+    const SzConfigTool_result r =
+        SzConfigTool_invoke(name.c_str(), config_json.c_str(), args_json.c_str());
+    const OwnedCString response(r.response);
+    if (r.returnCode != 0) {
+        throw LastError(r.returnCode);
+    }
+    return DecodeEnvelope(RequireResponse(response.get()));
 }
 
 /// Decoded envelope of a typed call (fields empty when absent for the kind).

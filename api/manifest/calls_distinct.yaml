@@ -172,14 +172,3 @@ functions:
       C typed export SzConfigTool_deleteDistinctCallElement addresses the call by
       FEATURE CODE only (no id form); element_feature NULL = None but an empty string is
       passed through (NOT_FOUND); errors are returnCode -2 with the reason code.
-
-excluded:
-  - rust: calls::distinct::set_distinct_call
-    reason: >-
-      No-op stub: returns the input config unchanged without parsing it or reading its
-      params (Python has no equivalent). Exposing it would advertise an update that
-      never happens. Legacy C export SzConfigTool_setDistinctCall wraps the same no-op.
-  - rust: calls::distinct::set_distinct_call_element
-    reason: >-
-      No-op stub: returns the input config unchanged without parsing it or reading its
-      params. No C export.

@@ -168,6 +168,7 @@ functions:
     doc: Update a feature's flags, behavior, class, version or RTYPE_ID.
     rust: features::set_feature
     rust_params_struct: features::SetFeatureParams
+    requires_options: true
     c_symbol: SzConfigTool_setFeature
     args:
       - name: feature

@@ -14,9 +14,16 @@
 #   path_strip   regex removed from report paths (installed-package prefixes)
 #   path_prefix  prepended to relative report paths (the tool's base directory)
 #
-# exclusions.<id>: component, file (path suffix), line (exact trimmed source
-# text; excuses every uncovered line/branch/region starting on such a line),
-# why (the reviewed justification).
+# exclusions.<id>: component, file (path suffix, "" = every gated file), and
+# ONE anchor: line (exact trimmed source text) or pattern (regex on it); it
+# excuses every uncovered line/branch/region starting on an anchor line.
+# Optional: function (regex, full match on the Rust fn name) limits anchors to
+# those fns; scope: block widens an anchor to the brace block it opens or sits
+# in; platform_dependent: "true" exempts a host-specific gap from the stale
+# check. why (the reviewed justification) is required. Policy: an exclusion is
+# allowed only for code no test on any host can execute (allocation failure,
+# generated code, a cross-process race); everything else gets a test or is
+# restructured so the dead arm does not exist.
 
 components:
   rust:
@@ -57,235 +64,24 @@ components:
     generated: "/generated/"
 
 exclusions:
-  # ---- Rust: defensive arms no input can reach (reviewed) ----
-  rust-ffi-cstring-nul:
-    component: "rust"
-    file: "ffi/src/lib.rs"
-    pattern: '^set_error\(format!\("Failed to (create C string|convert result): \{e\}"\), -4\);$'
-    scope: "block"
-    why: "CString::new fails only on an interior NUL. Every C ABI output is serde_json text (NUL is written as the JSON escape u0000) or the input config, which arrived as a NUL-terminated C string and so has no interior NUL; the -4 arm (its whole Err block) cannot run. tests_cov_c test_escaped_nul_round_trips_without_interior_nul pins the escape."
-  rust-ffi-cstring-literal:
-    component: "rust"
-    file: "ffi/src/lib.rs"
-    function: "SzConfigTool_configSectionIsEmpty"
-    pattern: '^Err\(e\) => \{$'
-    scope: "block"
-    why: "CString::new of the literal true/false strings (no NUL) cannot fail."
-  rust-ffi-serialize-value:
-    component: "rust"
-    file: "ffi/src/lib.rs"
-    pattern: '^set_error\(format!\("Failed to serialize [a-z ]+: \{e\}"\), -3\);$'
-    scope: "block"
-    why: "The value serialized is a serde_json::Value, Vec<Value>, Vec<String> or HashMap<String, String>; serde_json serialization of those cannot fail (string keys, no non-finite floats), so the -3 arm (its whole Err block) cannot run."
-  rust-ffi-serialize-fallback:
-    component: "rust"
-    file: "ffi/src/lib.rs"
-    line: '.unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {e}\"}}"));'
-    why: "Fallback closure of serde_json::to_string on a Vec<String>/Value, which cannot fail."
-  rust-serde-serialize:
-    component: "rust"
-    file: ""
-    pattern: 'serde_json::to_(string|string_pretty|value|vec|writer|writer_pretty)\('
-    why: "Serializing a serde_json::Value or a derived row struct of String/i64/bool/Option fields (all string keys, no non-finite floats) cannot fail; the `?`/map_err error region on such a line cannot run. Verified for every call in src/ and ffi/src by the coverage agents; a new serializable type with a fallible Serialize impl would need its own test."
-  rust-ffi-stub-success:
-    component: "rust"
-    file: "ffi/src/lib.rs"
-    function: 'SzConfigTool_(add|delete|get|list|set)(Candidate|Validation|Scoring|Matching)Functions?|SzConfigTool_getThreshold'
-    pattern: '^Ok\(.*\) => (match .*)?\{$'
-    scope: "block"
-    why: "Success arms of exports over library stubs that always return Err: src/functions/{candidate,validation,scoring,matching}.rs return NotImplemented and thresholds::get_threshold returns InvalidInput unconditionally (tests_cov_* assert those errors). Remove when a stub is implemented (the gate then fails on this stale entry)."
-  rust-ffi-stub-set-call:
-    component: "rust"
-    file: "ffi/src/lib.rs"
-    function: 'SzConfigTool_set(Standardize|Expression|Comparison|Distinct)Call'
-    pattern: '^(handle_result!\(sz_configtool_lib::calls::\w+::set_\w+_call\(|set_error\(e\.to_string\(\), -5\);)$'
-    scope: "block"
-    why: "Error arms over calls::{standardize,expression,comparison,distinct}::set_*_call, which are stubs that always return Ok(config.to_string())."
-  rust-ffi-fragment-params:
-    component: "rust"
-    file: "ffi/src/lib.rs"
-    function: "SzConfigTool_setFragmentWithJson"
-    line: "set_error(e.to_string(), -3);"
-    scope: "block"
-    why: "Err arm of SetFragmentParams::try_from, which always returns Ok (src/fragments.rs)."
-  rust-ffi-invoke-envelope:
-    component: "rust"
-    file: "ffi/src/lib.rs"
-    function: "SzConfigTool_invoke"
-    line: "Ok(out) => handle_result!(Ok::<String, SzConfigError>(out.to_envelope())),"
-    why: "handle_result! on a literal Ok: its Err arm is statically dead, and the envelope is serde_json text (no interior NUL)."
-  rust-ffi-test-allocator:
-    component: "rust"
-    file: "ffi/src/lib.rs"
-    function: "dealloc"
-    line: "}"
-    why: "Test-only poison allocator: the else of `if let Ok(padded)` needs dealloc with a layout alloc never produced (undefined behavior)."
-  rust-infallible-next-id:
-    component: "rust"
-    file: ""
-    pattern: '(helpers::)?get_next_id_(with_min|from_array)\(|get_desired_or_next_id\(sprofiles, "SPROFILE_ID", None, 1\)'
-    why: "helpers::get_next_id_with_min / get_next_id_from_array always return Ok (max + 1), and get_desired_or_next_id errors only for an explicit desired id (None here); the `?` error region cannot run."
-  rust-reparse-same-config:
-    component: "rust"
-    file: ""
-    function: 'set_feature_element|add_element_to_feature|delete_element_from_feature|add_feature_comparison|delete_feature_comparison|get_feature_comparison|add_feature_distinct_call_element|set_feature|execute_command|add_fragment|get_fragment|get_rule|set_rule|add_(comparison|distinct|expression|standardize)_function|delete_(comparison|expression|standardize)_function_cascade|clone_generic_plan|delete_generic_plan|set_generic_plan|add_comparison_threshold|delete_comparison_threshold|set_comparison_threshold|delete_generic_threshold|set_generic_threshold'
-    pattern: '^(let (mut )?\w+: Value = )?serde_json::from_str\((config_json|config|&modified_json|&cur)\)|^\.map_err\(\|e\| SzConfigError::JsonParse\(e\.to_string\(\)\)\)\?;$|helpers::find_in_config_array\('
-    why: "Re-parse/lookup of a JSON string this same call already parsed successfully (an earlier helpers::lookup_*/find_in_config_array/from_str on the identical string, or text it just produced with serde_json), so the JsonParse error region cannot run; each function's FIRST parse is covered by an invalid-JSON test."
-  rust-verified-section-add:
-    component: "rust"
-    file: ""
-    function: 'add_attribute|set_(comparison|distinct|expression|standardize)_function|clone_generic_plan|set_generic_plan|add_feature|add_feature_comparison|add_feature_distinct_call_element|list_features|add_generic_threshold'
-    pattern: '(helpers::)?add_to_config_array\(|^\}\)\?;$|^\)\?;$|^\.collect::<Result<Vec<_>>>\(\)\?;$|^let redo_canonical = send_to_redo_canonical\(send_to_redo\)\?;$'
-    why: "Error regions that cannot run: add_to_config_array/update_in_config_array into a section (or after a delete on the same section) the function verified moments earlier; `})?;` closing serde_json::to_value(json!{..}) of a literal object; build_feature_json only returns Ok (list_features collect); send_to_redo_canonical on a value already validated (an empty failure list guarantees Ok)."
-  rust-implicit-else-verified:
-    component: "rust"
-    file: ""
-    function: 'delete_(comparison|distinct|expression|standardize)_call(_element)?|delete_element|set_element|add_feature|delete_feature|set_(comparison|distinct|expression|standardize)_function|clone_generic_plan|delete_generic_plan|set_generic_plan|delete_search_profile|set_setting|set_system_parameter|set_comparison_threshold(_by_id)?|serialize|add_generic_threshold|set_generic_threshold'
-    line: "}"
-    why: "Implicit else (gap region at the closing brace) of `if let Some(x) = ...as_array_mut()/as_object_mut()/pointer_mut()` or `if let Value::Object(..)` on an array/object the same function already proved to exist (looked up, matched by field, or just constructed as json!{..}), so the else cannot run."
-  rust-prechecked-returns:
-    component: "rust"
-    file: ""
-    function: 'add_comparison_call|add_distinct_call|parse_command_line|delete_data_source|delete_element|validate_fragment_source'
-    pattern: '^return Err\(SzConfigError::(MissingSection\("CFG_CFCALL"|InvalidInput\(format!\($|InvalidInput\("Empty command"|NotFound\(format!\($)|^return \($'
-    scope: "block"
-    why: "Early returns (with their enclosing `if`/match-arm block) that a prior check in the same function already excludes: CFG_CFCALL missing (get_desired_or_next_id_from_section rejects it first); a blank distinct element (the earlier element loop rejects it); `splitn` never yields zero parts (Empty command); NotFound after a successful find (retain always removes it); fragment references the caller already validated."
-  rust-prechecked-lines:
-    component: "rust"
-    file: ""
-    function: 'delete_element|add_search_profile|parse_overrides|render_config'
-    pattern: '^\.ok_or_else\(\|\| SzConfigError::MissingSection\("(CFG_FELEM|G2_CONFIG)"\.to_string\(\)\)\)\?;$|^let (id|yn) = pair\.(first\(\)|get\(1\))\?|^String::from_utf8\(buf\)|^\.map_err\(\|e\| SzConfigError::JsonParse\(e\.to_string\(\)\)\)\?;$'
-    why: "Single-line error regions a prior check excludes: CFG_FELEM / G2_CONFIG re-checks after the same function verified them; parse_overrides chunks are never empty and empty tokens are filtered out first; render_config writes serde_json output (valid UTF-8; the map_err continues a serializer call that cannot fail)."
-  rust-jni-jvm-alloc:
+  # Only gaps that no test on any host can execute. Each names the one
+  # construct it excuses; everything else is covered by a real test.
+  # ---- Rust ----
+  rust-jni-getstringutfchars-oom:
     component: "rust"
     file: "bindings/jni/src/lib.rs"
-    function: 'read_string|new_result_array|build_exception'
-    pattern: 'mutf8_chars\(env\)|let marshal = |JObjectArray::<JString>::new\(|env\.new_string\(|array\.set_element\('
-    why: "JNI calls that fail only when the JVM cannot allocate (GetStringUTFChars, NewObjectArray, NewStringUTF) or on SetObjectArrayElement of a String into a fresh String[3]; not producible from a test without a broken JVM. The fallback when SzConfigToolException cannot be built IS tested (child JVM without the class -> RuntimeException)."
-  rust-jni-invoke-panic:
-    component: "rust"
-    file: "bindings/jni/src/lib.rs"
-    line: "Err(payload) => Failure::from_panic(payload.as_ref()),"
-    why: "A panic in this seam's own code: sz_configtool_api::invoke already catches library panics itself and returns INTERNAL (exercised through features::update_feature_version on a top-level array config), so the seam's catch_unwind never sees one; Failure::from_panic is unit-tested."
-  rust-napi-env-failures:
-    component: "rust"
-    file: "bindings/node/src/lib.rs"
-    pattern: '^obj\.set_named_property\("(code|reasonCode|kind|details)", |^Err\(e\) => e,$'
-    why: "napi_set_named_property on a freshly created Error object fails only with an invalid env/handle scope; not producible from JavaScript."
+    function: 'read_string'
+    line: ".map_err(|e| e.to_string())"
+    why: "Error conversion of JString::mutf8_chars (JNI GetStringUTFChars), which fails only when the JVM cannot allocate the UTF-8 copy (the null reference is handled before it). Every other JNI allocation in the seam shares a tested error path (marshal_failure, the RuntimeException fallback of throw_failure)."
   rust-napi-register:
     component: "rust"
     file: "bindings/node/src/lib.rs"
     line: "#[napi]"
-    why: "napi-derive's generated registration has a single counter, in the Err arm of napi_create_function (disassembly: one counter per _napi_rs_internal_register_*); the functions are registered on every load (their exports are tested), so that arm never runs."
-  rust-pyo3-module-init:
-    component: "rust"
-    file: "bindings/python/src/lib.rs"
-    function: 'native_module'
-    pattern: '^m\.add(_function)?\('
-    why: "PyModule add/add_function fail only on allocation failure during module init."
-  rust-codegen-unreachable:
-    component: "rust"
-    file: ""
-    pattern: 'unreachable!\("int_or_str is (typed|dispatched) per overload"\)|^ArgType::IntOrStr => "const std::variant'
-    why: "int_or_str args are expanded into per-type overloads before these match arms (documented in the generators); the arms exist only for exhaustiveness."
-  rust-codegen-lit-escapes:
-    component: "rust"
-    file: "tools/codegen/src/lang/cpp.rs"
-    function: 'lit'
-    pattern: '^'("|\\\\|\\n)' => out\.push_str'
-    why: "lit() only receives validated snake_case names, reason codes and tuple names, which cannot contain quote, backslash or newline."
-  rust-codegen-defensive:
-    component: "rust"
-    file: ""
-    function: 'doc_lines|return_doc|options_class|has_record|push_wrapped|yaml_files|is_type_path'
-    pattern: '^\}$|^Returns::Unit => "",$|^!f\.tuple_names\.is_empty\(\) && matches!|^return;$|^let path = entry\?\.path\(\);$|^return false;$'
-    why: "Generator/loader defensive arms: blank-note doc tail, unit @return (never emitted), options body never ends blank, tuple_names on other kinds (rejected by validation), push_wrapped never gets empty text, a mid-listing directory I/O error, and str::split always yields one segment."
-  rust-codegen-test-asserts:
-    component: "rust"
-    file: "tools/codegen/src/lang/python.rs"
-    function: 'test_generate_real_manifest'
-    pattern: '^assert!\(.*g\.path\.display\(\)\);$|^g\.path\.display\(\)$'
-    why: "Failure-message arguments of assertions in a passing unit test."
+    why: "napi-derive's generated module-registration code has a single counter, in the Err arm of napi_create_function (disassembly: one counter per _napi_rs_internal_register_*); every function is registered on each module load (their exports are tested), so that arm never runs."
   # ---- Java ----
-  java-exhaustive-switch:
-    component: "java"
-    file: "szconfigtool/Args.java"
-    pattern: '^default -> throw new IllegalStateException\(update\.toString\(\)\);$|^switch \(Objects\.requireNonNull\(update, key\)\.getState\(\)\) \{$'
-    why: "Switch over the 3-value FieldUpdate.State enum with all 3 cases handled; the default exists only because javac requires it for a statement switch."
-  java-native-contract:
-    component: "java"
-    file: "szconfigtool/Invoker.java"
-    pattern: '^if \(out == null \|\| out\.length != 3|^String got = out == null'
-    why: "The JNI seam returns exactly String[3] or throws (bindings/jni/src/lib.rs new_result_array); only the kind-mismatch branch can occur, and it is tested (InvokerTest)."
-  java-int-returns:
-    component: "java"
-    file: "szconfigtool/Invoker.java"
-    line: 'return Long.parseLong(call(name, "int", config, args)[2]);'
-    why: "No manifest function has `returns: int` today; the kind check before it is tested, but JaCoCo marks the line only on a successful return. Becomes stale (fails) once an int function exists."
-  java-try-with-resources:
-    component: "java"
-    file: "szconfigtool/NativeLoader.java"
-    line: "} catch (IOException e) {"
-    why: "javac-generated try-with-resources close bookkeeping: one side of its null check is unreachable (javap)."
   java-extract-race:
     component: "java"
     file: "szconfigtool/NativeLoader.java"
     pattern: '^\} catch \(FileAlreadyExistsException \| AccessDeniedException e\) \{$|^if \(!sameContent\(target, bytes\)\) \{$|^throw new IOException\("existing " \+ target'
-    scope: "line"
-    why: "Another JVM writing the identical library between the existence check and the atomic rename; the differing-content side is tested on macOS via a deny-delete ACL, Linux has no unprivileged way to make the rename fail."
+    why: "After the atomic rename fails, the side where ANOTHER JVM has meanwhile written the identical library (a cross-process race between the existence check and the rename) cannot be produced by a test; the differing-content side is tested on macOS via a deny-delete ACL (Linux has no unprivileged way to make the rename fail, so there the whole catch is uncovered)."
     platform_dependent: "true"
-  java-generated-rejected-overloads:
-    component: "java"
-    file: "szconfigtool/SzConfigTool.java"
-    pattern: '^return (addExpressionCall\(configJson, efuncCode, elementList, isVirtual, null\)|addStandardizeCall\(configJson, sfuncCode, null\)|setFeature\(configJson, feature, null\));$'
-    why: "Generated no-options overloads the library always rejects with INVALID_INPUT (an element or feature is required / no changes); tests assert the error, but JaCoCo counts the line only on a successful return."
-  # ---- C# ----
-  dotnet-native-contract:
-    component: "dotnet"
-    file: "Native/NativeCall.cs"
-    pattern: '\?\? throw Protocol\(|^return new ConfigAndJson\($|throw new FormatException\("no .kind.\"\)|^catch \(FormatException e\)$|throw Protocol\(\$"malformed envelope|\?\? \$"SzConfigTool_invoke failed'
-    scope: "line"
-    why: "Wire-contract violations by the C ABI: api/src/output.rs to_envelope always writes kind and the config/result its kind has, and a non-zero return always sets the last error message; Members/kind-mismatch protocol errors are tested."
-  dotnet-native-contract-block:
-    component: "dotnet"
-    file: "Native/NativeCall.cs"
-    line: 'throw Protocol($"malformed envelope: {e.Message}");'
-    scope: "block"
-    why: "Catch body of the malformed-envelope handler (see dotnet-native-contract)."
-  dotnet-int-returns:
-    component: "dotnet"
-    file: "Native/NativeCall.cs"
-    line: "public static long Int(string name, string config, string argsJson)"
-    scope: "block"
-    why: "No manifest function has `returns: int`; NativeCall.Int's kind check is tested (Expect throws first). Becomes stale once an int function exists."
-  dotnet-platform:
-    component: "dotnet"
-    file: "Native/NativeLoader.cs"
-    pattern: 'RuntimeInformation\.IsOSPlatform|RuntimeInformation\.ProcessArchitecture switch$|^: null;$|^Architecture\.(X64|Arm64) => |^_ => null,$|^return os == null \|\| arch == null|^return NativeMethods\.LibraryName \+ "\.dll";$|^return rid == null \? null'
-    why: "Host-platform selection: each host executes only its own OS/arch arm (CI Linux x64 and macOS arm64 cover theirs; the release smoke tests run on all four)."
-    platform_dependent: "true"
-  dotnet-platform-windows:
-    component: "dotnet"
-    file: "Native/NativeLoader.cs"
-    line: "if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))"
-    scope: "block"
-    why: "Windows-only arm of NativeFileName (see dotnet-platform)."
-    platform_dependent: "true"
-  dotnet-netfx-fallbacks:
-    component: "dotnet"
-    file: "Native/NativeLoader.cs"
-    pattern: '^if \(nativeLibrary == null \|\| resolverType == null\)$|^if \(_tryLoad == null \|\| setResolver == null \|\| resolve == null\)$|^if \(_tryLoad == null\)$|^string\? path = string\.IsNullOrEmpty\(dir\)'
-    scope: "block"
-    why: "Fallbacks for runtimes without System.Runtime.InteropServices.NativeLibrary (.NET Framework via netstandard2.0); the tests run on .NET 8, where NativeLibrary always exists; dir is never empty (Location's directory or AppContext.BaseDirectory)."
-  dotnet-version-null:
-    component: "dotnet"
-    file: "SzConfigTool.cs"
-    line: "return Utf8.FromNative(NativeMethods.SzConfigTool_getLibraryVersion()) ?? string.Empty;"
-    why: "SzConfigTool_getLibraryVersion returns a static non-null string."
-  # ---- C++ ----
-  cpp-native-contract:
-    component: "cpp"
-    file: "szconfigtool/core.hpp"
-    pattern: '^if \(r\.returnCode != 0 \|\| response == nullptr\) \{$|^if \(kind == nullptr \|\| kind->type != json::Value::Type::String\) \{$'
-    scope: "block"
-    why: "Wire-contract violations by the C ABI: success always returns a response, and the envelope always has a string kind (api/src/output.rs to_envelope)."

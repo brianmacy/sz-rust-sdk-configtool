@@ -253,9 +253,9 @@ target_link_libraries(your_app PRIVATE ${SZCONFIGTOOL_LIB})</code></pre>
                 <li><strong>Elements:</strong> 7 functions</li>
                 <li><strong>Features:</strong> 6 functions</li>
                 <li><strong>Behavior Overrides:</strong> 4 functions</li>
-                <li><strong>Thresholds:</strong> 10 functions</li>
-                <li><strong>Functions</strong> (standardize, expression, comparison, distinct, candidate, matching, scoring, validation): 47 functions</li>
-                <li><strong>Calls</strong> (standardize, expression, comparison, distinct): 27 functions</li>
+                <li><strong>Thresholds:</strong> 9 functions</li>
+                <li><strong>Functions</strong> (standardize, expression, comparison, distinct): 27 functions</li>
+                <li><strong>Calls</strong> (standardize, expression, comparison, distinct): 23 functions</li>
                 <li><strong>Config sections, rules, fragments, generic plans, system parameters, versioning, settings, export, validation:</strong> 29 functions</li>
             </ul>
 
@@ -263,7 +263,7 @@ target_link_libraries(your_app PRIVATE ${SZCONFIGTOOL_LIB})</code></pre>
             <p><code>SzConfigTool_invoke</code> returns 0, -1 (NULL or invalid UTF-8 argument) or -2 (failure; library errors always carry a reason code from <code>SzConfigTool_getLastErrorReasonCode()</code>). The typed functions do not share one numbering (-1 to -5); the per-function lists are in the "Return codes" section of <code>libSzConfigTool.h</code>. Treat any non-zero code as failure.</p>
 
             <h2>Complete Documentation</h2>
-            <p>For the complete list of all 149 functions with their declarations, see:</p>
+            <p>For the complete list of all 124 functions with their declarations, see:</p>
             <ul style="padding-left: 20px; line-height: 2;">
                 <li><a href="https://github.com/brianmacy/sz-rust-sdk-configtool/blob/main/docs/FFI_GUIDE.md">FFI_GUIDE.md</a> - C FFI guide</li>
                 <li><a href="https://github.com/brianmacy/sz-rust-sdk-configtool/blob/main/ffi/include/libSzConfigTool.h">libSzConfigTool.h</a> - Full header file</li>

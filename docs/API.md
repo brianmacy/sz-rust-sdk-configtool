@@ -270,17 +270,6 @@ Main error enum with 9 variants:
 - `add_distinct_function(config_json, code: &str, params: AddDistinctFunctionParams) -> Result<(String, Value)>`
 - `list_distinct_functions(config_json) -> Result<Vec<Value>>`
 
-### Matching Functions (`functions::matching`) ⚠️ Not Yet Implemented
-
-**Module:** `functions::matching`
-
-**Status:** Placeholder module - all functions return `NotImplemented` error
-
-**Functions:**
-- `list_matching_functions(config_json) -> Result<Vec<Value>>`
-
-**Note:** These functions manage matching functions (CFG_RTYPE) but are not yet implemented. Awaiting CLI command completion.
-
 ---
 
 ## Configuration Management

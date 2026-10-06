@@ -274,14 +274,6 @@ const BOUNDARIES: &[Boundary] = &[
         call: |a| unsafe { SzConfigTool_listGenericPlans(a[0], a[1]) },
     },
     Boundary {
-        name: "getThreshold",
-        args: &[FIXTURE],
-        optional: &[],
-        null_msg: NULL_REQ,
-        utf8_code: -2,
-        call: |a| unsafe { SzConfigTool_getThreshold(a[0], 1) },
-    },
-    Boundary {
         name: "listSystemParameters",
         args: &[FIXTURE],
         optional: &[],
@@ -450,6 +442,17 @@ fn test_library_error_message_with_nul_is_escaped() {
     assert!(msg.contains("NO\\0PE"), "{msg}");
 }
 
+/// An `INTERNAL` api error (a panic caught by `sz_configtool_api::invoke`) is
+/// recorded with reason INTERNAL and no details.
+#[test]
+fn test_set_error_from_api_records_internal() {
+    set_error_from_api(&sz_configtool_api::ApiError::Internal("boom".to_string()));
+    assert_eq!(last_message().as_deref(), Some("internal error: boom"));
+    assert_eq!(SzConfigTool_getLastErrorCode(), -2);
+    assert_eq!(last_reason().as_deref(), Some("INTERNAL"));
+    assert!(SzConfigTool_getLastErrorDetails().is_null());
+}
+
 #[test]
 fn test_ffi_guard_reports_string_and_opaque_panic_payloads() {
     let owned = String::from("formatted");
@@ -462,17 +465,14 @@ fn test_ffi_guard_reports_string_and_opaque_panic_payloads() {
     );
 }
 
-/// A library panic on a non-object config (JSON `IndexMut` on an array) is
-/// converted to -2 by the guard instead of unwinding into C.
+/// A top-level array config is a library MISSING_SECTION error (it used to
+/// panic in JSON `IndexMut`).
 #[test]
-fn test_library_panic_is_caught_by_export_guard() {
+fn test_array_config_is_missing_section_not_panic() {
     let r = unsafe { SzConfigTool_updateFeatureVersion(cs("[]").as_ptr(), cs("1").as_ptr()) };
     let msg = take_err(r, -2);
-    assert!(
-        msg.starts_with("internal panic in SzConfigTool_updateFeatureVersion: "),
-        "{msg}"
-    );
-    assert_eq!(last_reason(), None);
+    assert_eq!(msg, "Missing config section: COMPATIBILITY_VERSION");
+    assert_eq!(last_reason().as_deref(), Some("MISSING_SECTION"));
 }
 
 // ---------------------------------------------------------------------------
@@ -509,15 +509,14 @@ fn test_invoke_invalid_utf8_arguments() {
 }
 
 #[test]
-fn test_invoke_handler_panic_is_internal() {
+fn test_invoke_array_config_is_missing_section() {
     let r = invoke(
         &cs("update_feature_version"),
         &cs("[]"),
         Some(&cs(r#"{"version":"1"}"#)),
     );
-    let msg = take_lib_err(r, "INTERNAL");
-    assert!(msg.contains("panic in update_feature_version"), "{msg}");
-    assert!(SzConfigTool_getLastErrorDetails().is_null());
+    let msg = take_lib_err(r, "MISSING_SECTION");
+    assert_eq!(msg, "Missing config section: COMPATIBILITY_VERSION");
 }
 
 // ---------------------------------------------------------------------------
@@ -789,12 +788,6 @@ fn test_generic_plans() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn test_get_threshold_is_not_implemented() {
-    let msg = take_plain_err(unsafe { SzConfigTool_getThreshold(cs(FIXTURE).as_ptr(), 1) });
-    assert_eq!(msg, "Invalid input: get_threshold not yet implemented");
-}
-
-#[test]
 fn test_system_parameters() {
     let cfg = cs(FIXTURE);
     let name = cs("relationshipsBreakMatches");
@@ -865,7 +858,7 @@ fn test_version_reads_missing_and_nul() {
         assert!(msg.contains("not found"), "{name}: {msg}");
         let msg = take_err(call(&nul, &want), -4);
         assert!(
-            msg.starts_with("Failed to convert result: "),
+            msg.starts_with("Failed to convert result to C string: "),
             "{name}: {msg}"
         );
     }

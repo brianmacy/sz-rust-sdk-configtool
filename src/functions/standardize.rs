@@ -95,16 +95,19 @@ pub fn add_standardize_function(
 ) -> Result<(String, Value), SzConfigError> {
     let sfunc_code = sfunc_code.to_uppercase();
 
+    let config_data: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+
     // Check if function already exists
-    if find_in_config_array(config_json, "CFG_SFUNC", "SFUNC_CODE", &sfunc_code)?.is_some() {
+    if crate::helpers::find_in_section(&config_data, "CFG_SFUNC", "SFUNC_CODE", &sfunc_code)
+        .is_some()
+    {
         return Err(SzConfigError::validation(format!(
             "Standardize function already exists: {sfunc_code}"
         )));
     }
 
     // Get next SFUNC_ID
-    let config_data: Value =
-        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
     let sfunc_id = get_next_id(&config_data, "G2_CONFIG.CFG_SFUNC", "SFUNC_ID", 1)?;
 
     // Build a complete row via SfuncRow so every CFG_SFUNC key is present
@@ -116,7 +119,7 @@ pub fn add_standardize_function(
         sfunc_desc: params.description.map(str::to_string),
         language: params.language.map(str::to_string),
     };
-    let new_record = serde_json::to_value(&row)?;
+    let new_record = crate::helpers::row_value(&row);
 
     // Add to CFG_SFUNC
     let modified_json = add_to_config_array(config_json, "CFG_SFUNC", new_record.clone())?;
@@ -188,7 +191,10 @@ pub fn delete_standardize_function_cascade(
 ) -> Result<(String, Value), SzConfigError> {
     let sfunc_code = sfunc_code.to_uppercase();
 
-    let function = find_in_config_array(config_json, "CFG_SFUNC", "SFUNC_CODE", &sfunc_code)?
+    let mut config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+    let function = crate::helpers::find_in_section(&config, "CFG_SFUNC", "SFUNC_CODE", &sfunc_code)
+        .cloned()
         .ok_or_else(|| {
             SzConfigError::not_found(format!("Standardize function not found: {sfunc_code}"))
         })?;
@@ -197,14 +203,10 @@ pub fn delete_standardize_function_cascade(
         .and_then(|v| v.as_i64())
         .ok_or_else(|| SzConfigError::MissingField("SFUNC_ID".to_string()))?;
 
-    let mut config: Value =
-        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
-
     if let Some(sfcall) = config["G2_CONFIG"]["CFG_SFCALL"].as_array_mut() {
         sfcall.retain(|r| r["SFUNC_ID"].as_i64() != Some(sfunc_id));
     }
-    let cur =
-        serde_json::to_string(&config).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+    let cur = config.to_string();
 
     let (final_json, _) = delete_standardize_function(&cur, &sfunc_code)?;
 
@@ -290,37 +292,30 @@ pub fn set_standardize_function(
 ) -> Result<(String, Value), SzConfigError> {
     let sfunc_code = sfunc_code.to_uppercase();
 
-    // Find existing function
-    let mut function = find_in_config_array(config_json, "CFG_SFUNC", "SFUNC_CODE", &sfunc_code)?
-        .ok_or_else(|| {
-        SzConfigError::not_found(format!("Standardize function not found: {sfunc_code}"))
-    })?;
-
-    // In-place update of a complete existing row; all keys preserved.
-    // Update fields if provided
-    if let Some(obj) = function.as_object_mut() {
-        match params.connect_str {
-            FieldUpdate::Leave => {}
-            FieldUpdate::Clear => {
-                obj.insert("CONNECT_STR".to_string(), Value::Null);
+    super::replace_row_at_end(
+        config_json,
+        "CFG_SFUNC",
+        "SFUNC_CODE",
+        &sfunc_code,
+        || SzConfigError::not_found(format!("Standardize function not found: {sfunc_code}")),
+        |obj| {
+            match params.connect_str {
+                FieldUpdate::Leave => {}
+                FieldUpdate::Clear => {
+                    obj.insert("CONNECT_STR".to_string(), Value::Null);
+                }
+                FieldUpdate::Set(conn) => {
+                    obj.insert("CONNECT_STR".to_string(), json!(conn));
+                }
             }
-            FieldUpdate::Set(conn) => {
-                obj.insert("CONNECT_STR".to_string(), json!(conn));
+            if let Some(desc) = params.description {
+                obj.insert("SFUNC_DESC".to_string(), json!(desc));
             }
-        }
-        if let Some(desc) = params.description {
-            obj.insert("SFUNC_DESC".to_string(), json!(desc));
-        }
-        if let Some(lang) = params.language {
-            obj.insert("LANGUAGE".to_string(), json!(lang));
-        }
-    }
-
-    // Delete old and add updated
-    let temp_json = delete_from_config_array(config_json, "CFG_SFUNC", "SFUNC_CODE", &sfunc_code)?;
-    let modified_json = add_to_config_array(&temp_json, "CFG_SFUNC", function.clone())?;
-
-    Ok((modified_json, function))
+            if let Some(lang) = params.language {
+                obj.insert("LANGUAGE".to_string(), json!(lang));
+            }
+        },
+    )
 }
 
 #[cfg(test)]

@@ -996,7 +996,8 @@
       ],
       "notes": "Returns (modified config, the new CFG_EFCALL row {EFCALL_ID, FTYPE_ID, FELEM_ID, EFUNC_ID, EXEC_ORDER, EFEAT_FTYPE_ID, IS_VIRTUAL}); the created CFG_EFBOM rows are NOT in the record (see list_expression_calls). EFCALL_ID is auto-allocated (max + 1, floor 1000). Check order: EFCALL_ID allocation (MISSING_SECTION if CFG_EFCALL absent), efunc, feature, element, exactly-one rule, exec order, expression_feature, element list, then MISSING_SECTION if CFG_EFBOM absent. BOM FTYPE_ID sentinels (G2 EFBomConfig.cpp): 0 = parent feature link, -1 = any feature. The BOM-feature column is not rendered by get/list_expression_calls; read raw rows with get_config_section(\"CFG_EFBOM\").",
       "c_notes": "C export deltas (SzConfigTool_addExpressionCall): DROPS the new row; negative exec_order = None; empty ftype_code / felem_code / expression_feature are NOT coerced to None (they hit NOT_FOUND); is_virtual must be non-NULL; element_list_json also accepts [element, required, feature?] arrays, silently skips items that are neither an object nor an array of >= 2, defaults a missing required to \"Yes\" and a missing element to \"\" (then NOT_FOUND); invalid element JSON returns -3; library errors return -5 with no reason code.",
-      "status": "implemented"
+      "status": "implemented",
+      "requires_options": true
     },
     {
       "name": "delete_expression_call",
@@ -1253,7 +1254,8 @@
       ],
       "notes": "Returns (modified config, the new CFG_SFCALL row {SFCALL_ID, FTYPE_ID, FELEM_ID, SFUNC_ID, EXEC_ORDER}). SFCALL_ID is always auto-allocated (max + 1, floor 1000). MISSING_SECTION when CFG_SFCALL is absent. Check order: SFCALL_ID allocation, sfunc, feature, element, exactly-one rule, exec order. TRAP: the exec-order scope does not include SFUNC_ID, so a second call on the same feature continues that feature's order sequence.",
       "c_notes": "C export deltas (SzConfigTool_addStandardizeCall): DROPS the new row; empty ftype_code / felem_code = None; negative exec_order = None; library errors return returnCode -5 with no reason code recorded (set_error, not set_error_from).",
-      "status": "implemented"
+      "status": "implemented",
+      "requires_options": true
     },
     {
       "name": "delete_standardize_call",
@@ -2579,7 +2581,8 @@
       ],
       "notes": "If no supplied value differs from the stored row (including when no update args are given) the call fails with INVALID_INPUT \"No changes detected\". The input config is never modified on error.",
       "c_notes": "C typed export takes an updates JSON with keys candidates, anonymize, derived, history, matchkey (or matchKey), behavior, class, version, rtypeId (or RTYPE_ID); mistyped values are silently ignored.",
-      "status": "implemented"
+      "status": "implemented",
+      "requires_options": true
     },
     {
       "name": "add_feature_comparison",
@@ -3033,145 +3036,6 @@
       "notes": "The row is rewritten with every CFG_ERFRAG key; ERFRAG_ID is preserved.",
       "c_notes": "C export SzConfigTool_setFragmentWithJson (the only C entry point) takes an update JSON with keys ERFRAG_SOURCE|source and ERFRAG_DESC|description (null = clear; a non-string, non-null value is silently treated as absent).",
       "status": "implemented"
-    },
-    {
-      "name": "add_candidate_function",
-      "group": "functions_candidate",
-      "doc": "Add a candidate function (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::candidate::add_candidate_function",
-      "c_symbol": "SzConfigTool_addCandidateFunction",
-      "args": [
-        {
-          "name": "rtype_code",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        },
-        {
-          "name": "candidate_func",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        }
-      ],
-      "returns": "config_and_json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Candidate functions are not yet fully implemented\").",
-      "c_notes": "C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from); on success it would DROP the record.",
-      "status": "not_implemented"
-    },
-    {
-      "name": "delete_candidate_function",
-      "group": "functions_candidate",
-      "doc": "Delete a candidate function (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::candidate::delete_candidate_function",
-      "c_symbol": "SzConfigTool_deleteCandidateFunction",
-      "args": [
-        {
-          "name": "rtype_code",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        }
-      ],
-      "returns": "config_and_json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Candidate functions are not yet fully implemented\").",
-      "c_notes": "C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from); on success it would DROP the record.",
-      "status": "not_implemented"
-    },
-    {
-      "name": "get_candidate_function",
-      "group": "functions_candidate",
-      "doc": "Get a candidate function (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::candidate::get_candidate_function",
-      "c_symbol": "SzConfigTool_getCandidateFunction",
-      "args": [
-        {
-          "name": "rtype_code",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        }
-      ],
-      "returns": "json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Candidate functions are not yet fully implemented\").",
-      "c_notes": "C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from).",
-      "status": "not_implemented"
-    },
-    {
-      "name": "list_candidate_functions",
-      "group": "functions_candidate",
-      "doc": "List candidate functions (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::candidate::list_candidate_functions",
-      "c_symbol": "SzConfigTool_listCandidateFunctions",
-      "args": [],
-      "returns": "json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Candidate functions are not yet fully implemented\").",
-      "c_notes": "C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from).",
-      "status": "not_implemented"
-    },
-    {
-      "name": "set_candidate_function",
-      "group": "functions_candidate",
-      "doc": "Set a candidate function (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::candidate::set_candidate_function",
-      "c_symbol": "SzConfigTool_setCandidateFunction",
-      "args": [
-        {
-          "name": "rtype_code",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        },
-        {
-          "name": "candidate_func",
-          "type": "str",
-          "optional": true,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        }
-      ],
-      "returns": "config_and_json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Candidate functions are not yet fully implemented\").",
-      "c_notes": "`candidate_func`: C NULL = None. C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from); on success it would DROP the record.",
-      "status": "not_implemented"
     },
     {
       "name": "add_comparison_function",
@@ -3839,284 +3703,6 @@
       "status": "implemented"
     },
     {
-      "name": "add_matching_function",
-      "group": "functions_matching",
-      "doc": "Add a matching function (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::matching::add_matching_function",
-      "c_symbol": "SzConfigTool_addMatchingFunction",
-      "args": [
-        {
-          "name": "rtype_code",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        },
-        {
-          "name": "matching_func",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        }
-      ],
-      "returns": "config_and_json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Matching functions are not yet fully implemented\").",
-      "c_notes": "C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from); on success it would DROP the record.",
-      "status": "not_implemented"
-    },
-    {
-      "name": "delete_matching_function",
-      "group": "functions_matching",
-      "doc": "Delete a matching function (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::matching::delete_matching_function",
-      "c_symbol": "SzConfigTool_deleteMatchingFunction",
-      "args": [
-        {
-          "name": "rtype_code",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        }
-      ],
-      "returns": "config_and_json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Matching functions are not yet fully implemented\").",
-      "c_notes": "C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from); on success it would DROP the record.",
-      "status": "not_implemented"
-    },
-    {
-      "name": "get_matching_function",
-      "group": "functions_matching",
-      "doc": "Get a matching function (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::matching::get_matching_function",
-      "c_symbol": "SzConfigTool_getMatchingFunction",
-      "args": [
-        {
-          "name": "rtype_code",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        }
-      ],
-      "returns": "json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Matching functions are not yet fully implemented\").",
-      "c_notes": "C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from).",
-      "status": "not_implemented"
-    },
-    {
-      "name": "list_matching_functions",
-      "group": "functions_matching",
-      "doc": "List matching functions (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::matching::list_matching_functions",
-      "c_symbol": "SzConfigTool_listMatchingFunctions",
-      "args": [],
-      "returns": "json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Matching functions are not yet fully implemented\").",
-      "c_notes": "C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from).",
-      "status": "not_implemented"
-    },
-    {
-      "name": "set_matching_function",
-      "group": "functions_matching",
-      "doc": "Set a matching function (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::matching::set_matching_function",
-      "c_symbol": "SzConfigTool_setMatchingFunction",
-      "args": [
-        {
-          "name": "rtype_code",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        },
-        {
-          "name": "matching_func",
-          "type": "str",
-          "optional": true,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        }
-      ],
-      "returns": "config_and_json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Matching functions are not yet fully implemented\").",
-      "c_notes": "`matching_func`: C NULL = None. C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from); on success it would DROP the record.",
-      "status": "not_implemented"
-    },
-    {
-      "name": "add_scoring_function",
-      "group": "functions_scoring",
-      "doc": "Add a scoring function (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::scoring::add_scoring_function",
-      "c_symbol": "SzConfigTool_addScoringFunction",
-      "args": [
-        {
-          "name": "rtype_code",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        },
-        {
-          "name": "scoring_func",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        }
-      ],
-      "returns": "config_and_json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Scoring functions are not yet fully implemented\").",
-      "c_notes": "C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from); on success it would DROP the record.",
-      "status": "not_implemented"
-    },
-    {
-      "name": "delete_scoring_function",
-      "group": "functions_scoring",
-      "doc": "Delete a scoring function (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::scoring::delete_scoring_function",
-      "c_symbol": "SzConfigTool_deleteScoringFunction",
-      "args": [
-        {
-          "name": "rtype_code",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        }
-      ],
-      "returns": "config_and_json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Scoring functions are not yet fully implemented\").",
-      "c_notes": "C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from); on success it would DROP the record.",
-      "status": "not_implemented"
-    },
-    {
-      "name": "get_scoring_function",
-      "group": "functions_scoring",
-      "doc": "Get a scoring function (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::scoring::get_scoring_function",
-      "c_symbol": "SzConfigTool_getScoringFunction",
-      "args": [
-        {
-          "name": "rtype_code",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        }
-      ],
-      "returns": "json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Scoring functions are not yet fully implemented\").",
-      "c_notes": "C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from).",
-      "status": "not_implemented"
-    },
-    {
-      "name": "list_scoring_functions",
-      "group": "functions_scoring",
-      "doc": "List scoring functions (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::scoring::list_scoring_functions",
-      "c_symbol": "SzConfigTool_listScoringFunctions",
-      "args": [],
-      "returns": "json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Scoring functions are not yet fully implemented\").",
-      "c_notes": "C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from).",
-      "status": "not_implemented"
-    },
-    {
-      "name": "set_scoring_function",
-      "group": "functions_scoring",
-      "doc": "Set a scoring function (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::scoring::set_scoring_function",
-      "c_symbol": "SzConfigTool_setScoringFunction",
-      "args": [
-        {
-          "name": "rtype_code",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        },
-        {
-          "name": "scoring_func",
-          "type": "str",
-          "optional": true,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        }
-      ],
-      "returns": "config_and_json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Scoring functions are not yet fully implemented\").",
-      "c_notes": "`scoring_func`: C NULL = None. C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from); on success it would DROP the record.",
-      "status": "not_implemented"
-    },
-    {
       "name": "add_standardize_function",
       "group": "functions_standardize",
       "doc": "Add a standardize function (CFG_SFUNC row).",
@@ -4332,145 +3918,6 @@
       "notes": "Returns (modified config, the updated CFG_SFUNC row). No value validation. The row is deleted and re-appended, so it moves to the END of CFG_SFUNC. A missing CFG_SFUNC section is NOT_FOUND.",
       "c_notes": "C deltas: both exports drop the updated row. SzConfigTool_setStandardizeFunction (direct args) cannot Clear: NULL connect_str = Leave, \"\" = Set(\"\"); an EMPTY sfunc_desc / language = None (leave); library errors return non-standard -5. SzConfigTool_setStandardizeFunctionWithJson takes an updates object with keys CONNECT_STR|connectStr (tri-state: null clears), SFUNC_DESC|description, LANGUAGE|language (one spelling per field; null = leave); a non-object, an unknown key (including ANON_SUPPORT), a non-string value, or both spellings of a field is INVALID_INPUT; unparsable JSON is returnCode -3.",
       "status": "implemented"
-    },
-    {
-      "name": "add_validation_function",
-      "group": "functions_validation",
-      "doc": "Add a validation function (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::validation::add_validation_function",
-      "c_symbol": "SzConfigTool_addValidationFunction",
-      "args": [
-        {
-          "name": "attr_code",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        },
-        {
-          "name": "validation_func",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        }
-      ],
-      "returns": "config_and_json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Validation functions are not yet fully implemented\").",
-      "c_notes": "C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from); on success it would DROP the record.",
-      "status": "not_implemented"
-    },
-    {
-      "name": "delete_validation_function",
-      "group": "functions_validation",
-      "doc": "Delete a validation function (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::validation::delete_validation_function",
-      "c_symbol": "SzConfigTool_deleteValidationFunction",
-      "args": [
-        {
-          "name": "attr_code",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        }
-      ],
-      "returns": "config_and_json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Validation functions are not yet fully implemented\").",
-      "c_notes": "C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from); on success it would DROP the record.",
-      "status": "not_implemented"
-    },
-    {
-      "name": "get_validation_function",
-      "group": "functions_validation",
-      "doc": "Get a validation function (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::validation::get_validation_function",
-      "c_symbol": "SzConfigTool_getValidationFunction",
-      "args": [
-        {
-          "name": "attr_code",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        }
-      ],
-      "returns": "json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Validation functions are not yet fully implemented\").",
-      "c_notes": "C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from).",
-      "status": "not_implemented"
-    },
-    {
-      "name": "list_validation_functions",
-      "group": "functions_validation",
-      "doc": "List validation functions (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::validation::list_validation_functions",
-      "c_symbol": "SzConfigTool_listValidationFunctions",
-      "args": [],
-      "returns": "json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Validation functions are not yet fully implemented\").",
-      "c_notes": "C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from).",
-      "status": "not_implemented"
-    },
-    {
-      "name": "set_validation_function",
-      "group": "functions_validation",
-      "doc": "Set a validation function (placeholder; always NOT_IMPLEMENTED).",
-      "rust": "functions::validation::set_validation_function",
-      "c_symbol": "SzConfigTool_setValidationFunction",
-      "args": [
-        {
-          "name": "attr_code",
-          "type": "str",
-          "optional": false,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        },
-        {
-          "name": "validation_func",
-          "type": "str",
-          "optional": true,
-          "tristate": false,
-          "required": false,
-          "semantics": "Ignored by the placeholder implementation.",
-          "positional": false,
-          "owned": false
-        }
-      ],
-      "returns": "config_and_json",
-      "errors": [
-        "NOT_IMPLEMENTED"
-      ],
-      "notes": "PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so even invalid JSON) and always returns NOT_IMPLEMENTED (\"Validation functions are not yet fully implemented\").",
-      "c_notes": "`validation_func`: C NULL = None. C typed export reports the error with returnCode -5 and NO reason code (set_error, not set_error_from); on success it would DROP the record.",
-      "status": "not_implemented"
     },
     {
       "name": "clone_generic_plan",
@@ -5757,38 +5204,6 @@
         "reason": "Non-config utility, not Result-returning (fn(&str) -> Option<usize>): sort key into the BEHAVIOR_CODES display order, used internally by behavior-ordered listings."
       },
       {
-        "rust": "calls::comparison::set_comparison_call",
-        "reason": "No-op stub: returns the input config unchanged without parsing it or reading its params (Python has no equivalent). Exposing it would advertise an update that never happens. Legacy C export SzConfigTool_setComparisonCall wraps the same no-op."
-      },
-      {
-        "rust": "calls::comparison::set_comparison_call_element",
-        "reason": "No-op stub: returns the input config unchanged without parsing it or reading its params. No C export."
-      },
-      {
-        "rust": "calls::distinct::set_distinct_call",
-        "reason": "No-op stub: returns the input config unchanged without parsing it or reading its params (Python has no equivalent). Exposing it would advertise an update that never happens. Legacy C export SzConfigTool_setDistinctCall wraps the same no-op."
-      },
-      {
-        "rust": "calls::distinct::set_distinct_call_element",
-        "reason": "No-op stub: returns the input config unchanged without parsing it or reading its params. No C export."
-      },
-      {
-        "rust": "calls::expression::set_expression_call",
-        "reason": "No-op stub (returns the config unchanged; Python has no equivalent). Exposing it would advertise an update that never happens. C export SzConfigTool_setExpressionCall wraps the same no-op."
-      },
-      {
-        "rust": "calls::expression::set_expression_call_element",
-        "reason": "No-op stub (returns the config unchanged); no C export."
-      },
-      {
-        "rust": "calls::standardize::set_standardize_call",
-        "reason": "No-op stub (returns the config unchanged; Python has no equivalent). Exposing it would advertise an update that never happens. C export SzConfigTool_setStandardizeCall wraps the same no-op."
-      },
-      {
-        "rust": "calls::standardize::set_standardize_call_element",
-        "reason": "No-op stub (returns the config unchanged); no C export."
-      },
-      {
         "rust": "elements::set_feature_element_display_level",
         "reason": "Convenience wrapper delegating to set_feature_element with only display_level; covered by set_feature_element."
       },
@@ -5823,22 +5238,6 @@
       {
         "rust": "filter::matches_filter",
         "reason": "Non-config utility, not Result-returning (fn(&Value, &str, FilterSubstrate) -> bool): client-side record filtering; bindings filter their own results."
-      },
-      {
-        "rust": "functions::candidate::remove_candidate_function",
-        "reason": "not-implemented: placeholder that always returns NOT_IMPLEMENTED and has no C export (only add/delete/get/list/setCandidateFunction are exported)."
-      },
-      {
-        "rust": "functions::matching::remove_matching_function",
-        "reason": "not-implemented: placeholder that always returns NOT_IMPLEMENTED and has no C export (only add/delete/get/list/setMatchingFunction are exported)."
-      },
-      {
-        "rust": "functions::scoring::remove_scoring_function",
-        "reason": "not-implemented: placeholder that always returns NOT_IMPLEMENTED and has no C export (only add/delete/get/list/setScoringFunction are exported)."
-      },
-      {
-        "rust": "functions::validation::remove_validation_function",
-        "reason": "not-implemented: placeholder that always returns NOT_IMPLEMENTED and has no C export (only add/delete/get/list/setValidationFunction are exported)."
       },
       {
         "rust": "helpers::field_update_str",
@@ -5963,14 +5362,6 @@
       {
         "rust": "thresholds::delete_comparison_threshold_by_id",
         "reason": "Doc-hidden ID-based twin of delete_comparison_threshold, public only for the ffi crate (SzConfigTool_deleteComparisonThreshold)."
-      },
-      {
-        "rust": "thresholds::get_threshold",
-        "reason": "Unimplemented stub (always INVALID_INPUT \"not yet implemented\"); C export SzConfigTool_getThreshold wraps the stub."
-      },
-      {
-        "rust": "thresholds::set_threshold",
-        "reason": "Unimplemented stub (always INVALID_INPUT \"not yet implemented\"); no C export."
       }
     ]
   }

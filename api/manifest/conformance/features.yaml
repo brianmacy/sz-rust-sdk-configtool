@@ -631,6 +631,12 @@ cases:
     args: {version: "11"}
     expect: {error: MISSING_SECTION}
 
+  - name: update_feature_version_on_array_config_is_missing_section
+    fn: update_feature_version
+    config_literal: '[]'
+    args: {version: "11"}
+    expect: {error: MISSING_SECTION}
+
   - name: update_feature_version_invalid_config_is_json_parse
     fn: update_feature_version
     config_literal: "not json"

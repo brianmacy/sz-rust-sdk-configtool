@@ -64,7 +64,7 @@ pub fn add_config_section(config_json: &str, section_name: &str) -> Result<Strin
         ));
     }
 
-    Ok(serde_json::to_string(&config_data)?)
+    Ok(config_data.to_string())
 }
 
 /// Remove a configuration section
@@ -104,7 +104,7 @@ pub fn remove_config_section(config_json: &str, section_name: &str) -> Result<St
         )));
     }
 
-    Ok(serde_json::to_string(&config_data)?)
+    Ok(config_data.to_string())
 }
 
 /// Get items from a configuration section with optional filtering
@@ -366,7 +366,7 @@ pub fn add_config_section_field(
         }
     }
 
-    Ok((serde_json::to_string(&config_data)?, counts))
+    Ok((config_data.to_string(), counts))
 }
 
 /// Remove a field from all items in a configuration section
@@ -424,7 +424,7 @@ pub fn remove_config_section_field(
         }
     }
 
-    Ok((serde_json::to_string(&config_data)?, item_count))
+    Ok((config_data.to_string(), item_count))
 }
 
 #[cfg(test)]

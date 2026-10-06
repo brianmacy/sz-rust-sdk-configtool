@@ -88,6 +88,16 @@ pub(crate) fn config_and_json<T: Serialize>(config: String, record: T) -> Result
 /// `status: not_implemented` — the library call always fails, and its error
 /// (`NOT_IMPLEMENTED`) is the result. A success means the manifest status is
 /// stale, which is reported as `INTERNAL` rather than shaped by a guess.
+// Called by generated dispatch only for `status: not_implemented` functions,
+// of which the manifest has none today (schema support is kept); `expect`
+// fails the build once one exists, so this attribute cannot go stale.
+#[cfg_attr(
+    not(test),
+    expect(
+        dead_code,
+        reason = "no status: not_implemented function in the manifest"
+    )
+)]
 pub(crate) fn not_implemented<T>(
     name: &str,
     result: Result<T, sz_configtool_lib::SzConfigError>,

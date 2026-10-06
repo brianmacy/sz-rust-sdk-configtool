@@ -375,7 +375,3 @@ excluded:
     reason: Doc-hidden ID-based twin of set_comparison_threshold, public only for the ffi crate (SzConfigTool_setComparisonThreshold).
   - rust: thresholds::delete_comparison_threshold_by_id
     reason: Doc-hidden ID-based twin of delete_comparison_threshold, public only for the ffi crate (SzConfigTool_deleteComparisonThreshold).
-  - rust: thresholds::get_threshold
-    reason: Unimplemented stub (always INVALID_INPUT "not yet implemented"); C export SzConfigTool_getThreshold wraps the stub.
-  - rust: thresholds::set_threshold
-    reason: Unimplemented stub (always INVALID_INPUT "not yet implemented"); no C export.

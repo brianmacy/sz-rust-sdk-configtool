@@ -1,5 +1,6 @@
 package io.github.brianmacy.szconfigtool;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -67,9 +68,10 @@ final class NativeLoader {
         }
         String resource = resourcePath(platform(System.getProperty("os.name"),
                 System.getProperty("os.arch")), System.mapLibraryName(DEFAULT_NAME));
-        try (InputStream in = NativeLoader.class.getResourceAsStream(resource)) {
-            if (in != null) {
-                Path lib = extract(in.readAllBytes(), extractionBase(), version(),
+        try {
+            byte[] bundled = resourceBytes(resource);
+            if (bundled != null) {
+                Path lib = extract(bundled, extractionBase(), version(),
                         System.mapLibraryName(DEFAULT_NAME));
                 loadExtracted(lib);
                 loadedFrom = "resource:" + lib;
@@ -147,11 +149,29 @@ final class NativeLoader {
         return Paths.get(System.getProperty("java.io.tmpdir"), "sz-configtool-jni-" + user);
     }
 
+    /**
+     * The bytes of classpath resource {@code path}, or null when it is absent.
+     * (A plain try/finally: try-with-resources on a nullable stream leaves a
+     * javac null-check branch that can never be taken.)
+     */
+    static byte[] resourceBytes(String path) throws IOException {
+        InputStream in = NativeLoader.class.getResourceAsStream(path);
+        if (in == null) {
+            return null;
+        }
+        try {
+            return in.readAllBytes();
+        } finally {
+            in.close();
+        }
+    }
+
     static String version() {
         Properties p = new Properties();
-        try (InputStream in = NativeLoader.class.getResourceAsStream(VERSION_RESOURCE)) {
-            if (in != null) {
-                p.load(in);
+        try {
+            byte[] bytes = resourceBytes(VERSION_RESOURCE);
+            if (bytes != null) {
+                p.load(new ByteArrayInputStream(bytes));
             }
         } catch (IOException e) {
             throw new UncheckedIOException("reading " + VERSION_RESOURCE, e);

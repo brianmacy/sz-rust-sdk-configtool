@@ -13,10 +13,11 @@ final class Invoker {
             throws SzConfigToolException {
         Objects.requireNonNull(config, "configJson");
         String[] out = NativeBridge.invoke(name, config, args.toJson());
-        if (out == null || out.length != 3 || !expectedKind.equals(out[0])) {
-            String got = out == null || out.length == 0 ? "nothing" : out[0];
+        // The JNI seam returns exactly {kind, config, result} or throws
+        // (bindings/jni/src/lib.rs new_result_array).
+        if (!expectedKind.equals(out[0])) {
             throw new SzConfigToolException("INTERNAL", "INTERNAL",
-                    name + ": expected result kind " + expectedKind + " but got " + got, null);
+                    name + ": expected result kind " + expectedKind + " but got " + out[0], null);
         }
         return out;
     }
@@ -33,10 +34,6 @@ final class Invoker {
             throws SzConfigToolException {
         String[] out = call(name, "config_and_json", config, args);
         return new ConfigAndJson(out[1], out[2]);
-    }
-
-    static long integer(String name, String config, Args args) throws SzConfigToolException {
-        return Long.parseLong(call(name, "int", config, args)[2]);
     }
 
     static void unit(String name, String config, Args args) throws SzConfigToolException {

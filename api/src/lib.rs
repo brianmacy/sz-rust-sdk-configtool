@@ -184,7 +184,16 @@ pub fn invoke(name: &str, config: &str, args_json: &str) -> Result<Output, ApiEr
         )))
     })?;
     let args = Args::new(&value)?;
-    catch_unwind(AssertUnwindSafe(|| handler(config, &args))).unwrap_or_else(|payload| {
+    guarded(name, || handler(config, &args))
+}
+
+/// Run `call`, converting a panic into `INTERNAL` ("panic in {name}: ...") so
+/// a library defect never unwinds into a binding.
+fn guarded(
+    name: &str,
+    call: impl FnOnce() -> Result<Output, ApiError>,
+) -> Result<Output, ApiError> {
+    catch_unwind(AssertUnwindSafe(call)).unwrap_or_else(|payload| {
         Err(ApiError::Internal(format!(
             "panic in {name}: {}",
             panic_text(payload.as_ref())
@@ -316,6 +325,14 @@ mod tests {
         assert_eq!(LIBRARY_VERSION, workspace_version);
         assert_eq!(LIBRARY_VERSION_NUL, format!("{workspace_version}\0"));
         assert_eq!(ABI_VERSION, 2);
+    }
+
+    #[test]
+    fn test_guarded_converts_a_panic_to_internal() {
+        let err = guarded("boom_fn", || panic!("kaboom")).unwrap_err();
+        assert_eq!(err.reason_code(), "INTERNAL");
+        assert_eq!(err.to_string(), "internal error: panic in boom_fn: kaboom");
+        assert!(guarded("ok_fn", || invoke("list_data_sources", CFG, "{}")).is_ok());
     }
 
     #[test]

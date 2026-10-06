@@ -27,8 +27,13 @@ fn read_yaml<T: DeserializeOwned>(path: &Path) -> Result<T> {
 /// `*.yaml` files directly in `dir`, sorted by name, excluding `skip` stems.
 fn yaml_files(dir: &Path, skip: &[&str]) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
-    for entry in std::fs::read_dir(dir).with_context(|| format!("listing {}", dir.display()))? {
-        let path = entry?.path();
+    // One fallible step for the listing and every entry (an I/O error on
+    // either is the same "listing" failure).
+    let entries = std::fs::read_dir(dir)
+        .and_then(|rd| rd.collect::<std::io::Result<Vec<_>>>())
+        .with_context(|| format!("listing {}", dir.display()))?;
+    for entry in entries {
+        let path = entry.path();
         let is_yaml = path.extension().is_some_and(|e| e == "yaml");
         let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
         if is_yaml && !skip.contains(&stem) {

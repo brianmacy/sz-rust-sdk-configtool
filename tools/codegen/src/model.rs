@@ -247,6 +247,11 @@ pub struct Function {
     pub c_notes: Option<String>,
     #[serde(default)]
     pub status: Status,
+    /// The library rejects a call that passes none of the optional arguments
+    /// (e.g. "exactly one of ftype_code / felem_code"), so a binding that
+    /// offers a no-options convenience overload (Java) omits it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub requires_options: bool,
 }
 
 impl Function {

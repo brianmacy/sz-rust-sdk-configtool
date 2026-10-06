@@ -86,7 +86,10 @@ API rules (see `bindings/CONTRACT.md`; generated from `api/manifest`):
   notes and reason codes.
 * Required args (including manifest `required: true`) are positional;
   optional args go in the per-function `*Options` builder (an overload without
-  it exists). Unset = omitted, so the LIBRARY default applies.
+  it exists, except for the manifest's `requires_options` functions, which the
+  library rejects without an optional arg: `addExpressionCall`,
+  `addStandardizeCall`, `setFeature`). Unset = omitted, so the LIBRARY default
+  applies.
 * Tri-state args take `FieldUpdate<T>`: `leave()` / `clear()` / `set(v)`.
 * Returns: `config` → `String`; `json` → JSON text `String`;
   `config_and_json` → `ConfigAndJson(config, json)`; `tuple_names` →

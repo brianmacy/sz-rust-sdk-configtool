@@ -12,7 +12,6 @@ from conftest import FUNCTIONS
 from naming import py_name
 
 IMPLEMENTED = [f for f in FUNCTIONS.values() if f["status"] == "implemented"]
-PLACEHOLDERS = [f for f in FUNCTIONS.values() if f["status"] == "not_implemented"]
 TUPLE_NAMED = [f for f in IMPLEMENTED if f.get("tuple_names")]
 P = inspect.Parameter
 
@@ -39,16 +38,6 @@ def test_signature_matches_manifest(f: dict) -> None:
     assert [(p.name, p.kind, p.default) for p in params] == expected_params(f)
     assert f["name"] in sct.__all__
     assert fn.__doc__ and fn.__doc__.startswith(f["doc"].split()[0])
-
-
-def test_placeholders_are_skipped_but_invokable(template: str) -> None:
-    assert PLACEHOLDERS, "manifest has not_implemented functions"
-    for f in PLACEHOLDERS:
-        assert not hasattr(sct, f["name"]), f["name"]
-    name = PLACEHOLDERS[0]["name"]
-    with pytest.raises(sct.SzConfigToolError) as e:
-        sct.invoke(name, template, {})
-    assert e.value.reason_code in {"NOT_IMPLEMENTED", "MISSING_FIELD"}
 
 
 def test_names_are_snake_case_and_keyword_safe() -> None:

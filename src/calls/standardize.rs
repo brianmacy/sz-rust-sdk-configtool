@@ -51,44 +51,12 @@ pub struct AddStandardizeCallElementParams {
     pub exec_order: Option<i64>,
 }
 
-/// Parameters for setting (updating) a standardize call
-#[derive(Debug, Clone, Default)]
-pub struct SetStandardizeCallParams {
-    pub sfcall_id: i64,
-    pub exec_order: Option<i64>,
-}
-
-impl TryFrom<&Value> for SetStandardizeCallParams {
-    type Error = SzConfigError;
-
-    fn try_from(json: &Value) -> Result<Self> {
-        let sfcall_id = json
-            .get("sfcallId")
-            .and_then(|v| v.as_i64())
-            .ok_or_else(|| SzConfigError::MissingField("sfcallId".to_string()))?;
-
-        Ok(Self {
-            sfcall_id,
-            exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
-        })
-    }
-}
-
 /// Parameters for deleting a standardize call element
 #[derive(Debug, Clone)]
 pub struct DeleteStandardizeCallElementParams {
     pub ftype_id: i64,
     pub sfunc_id: i64,
     pub felem_id: Option<i64>,
-}
-
-/// Parameters for setting a standardize call element
-#[derive(Debug, Clone)]
-pub struct SetStandardizeCallElementParams {
-    pub ftype_id: i64,
-    pub sfunc_id: i64,
-    pub felem_id: Option<i64>,
-    pub updates: Value,
 }
 
 /// Add a new standardize call
@@ -163,7 +131,7 @@ pub fn add_standardize_call(
         sfunc_id,
         exec_order: Some(final_exec_order),
     };
-    let new_record = serde_json::to_value(&row)?;
+    let new_record = crate::helpers::row_value(&row);
 
     // Add to config
     if let Some(sfcall_array) = config_data["G2_CONFIG"]["CFG_SFCALL"].as_array_mut() {
@@ -172,8 +140,7 @@ pub fn add_standardize_call(
         return Err(SzConfigError::MissingSection("CFG_SFCALL".to_string()));
     }
 
-    let modified_config =
-        serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let modified_config = config_data.to_string();
 
     Ok((modified_config, new_record))
 }
@@ -209,11 +176,10 @@ pub fn delete_standardize_call(config: &str, sfcall_id: i64) -> Result<String> {
     }
 
     // Delete the standardize call
-    if let Some(sfcall_array) = config_data["G2_CONFIG"]["CFG_SFCALL"].as_array_mut() {
-        sfcall_array.retain(|record| record["SFCALL_ID"].as_i64() != Some(sfcall_id));
-    }
+    let sfcall_array = crate::helpers::verified_section_mut(&mut config_data, "CFG_SFCALL");
+    sfcall_array.retain(|record| record["SFCALL_ID"].as_i64() != Some(sfcall_id));
 
-    serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config_data.to_string())
 }
 
 /// Get a single standardize call, addressed by id or by feature code.
@@ -375,19 +341,6 @@ pub fn list_standardize_calls(config: &str) -> Result<Vec<Value>> {
     Ok(items)
 }
 
-/// Update a standardize call (stub - not implemented in Python)
-///
-/// # Arguments
-/// * `config` - Configuration JSON string
-/// * `params` - Standardize call parameters (sfcall_id required, others optional to update)
-///
-/// # Returns
-/// Modified configuration JSON string
-pub fn set_standardize_call(config: &str, _params: SetStandardizeCallParams) -> Result<String> {
-    // This is a stub - the Python version doesn't implement this
-    Ok(config.to_string())
-}
-
 /// Add a standardize call element (CFG_SFCALL record)
 ///
 /// Creates a new standardize call element as a CFG_SFCALL row.
@@ -455,7 +408,7 @@ pub fn add_standardize_call_element(
         sfunc_id: params.sfunc_id,
         exec_order: Some(exec_order),
     };
-    let new_record = serde_json::to_value(&row)?;
+    let new_record = crate::helpers::row_value(&row);
 
     // Add to CFG_SFCALL
     if let Some(sfcall_array) = config_data["G2_CONFIG"]["CFG_SFCALL"].as_array_mut() {
@@ -464,8 +417,7 @@ pub fn add_standardize_call_element(
         return Err(SzConfigError::MissingSection("CFG_SFCALL".to_string()));
     }
 
-    let modified_config =
-        serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let modified_config = config_data.to_string();
 
     Ok((modified_config, new_record))
 }
@@ -511,31 +463,14 @@ pub fn delete_standardize_call_element(
     }
 
     // Delete the element
-    if let Some(sfcall_array) = config_data["G2_CONFIG"]["CFG_SFCALL"].as_array_mut() {
-        sfcall_array.retain(|item| {
-            !(item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
-                && item.get("SFUNC_ID").and_then(|v| v.as_i64()) == Some(params.sfunc_id)
-                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(final_felem_id))
-        });
-    }
+    let sfcall_array = crate::helpers::verified_section_mut(&mut config_data, "CFG_SFCALL");
+    sfcall_array.retain(|item| {
+        !(item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(params.ftype_id)
+            && item.get("SFUNC_ID").and_then(|v| v.as_i64()) == Some(params.sfunc_id)
+            && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(final_felem_id))
+    });
 
-    serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))
-}
-
-/// Update a standardize call element (stub - not typically used)
-///
-/// # Arguments
-/// * `config` - Configuration JSON string
-/// * `params` - Element parameters including updates
-///
-/// # Returns
-/// Modified configuration JSON string
-pub fn set_standardize_call_element(
-    config: &str,
-    _params: SetStandardizeCallElementParams,
-) -> Result<String> {
-    // This is a stub - not commonly used
-    Ok(config.to_string())
+    Ok(config_data.to_string())
 }
 
 #[cfg(test)]

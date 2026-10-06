@@ -57,11 +57,13 @@ class TypedApiTest {
             List<Map<String, Object>> args = (List<Map<String, Object>>) f.get("args");
             long positional = args.stream().filter(a -> !(Boolean) a.get("optional")
                     && !(Boolean) a.get("tristate") || (Boolean) a.get("required")).count();
-            boolean hasOptions = args.size() > positional;
+            // requires_options: only the Options overload (no options-less forwarder).
+            boolean twoForms = args.size() > positional
+                    && !Boolean.TRUE.equals(f.get("requires_options"));
             // Each positional int_or_str arg doubles the overloads (long / String).
             long intOrStr = args.stream().filter(a -> "int_or_str".equals(a.get("type"))
                     && (!(Boolean) a.get("optional") || (Boolean) a.get("required"))).count();
-            assertEquals((hasOptions ? 2 : 1) << intOrStr, ms.size(), java);
+            assertEquals((twoForms ? 2 : 1) << intOrStr, ms.size(), java);
             for (Method m : ms) {
                 assertTrue(Modifier.isStatic(m.getModifiers()), java);
                 assertEquals(String.class, m.getParameterTypes()[0], java);

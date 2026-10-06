@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project Overview
 
-This is a pure Rust library for manipulating Senzing configuration JSON documents (g2config.json). It provides 203 public functions across 35 modules (146 configuration functions in the binding manifest, 28 groups) for programmatic configuration management without any display logic or CLI dependencies.
+This is a pure Rust library for manipulating Senzing configuration JSON documents (g2config.json). It provides 169 public functions across 31 modules (126 configuration functions in the binding manifest, 24 groups) for programmatic configuration management without any display logic or CLI dependencies.
 
 ### ⚠️ Important Context
 
@@ -23,7 +23,7 @@ This library provides the programmatic interface ("how") - proper usage requires
 - **No SDK Dependencies**: Does not depend on sz-rust-sdk for core operations
 - **Minimal Dependencies**: Only serde, serde_json, and anyhow (the root library;
   binding crates add pyo3 / jni / napi only in their own workspace members)
-- **C FFI Support**: A separate workspace crate (`ffi/`, package `sz-configtool-ffi`) exports 149 C-compatible `SzConfigTool_*` functions as libSzConfigTool; the root crate itself has no C symbols
+- **C FFI Support**: A separate workspace crate (`ffi/`, package `sz-configtool-ffi`) exports 124 C-compatible `SzConfigTool_*` functions as libSzConfigTool; the root crate itself has no C symbols
 
 ## Architecture
 
@@ -85,7 +85,7 @@ This library provides the programmatic interface ("how") - proper usage requires
   workspace member, so plain `cargo test` covers only it)
 - `ffi/` — `sz-configtool-ffi`, the C ABI (`[lib] name = "SzConfigTool"`,
   crate-type `cdylib` + `staticlib`):
-  - `ffi/src/lib.rs` — the 149 `extern "C"` exports
+  - `ffi/src/lib.rs` — the 124 `extern "C"` exports
   - `ffi/include/libSzConfigTool.h` — the C header
   - `ffi/tests/header_sync.rs` — header vs export drift check
   - `ffi/tests/c_abi.rs` — builds and runs `ffi/tests/c/test_basic.c` and
@@ -126,7 +126,7 @@ src/
 ├── datasources.rs      # CFG_DSRC operations (5 functions)
 ├── elements.rs         # CFG_FELEM operations (10 functions)
 ├── features.rs         # Feature operations (16 functions)
-├── thresholds.rs       # Threshold operations (14 functions)
+├── thresholds.rs       # Threshold operations (12 functions)
 ├── config_sections.rs  # G2_CONFIG section operations
 ├── fragments.rs        # CFG_ERFRAG operations
 ├── generic_plans.rs    # CFG_GPLAN operations
@@ -134,22 +134,18 @@ src/
 ├── search_profiles.rs  # CFG_SPROFILE operations (4 functions; INGEST/SEARCH delete-protected)
 ├── system_params.rs    # System parameters
 ├── versioning.rs       # Version management
-├── calls/              # Call management (32 functions)
+├── calls/              # Call management (24 functions)
 │   ├── mod.rs
 │   ├── standardize.rs  # CFG_SFCALL, CFG_SBOM
 │   ├── expression.rs   # CFG_EFCALL, CFG_EFBOM
 │   ├── comparison.rs   # CFG_CFCALL, CFG_CFBOM
 │   └── distinct.rs     # CFG_DFCALL, CFG_DFBOM
-└── functions/          # Function management (47 functions)
+└── functions/          # Function management (23 functions)
     ├── mod.rs
     ├── standardize.rs  # CFG_SFUNC
     ├── expression.rs   # CFG_EFUNC
     ├── comparison.rs   # CFG_CFUNC
-    ├── distinct.rs     # CFG_DFUNC
-    ├── matching.rs     # CFG_RTYPE
-    ├── scoring.rs      # Scoring functions (stubs)
-    ├── candidate.rs    # Candidate functions (stubs)
-    └── validation.rs   # Validation functions (stubs)
+    └── distinct.rs     # CFG_DFUNC
 ```
 
 ## Development Standards

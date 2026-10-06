@@ -19,14 +19,6 @@ describe("naming", () => {
     }
   });
 
-  test("not_implemented placeholders are skipped (but stay in invoke)", () => {
-    const stubs = manifest.functions.filter((f) => f.status === "not_implemented");
-    assert.ok(stubs.length > 0);
-    for (const f of stubs) assert.ok(!exported.has(camel(f.name)), f.name);
-    // They stay reachable through invoke; the conformance runner calls every
-    // stub that way and expects NOT_IMPLEMENTED.
-  });
-
   test("TYPED_FUNCTION_NAMES lists exactly the implemented functions in order", () => {
     const want = manifest.functions.filter((f) => f.status === "implemented").map((f) => f.name);
     assert.deepEqual([...sz.TYPED_FUNCTION_NAMES], want);

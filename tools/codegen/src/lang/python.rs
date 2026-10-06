@@ -614,7 +614,22 @@ mod tests {
             notes: None,
             c_notes: None,
             status: Status::Implemented,
+            requires_options: false,
         }
+    }
+
+    /// tuple_names on a non-record return is not a record (validation rejects
+    /// it in manifests); empty text wraps to nothing.
+    #[test]
+    fn test_has_record_needs_record_return_and_push_wrapped_empty() {
+        let mut f = func(vec![], Returns::Config);
+        f.tuple_names = vec!["a".into()];
+        assert!(!has_record(&f));
+        f.returns = Returns::Json;
+        assert!(has_record(&f));
+        let mut out = String::new();
+        push_wrapped(&mut out, 4, "");
+        assert_eq!(out, "");
     }
 
     fn real_inputs() -> Inputs {
@@ -815,19 +830,24 @@ mod tests {
             assert_eq!(py.contains(&def), expected, "{}", f.name);
             assert_eq!(pyi.contains(&def), expected, "{}", f.name);
         }
-        for g in &out {
-            assert!(g.contents.ends_with('\n'), "{}", g.path.display());
-            assert!(!g.contents.ends_with("\n\n"), "{}", g.path.display());
-            for line in g.contents.lines() {
-                assert!(line.chars().count() <= LINE_WIDTH + 40, "{line}");
-                assert_eq!(
-                    line.trim_end(),
-                    line,
-                    "trailing space in {}",
-                    g.path.display()
-                );
-            }
-        }
+        // Files not ending in exactly one newline, and over-long or
+        // trailing-space lines (collected, so a failure lists them all).
+        let endings: Vec<_> = out
+            .iter()
+            .map(|g| {
+                (
+                    &g.path,
+                    g.contents.ends_with('\n') && !g.contents.ends_with("\n\n"),
+                )
+            })
+            .collect();
+        assert!(endings.iter().all(|(_, ok)| *ok), "{endings:?}");
+        let bad_lines: Vec<&str> = out
+            .iter()
+            .flat_map(|g| g.contents.lines())
+            .filter(|l| l.chars().count() > LINE_WIDTH + 40 || l.trim_end() != *l)
+            .collect();
+        assert_eq!(bad_lines, Vec::<&str>::new());
         assert_eq!(generate(&inputs), out, "deterministic");
     }
 

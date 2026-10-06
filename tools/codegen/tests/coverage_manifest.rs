@@ -38,6 +38,13 @@ fn with_struct_arg(arg: &str) -> String {
 fn test_rejects_every_function_and_arg_shape_problem() {
     let table: Vec<(&str, String, &str)> = vec![
         (
+            "cov_requires_options",
+            GROUP
+                .replace("    c_symbol:", "    requires_options: true\n    c_symbol:")
+                .replace("      - {name: tier, type: int, tristate: true}\n", ""),
+            "get_thing: requires_options needs an optional argument",
+        ),
+        (
             "cov_arg_name",
             GROUP.replace(ARG, "{name: Code, type: str}"),
             "get_thing.Code: arg name must be snake_case",
@@ -388,7 +395,7 @@ fn test_every_binding_renders_the_extra_shapes() {
         (
             "cs/Api.g.cs",
             &[
-                "return NativeCall.Int(\"set_flag\"",
+                "return long.Parse(NativeCall.Require(NativeCall.Expect(\"int\", \"set_flag\"",
                 "NativeCall.Unit(\"drop_flag\"",
                 "/// Set a \"flag\" under C:\\flags.",
             ],
@@ -396,7 +403,7 @@ fn test_every_binding_renders_the_extra_shapes() {
         (
             "java/Api.java",
             &[
-                "return Invoker.integer(\"set_flag\"",
+                "return Long.parseLong(Invoker.call(\"set_flag\", \"int\"",
                 "Invoker.unit(\"drop_flag\"",
                 "* Set a \"flag\" under C:&#92;flags.",
             ],

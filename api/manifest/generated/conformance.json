@@ -4154,6 +4154,33 @@
     },
     {
       "group": "calls_expression",
+      "name": "delete_element_by_feature_selector_and_element_feature",
+      "steps": [
+        {
+          "fn": "delete_expression_call_element",
+          "args": {
+            "call": "PHONE",
+            "element_code": "PHONE_LAST_10",
+            "element_feature": "PHONE"
+          },
+          "expect": {}
+        },
+        {
+          "fn": "list_expression_calls",
+          "args": {},
+          "expect": {
+            "contains": [
+              {
+                "id": 1,
+                "elementList": []
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "group": "calls_expression",
       "name": "delete_element_disambiguated_by_element_feature",
       "steps": [
         {
@@ -9064,6 +9091,22 @@
     },
     {
       "group": "features",
+      "name": "update_feature_version_on_array_config_is_missing_section",
+      "steps": [
+        {
+          "fn": "update_feature_version",
+          "args": {
+            "version": "11"
+          },
+          "config_literal": "[]",
+          "expect": {
+            "error": "MISSING_SECTION"
+          }
+        }
+      ]
+    },
+    {
+      "group": "features",
       "name": "update_feature_version_invalid_config_is_json_parse",
       "steps": [
         {
@@ -9650,110 +9693,6 @@
           "config_literal": "not json",
           "expect": {
             "error": "JSON_PARSE"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_candidate",
-      "name": "add_is_not_implemented",
-      "steps": [
-        {
-          "fn": "add_candidate_function",
-          "args": {
-            "rtype_code": "EXACTLY_ONE",
-            "candidate_func": "X"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_candidate",
-      "name": "delete_is_not_implemented",
-      "steps": [
-        {
-          "fn": "delete_candidate_function",
-          "args": {
-            "rtype_code": "EXACTLY_ONE"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_candidate",
-      "name": "get_is_not_implemented",
-      "steps": [
-        {
-          "fn": "get_candidate_function",
-          "args": {
-            "rtype_code": "EXACTLY_ONE"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_candidate",
-      "name": "list_is_not_implemented",
-      "steps": [
-        {
-          "fn": "list_candidate_functions",
-          "args": {},
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_candidate",
-      "name": "set_is_not_implemented",
-      "steps": [
-        {
-          "fn": "set_candidate_function",
-          "args": {
-            "rtype_code": "EXACTLY_ONE",
-            "candidate_func": "X"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_candidate",
-      "name": "set_without_optional_is_not_implemented",
-      "steps": [
-        {
-          "fn": "set_candidate_function",
-          "args": {
-            "rtype_code": "EXACTLY_ONE"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_candidate",
-      "name": "invalid_config_still_not_implemented",
-      "steps": [
-        {
-          "fn": "list_candidate_functions",
-          "args": {},
-          "config_literal": "not json",
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
           }
         }
       ]
@@ -11649,214 +11588,6 @@
       ]
     },
     {
-      "group": "functions_matching",
-      "name": "add_is_not_implemented",
-      "steps": [
-        {
-          "fn": "add_matching_function",
-          "args": {
-            "rtype_code": "EXACTLY_ONE",
-            "matching_func": "X"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_matching",
-      "name": "delete_is_not_implemented",
-      "steps": [
-        {
-          "fn": "delete_matching_function",
-          "args": {
-            "rtype_code": "EXACTLY_ONE"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_matching",
-      "name": "get_is_not_implemented",
-      "steps": [
-        {
-          "fn": "get_matching_function",
-          "args": {
-            "rtype_code": "EXACTLY_ONE"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_matching",
-      "name": "list_is_not_implemented",
-      "steps": [
-        {
-          "fn": "list_matching_functions",
-          "args": {},
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_matching",
-      "name": "set_is_not_implemented",
-      "steps": [
-        {
-          "fn": "set_matching_function",
-          "args": {
-            "rtype_code": "EXACTLY_ONE",
-            "matching_func": "X"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_matching",
-      "name": "set_without_optional_is_not_implemented",
-      "steps": [
-        {
-          "fn": "set_matching_function",
-          "args": {
-            "rtype_code": "EXACTLY_ONE"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_matching",
-      "name": "invalid_config_still_not_implemented",
-      "steps": [
-        {
-          "fn": "list_matching_functions",
-          "args": {},
-          "config_literal": "not json",
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_scoring",
-      "name": "add_is_not_implemented",
-      "steps": [
-        {
-          "fn": "add_scoring_function",
-          "args": {
-            "rtype_code": "EXACTLY_ONE",
-            "scoring_func": "X"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_scoring",
-      "name": "delete_is_not_implemented",
-      "steps": [
-        {
-          "fn": "delete_scoring_function",
-          "args": {
-            "rtype_code": "EXACTLY_ONE"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_scoring",
-      "name": "get_is_not_implemented",
-      "steps": [
-        {
-          "fn": "get_scoring_function",
-          "args": {
-            "rtype_code": "EXACTLY_ONE"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_scoring",
-      "name": "list_is_not_implemented",
-      "steps": [
-        {
-          "fn": "list_scoring_functions",
-          "args": {},
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_scoring",
-      "name": "set_is_not_implemented",
-      "steps": [
-        {
-          "fn": "set_scoring_function",
-          "args": {
-            "rtype_code": "EXACTLY_ONE",
-            "scoring_func": "X"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_scoring",
-      "name": "set_without_optional_is_not_implemented",
-      "steps": [
-        {
-          "fn": "set_scoring_function",
-          "args": {
-            "rtype_code": "EXACTLY_ONE"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_scoring",
-      "name": "invalid_config_still_not_implemented",
-      "steps": [
-        {
-          "fn": "list_scoring_functions",
-          "args": {},
-          "config_literal": "not json",
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
       "group": "functions_standardize",
       "name": "add_returns_config_and_record",
       "steps": [
@@ -12488,110 +12219,6 @@
           "config_literal": "not json",
           "expect": {
             "error": "JSON_PARSE"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_validation",
-      "name": "add_is_not_implemented",
-      "steps": [
-        {
-          "fn": "add_validation_function",
-          "args": {
-            "attr_code": "EXACTLY_ONE",
-            "validation_func": "X"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_validation",
-      "name": "delete_is_not_implemented",
-      "steps": [
-        {
-          "fn": "delete_validation_function",
-          "args": {
-            "attr_code": "EXACTLY_ONE"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_validation",
-      "name": "get_is_not_implemented",
-      "steps": [
-        {
-          "fn": "get_validation_function",
-          "args": {
-            "attr_code": "EXACTLY_ONE"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_validation",
-      "name": "list_is_not_implemented",
-      "steps": [
-        {
-          "fn": "list_validation_functions",
-          "args": {},
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_validation",
-      "name": "set_is_not_implemented",
-      "steps": [
-        {
-          "fn": "set_validation_function",
-          "args": {
-            "attr_code": "EXACTLY_ONE",
-            "validation_func": "X"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_validation",
-      "name": "set_without_optional_is_not_implemented",
-      "steps": [
-        {
-          "fn": "set_validation_function",
-          "args": {
-            "attr_code": "EXACTLY_ONE"
-          },
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
-          }
-        }
-      ]
-    },
-    {
-      "group": "functions_validation",
-      "name": "invalid_config_still_not_implemented",
-      "steps": [
-        {
-          "fn": "list_validation_functions",
-          "args": {},
-          "config_literal": "not json",
-          "expect": {
-            "error": "NOT_IMPLEMENTED"
           }
         }
       ]

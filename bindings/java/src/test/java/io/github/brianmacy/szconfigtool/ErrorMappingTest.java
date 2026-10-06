@@ -53,24 +53,6 @@ class ErrorMappingTest {
                 () -> SzConfigTool.deleteComparisonCallElement(TEMPLATE, "GENDER", "FULL_NAME"));
         fails("NOT_IN_FEATURE", () -> SzConfigTool.deleteComparisonCallElement(TEMPLATE, "NAME",
                 "ADDR1", new SzConfigTool.DeleteComparisonCallElementOptions().elementFeature("NAME")));
-        Map<String, Object> stub = stubStep();
-        SzConfigToolException e = fails("NOT_IMPLEMENTED", () -> NativeBridge.invoke(
-                (String) stub.get("fn"), TEMPLATE, Json.write(stub.get("args"))));
-        assertNull(e.getDetails());
-    }
-
-    /** A conformance step calling a not_implemented function (stubs have no typed wrapper). */
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> stubStep() {
-        for (Map<String, Object> c : (List<Map<String, Object>>) TestSupport.conformance().get("cases")) {
-            for (Map<String, Object> step : (List<Map<String, Object>>) c.get("steps")) {
-                Map<String, Object> expect = (Map<String, Object>) step.get("expect");
-                if ("NOT_IMPLEMENTED".equals(expect.get("error")) && !step.containsKey("config_literal")) {
-                    return step;
-                }
-            }
-        }
-        throw new AssertionError("no NOT_IMPLEMENTED conformance step");
     }
 
     @Test

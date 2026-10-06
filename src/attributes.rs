@@ -148,7 +148,7 @@ impl<'a> TryFrom<&'a Value> for SetAttributeParams<'a> {
 /// - `JsonParse` if config_json is invalid
 /// - `MissingSection` if required sections don't exist
 pub fn add_attribute(config_json: &str, params: AddAttributeParams) -> Result<(String, Value)> {
-    let config: Value =
+    let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
     // Validate attribute class (matches Python line 173-181)
@@ -238,13 +238,13 @@ pub fn add_attribute(config_json: &str, params: AddAttributeParams) -> Result<(S
         default_value: params.default_value.map(str::to_string),
         internal: internal.to_string(),
     };
-    let new_attribute = serde_json::to_value(&row)?;
+    let new_attribute = crate::helpers::row_value(&row);
 
     // Add to CFG_ATTR only (Python does not create FBOM in addAttribute)
-    let modified_json =
-        helpers::add_to_config_array(config_json, "CFG_ATTR", new_attribute.clone())?;
+    // (CFG_ATTR was looked up above.)
+    helpers::verified_section_mut(&mut config, "CFG_ATTR").push(new_attribute.clone());
 
-    Ok((modified_json, new_attribute))
+    Ok((config.to_string(), new_attribute))
 }
 
 /// Delete an attribute from the configuration
@@ -397,7 +397,7 @@ pub fn set_attribute(config_json: &str, params: SetAttributeParams) -> Result<St
         attr["DEFAULT_VALUE"] = json!(val);
     }
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 #[cfg(test)]

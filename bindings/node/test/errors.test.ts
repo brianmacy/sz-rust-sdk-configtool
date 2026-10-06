@@ -27,8 +27,10 @@ describe("reason codes", () => {
   });
 
   const examples = errorExamples();
-  test("conformance reaches every library reason code (all but INTERNAL)", () => {
-    const missing = manifest.reason_codes.filter((c) => c !== "INTERNAL" && !examples.has(c));
+  // NOT_IMPLEMENTED is kept for `status: not_implemented` functions, of which the manifest has none.
+  test("conformance reaches every library reason code (all but INTERNAL / NOT_IMPLEMENTED)", () => {
+    const unreachable = new Set(["INTERNAL", "NOT_IMPLEMENTED"]);
+    const missing = manifest.reason_codes.filter((c) => !unreachable.has(c) && !examples.has(c));
     assert.deepEqual(missing, []);
   });
 

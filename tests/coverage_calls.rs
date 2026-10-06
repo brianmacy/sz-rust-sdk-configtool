@@ -126,14 +126,6 @@ mod comparison {
                 field,
             );
         }
-
-        let p = SetComparisonCallParams::try_from(&json!({"cfcallId": 9, "execOrder": 2})).unwrap();
-        assert_eq!((p.cfcall_id, p.exec_order), (9, Some(2)));
-        assert_err(
-            SetComparisonCallParams::try_from(&json!({})),
-            SzErrorKind::MissingField,
-            "cfcallId",
-        );
     }
 
     #[test]
@@ -268,22 +260,6 @@ mod comparison {
         assert_eq!(items.len(), rows(&template(), "CFG_CFCALL").len());
         assert_eq!(items[0]["feature"], "NAME");
         assert_eq!(items[0]["function"], "GNR_COMP");
-    }
-
-    #[test]
-    fn set_stubs_return_config_unchanged() {
-        let c = template();
-        assert_eq!(
-            set_comparison_call(&c, SetComparisonCallParams::default()).unwrap(),
-            c
-        );
-        let p = SetComparisonCallElementParams {
-            ftype_id: 1,
-            felem_id: 2,
-            exec_order: 1,
-            updates: json!({}),
-        };
-        assert_eq!(set_comparison_call_element(&c, 1, p).unwrap(), c);
     }
 
     fn elem(ftype_id: i64, exec_order: Option<i64>) -> AddComparisonCallElementParams {
@@ -423,13 +399,6 @@ mod distinct {
             AddDistinctCallParams::try_from(&json!({"ftypeCode": "N"})),
             SzErrorKind::MissingField,
             "dfuncCode",
-        );
-        let p = SetDistinctCallParams::try_from(&json!({"dfcallId": 3, "execOrder": 1})).unwrap();
-        assert_eq!((p.dfcall_id, p.exec_order), (3, Some(1)));
-        assert_err(
-            SetDistinctCallParams::try_from(&json!({})),
-            SzErrorKind::MissingField,
-            "dfcallId",
         );
     }
 
@@ -572,23 +541,6 @@ mod distinct {
         assert_eq!(items[0]["elementList"][0], "FULL_NAME");
     }
 
-    #[test]
-    fn set_stubs_return_config_unchanged() {
-        let c = template();
-        assert_eq!(
-            set_distinct_call(&c, SetDistinctCallParams::default()).unwrap(),
-            c
-        );
-        let p = SetDistinctCallElementParams {
-            dfcall_id: 1,
-            ftype_id: 1,
-            felem_id: 2,
-            exec_order: 1,
-            updates: json!({}),
-        };
-        assert_eq!(set_distinct_call_element(&c, p).unwrap(), c);
-    }
-
     fn elem(exec_order: Option<i64>) -> AddDistinctCallElementParams {
         AddDistinctCallElementParams {
             dfcall_id: 1,
@@ -724,13 +676,6 @@ mod expression {
         assert_eq!(
             (e.ftype_id, e.felem_id, e.exec_order, e.felem_req.as_str()),
             (1, 2, Some(3), "Yes")
-        );
-        let s = SetExpressionCallParams::try_from(&json!({"efcallId": 4, "execOrder": 2})).unwrap();
-        assert_eq!((s.efcall_id, s.exec_order), (4, Some(2)));
-        assert_err(
-            SetExpressionCallParams::try_from(&json!({})),
-            SzErrorKind::MissingField,
-            "efcallId",
         );
     }
 
@@ -918,17 +863,6 @@ mod expression {
         assert!(items.iter().any(|i| i["expressionFeature"] != "n/a"));
     }
 
-    #[test]
-    fn set_stubs_return_config_unchanged() {
-        let c = template();
-        assert_eq!(
-            set_expression_call(&c, SetExpressionCallParams::default()).unwrap(),
-            c
-        );
-        let p = ExpressionCallElementParams::new(1, 2, None, "No".into());
-        assert_eq!(set_expression_call_element(&c, p).unwrap(), c);
-    }
-
     fn elem(ftype_id: i64, exec_order: Option<i64>) -> ExpressionCallElementParams {
         ExpressionCallElementParams::new(ftype_id, 11, exec_order, "Yes".into())
     }
@@ -1040,14 +974,6 @@ mod standardize {
         assert_eq!(
             (p.ftype_code, p.felem_code, p.exec_order, p.sfunc_code),
             (None, None, None, "SF")
-        );
-        let s =
-            SetStandardizeCallParams::try_from(&json!({"sfcallId": 4, "execOrder": 2})).unwrap();
-        assert_eq!((s.sfcall_id, s.exec_order), (4, Some(2)));
-        assert_err(
-            SetStandardizeCallParams::try_from(&json!({})),
-            SzErrorKind::MissingField,
-            "sfcallId",
         );
     }
 
@@ -1178,22 +1104,6 @@ mod standardize {
         let items = list_standardize_calls(&template()).unwrap();
         assert!(items.iter().any(|i| i["element"] != "n/a"));
         assert!(items.iter().any(|i| i["feature"] == "NAME"));
-    }
-
-    #[test]
-    fn set_stubs_return_config_unchanged() {
-        let c = template();
-        assert_eq!(
-            set_standardize_call(&c, SetStandardizeCallParams::default()).unwrap(),
-            c
-        );
-        let p = SetStandardizeCallElementParams {
-            ftype_id: 1,
-            sfunc_id: 1,
-            felem_id: None,
-            updates: json!({}),
-        };
-        assert_eq!(set_standardize_call_element(&c, p).unwrap(), c);
     }
 
     fn elem(felem_id: Option<i64>, exec_order: Option<i64>) -> AddStandardizeCallElementParams {

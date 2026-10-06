@@ -70,6 +70,13 @@ impl Failure {
     }
 }
 
+/// Run `call`, turning a panic into an `INTERNAL` failure (the `jni` crate
+/// does not catch panics, and one must never unwind into the JVM).
+fn guarded<T>(call: impl FnOnce() -> Result<T, Failure>) -> Result<T, Failure> {
+    catch_unwind(AssertUnwindSafe(call))
+        .unwrap_or_else(|payload| Err(Failure::from_panic(payload.as_ref())))
+}
+
 /// The `{kind, config, result}` triple returned to Java.
 fn output_parts(out: &Output) -> [Option<String>; 3] {
     [
@@ -129,11 +136,13 @@ fn read_string(env: &Env, s: &JString, what: &str) -> Result<Option<String>, Fai
     if s.is_null() {
         return Ok(None);
     }
-    let invalid = |e: String| Failure::new(INVALID_INPUT, format!("invalid {what}: {e}"));
-    let chars = s.mutf8_chars(env).map_err(|e| invalid(e.to_string()))?;
-    decode_mutf8_strict(chars.to_bytes())
+    // GetStringUTFChars fails only when the JVM cannot allocate; that and a
+    // malformed string are the same INVALID_INPUT for this argument.
+    s.mutf8_chars(env)
+        .map_err(|e| e.to_string())
+        .and_then(|chars| decode_mutf8_strict(chars.to_bytes()))
         .map(Some)
-        .map_err(invalid)
+        .map_err(|e| Failure::new(INVALID_INPUT, format!("invalid {what}: {e}")))
 }
 
 /// A required (non-null) Java string argument.
@@ -146,15 +155,27 @@ fn new_result_array<'local>(
     env: &mut Env<'local>,
     parts: &[Option<String>; 3],
 ) -> Result<JObjectArray<'local, JString<'local>>, Failure> {
-    let marshal = |e: jni::errors::Error| Failure::new(INTERNAL, format!("building result: {e}"));
-    let array = JObjectArray::<JString>::new(env, parts.len(), JString::null()).map_err(marshal)?;
-    for (i, part) in parts.iter().enumerate() {
-        if let Some(text) = part {
-            let js = env.new_string(text).map_err(marshal)?;
-            array.set_element(env, i, &js).map_err(marshal)?;
-        }
-    }
-    Ok(array)
+    // Every step fails only when the JVM cannot allocate (NewObjectArray,
+    // NewStringUTF) or on a String stored into a fresh String[3]; one
+    // INTERNAL "building result" failure covers them all.
+    JObjectArray::<JString>::new(env, parts.len(), JString::null())
+        .and_then(|array| {
+            parts
+                .iter()
+                .enumerate()
+                .filter_map(|(i, part)| part.as_deref().map(|text| (i, text)))
+                .try_for_each(|(i, text)| {
+                    env.new_string(text)
+                        .and_then(|js| array.set_element(env, i, &js))
+                })
+                .map(|()| array)
+        })
+        .map_err(marshal_failure)
+}
+
+/// A JNI call failure while building the result (JVM allocation failure).
+fn marshal_failure(e: jni::errors::Error) -> Failure {
+    Failure::new(INTERNAL, format!("building result: {e}"))
 }
 
 /// The whole native call: read args, invoke, marshal the result.
@@ -194,26 +215,38 @@ fn build_exception<'local>(
     env: &mut Env<'local>,
     failure: &Failure,
 ) -> jni::errors::Result<JObject<'local>> {
-    let kind = env.new_string(&failure.reason_code)?;
-    let reason = env.new_string(&failure.reason_code)?;
-    let message = env.new_string(&failure.message)?;
-    let details = match &failure.details {
-        Some(d) => JObject::from(env.new_string(d)?),
-        None => JObject::null(),
-    };
-    // SzConfigToolException(String kind, String reasonCode, String message, String details)
-    env.new_object(
-        jni::jni_str!("io/github/brianmacy/szconfigtool/SzConfigToolException"),
-        jni::jni_sig!(
-            "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V"
-        ),
-        &[
-            JValue::Object(&kind),
-            JValue::Object(&reason),
-            JValue::Object(&message),
-            JValue::Object(&details),
-        ],
-    )
+    // The constructor's four String arguments: kind, reasonCode, message and
+    // details (null when absent). Any allocation failure, or a missing
+    // exception class, is the Err that throw_failure falls back on.
+    let texts = [
+        Some(failure.reason_code.as_str()),
+        Some(failure.reason_code.as_str()),
+        Some(failure.message.as_str()),
+        failure.details.as_deref(),
+    ];
+    texts
+        .into_iter()
+        .map(|text| {
+            text.map_or(Ok(JObject::null()), |t| {
+                env.new_string(t).map(JObject::from)
+            })
+        })
+        .collect::<jni::errors::Result<Vec<JObject>>>()
+        .and_then(|args| {
+            // SzConfigToolException(String kind, String reasonCode, String message, String details)
+            env.new_object(
+                jni::jni_str!("io/github/brianmacy/szconfigtool/SzConfigToolException"),
+                jni::jni_sig!(
+                    "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V"
+                ),
+                &[
+                    JValue::Object(&args[0]),
+                    JValue::Object(&args[1]),
+                    JValue::Object(&args[2]),
+                    JValue::Object(&args[3]),
+                ],
+            )
+        })
 }
 
 /// `NativeBridge.invoke(String name, String config, String argsJson)`.
@@ -232,13 +265,9 @@ pub extern "system" fn Java_io_github_brianmacy_szconfigtool_NativeBridge_invoke
     // for the duration of the call on this thread.
     let mut guard: AttachGuard<'local> = unsafe { AttachGuard::from_unowned(env.into_raw()) };
     let env = guard.borrow_env_mut();
-    let outcome = catch_unwind(AssertUnwindSafe(|| {
-        run(&mut *env, &name, &config, &args_json)
-    }));
-    let failure = match outcome {
-        Ok(Ok(array)) => return array.into_raw(),
-        Ok(Err(failure)) => failure,
-        Err(payload) => Failure::from_panic(payload.as_ref()),
+    let failure = match guarded(|| run(&mut *env, &name, &config, &args_json)) {
+        Ok(array) => return array.into_raw(),
+        Err(failure) => failure,
     };
     // Throwing must not unwind into the JVM either.
     let _ = catch_unwind(AssertUnwindSafe(|| throw_failure(&mut *env, &failure)));
@@ -312,6 +341,21 @@ mod tests {
             output_parts(&Output::Unit),
             [Some("unit".into()), None, None]
         );
+    }
+
+    #[test]
+    fn test_guarded_turns_a_panic_into_internal() {
+        let f = guarded::<()>(|| panic!("seam bug")).unwrap_err();
+        assert_eq!(f.reason_code, INTERNAL);
+        assert_eq!(f.message, "panic in JNI binding: seam bug");
+        assert_eq!(guarded(|| Ok::<i32, Failure>(3)), Ok(3));
+    }
+
+    #[test]
+    fn test_marshal_failure_is_internal() {
+        let f = marshal_failure(jni::errors::Error::NullPtr("array"));
+        assert_eq!(f.reason_code, INTERNAL);
+        assert!(f.message.starts_with("building result: "));
     }
 
     #[test]

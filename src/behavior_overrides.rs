@@ -120,7 +120,7 @@ pub fn add_behavior_override(
         ftype_excl: exclusivity.to_string(),
         ftype_stab: stability.to_string(),
     };
-    let override_record = serde_json::to_value(&row)?;
+    let override_record = crate::helpers::row_value(&row);
 
     // Add to CFG_FBOVR
     helpers::add_to_config_array(config_json, "CFG_FBOVR", override_record)
@@ -168,7 +168,7 @@ pub fn delete_behavior_override(
         )));
     }
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 /// Get a specific behavior override
@@ -344,11 +344,10 @@ pub fn list_behavior_overrides_resolved(config_json: &str) -> Result<Vec<Value>>
     // Sort by (FTYPE_ID, UTYPE_CODE).
     rows.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
 
-    rows.into_iter()
-        .map(|(_, _, display)| {
-            serde_json::to_value(&display).map_err(|e| SzConfigError::JsonParse(e.to_string()))
-        })
-        .collect()
+    Ok(rows
+        .into_iter()
+        .map(|(_, _, display)| crate::helpers::row_value(&display))
+        .collect())
 }
 
 #[cfg(test)]

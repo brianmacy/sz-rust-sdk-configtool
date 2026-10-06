@@ -101,8 +101,13 @@ pub fn add_comparison_function(
 ) -> Result<(String, Value), SzConfigError> {
     let cfunc_code = cfunc_code.to_uppercase();
 
+    let config_data: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+
     // Check if function already exists
-    if find_in_config_array(config_json, "CFG_CFUNC", "CFUNC_CODE", &cfunc_code)?.is_some() {
+    if crate::helpers::find_in_section(&config_data, "CFG_CFUNC", "CFUNC_CODE", &cfunc_code)
+        .is_some()
+    {
         return Err(SzConfigError::validation(format!(
             "Comparison function already exists: {cfunc_code}"
         )));
@@ -125,8 +130,6 @@ pub fn add_comparison_function(
     };
 
     // Get next CFUNC_ID
-    let config_data: Value =
-        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
     let cfunc_id = get_next_id(&config_data, "G2_CONFIG.CFG_CFUNC", "CFUNC_ID", 1)?;
 
     // Build a complete row via CfuncRow so every CFG_CFUNC key is present
@@ -139,7 +142,7 @@ pub fn add_comparison_function(
         cfunc_desc: params.description.map(str::to_string),
         language: params.language.map(str::to_string),
     };
-    let new_record = serde_json::to_value(&row)?;
+    let new_record = crate::helpers::row_value(&row);
 
     // Add to CFG_CFUNC
     let modified_json = add_to_config_array(config_json, "CFG_CFUNC", new_record.clone())?;
@@ -238,7 +241,10 @@ pub fn delete_comparison_function_cascade(
 ) -> Result<(String, Value), SzConfigError> {
     let cfunc_code = cfunc_code.to_uppercase();
 
-    let function = find_in_config_array(config_json, "CFG_CFUNC", "CFUNC_CODE", &cfunc_code)?
+    let mut config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+    let function = crate::helpers::find_in_section(&config, "CFG_CFUNC", "CFUNC_CODE", &cfunc_code)
+        .cloned()
         .ok_or_else(|| {
             SzConfigError::not_found(format!("Comparison function not found: {cfunc_code}"))
         })?;
@@ -249,8 +255,6 @@ pub fn delete_comparison_function_cascade(
 
     // Steps 1 & 2: remove CFG_CFBOM (by the CFCALL_IDs bound to this function),
     // then CFG_CFCALL.
-    let mut config: Value =
-        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
 
     let cfcall_ids: Vec<i64> = config["G2_CONFIG"]["CFG_CFCALL"]
         .as_array()
@@ -271,12 +275,9 @@ pub fn delete_comparison_function_cascade(
     if let Some(cfcall) = config["G2_CONFIG"]["CFG_CFCALL"].as_array_mut() {
         cfcall.retain(|r| r["CFUNC_ID"].as_i64() != Some(cfunc_id));
     }
-    let mut cur =
-        serde_json::to_string(&config).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
 
     // Step 3: CFG_CFRTN. Reuse the Wave-2 three-key delete for well-formed rows.
-    let snapshot: Value =
-        serde_json::from_str(&cur).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+    let snapshot = config.clone();
     let cfrtn_rows: Vec<Value> = snapshot["G2_CONFIG"]["CFG_CFRTN"]
         .as_array()
         .map(|a| {
@@ -293,21 +294,18 @@ pub fn delete_comparison_function_cascade(
             && let Some(code) = ftype_code_for_id(&snapshot, fid)
             && seen.insert((fid, rt.to_uppercase()))
         {
-            cur = crate::thresholds::delete_comparison_threshold(&cur, &cfunc_code, &code, rt)?;
+            crate::thresholds::delete_comparison_threshold_in(&mut config, &cfunc_code, &code, rt)?;
         }
     }
 
     // Sweep any remaining CFG_CFRTN rows for this function (orphan FTYPE_ID or
     // null CFUNC_RTNVAL rows the three-key delete cannot address).
-    let mut swept: Value =
-        serde_json::from_str(&cur).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
-    if let Some(arr) = swept["G2_CONFIG"]["CFG_CFRTN"].as_array_mut() {
+    if let Some(arr) = config["G2_CONFIG"]["CFG_CFRTN"].as_array_mut() {
         arr.retain(|r| r["CFUNC_ID"].as_i64() != Some(cfunc_id));
     }
-    cur = serde_json::to_string(&swept).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
 
     // Step 4: CFG_CFUNC itself.
-    let (final_json, _) = delete_comparison_function(&cur, &cfunc_code)?;
+    let (final_json, _) = delete_comparison_function(&config.to_string(), &cfunc_code)?;
 
     Ok((final_json, function))
 }
@@ -395,40 +393,33 @@ pub fn set_comparison_function(
 ) -> Result<(String, Value), SzConfigError> {
     let cfunc_code = cfunc_code.to_uppercase();
 
-    // Find existing function
-    let mut function = find_in_config_array(config_json, "CFG_CFUNC", "CFUNC_CODE", &cfunc_code)?
-        .ok_or_else(|| {
-        SzConfigError::not_found(format!("Comparison function not found: {cfunc_code}"))
-    })?;
-
-    // In-place update of a complete existing row; all keys preserved.
-    // Update fields if provided
-    if let Some(obj) = function.as_object_mut() {
-        match params.connect_str {
-            FieldUpdate::Leave => {}
-            FieldUpdate::Clear => {
-                obj.insert("CONNECT_STR".to_string(), Value::Null);
+    super::replace_row_at_end(
+        config_json,
+        "CFG_CFUNC",
+        "CFUNC_CODE",
+        &cfunc_code,
+        || SzConfigError::not_found(format!("Comparison function not found: {cfunc_code}")),
+        |obj| {
+            match params.connect_str {
+                FieldUpdate::Leave => {}
+                FieldUpdate::Clear => {
+                    obj.insert("CONNECT_STR".to_string(), Value::Null);
+                }
+                FieldUpdate::Set(conn) => {
+                    obj.insert("CONNECT_STR".to_string(), json!(conn));
+                }
             }
-            FieldUpdate::Set(conn) => {
-                obj.insert("CONNECT_STR".to_string(), json!(conn));
+            if let Some(desc) = params.description {
+                obj.insert("CFUNC_DESC".to_string(), json!(desc));
             }
-        }
-        if let Some(desc) = params.description {
-            obj.insert("CFUNC_DESC".to_string(), json!(desc));
-        }
-        if let Some(lang) = params.language {
-            obj.insert("LANGUAGE".to_string(), json!(lang));
-        }
-        if let Some(anon) = params.anon_support {
-            obj.insert("ANON_SUPPORT".to_string(), json!(anon));
-        }
-    }
-
-    // Delete old and add updated
-    let temp_json = delete_from_config_array(config_json, "CFG_CFUNC", "CFUNC_CODE", &cfunc_code)?;
-    let modified_json = add_to_config_array(&temp_json, "CFG_CFUNC", function.clone())?;
-
-    Ok((modified_json, function))
+            if let Some(lang) = params.language {
+                obj.insert("LANGUAGE".to_string(), json!(lang));
+            }
+            if let Some(anon) = params.anon_support {
+                obj.insert("ANON_SUPPORT".to_string(), json!(anon));
+            }
+        },
+    )
 }
 
 #[cfg(test)]

@@ -34,7 +34,7 @@ namespace Sz.ConfigTool
             get
             {
                 NativeLoader.EnsureInstalled();
-                return Utf8.FromNative(NativeMethods.SzConfigTool_getLibraryVersion()) ?? string.Empty;
+                return NativeCall.Require(Utf8.FromNative(NativeMethods.SzConfigTool_getLibraryVersion()), "SzConfigTool_getLibraryVersion returned NULL");
             }
         }
 

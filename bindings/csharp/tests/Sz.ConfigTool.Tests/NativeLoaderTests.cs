@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Sz.ConfigTool.Native;
 using Sz.ConfigTool.Tests.Support;
@@ -37,6 +38,67 @@ namespace Sz.ConfigTool.Tests
             Assert.Matches("^(linux|osx|win)-(x64|arm64)$", rid);
             string file = NativeLoader.NativeFileName();
             Assert.Contains("SzConfigTool", file);
+        }
+
+        // Host-independent: every OS / architecture mapping, not just this host's.
+        [Theory]
+        [InlineData("win", Architecture.X64, "win-x64")]
+        [InlineData("osx", Architecture.Arm64, "osx-arm64")]
+        [InlineData("linux", Architecture.X64, "linux-x64")]
+        [InlineData("linux", Architecture.X86, null)]
+        [InlineData(null, Architecture.Arm64, null)]
+        public void Rid_maps_os_and_architecture(string? os, Architecture arch, string? rid)
+        {
+            Assert.Equal(rid, NativeLoader.Rid(os, arch));
+        }
+
+        [Theory]
+        [InlineData("win", "SzConfigTool.dll")]
+        [InlineData("osx", "libSzConfigTool.dylib")]
+        [InlineData("linux", "libSzConfigTool.so")]
+        [InlineData(null, "libSzConfigTool.so")]
+        public void File_name_per_os(string? os, string file)
+        {
+            Assert.Equal(file, NativeLoader.FileName(os));
+        }
+
+        [Fact]
+        public void Bundled_path_needs_a_supported_rid()
+        {
+            Assert.Null(NativeLoader.BundledPath("base", null, "libSzConfigTool.so"));
+            Assert.Equal(Path.Combine("base", "runtimes", "linux-x64", "native", "libSzConfigTool.so"),
+                NativeLoader.BundledPath("base", "linux-x64", "libSzConfigTool.so"));
+        }
+
+        [Fact]
+        public void Host_os_is_one_of_the_known_ones()
+        {
+            Assert.Contains(NativeLoader.CurrentOs(), new[] { "win", "osx", "linux" });
+        }
+
+        // A runtime without NativeLibrary / DllImportResolver (.NET Framework),
+        // or types without the expected members, leaves the default loader.
+        [Fact]
+        public void Binding_needs_native_library_and_resolver_types()
+        {
+            Assembly asm = typeof(SzConfigTool).Assembly;
+            Type nativeLibrary = typeof(NativeLibrary);
+            Assert.Null(NativeLoader.Bind(null, typeof(DllImportResolver), asm));
+            Assert.Null(NativeLoader.Bind(nativeLibrary, null, asm));
+            Assert.Null(NativeLoader.Bind(typeof(object), typeof(DllImportResolver), asm));
+            Assert.Null(NativeLoader.Bind(nativeLibrary, typeof(Action), asm));
+            Assert.NotNull(NativeLoader.Bind(nativeLibrary, typeof(DllImportResolver), asm));
+            Assert.Equal(IntPtr.Zero, NativeLoader.LoadBundled(asm, null));
+        }
+
+        [Fact]
+        public void Directory_of_an_assembly_location()
+        {
+            Assert.Equal(AppContext.BaseDirectory, NativeLoader.DirectoryOf(""));
+            Assert.Equal(AppContext.BaseDirectory, NativeLoader.DirectoryOf(null));
+            Assert.Equal(AppContext.BaseDirectory, NativeLoader.DirectoryOf("lib.dll"));
+            Assert.Equal(AppContext.BaseDirectory, NativeLoader.DirectoryOf(Path.GetPathRoot(AssemblyDir)));
+            Assert.Equal(AssemblyDir, NativeLoader.DirectoryOf(typeof(SzConfigTool).Assembly.Location));
         }
 
         [Fact]

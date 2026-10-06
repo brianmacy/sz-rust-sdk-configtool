@@ -233,6 +233,7 @@ mod tests {
             notes: None,
             c_notes: None,
             status: crate::model::Status::Implemented,
+            requires_options: false,
         }
     }
 

@@ -15,6 +15,33 @@ using szconfigtool::ErrorKind;
 using szconfigtool::FieldUpdate;
 using szconfigtool::SzConfigToolException;
 
+// Wire-contract guards on crafted input (the C ABI never produces it:
+// api/src/output.rs to_envelope always writes a string kind).
+TEST(Envelope, DecodesMembersAndRejectsAMissingOrNonStringKind) {
+    const auto out = szconfigtool::detail::DecodeEnvelope(R"({"kind":"config_and_json","config":"c","result":[1]})");
+    EXPECT_EQ(out.kind, "config_and_json");
+    EXPECT_EQ(out.config, std::optional<std::string>("c"));
+    EXPECT_EQ(out.result, std::optional<std::string>("[1]"));
+    for (const char* bad : {R"({})", R"({"kind":1})"}) {
+        try {
+            (void)szconfigtool::detail::DecodeEnvelope(bad);
+            ADD_FAILURE() << bad;
+        } catch (const SzConfigToolException& e) {
+            EXPECT_EQ(e.ReasonCode(), "INTERNAL");
+        }
+    }
+}
+
+TEST(Envelope, NullResponseIsInternal) {
+    EXPECT_EQ(szconfigtool::detail::RequireResponse("x"), "x");
+    try {
+        (void)szconfigtool::detail::RequireResponse(nullptr);
+        ADD_FAILURE() << "no throw";
+    } catch (const SzConfigToolException& e) {
+        EXPECT_EQ(e.ReasonCode(), "INTERNAL");
+    }
+}
+
 TEST(Json, DecodesEveryEscape) {
     const json::Value v = json::Parse(R"("q\" b\\ s\/ \b\f\n\r\t \u00e9 \ud83d\ude00 \u0001")");
     EXPECT_EQ(v.text, "q\" b\\ s/ \b\f\n\r\t \xC3\xA9 \xF0\x9F\x98\x80 \x01");

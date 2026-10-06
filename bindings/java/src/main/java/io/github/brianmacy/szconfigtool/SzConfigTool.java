@@ -1187,43 +1187,6 @@ public final class SzConfigTool {
      * feature. [] is allowed.
      * @param isVirtual <code>is_virtual</code> (str) Stored verbatim in IS_VIRTUAL (not validated or
      * normalized; the Rust <code>new()</code> default is "No").
-     * @return the modified configuration and the returned record (JSON text)
-     * @throws SzConfigToolException library reason codes: JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS, MISSING_FIELD; plus the universal INVALID_INPUT / MISSING_FIELD / INTERNAL wire errors
-     */
-    public static ConfigAndJson addExpressionCall(String configJson, String efuncCode, String elementList, String isVirtual) throws SzConfigToolException {
-        return addExpressionCall(configJson, efuncCode, elementList, isVirtual, null);
-    }
-
-    /**
-     * Add an expression call (CFG_EFCALL row) plus its element list (CFG_EFBOM rows).
-     *
-     * <p>Notes:
-     * Returns (modified config, the new CFG_EFCALL row {EFCALL_ID, FTYPE_ID, FELEM_ID,
-     * EFUNC_ID, EXEC_ORDER, EFEAT_FTYPE_ID, IS_VIRTUAL}); the created CFG_EFBOM rows are NOT
-     * in the record (see list_expression_calls). EFCALL_ID is auto-allocated (max + 1, floor
-     * 1000). Check order: EFCALL_ID allocation (MISSING_SECTION if CFG_EFCALL absent), efunc,
-     * feature, element, exactly-one rule, exec order, expression_feature, element list, then
-     * MISSING_SECTION if CFG_EFBOM absent. BOM FTYPE_ID sentinels (G2 EFBomConfig.cpp): 0 =
-     * parent feature link, -1 = any feature. The BOM-feature column is not rendered by
-     * get/list_expression_calls; read raw rows with get_config_section("CFG_EFBOM").
-     *
-     * <p>Wire name: {@code add_expression_call}; group: {@code calls_expression}.
-     *
-     * @param configJson the configuration JSON document (opaque; never parsed here)
-     * @param efuncCode <code>efunc_code</code> (str) Expression function code (CFG_EFUNC, case-insensitive) or
-     * NOT_FOUND.
-     * @param elementList <code>element_list</code> (json) JSON array of {"element": str, "required": str,
-     * "feature"?: str} objects (unknown keys, non-objects, non-string values = INVALID_INPUT;
-     * missing element/required = MISSING_FIELD). One CFG_EFBOM row per item, EXEC_ORDER =
-     * 1-based list position. element: global CFG_FELEM lookup (case-insensitive) or NOT_FOUND.
-     * required: stored verbatim in FELEM_REQ (not validated or normalized). feature: absent
-     * stores BOM FTYPE_ID -1 (G2 WILDCARDED_FTYPE: any feature in the record carrying the
-     * element); "PARENT" (case-insensitive) stores BOM FTYPE_ID 0 (G2
-     * PARENT_FEATURE_LINKED_FTYPE: the feature that triggered the call); otherwise a feature
-     * code (case-insensitive) or NOT_FOUND. The element is NOT checked for membership in that
-     * feature. [] is allowed.
-     * @param isVirtual <code>is_virtual</code> (str) Stored verbatim in IS_VIRTUAL (not validated or
-     * normalized; the Rust <code>new()</code> default is "No").
      * @param options optional arguments ({@code null} = none); see {@link AddExpressionCallOptions}
      * @return the modified configuration and the returned record (JSON text)
      * @throws SzConfigToolException library reason codes: JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS, MISSING_FIELD; plus the universal INVALID_INPUT / MISSING_FIELD / INTERNAL wire errors
@@ -1574,30 +1537,6 @@ public final class SzConfigTool {
             wire.integer("exec_order", execOrder);
             return this;
         }
-    }
-
-    /**
-     * Add a standardize call (CFG_SFCALL row) binding a standardize function to a feature or
-     * an element.
-     *
-     * <p>Notes:
-     * Returns (modified config, the new CFG_SFCALL row {SFCALL_ID, FTYPE_ID, FELEM_ID,
-     * SFUNC_ID, EXEC_ORDER}). SFCALL_ID is always auto-allocated (max + 1, floor 1000).
-     * MISSING_SECTION when CFG_SFCALL is absent. Check order: SFCALL_ID allocation, sfunc,
-     * feature, element, exactly-one rule, exec order. TRAP: the exec-order scope does not
-     * include SFUNC_ID, so a second call on the same feature continues that feature's order
-     * sequence.
-     *
-     * <p>Wire name: {@code add_standardize_call}; group: {@code calls_standardize}.
-     *
-     * @param configJson the configuration JSON document (opaque; never parsed here)
-     * @param sfuncCode <code>sfunc_code</code> (str) Standardize function code (CFG_SFUNC, case-insensitive) or
-     * NOT_FOUND. Looked up before the feature/element.
-     * @return the modified configuration and the returned record (JSON text)
-     * @throws SzConfigToolException library reason codes: JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS; plus the universal INVALID_INPUT / MISSING_FIELD / INTERNAL wire errors
-     */
-    public static ConfigAndJson addStandardizeCall(String configJson, String sfuncCode) throws SzConfigToolException {
-        return addStandardizeCall(configJson, sfuncCode, null);
     }
 
     /**
@@ -3075,26 +3014,6 @@ public final class SzConfigTool {
             wire.integer("rtype_id", rtypeId);
             return this;
         }
-    }
-
-    /**
-     * Update a feature's flags, behavior, class, version or RTYPE_ID.
-     *
-     * <p>Notes:
-     * If no supplied value differs from the stored row (including when no update args are
-     * given) the call fails with INVALID_INPUT "No changes detected". The input config is
-     * never modified on error.
-     *
-     * <p>Wire name: {@code set_feature}; group: {@code features}.
-     *
-     * @param configJson the configuration JSON document (opaque; never parsed here)
-     * @param feature <code>feature</code> (str) Integer string (after trim) = FTYPE_ID; otherwise a code,
-     * uppercased. Unknown is NOT_FOUND.
-     * @return the modified configuration JSON document (opaque)
-     * @throws SzConfigToolException library reason codes: JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT; plus the universal INVALID_INPUT / MISSING_FIELD / INTERNAL wire errors
-     */
-    public static String setFeature(String configJson, String feature) throws SzConfigToolException {
-        return setFeature(configJson, feature, null);
     }
 
     /**

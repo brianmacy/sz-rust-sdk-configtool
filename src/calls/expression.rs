@@ -70,29 +70,6 @@ impl ExpressionCallElementParams {
     }
 }
 
-/// Parameters for setting (updating) an expression call
-#[derive(Debug, Clone, Default)]
-pub struct SetExpressionCallParams {
-    pub efcall_id: i64,
-    pub exec_order: Option<i64>,
-}
-
-impl TryFrom<&Value> for SetExpressionCallParams {
-    type Error = SzConfigError;
-
-    fn try_from(json: &Value) -> Result<Self> {
-        let efcall_id = json
-            .get("efcallId")
-            .and_then(|v| v.as_i64())
-            .ok_or_else(|| SzConfigError::MissingField("efcallId".to_string()))?;
-
-        Ok(Self {
-            efcall_id,
-            exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
-        })
-    }
-}
-
 /// Add a new expression call with element list
 ///
 /// Creates a new expression call linking a function to a feature or element
@@ -194,7 +171,7 @@ pub fn add_expression_call(
             exec_order: bom_exec_order,
             felem_req: required,
         };
-        efbom_records.push(serde_json::to_value(&bom_row)?);
+        efbom_records.push(crate::helpers::row_value(&bom_row));
     }
 
     // Create new CFG_EFCALL record via EfcallRow so every key is always present.
@@ -207,7 +184,7 @@ pub fn add_expression_call(
         efeat_ftype_id,
         is_virtual: params.is_virtual.to_string(),
     };
-    let new_record = serde_json::to_value(&efcall_row)?;
+    let new_record = crate::helpers::row_value(&efcall_row);
 
     // Add to config
     if let Some(efcall_array) = config_data["G2_CONFIG"]["CFG_EFCALL"].as_array_mut() {
@@ -222,8 +199,7 @@ pub fn add_expression_call(
         return Err(SzConfigError::MissingSection("CFG_EFBOM".to_string()));
     }
 
-    let modified_config =
-        serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let modified_config = config_data.to_string();
 
     Ok((modified_config, new_record))
 }
@@ -261,16 +237,15 @@ pub fn delete_expression_call(config: &str, efcall_id: i64) -> Result<String> {
     }
 
     // Delete the expression call
-    if let Some(efcall_array) = config_data["G2_CONFIG"]["CFG_EFCALL"].as_array_mut() {
-        efcall_array.retain(|record| record["EFCALL_ID"].as_i64() != Some(efcall_id));
-    }
+    let efcall_array = crate::helpers::verified_section_mut(&mut config_data, "CFG_EFCALL");
+    efcall_array.retain(|record| record["EFCALL_ID"].as_i64() != Some(efcall_id));
 
     // Delete associated EFBOM records
     if let Some(efbom_array) = config_data["G2_CONFIG"]["CFG_EFBOM"].as_array_mut() {
         efbom_array.retain(|record| record["EFCALL_ID"].as_i64() != Some(efcall_id));
     }
 
-    serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config_data.to_string())
 }
 
 /// Get a single expression call, addressed by id or by feature code.
@@ -460,19 +435,6 @@ pub fn list_expression_calls(config: &str) -> Result<Vec<Value>> {
     Ok(items)
 }
 
-/// Update an expression call (stub - not implemented in Python)
-///
-/// # Arguments
-/// * `config` - Configuration JSON string
-/// * `params` - Expression call parameters (efcall_id required, others optional to update)
-///
-/// # Returns
-/// Modified configuration JSON string
-pub fn set_expression_call(config: &str, _params: SetExpressionCallParams) -> Result<String> {
-    // This is a stub - the Python version doesn't implement this
-    Ok(config.to_string())
-}
-
 /// Add an expression call element (EBOM record)
 ///
 /// Creates a new expression bill of materials entry.
@@ -547,7 +509,7 @@ pub fn add_expression_call_element(
         exec_order,
         felem_req: params.felem_req,
     };
-    let new_record = serde_json::to_value(&row)?;
+    let new_record = crate::helpers::row_value(&row);
 
     // Add to CFG_EFBOM
     if let Some(ebom_array) = config_data["G2_CONFIG"]["CFG_EFBOM"].as_array_mut() {
@@ -556,8 +518,7 @@ pub fn add_expression_call_element(
         return Err(SzConfigError::MissingSection("CFG_EFBOM".to_string()));
     }
 
-    let modified_config =
-        serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let modified_config = config_data.to_string();
 
     Ok((modified_config, new_record))
 }
@@ -646,36 +607,19 @@ pub fn delete_expression_call_element(
         "Expression",
     )?;
 
-    if let Some(ebom_array) = config_data["G2_CONFIG"]["CFG_EFBOM"].as_array_mut() {
-        // Mirror the derive predicate: when a feature disambiguated the target
-        // row, constrain the retain by FTYPE too. Otherwise a sibling row sharing
-        // (call, felem, exec) under another feature would be over-deleted.
-        ebom_array.retain(|item| {
-            !(item.get("EFCALL_ID").and_then(|v| v.as_i64()) == Some(efcall_id)
-                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
-                && element_ftype_id
-                    .is_none_or(|ft| item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ft)))
-        });
-    }
+    let ebom_array = crate::helpers::verified_section_mut(&mut config_data, "CFG_EFBOM");
+    // Mirror the derive predicate: when a feature disambiguated the target
+    // row, constrain the retain by FTYPE too. Otherwise a sibling row sharing
+    // (call, felem, exec) under another feature would be over-deleted.
+    ebom_array.retain(|item| {
+        !(item.get("EFCALL_ID").and_then(|v| v.as_i64()) == Some(efcall_id)
+            && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
+            && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
+            && element_ftype_id
+                .is_none_or(|ft| item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ft)))
+    });
 
-    serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))
-}
-
-/// Update an expression call element (stub - not typically used)
-///
-/// # Arguments
-/// * `config` - Configuration JSON string
-/// * `params` - Expression call element parameters (efcall_id, ftype_id, felem_id, exec_order, updates)
-///
-/// # Returns
-/// Modified configuration JSON string
-pub fn set_expression_call_element(
-    config: &str,
-    _params: ExpressionCallElementParams,
-) -> Result<String> {
-    // This is a stub - not commonly used
-    Ok(config.to_string())
+    Ok(config_data.to_string())
 }
 
 #[cfg(test)]

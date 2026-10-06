@@ -157,19 +157,17 @@ impl CommandProcessor {
 
 /// Parse a command line into (command_name, parameters)
 fn parse_command_line(line: &str) -> Result<(String, Value)> {
-    let parts: Vec<&str> = line.splitn(2, ' ').collect();
+    // The command is everything before the first space (possibly empty); the
+    // rest, when present, is its JSON parameters.
+    let (cmd, rest) = match line.split_once(' ') {
+        Some((cmd, rest)) => (cmd.to_string(), Some(rest)),
+        None => (line.to_string(), None),
+    };
 
-    if parts.is_empty() {
-        return Err(SzConfigError::InvalidInput("Empty command".to_string()));
-    }
-
-    let cmd = parts[0].to_string();
-
-    let params = if parts.len() > 1 {
-        serde_json::from_str(parts[1])
-            .map_err(|e| SzConfigError::JsonParse(format!("Invalid JSON in '{cmd}': {e}")))?
-    } else {
-        Value::Null
+    let params = match rest {
+        Some(json) => serde_json::from_str(json)
+            .map_err(|e| SzConfigError::JsonParse(format!("Invalid JSON in '{cmd}': {e}")))?,
+        None => Value::Null,
     };
 
     Ok((cmd, params))
@@ -490,11 +488,9 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
                 config,
                 crate::thresholds::AddComparisonThresholdParams {
                     cfunc_code: Some(func),
-                    ftype_code: if feature.eq_ignore_ascii_case("ALL") {
-                        None
-                    } else {
-                        Some(feature)
-                    },
+                    // "ALL" passes through: the library resolves "all"
+                    // (case-insensitive) to the all-features FTYPE_ID 0.
+                    ftype_code: Some(feature),
                     cfunc_rtnval: Some(score_name),
                     exec_order: None,
                     same_score: same,
@@ -563,12 +559,13 @@ fn execute_command(config: &str, cmd: &str, params: &Value) -> Result<String> {
             let feature = get_str_param(params, "feature")?;
             let element = get_str_param(params, "element")?;
 
+            let config_val: Value = serde_json::from_str(config)?;
+
             // Lookup IDs
             let ftype_id = crate::helpers::lookup_feature_id(config, feature)?;
             let felem_id = crate::helpers::lookup_element_id(config, element)?;
 
             // Find the cfcall_id for this feature
-            let config_val: Value = serde_json::from_str(config)?;
             let cfcall_array = config_val["G2_CONFIG"]["CFG_CFCALL"]
                 .as_array()
                 .ok_or_else(|| SzConfigError::MissingSection("CFG_CFCALL".to_string()))?;
@@ -968,6 +965,15 @@ save
     /// propagate with their own variant.
     #[test]
     fn test_downstream_errors_propagate_variant() {
+        // An unparsable config reaches addComparisonCallElement's own parse.
+        let err = execute_command(
+            "not json",
+            "addComparisonCallElement",
+            &json!({"feature": "NAME", "element": "FULL_NAME"}),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), SzErrorKind::JsonParse);
+
         let no_version = r#"{"G2_CONFIG": {}}"#;
         let err = execute_command(
             no_version,
@@ -1407,11 +1413,19 @@ save
         assert_eq!(row["FTYPE_ID"], 1);
         assert_eq!(row["UN_LIKELY_SCORE"], 60);
 
-        // Current behavior: the processor maps "ALL" to ftype_code=None, which
-        // the SDK rejects (the SDK itself resolves "all" when passed through).
-        let err = run("addComparisonThreshold", threshold("ALL")).unwrap_err();
-        assert_eq!(err.kind(), SzErrorKind::MissingField);
-        assert_eq!(err.to_string(), "Missing required field: ftype_code");
+        // "ALL" (any case) is the all-features sentinel: FTYPE_ID 0.
+        for (all, score) in [("ALL", "ALL_SCORE_A"), ("all", "ALL_SCORE_B")] {
+            let mut p = threshold(all);
+            p["scoreName"] = json!(score);
+            let out = parsed(&run("addComparisonThreshold", p).unwrap());
+            let row = rows(&out, "CFG_CFRTN")
+                .iter()
+                .find(|r| r["CFUNC_RTNVAL"] == score)
+                .unwrap()
+                .clone();
+            assert_eq!(row["FTYPE_ID"], 0);
+            assert_eq!(row["SAME_SCORE"], 100);
+        }
 
         let before = rows(&parsed(TEMPLATE), "CFG_GENERIC_THRESHOLD").len();
         let out = parsed(

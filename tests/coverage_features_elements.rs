@@ -22,10 +22,10 @@ use sz_configtool_lib::elements::{
 use sz_configtool_lib::features::{
     AddFeatureComparisonParams, AddFeatureDistinctCallElementParams, AddFeatureParams,
     GetFeatureComparisonParams, SetFeatureParams, add_feature, add_feature_comparison,
-    add_feature_comparison_element, add_feature_distinct_call_element, delete_feature,
-    delete_feature_comparison, delete_feature_comparison_element, get_feature, get_feature_class,
-    get_feature_comparison, list_feature_classes, list_feature_comparisons, list_features,
-    set_feature, update_feature_version,
+    add_feature_comparison_element, add_feature_distinct_call_element, build_feature_json,
+    delete_feature, delete_feature_comparison, delete_feature_comparison_element, get_feature,
+    get_feature_class, get_feature_comparison, list_feature_classes, list_feature_comparisons,
+    list_features, set_feature, update_feature_version,
 };
 use sz_configtool_lib::filter::to_python_repr_string;
 use sz_configtool_lib::{
@@ -1412,6 +1412,10 @@ fn test_build_feature_json_with_sparse_rows() {
             {"element": "", "expressed": "No", "compared": "No", "derived": "No", "display": "No"}
         ])
     );
+    // The public builder on the parsed config gives the same summary.
+    let parsed: serde_json::Value = serde_json::from_str(cfg).unwrap();
+    let ftype = &parsed["G2_CONFIG"]["CFG_FTYPE"][0];
+    assert_eq!(build_feature_json(&parsed, ftype).unwrap(), f);
 }
 
 #[test]
@@ -1829,4 +1833,7 @@ fn test_update_feature_version() {
         update_feature_version(EMPTY_G2, "1"),
         "COMPATIBILITY_VERSION",
     );
+    // A top-level array (valid JSON, not a config object) is a missing
+    // section, not a panic (JSON IndexMut on an array used to panic).
+    assert_missing_section(update_feature_version("[]", "1"), "COMPATIBILITY_VERSION");
 }

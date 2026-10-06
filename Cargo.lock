@@ -617,6 +617,7 @@ dependencies = [
 name = "sz-configtool-ffi"
 version = "4.4.0-1"
 dependencies = [
+ "serde",
  "serde_json",
  "sz-configtool-api",
  "sz_configtool_lib",

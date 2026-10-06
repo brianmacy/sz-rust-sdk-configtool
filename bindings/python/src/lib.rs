@@ -79,10 +79,12 @@ fn invoke(
 
 #[pymodule(name = "_native")]
 fn native_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_function(wrap_pyfunction!(invoke, m)?)?;
-    // Single source: sz-configtool-api (the workspace version / C ABI version).
-    m.add("LIBRARY_VERSION", sz_configtool_api::LIBRARY_VERSION)?;
-    m.add("ABI_VERSION", sz_configtool_api::ABI_VERSION)?;
-    m.add("NativeError", m.py().get_type::<NativeError>())?;
-    Ok(())
+    // Each step fails only on interpreter allocation failure during import;
+    // the first failure is the import error.
+    wrap_pyfunction!(invoke, m)
+        .and_then(|f| m.add_function(f))
+        // Single source: sz-configtool-api (the workspace version / C ABI version).
+        .and_then(|()| m.add("LIBRARY_VERSION", sz_configtool_api::LIBRARY_VERSION))
+        .and_then(|()| m.add("ABI_VERSION", sz_configtool_api::ABI_VERSION))
+        .and_then(|()| m.add("NativeError", m.py().get_type::<NativeError>()))
 }
