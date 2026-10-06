@@ -43,6 +43,10 @@ npm test               # conformance + API + error + export tests vs the real .n
 npm run typecheck      # tsc --noEmit over sources, tests and examples
 ```
 
+Coverage (Node's built-in `--experimental-test-coverage`, source-mapped to
+the TypeScript, incl. `trpc/`): `packaging/coverage.sh rust node` from the
+repository root (see `packaging/README.md`, Coverage).
+
 Regenerate the typed wrappers, Zod schemas and router after a manifest change
 (from the workspace root): `cargo run -p sz-configtool-codegen`
 (`-- --check` fails when they are stale).

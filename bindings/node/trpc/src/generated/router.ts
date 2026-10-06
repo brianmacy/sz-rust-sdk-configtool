@@ -10,6 +10,9 @@ import { szCall } from "../sz-call.js";
 import { t } from "../trpc.js";
 import * as schemas from "./schemas.js";
 
+/** Type of {@link configToolRouter}, for typed clients. */
+export type ConfigToolRouter = typeof configToolRouter;
+
 /** The configuration-tool router. */
 export const configToolRouter = t.router({
   /**
@@ -1324,6 +1327,3 @@ export const configToolRouter = t.router({
       }),
     ),
 });
-
-/** Type of {@link configToolRouter}, for typed clients. */
-export type ConfigToolRouter = typeof configToolRouter;

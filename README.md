@@ -586,9 +586,13 @@ cargo test -- --nocapture
 # Run specific test
 cargo test test_add_data_source
 
-# Check code coverage (with tarpaulin)
-cargo tarpaulin --out Html
+# Coverage of every component (Rust + all bindings) with the 100% gate
+packaging/install-tools.sh <target> && packaging/install-tools.sh <target> coverage
+packaging/coverage.sh
 ```
+
+Coverage policy, tools and the reviewed exclusions: `coverage/policy.yaml` and
+[`packaging/README.md`](packaging/README.md#coverage).
 
 ## Documentation
 

@@ -259,10 +259,10 @@ mod tests {
     fn test_library_error_keeps_reason_and_source() {
         let err = invoke("get_data_source", CFG, r#"{"code":"X"}"#).unwrap_err();
         assert_eq!(err.reason_code(), "NOT_FOUND");
-        assert!(matches!(
-            err.config_error(),
-            Some(SzConfigError::NotFound(_))
-        ));
+        assert_eq!(
+            err.config_error().map(SzConfigError::reason_code),
+            Some("NOT_FOUND")
+        );
         let internal = ApiError::Internal("boom".into());
         assert_eq!(internal.reason_code(), "INTERNAL");
         assert!(internal.config_error().is_none());

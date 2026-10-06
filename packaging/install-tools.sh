@@ -5,11 +5,13 @@
 # Every download is verified:
 #   * Rust: rust-toolchain.toml via rustup (rustup verifies dist hashes)
 #   * zig, JDK, Node: sha256 from config.yaml; Maven: sha512 from config.yaml
-#   * cargo-zigbuild / cargo-cyclonedx: `cargo install --locked` (crates.io checksums)
-#   * maturin / pytest: pip --require-hashes (packaging/requirements-*.txt)
+#   * cargo-zigbuild / cargo-cyclonedx / cargo-llvm-cov: `cargo install --locked`
+#     (crates.io checksums); llvm-tools: rustup component of the pinned toolchain
+#   * maturin / pytest / coverage.py: pip --require-hashes (packaging/requirements-*.txt)
 #
 # Usage: packaging/install-tools.sh <target> [component...]
 #   components: rust zig cargo-tools python jdk maven node   (default: all that apply)
+#               coverage   cargo-llvm-cov + llvm-tools (packaging/coverage.sh; never by default)
 # Afterwards every packaging script finds the tools via lib/tools-env.sh;
 # in GitHub Actions the PATH/JAVA_HOME are also exported to later steps.
 # shellcheck source=lib/common.sh
@@ -84,6 +86,12 @@ install_cargo_tools() {
     done
 }
 
+# Coverage tooling (CI `linux` job, local runs): not part of a release build.
+install_coverage_tools() {
+    (cd "${REPO_ROOT}" && rustup component add llvm-tools)
+    cargo install --locked --version "$(cfg tools.cargo_llvm_cov)" --root "${SZ_TOOLS_DIR}/cargo" cargo-llvm-cov
+}
+
 install_python_tools() {
     # Reuse a (cached) venv only if its interpreter still runs: when the host
     # Python moves (e.g. actions/setup-python picks a new patch release) the
@@ -152,6 +160,7 @@ for component in "${COMPONENTS[@]}"; do
         jdk) install_jdk ;;
         maven) install_maven ;;
         node) install_node ;;
+        coverage) install_coverage_tools ;;
         *) die "unknown component '${component}'" ;;
     esac
 done

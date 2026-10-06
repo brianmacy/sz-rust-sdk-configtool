@@ -88,6 +88,10 @@ Regenerate the headers after a manifest change with
 | `SZCONFIGTOOL_STATIC_DEPS` | per platform | system libs the Rust staticlib needs |
 | `SZCONFIGTOOL_BUILD_TESTS` / `_EXAMPLES` | `ON` top-level | |
 | `SZCONFIGTOOL_ENABLE_SANITIZERS` | `OFF` | ASan + UBSan for tests/examples |
+| `SZCONFIGTOOL_ENABLE_COVERAGE` | `OFF` | clang source-based coverage for tests/examples (clang only) |
+
+Coverage (with ASan + UBSan, clang): `packaging/coverage.sh cpp` from the
+repository root (see `packaging/README.md`, Coverage).
 
 ## Install and consume
 

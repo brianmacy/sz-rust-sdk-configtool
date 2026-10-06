@@ -205,5 +205,35 @@
         <native.lib.file>szconfigtool_jni.dll</native.lib.file>
       </properties>
     </profile>
+    <!-- `mvn -Pcoverage test`: JaCoCo line/branch coverage of the Java classes
+         (target/site/jacoco/jacoco.xml). The gate is packaging/coverage.sh
+         (coverage/policy.yaml); this profile only measures. -->
+    <profile>
+      <id>coverage</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <version>0.8.15</version>
+            <executions>
+              <execution>
+                <id>prepare-agent</id>
+                <goals>
+                  <goal>prepare-agent</goal>
+                </goals>
+              </execution>
+              <execution>
+                <id>report</id>
+                <phase>test</phase>
+                <goals>
+                  <goal>report</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
   </profiles>
 </project>

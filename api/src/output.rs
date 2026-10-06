@@ -85,9 +85,53 @@ pub(crate) fn config_and_json<T: Serialize>(config: String, record: T) -> Result
         .map_err(|e| ApiError::Internal(format!("serializing record: {e}")))
 }
 
+/// `status: not_implemented` — the library call always fails, and its error
+/// (`NOT_IMPLEMENTED`) is the result. A success means the manifest status is
+/// stale, which is reported as `INTERNAL` rather than shaped by a guess.
+pub(crate) fn not_implemented<T>(
+    name: &str,
+    result: Result<T, sz_configtool_lib::SzConfigError>,
+) -> Result<Output, ApiError> {
+    result?;
+    Err(ApiError::Internal(format!(
+        "{name} is marked status: not_implemented in the manifest but succeeded"
+    )))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::BTreeMap;
+    use sz_configtool_lib::SzConfigError;
+
+    /// A map with non-string keys: serde_json cannot represent it.
+    fn unserializable() -> BTreeMap<(i32, i32), i32> {
+        BTreeMap::from([((1, 2), 3)])
+    }
+
+    #[test]
+    fn test_unserializable_results_are_internal() {
+        let err = json(unserializable()).unwrap_err();
+        assert_eq!(err.reason_code(), "INTERNAL");
+        assert!(err.to_string().contains("serializing result"), "{err}");
+        let err = config_and_json("c".into(), unserializable()).unwrap_err();
+        assert_eq!(err.reason_code(), "INTERNAL");
+        assert!(err.to_string().contains("serializing record"), "{err}");
+    }
+
+    #[test]
+    fn test_not_implemented_passes_error_and_rejects_success() {
+        let lib_err = SzConfigError::NotImplemented("f".into());
+        let err = not_implemented::<()>("f", Err(lib_err)).unwrap_err();
+        assert_eq!(err.reason_code(), "NOT_IMPLEMENTED");
+        let err = not_implemented("f", Ok(1)).unwrap_err();
+        assert_eq!(err.reason_code(), "INTERNAL");
+        assert!(
+            err.to_string()
+                .contains("f is marked status: not_implemented"),
+            "{err}"
+        );
+    }
 
     #[test]
     fn test_envelope_shapes() {

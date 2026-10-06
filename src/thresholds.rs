@@ -1535,13 +1535,12 @@ mod tests {
             send_to_redo: None,
             feature: None,
         };
-        match add_generic_threshold(config, none.clone()) {
-            Err(SzConfigError::MissingField(m)) => assert_eq!(
-                m,
-                "plan, behavior, scoring_cap, candidate_cap, send_to_redo"
-            ),
-            other => panic!("expected MissingField, got {other:?}"),
-        }
+        let err = add_generic_threshold(config, none.clone()).unwrap_err();
+        assert!(
+            matches!(&err, SzConfigError::MissingField(m)
+                if m == "plan, behavior, scoring_cap, candidate_cap, send_to_redo"),
+            "expected MissingField, got {err:?}"
+        );
         let only_redo_missing = AddGenericThresholdParams {
             plan: Some("INGEST"),
             behavior: Some("F1"),
@@ -1549,10 +1548,11 @@ mod tests {
             candidate_cap: Some(1),
             ..none
         };
-        match add_generic_threshold(config, only_redo_missing) {
-            Err(SzConfigError::MissingField(m)) => assert_eq!(m, "send_to_redo"),
-            other => panic!("expected MissingField, got {other:?}"),
-        }
+        let err = add_generic_threshold(config, only_redo_missing).unwrap_err();
+        assert!(
+            matches!(&err, SzConfigError::MissingField(m) if m == "send_to_redo"),
+            "expected MissingField, got {err:?}"
+        );
     }
 
     const CFRTN_KEYS: [&str; 10] = [

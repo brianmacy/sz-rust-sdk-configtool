@@ -169,3 +169,19 @@ def test_nan_arg_is_invalid_input(template: str) -> None:
     with pytest.raises(sct.SzConfigToolError) as e:
         sct.invoke("add_data_source", template, {"code": "A", "id": float("nan")})
     assert e.value.reason_code == "INVALID_INPUT"
+
+
+class _NamelessMeta(type):
+    """A metaclass whose ``__name__`` lookup fails (overrides ``type.__name__``)."""
+
+    @property
+    def __name__(cls) -> str:  # type: ignore[override]
+        raise RuntimeError("no name")
+
+
+def test_config_whose_type_has_no_readable_name_is_invalid_input() -> None:
+    nameless = _NamelessMeta("Nameless", (), {})()
+    with pytest.raises(sct.SzConfigToolError) as e:
+        sct.invoke("list_data_sources", nameless)  # type: ignore[arg-type]
+    assert e.value.reason_code == "INVALID_INPUT"
+    assert e.value.message == "config must be a str, not ?"

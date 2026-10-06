@@ -44,6 +44,10 @@ python3 -m venv .venv && .venv/bin/pip install maturin pytest ruff
 .venv/bin/pytest                        # conformance + binding tests
 ```
 
+Coverage (coverage.py, with the pyo3 seam instrumented; 100% gate):
+`packaging/coverage.sh rust python` from the repository root (see
+`packaging/README.md`, Coverage).
+
 ## Example
 
 ```python

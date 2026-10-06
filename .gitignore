@@ -47,3 +47,11 @@ create_senzing_lib.sh
 
 # Implementation notes (temporary)
 FFI_IMPLEMENTATION.md
+
+# Coverage artifacts (packaging/coverage.sh writes reports to target/coverage)
+*.profraw
+*.profdata
+.coverage
+.coverage.*
+lcov.info
+coverage.info

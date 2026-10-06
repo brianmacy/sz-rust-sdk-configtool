@@ -21,6 +21,51 @@ namespace Sz.ConfigTool.Tests
         }
 
         [Theory]
+        [InlineData("1e5")]
+        [InlineData("2E-3")]
+        public void Exponents_with_and_without_a_sign_are_accepted(string json)
+        {
+            Assert.True(JsonScanner.IsSingleValue(json));
+        }
+
+        [Fact]
+        public void Nesting_is_limited_to_the_max_depth()
+        {
+            Assert.True(JsonScanner.IsSingleValue(new string('[', 513) + new string(']', 513)));
+            Assert.False(JsonScanner.IsSingleValue(new string('[', 514) + new string(']', 514)));
+        }
+
+        [Theory]
+        [InlineData("{\"a\":1} x", "trailing characters")]
+        [InlineData("{\"a\"", "expected ':'")]
+        [InlineData("{\"a", "unterminated string")]
+        [InlineData("{\"a\\", "unterminated escape")]
+        public void Object_members_report_the_format_error(string json, string what)
+        {
+            var e = Assert.Throws<FormatException>(() => JsonScanner.ObjectMembers(json));
+            Assert.EndsWith(what, e.Message);
+        }
+
+        [Fact]
+        public void Decoded_string_must_be_the_whole_input()
+        {
+            var e = Assert.Throws<FormatException>(() => JsonScanner.DecodeString("\"a\" \"b\""));
+            Assert.Equal("invalid JSON at offset 4: trailing characters", e.Message);
+        }
+
+        [Fact]
+        public void Args_writer_escapes_and_optional_values()
+        {
+            var w = new ArgsWriter();
+            w.Str("s", "\r\t\b\f", "s");
+            w.OptBool("f", false);
+            w.OptBool("absent_bool", null);
+            w.OptStrList("list", new[] { "x" }, "list");
+            w.OptStrList("absent_list", null, "absent_list");
+            Assert.Equal("{\"s\":\"\\r\\t\\b\\f\",\"f\":false,\"list\":[\"x\"]}", w.ToJson());
+        }
+
+        [Theory]
         [InlineData("")]
         [InlineData("1 2")]
         [InlineData("1, \"x\": 2")]

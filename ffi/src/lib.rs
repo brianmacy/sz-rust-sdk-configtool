@@ -11411,3 +11411,15 @@ mod tests_set_function_json;
 
 #[cfg(test)]
 mod tests_invoke;
+
+#[cfg(test)]
+mod tests_cov_a;
+
+#[cfg(test)]
+mod tests_cov_b;
+
+#[cfg(test)]
+mod tests_cov_c;
+
+#[cfg(test)]
+mod tests_cov_d;

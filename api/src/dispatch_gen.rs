@@ -1124,51 +1124,43 @@ fn call_set_fragment(config: &str, args: &Args<'_>) -> Result<Output, ApiError> 
 
 fn call_add_candidate_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["rtype_code", "candidate_func"])?;
-    let result = sz_configtool_lib::functions::candidate::add_candidate_function(
+    crate::output::not_implemented("add_candidate_function", sz_configtool_lib::functions::candidate::add_candidate_function(
         config,
         args.req_str("rtype_code")?,
         args.req_str("candidate_func")?,
-    )?;
-    let (config, record) = result;
-    crate::output::config_and_json(config, record)
+    ))
 }
 
 fn call_delete_candidate_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["rtype_code"])?;
-    let result = sz_configtool_lib::functions::candidate::delete_candidate_function(
+    crate::output::not_implemented("delete_candidate_function", sz_configtool_lib::functions::candidate::delete_candidate_function(
         config,
         args.req_str("rtype_code")?,
-    )?;
-    let (config, record) = result;
-    crate::output::config_and_json(config, record)
+    ))
 }
 
 fn call_get_candidate_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["rtype_code"])?;
-    let result = sz_configtool_lib::functions::candidate::get_candidate_function(
+    crate::output::not_implemented("get_candidate_function", sz_configtool_lib::functions::candidate::get_candidate_function(
         config,
         args.req_str("rtype_code")?,
-    )?;
-    crate::output::json(result)
+    ))
 }
 
 fn call_list_candidate_functions(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&[])?;
-    let result = sz_configtool_lib::functions::candidate::list_candidate_functions(
+    crate::output::not_implemented("list_candidate_functions", sz_configtool_lib::functions::candidate::list_candidate_functions(
         config,
-    )?;
-    crate::output::json(result)
+    ))
 }
 
 fn call_set_candidate_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["rtype_code", "candidate_func"])?;
-    let result = sz_configtool_lib::functions::candidate::set_candidate_function(
+    crate::output::not_implemented("set_candidate_function", sz_configtool_lib::functions::candidate::set_candidate_function(
         config,
         args.req_str("rtype_code")?,
         args.opt_str("candidate_func")?,
-    )?;
-    let (config, record) = result;
-    crate::output::config_and_json(config, record)
+    ))
 }
 
 fn call_add_comparison_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
@@ -1368,100 +1360,84 @@ fn call_set_expression_function(config: &str, args: &Args<'_>) -> Result<Output,
 
 fn call_add_matching_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["rtype_code", "matching_func"])?;
-    let result = sz_configtool_lib::functions::matching::add_matching_function(
+    crate::output::not_implemented("add_matching_function", sz_configtool_lib::functions::matching::add_matching_function(
         config,
         args.req_str("rtype_code")?,
         args.req_str("matching_func")?,
-    )?;
-    let (config, record) = result;
-    crate::output::config_and_json(config, record)
+    ))
 }
 
 fn call_delete_matching_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["rtype_code"])?;
-    let result = sz_configtool_lib::functions::matching::delete_matching_function(
+    crate::output::not_implemented("delete_matching_function", sz_configtool_lib::functions::matching::delete_matching_function(
         config,
         args.req_str("rtype_code")?,
-    )?;
-    let (config, record) = result;
-    crate::output::config_and_json(config, record)
+    ))
 }
 
 fn call_get_matching_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["rtype_code"])?;
-    let result = sz_configtool_lib::functions::matching::get_matching_function(
+    crate::output::not_implemented("get_matching_function", sz_configtool_lib::functions::matching::get_matching_function(
         config,
         args.req_str("rtype_code")?,
-    )?;
-    crate::output::json(result)
+    ))
 }
 
 fn call_list_matching_functions(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&[])?;
-    let result = sz_configtool_lib::functions::matching::list_matching_functions(
+    crate::output::not_implemented("list_matching_functions", sz_configtool_lib::functions::matching::list_matching_functions(
         config,
-    )?;
-    crate::output::json(result)
+    ))
 }
 
 fn call_set_matching_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["rtype_code", "matching_func"])?;
-    let result = sz_configtool_lib::functions::matching::set_matching_function(
+    crate::output::not_implemented("set_matching_function", sz_configtool_lib::functions::matching::set_matching_function(
         config,
         args.req_str("rtype_code")?,
         args.opt_str("matching_func")?,
-    )?;
-    let (config, record) = result;
-    crate::output::config_and_json(config, record)
+    ))
 }
 
 fn call_add_scoring_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["rtype_code", "scoring_func"])?;
-    let result = sz_configtool_lib::functions::scoring::add_scoring_function(
+    crate::output::not_implemented("add_scoring_function", sz_configtool_lib::functions::scoring::add_scoring_function(
         config,
         args.req_str("rtype_code")?,
         args.req_str("scoring_func")?,
-    )?;
-    let (config, record) = result;
-    crate::output::config_and_json(config, record)
+    ))
 }
 
 fn call_delete_scoring_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["rtype_code"])?;
-    let result = sz_configtool_lib::functions::scoring::delete_scoring_function(
+    crate::output::not_implemented("delete_scoring_function", sz_configtool_lib::functions::scoring::delete_scoring_function(
         config,
         args.req_str("rtype_code")?,
-    )?;
-    let (config, record) = result;
-    crate::output::config_and_json(config, record)
+    ))
 }
 
 fn call_get_scoring_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["rtype_code"])?;
-    let result = sz_configtool_lib::functions::scoring::get_scoring_function(
+    crate::output::not_implemented("get_scoring_function", sz_configtool_lib::functions::scoring::get_scoring_function(
         config,
         args.req_str("rtype_code")?,
-    )?;
-    crate::output::json(result)
+    ))
 }
 
 fn call_list_scoring_functions(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&[])?;
-    let result = sz_configtool_lib::functions::scoring::list_scoring_functions(
+    crate::output::not_implemented("list_scoring_functions", sz_configtool_lib::functions::scoring::list_scoring_functions(
         config,
-    )?;
-    crate::output::json(result)
+    ))
 }
 
 fn call_set_scoring_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["rtype_code", "scoring_func"])?;
-    let result = sz_configtool_lib::functions::scoring::set_scoring_function(
+    crate::output::not_implemented("set_scoring_function", sz_configtool_lib::functions::scoring::set_scoring_function(
         config,
         args.req_str("rtype_code")?,
         args.opt_str("scoring_func")?,
-    )?;
-    let (config, record) = result;
-    crate::output::config_and_json(config, record)
+    ))
 }
 
 fn call_add_standardize_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
@@ -1533,51 +1509,43 @@ fn call_set_standardize_function(config: &str, args: &Args<'_>) -> Result<Output
 
 fn call_add_validation_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["attr_code", "validation_func"])?;
-    let result = sz_configtool_lib::functions::validation::add_validation_function(
+    crate::output::not_implemented("add_validation_function", sz_configtool_lib::functions::validation::add_validation_function(
         config,
         args.req_str("attr_code")?,
         args.req_str("validation_func")?,
-    )?;
-    let (config, record) = result;
-    crate::output::config_and_json(config, record)
+    ))
 }
 
 fn call_delete_validation_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["attr_code"])?;
-    let result = sz_configtool_lib::functions::validation::delete_validation_function(
+    crate::output::not_implemented("delete_validation_function", sz_configtool_lib::functions::validation::delete_validation_function(
         config,
         args.req_str("attr_code")?,
-    )?;
-    let (config, record) = result;
-    crate::output::config_and_json(config, record)
+    ))
 }
 
 fn call_get_validation_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["attr_code"])?;
-    let result = sz_configtool_lib::functions::validation::get_validation_function(
+    crate::output::not_implemented("get_validation_function", sz_configtool_lib::functions::validation::get_validation_function(
         config,
         args.req_str("attr_code")?,
-    )?;
-    crate::output::json(result)
+    ))
 }
 
 fn call_list_validation_functions(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&[])?;
-    let result = sz_configtool_lib::functions::validation::list_validation_functions(
+    crate::output::not_implemented("list_validation_functions", sz_configtool_lib::functions::validation::list_validation_functions(
         config,
-    )?;
-    crate::output::json(result)
+    ))
 }
 
 fn call_set_validation_function(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {
     args.check_known(&["attr_code", "validation_func"])?;
-    let result = sz_configtool_lib::functions::validation::set_validation_function(
+    crate::output::not_implemented("set_validation_function", sz_configtool_lib::functions::validation::set_validation_function(
         config,
         args.req_str("attr_code")?,
         args.opt_str("validation_func")?,
-    )?;
-    let (config, record) = result;
-    crate::output::config_and_json(config, record)
+    ))
 }
 
 fn call_clone_generic_plan(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {

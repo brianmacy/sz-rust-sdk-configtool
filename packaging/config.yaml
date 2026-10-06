@@ -18,6 +18,8 @@ tools:
   # Installed with `cargo install --locked` (crates.io checksums are verified by cargo).
   cargo_zigbuild: "0.22.3"
   cargo_cyclonedx: "0.5.9"
+  # Coverage only (install-tools.sh component `coverage`, packaging/coverage.sh); G2 pins none.
+  cargo_llvm_cov: "0.9.1"
   # Installed with `pip install --require-hashes -r packaging/requirements-build.txt`.
   maturin: "1.9.0"
   python: "3.12"

@@ -20,6 +20,7 @@ native_c="${STAGE}/native/c"
 [[ -d "${native_c}" ]] || die "no staged C ABI; run build-native.sh ${TARGET}"
 case "${CFLAGS:-} ${CXXFLAGS:-} ${LDFLAGS:-}" in
     *-fsanitize*) die "release packaging must not use sanitizer flags" ;;
+    *-fprofile-instr-generate* | *--coverage*) die "release packaging must not use coverage flags" ;;
 esac
 
 name="sz-configtool-cpp-${VERSION}-${OS}-$(tcfg "${TARGET}" arch)"
@@ -43,6 +44,7 @@ fi
 cmake -S "$(native_path "${REPO_ROOT}/bindings/cpp")" -B "$(native_path "${build}")" ${generator[@]+"${generator[@]}"} \
     -DCMAKE_BUILD_TYPE=Release \
     -DSZCONFIGTOOL_ENABLE_SANITIZERS=OFF \
+    -DSZCONFIGTOOL_ENABLE_COVERAGE=OFF \
     -DSZCONFIGTOOL_NATIVE_DIR="$(native_path "${natives}")" \
     -DSZCONFIGTOOL_C_INCLUDE_DIR="$(native_path "${native_c}/include")"
 cmake --build "$(native_path "${build}")" --config Release --parallel

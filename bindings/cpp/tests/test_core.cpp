@@ -39,6 +39,41 @@ TEST(Json, RejectsMalformedInput) {
     }
 }
 
+TEST(Json, ReportsEachMalformation) {
+    const std::pair<const char*, const char*> cases[] = {
+        {"{1:2}", "invalid JSON at byte 1: expected key"},
+        {R"({"a":1,2})", "invalid JSON at byte 7: expected key"},
+        // (Plain literals: the compiler may expand \u inside raw strings.)
+        {"\"\\u12\"", "invalid JSON at byte 3: short \\u escape"},
+        {"\"\\uZZZZ\"", "invalid JSON at byte 3: bad \\u escape"},
+        {"\"\\u12G4\"", "invalid JSON at byte 3: bad \\u escape"},
+        {"\"\\udc00\\udc00\"", "invalid JSON at byte 7: lone surrogate"},
+        {"\"\\ud800x\"", "invalid JSON at byte 7: lone surrogate"},
+        {"\"\\ud800\\u0041\"", "invalid JSON at byte 13: bad low surrogate"},
+        {"\"\\ud800\\ue000\"", "invalid JSON at byte 13: bad low surrogate"},
+        {"\"\\", "invalid JSON at byte 2: unterminated escape"},
+    };
+    for (const auto& [bad, message] : cases) {
+        try {
+            (void)json::Parse(bad);
+            ADD_FAILURE() << "accepted: " << bad;
+        } catch (const SzConfigToolException& e) {
+            EXPECT_EQ(e.ReasonCode(), "INTERNAL") << bad;
+            EXPECT_STREQ(e.what(), message) << bad;
+        }
+    }
+}
+
+TEST(Json, DecodesEveryUtf8LengthAndWhitespace) {
+    EXPECT_EQ(json::Parse("\"\\u0041\\u00e9\\u20ac\\uffff\\ud83d\\ude00\"").text,
+              "A\xC3\xA9\xE2\x82\xAC\xEF\xBF\xBF\xF0\x9F\x98\x80");
+    const json::Value v = json::Parse(" \t\n\r[\r1 ,\tfalse\n]\r\n");
+    ASSERT_EQ(v.items.size(), 2U);
+    EXPECT_EQ(v.items[0].text, "1");
+    EXPECT_EQ(v.items[1].type, json::Value::Type::Bool);
+    EXPECT_FALSE(v.items[1].boolean);
+}
+
 TEST(Json, RejectsExcessiveNesting) {
     const std::string deep(2000, '[');
     EXPECT_THROW((void)json::Parse(deep), SzConfigToolException);
@@ -62,6 +97,58 @@ TEST(ArgsWriter, WritesEveryType) {
     w.StrList("l", {"x", "y"});
     EXPECT_EQ(w.Finish(), R"({"s":"a\"b","i":-42,"b":true,"j":{"k":[1]},"n":null,"l":["x","y"]})");
     EXPECT_EQ(szconfigtool::detail::ArgsWriter{}.Finish(), "{}");
+}
+
+TEST(ArgsWriter, WritesFalseCarriageReturnAndIntOrStr) {
+    szconfigtool::detail::ArgsWriter w;
+    w.Bool("f", false);
+    w.Str("r", "a\rb");
+    w.IntOrStr("id", std::int64_t{-7});
+    w.IntOrStr("code", std::string("PHONE"));
+    EXPECT_EQ(w.Finish(), R"({"f":false,"r":"a\rb","id":-7,"code":"PHONE"})");
+}
+
+TEST(Runtime, WireNameOfEveryResultKind) {
+    using szconfigtool::ResultKind;
+    using szconfigtool::detail::WireName;
+    EXPECT_EQ(WireName(ResultKind::Config), "config");
+    EXPECT_EQ(WireName(ResultKind::Json), "json");
+    EXPECT_EQ(WireName(ResultKind::ConfigAndJson), "config_and_json");
+    EXPECT_EQ(WireName(ResultKind::Int), "int");
+    EXPECT_EQ(WireName(ResultKind::Unit), "unit");
+    // A value outside the enumerators (valid for a scoped enum) has no name.
+    EXPECT_EQ(WireName(static_cast<ResultKind>(99)), "");
+}
+
+TEST(Runtime, ParseIntAcceptsOnlyAWholeInteger) {
+    using szconfigtool::detail::ParseInt;
+    EXPECT_EQ(ParseInt("42"), 42);
+    EXPECT_EQ(ParseInt("-9223372036854775808"), INT64_MIN);
+    for (const char* bad : {"", "x", "1.5", "99999999999999999999"}) {
+        try {
+            (void)ParseInt(bad);
+            ADD_FAILURE() << "accepted: " << bad;
+        } catch (const SzConfigToolException& e) {
+            EXPECT_EQ(e.ReasonCode(), "INTERNAL") << bad;
+            EXPECT_EQ(std::string(e.what()), std::string("expected an integer result, got '") + bad + "'");
+        }
+    }
+}
+
+TEST(Runtime, RecordMemberRequiresAnObjectWithTheField) {
+    const szconfigtool::detail::Record rec(R"({"ID": 1001, "V": "4.0.0"})");
+    EXPECT_EQ(rec.Member("ID"), "1001");
+    EXPECT_EQ(rec.Member("V"), R"("4.0.0")");
+    for (const char* text : {R"({"ID": 1})", "[1]"}) {
+        const szconfigtool::detail::Record r(text);
+        try {
+            (void)r.Member("MISSING");
+            ADD_FAILURE() << "found MISSING in " << text;
+        } catch (const SzConfigToolException& e) {
+            EXPECT_EQ(e.ReasonCode(), "INTERNAL");
+            EXPECT_STREQ(e.what(), "record lacks field 'MISSING'");
+        }
+    }
 }
 
 TEST(FieldUpdate, DefaultIsLeave) {

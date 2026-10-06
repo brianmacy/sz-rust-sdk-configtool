@@ -801,4 +801,701 @@ save
         assert_eq!(overrides.as_array().unwrap().len(), 1);
         assert_eq!(overrides[0]["UTYPE_CODE"], "BUSINESS");
     }
+
+    // ===== Coverage: every command arm, success and error paths =====
+
+    use crate::error::SzErrorKind;
+    use serde_json::json;
+
+    /// The real Senzing g2config template (the conformance fixture).
+    const TEMPLATE: &str = include_str!("../tests/fixtures/g2config_template.json");
+
+    fn run(cmd: &str, params: Value) -> Result<String> {
+        execute_command(TEMPLATE, cmd, &params)
+    }
+
+    fn parsed(config: &str) -> Value {
+        serde_json::from_str(config).unwrap()
+    }
+
+    fn rows<'a>(config: &'a Value, section: &str) -> &'a Vec<Value> {
+        config["G2_CONFIG"][section].as_array().unwrap()
+    }
+
+    fn has_row(config: &Value, section: &str, key: &str, value: &str) -> bool {
+        rows(config, section)
+            .iter()
+            .any(|r| r[key].as_str() == Some(value))
+    }
+
+    /// Every required string parameter, when absent, fails with
+    /// `MissingField(<param>)` before the underlying SDK call runs.
+    #[test]
+    fn test_missing_required_params_report_missing_field() {
+        let cases: Vec<(&str, Value, &str)> = vec![
+            ("verifyCompatibilityVersion", json!({}), "expectedVersion"),
+            ("updateCompatibilityVersion", json!({}), "toVersion"),
+            ("removeConfigSection", json!({}), "section"),
+            ("removeConfigSectionField", json!({}), "section"),
+            (
+                "removeConfigSectionField",
+                json!({"section": "CFG_ATTR"}),
+                "field",
+            ),
+            ("addConfigSection", json!({}), "section"),
+            ("addConfigSectionField", json!({}), "section"),
+            (
+                "addConfigSectionField",
+                json!({"section": "CFG_ATTR"}),
+                "field",
+            ),
+            ("addAttribute", json!({}), "attribute"),
+            ("addAttribute", json!({"attribute": "A"}), "class"),
+            (
+                "addAttribute",
+                json!({"attribute": "A", "class": "OTHER"}),
+                "feature",
+            ),
+            (
+                "addAttribute",
+                json!({"attribute": "A", "class": "OTHER", "feature": "NAME"}),
+                "element",
+            ),
+            ("deleteAttribute", json!({}), "attribute"),
+            ("setAttribute", json!({}), "attribute"),
+            ("addElement", json!({}), "element"),
+            ("setFeatureElement", json!({}), "feature"),
+            ("setFeatureElement", json!({"feature": "NAME"}), "element"),
+            ("addFeature", json!({}), "feature"),
+            ("addFeature", json!({"feature": "NEW_F"}), "elementList"),
+            ("setFeature", json!({}), "feature"),
+            ("addBehaviorOverride", json!({}), "feature"),
+            (
+                "addBehaviorOverride",
+                json!({"feature": "NAME"}),
+                "usageType",
+            ),
+            (
+                "addBehaviorOverride",
+                json!({"feature": "NAME", "usageType": "BUSINESS"}),
+                "behavior",
+            ),
+            ("deleteFragment", json!({}), "fragment"),
+            ("deleteFragment", Value::Null, "fragment"),
+            ("setFragment", json!({}), "fragment"),
+            ("setFragment", json!({"fragment": "SAME_NAME"}), "source"),
+            ("addFragment", json!({}), "ERFRAG_CODE"),
+            ("addRule", json!({}), "ERRULE_CODE"),
+            ("setRule", json!({}), "code or rule"),
+            ("setSetting", json!({}), "name"),
+            ("removeStandardizeFunction", json!({}), "function"),
+            ("deleteStandardizeFunction", json!({}), "function"),
+            ("addStandardizeFunction", json!({}), "function"),
+            (
+                "addStandardizeFunction",
+                json!({"function": "F"}),
+                "connectStr",
+            ),
+            ("removeComparisonFunction", json!({}), "function"),
+            ("deleteComparisonFunction", json!({}), "function"),
+            ("addComparisonFunction", json!({}), "function"),
+            (
+                "addComparisonFunction",
+                json!({"function": "F"}),
+                "connectStr",
+            ),
+            ("addExpressionFunction", json!({}), "function"),
+            (
+                "addExpressionFunction",
+                json!({"function": "F"}),
+                "connectStr",
+            ),
+            ("addComparisonThreshold", json!({}), "function"),
+            (
+                "addComparisonThreshold",
+                json!({"function": "STR_COMP"}),
+                "feature",
+            ),
+            (
+                "addComparisonThreshold",
+                json!({"function": "STR_COMP", "feature": "ALL"}),
+                "scoreName",
+            ),
+            ("addExpressionCall", json!({}), "feature"),
+            ("addExpressionCall", json!({"feature": "NAME"}), "function"),
+            (
+                "addExpressionCall",
+                json!({"feature": "NAME", "function": "NAME_HASHER"}),
+                "elementList",
+            ),
+            (
+                "addExpressionCall",
+                json!({"feature": "NAME", "function": "NAME_HASHER", "elementList": [{}]}),
+                "element",
+            ),
+            ("deleteComparisonCallElement", json!({}), "feature"),
+            (
+                "deleteComparisonCallElement",
+                json!({"feature": "NAME"}),
+                "element",
+            ),
+            ("addComparisonCallElement", json!({}), "feature"),
+            (
+                "addComparisonCallElement",
+                json!({"feature": "NAME"}),
+                "element",
+            ),
+            ("deleteDistinctCallElement", json!({}), "feature"),
+            (
+                "deleteDistinctCallElement",
+                json!({"feature": "NAME"}),
+                "element",
+            ),
+        ];
+
+        for (cmd, params, field) in cases {
+            let err = run(cmd, params).unwrap_err();
+            assert_eq!(err.kind(), SzErrorKind::MissingField, "{cmd}: {err}");
+            assert_eq!(
+                err.to_string(),
+                format!("Missing required field: {field}"),
+                "{cmd}"
+            );
+        }
+    }
+
+    /// Errors raised by the underlying SDK call (after parameter extraction)
+    /// propagate with their own variant.
+    #[test]
+    fn test_downstream_errors_propagate_variant() {
+        let no_version = r#"{"G2_CONFIG": {}}"#;
+        let err = execute_command(
+            no_version,
+            "verifyCompatibilityVersion",
+            &json!({"expectedVersion": "11"}),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), SzErrorKind::NotFound);
+        assert_eq!(err.to_string(), "CONFIG_VERSION not found");
+
+        let err = run("addGenericThreshold", json!({"scoringCap": "not-a-number"})).unwrap_err();
+        assert_eq!(err.kind(), SzErrorKind::InvalidInput);
+
+        let err = run(
+            "addExpressionCall",
+            json!({"feature": "NAME", "function": "NAME_HASHER", "elementList": "FULL_NAME"}),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), SzErrorKind::InvalidInput);
+        assert_eq!(err.to_string(), "Invalid input: elementList must be array");
+
+        let err = run(
+            "addExpressionCall",
+            json!({
+                "feature": "NAME",
+                "function": "NO_SUCH_EFUNC",
+                "elementList": [{"element": "FULL_NAME"}]
+            }),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), SzErrorKind::NotFound);
+
+        let err = run(
+            "setFeatureElement",
+            json!({"feature": "NAME", "element": "FULL_NAME"}),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), SzErrorKind::InvalidInput);
+        assert_eq!(
+            err.to_string(),
+            "Invalid input: setFeatureElement requires 'derived' or 'displayLevel'"
+        );
+    }
+
+    #[test]
+    fn test_add_comparison_call_element_error_paths() {
+        let params = json!({"feature": "F1", "element": "E1"});
+
+        let err = run(
+            "addComparisonCallElement",
+            json!({"feature": "NO_SUCH_FEATURE", "element": "FULL_NAME"}),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), SzErrorKind::NotFound);
+        assert_eq!(err.to_string(), "Feature 'NO_SUCH_FEATURE' not found");
+
+        let err = run(
+            "addComparisonCallElement",
+            json!({"feature": "NAME", "element": "NO_SUCH_ELEMENT"}),
+        )
+        .unwrap_err();
+        assert_eq!(err.kind(), SzErrorKind::NotFound);
+        assert_eq!(err.to_string(), "Element 'NO_SUCH_ELEMENT' not found");
+
+        let base = r#""CFG_FTYPE": [{"FTYPE_ID": 7, "FTYPE_CODE": "F1"}],
+                      "CFG_FELEM": [{"FELEM_ID": 8, "FELEM_CODE": "E1"}]"#;
+
+        let no_section = format!(r#"{{"G2_CONFIG": {{{base}}}}}"#);
+        let err = execute_command(&no_section, "addComparisonCallElement", &params).unwrap_err();
+        assert_eq!(err.kind(), SzErrorKind::MissingSection);
+        assert_eq!(err.to_string(), "Missing config section: CFG_CFCALL");
+
+        let no_call = format!(
+            r#"{{"G2_CONFIG": {{{base}, "CFG_CFCALL": [{{"CFCALL_ID": 1, "FTYPE_ID": 99}}]}}}}"#
+        );
+        let err = execute_command(&no_call, "addComparisonCallElement", &params).unwrap_err();
+        assert_eq!(err.kind(), SzErrorKind::NotFound);
+        assert_eq!(err.to_string(), "No comparison call found for feature F1");
+
+        let no_call_id =
+            format!(r#"{{"G2_CONFIG": {{{base}, "CFG_CFCALL": [{{"FTYPE_ID": 7}}]}}}}"#);
+        let err = execute_command(&no_call_id, "addComparisonCallElement", &params).unwrap_err();
+        assert_eq!(err.kind(), SzErrorKind::InvalidStructure);
+        assert_eq!(
+            err.to_string(),
+            "Invalid config structure: CFCALL_ID missing"
+        );
+    }
+
+    #[test]
+    fn test_config_section_commands_succeed() {
+        let out = parsed(
+            &run(
+                "removeConfigSection",
+                json!({"section": "CFG_DSRC_INTEREST"}),
+            )
+            .unwrap(),
+        );
+        assert!(out["G2_CONFIG"].get("CFG_DSRC_INTEREST").is_none());
+
+        let out = parsed(
+            &run(
+                "removeConfigSectionField",
+                json!({"section": "CFG_ATTR", "field": "INTERNAL"}),
+            )
+            .unwrap(),
+        );
+        assert!(
+            rows(&out, "CFG_ATTR")
+                .iter()
+                .all(|r| r.get("INTERNAL").is_none())
+        );
+
+        let out = parsed(&run("addConfigSection", json!({"section": "CFG_NEW"})).unwrap());
+        assert_eq!(out["G2_CONFIG"]["CFG_NEW"], json!([]));
+
+        let out = parsed(
+            &run(
+                "addConfigSectionField",
+                json!({"section": "CFG_ATTR", "field": "NEW_FIELD", "value": "x"}),
+            )
+            .unwrap(),
+        );
+        assert!(rows(&out, "CFG_ATTR").iter().all(|r| r["NEW_FIELD"] == "x"));
+    }
+
+    #[test]
+    fn test_attribute_and_element_commands_succeed() {
+        let added = run(
+            "addAttribute",
+            json!({
+                "attribute": "MY_ATTR",
+                "class": "OTHER",
+                "feature": "NAME",
+                "element": "FULL_NAME",
+                "required": "No",
+                "internal": "No",
+                "default": "dflt",
+                "id": 9001
+            }),
+        )
+        .unwrap();
+        let out = parsed(&added);
+        let attr = rows(&out, "CFG_ATTR")
+            .iter()
+            .find(|r| r["ATTR_CODE"] == "MY_ATTR")
+            .unwrap();
+        assert_eq!(attr["ATTR_ID"], 9001);
+        assert_eq!(attr["DEFAULT_VALUE"], "dflt");
+
+        let set = execute_command(
+            &added,
+            "setAttribute",
+            &json!({"attribute": "MY_ATTR", "internal": "Yes"}),
+        )
+        .unwrap();
+        let out = parsed(&set);
+        let attr = rows(&out, "CFG_ATTR")
+            .iter()
+            .find(|r| r["ATTR_CODE"] == "MY_ATTR")
+            .unwrap();
+        assert_eq!(attr["INTERNAL"], "Yes");
+
+        let deleted =
+            execute_command(&set, "deleteAttribute", &json!({"attribute": "MY_ATTR"})).unwrap();
+        assert!(!has_row(
+            &parsed(&deleted),
+            "CFG_ATTR",
+            "ATTR_CODE",
+            "MY_ATTR"
+        ));
+
+        let out = parsed(
+            &run(
+                "addElement",
+                json!({"element": "MY_ELEM", "datatype": "string", "id": 9002}),
+            )
+            .unwrap(),
+        );
+        let elem = rows(&out, "CFG_FELEM")
+            .iter()
+            .find(|r| r["FELEM_CODE"] == "MY_ELEM")
+            .unwrap();
+        assert_eq!(elem["FELEM_ID"], 9002);
+    }
+
+    fn fbom_row(config: &Value, ftype_id: i64, felem_id: i64) -> Value {
+        rows(config, "CFG_FBOM")
+            .iter()
+            .find(|r| r["FTYPE_ID"] == ftype_id && r["FELEM_ID"] == felem_id)
+            .cloned()
+            .unwrap()
+    }
+
+    #[test]
+    fn test_set_feature_element_derived_and_display_level() {
+        // NAME is FTYPE_ID 1 and FULL_NAME is FELEM_ID 2 in the template.
+        let out = parsed(
+            &run(
+                "setFeatureElement",
+                json!({"feature": "NAME", "element": "FULL_NAME", "derived": "Yes"}),
+            )
+            .unwrap(),
+        );
+        assert_eq!(fbom_row(&out, 1, 2)["DERIVED"], "Yes");
+
+        let out = parsed(
+            &run(
+                "setFeatureElement",
+                json!({"feature": "NAME", "element": "FULL_NAME", "displayLevel": 0}),
+            )
+            .unwrap(),
+        );
+        assert_eq!(fbom_row(&out, 1, 2)["DISPLAY_LEVEL"], 0);
+    }
+
+    #[test]
+    fn test_feature_commands_succeed() {
+        let out = parsed(
+            &run(
+                "addFeature",
+                json!({
+                    "feature": "MY_FEAT",
+                    "elementList": [{"element": "MY_FEAT_ELEM"}],
+                    "class": "OTHER",
+                    "behavior": "FM",
+                    "candidates": "No",
+                    "anonymize": "No",
+                    "derived": "No",
+                    "history": "Yes",
+                    "matchKey": "Yes",
+                    "standardize": "",
+                    "expression": "",
+                    "comparison": "",
+                    "version": 2,
+                    "rtypeId": 0,
+                    "id": 9003
+                }),
+            )
+            .unwrap(),
+        );
+        let feat = rows(&out, "CFG_FTYPE")
+            .iter()
+            .find(|r| r["FTYPE_CODE"] == "MY_FEAT")
+            .unwrap();
+        assert_eq!(feat["FTYPE_ID"], 9003);
+        assert_eq!(feat["VERSION"], 2);
+
+        let out = parsed(
+            &run(
+                "setFeature",
+                json!({
+                    "feature": "NAME",
+                    "candidates": "No",
+                    "anonymize": "No",
+                    "derived": "No",
+                    "history": "Yes",
+                    "matchKey": "Yes",
+                    "behavior": "NAME",
+                    "class": "NAME",
+                    "version": 3,
+                    "rtypeId": 0
+                }),
+            )
+            .unwrap(),
+        );
+        let name = rows(&out, "CFG_FTYPE")
+            .iter()
+            .find(|r| r["FTYPE_CODE"] == "NAME")
+            .unwrap();
+        assert_eq!(name["USED_FOR_CAND"], "No");
+        assert_eq!(name["VERSION"], 3);
+    }
+
+    #[test]
+    fn test_fragment_and_rule_commands_succeed() {
+        let out = parsed(&run("deleteFragment", json!({"fragment": "SAME_NAME"})).unwrap());
+        assert!(!has_row(&out, "CFG_ERFRAG", "ERFRAG_CODE", "SAME_NAME"));
+
+        // Legacy form: the parameter is a bare JSON string.
+        let out = parsed(&run("deleteFragment", json!("CLOSE_NAME")).unwrap());
+        assert!(!has_row(&out, "CFG_ERFRAG", "ERFRAG_CODE", "CLOSE_NAME"));
+
+        let out = parsed(
+            &run(
+                "setFragment",
+                json!({"fragment": "SAME_NAME", "source": "./FRAGMENT[./GNR_CLOSE_NAME>0]"}),
+            )
+            .unwrap(),
+        );
+        let frag = rows(&out, "CFG_ERFRAG")
+            .iter()
+            .find(|r| r["ERFRAG_CODE"] == "SAME_NAME")
+            .unwrap();
+        assert_eq!(frag["ERFRAG_SOURCE"], "./FRAGMENT[./GNR_CLOSE_NAME>0]");
+
+        let out = parsed(
+            &run(
+                "addFragment",
+                json!({"ERFRAG_CODE": "MY_FRAG", "ERFRAG_SOURCE": "./FRAGMENT[./SAME_NAME>0]"}),
+            )
+            .unwrap(),
+        );
+        assert!(has_row(&out, "CFG_ERFRAG", "ERFRAG_CODE", "MY_FRAG"));
+
+        let rule = json!({
+            "ERRULE_CODE": "MY_RULE",
+            "RESOLVE": "No",
+            "RELATE": "Yes",
+            "RTYPE_ID": 2,
+            "QUAL_ERFRAG_CODE": "SAME_NAME"
+        });
+        let out = parsed(&run("addRule", rule.clone()).unwrap());
+        let added = rows(&out, "CFG_ERRULE")
+            .iter()
+            .find(|r| r["ERRULE_CODE"] == "MY_RULE")
+            .unwrap();
+        assert!(added["ERRULE_ID"].as_i64().unwrap() >= 1000);
+
+        let mut with_id = rule;
+        with_id["ERRULE_ID"] = json!(4242);
+        let out = parsed(&run("addRule", with_id).unwrap());
+        let added = rows(&out, "CFG_ERRULE")
+            .iter()
+            .find(|r| r["ERRULE_CODE"] == "MY_RULE")
+            .unwrap();
+        assert_eq!(added["ERRULE_ID"], 4242);
+
+        let out = parsed(&run("setRule", json!({"code": "SAME_A1", "tier": 11})).unwrap());
+        let rule = rows(&out, "CFG_ERRULE")
+            .iter()
+            .find(|r| r["ERRULE_CODE"] == "SAME_A1")
+            .unwrap();
+        assert_eq!(rule["ERRULE_TIER"], 11);
+    }
+
+    #[test]
+    fn test_set_setting_command_succeeds() {
+        let out = parsed(
+            &run(
+                "setSetting",
+                json!({"name": "relationshipsBreakMatches", "value": "Yes"}),
+            )
+            .unwrap(),
+        );
+        let disclosed = rows(&out, "CFG_RTYPE")
+            .iter()
+            .find(|r| r["RCLASS_ID"] == 2)
+            .unwrap();
+        assert_eq!(disclosed["BREAK_RES"], "Yes");
+    }
+
+    #[test]
+    fn test_function_commands_succeed() {
+        let add_std = json!({
+            "function": "MY_SFUNC",
+            "connectStr": "g2MySfunc",
+            "description": "mine",
+            "language": "en"
+        });
+        let added = run("addStandardizeFunction", add_std).unwrap();
+        assert!(has_row(
+            &parsed(&added),
+            "CFG_SFUNC",
+            "SFUNC_CODE",
+            "MY_SFUNC"
+        ));
+        for cmd in ["removeStandardizeFunction", "deleteStandardizeFunction"] {
+            let out = execute_command(&added, cmd, &json!({"function": "MY_SFUNC"})).unwrap();
+            assert!(!has_row(
+                &parsed(&out),
+                "CFG_SFUNC",
+                "SFUNC_CODE",
+                "MY_SFUNC"
+            ));
+        }
+
+        let add_cmp = json!({
+            "function": "MY_CFUNC",
+            "connectStr": "g2MyCfunc",
+            "anonSupport": "Yes",
+            "description": "mine"
+        });
+        let added = run("addComparisonFunction", add_cmp).unwrap();
+        assert!(has_row(
+            &parsed(&added),
+            "CFG_CFUNC",
+            "CFUNC_CODE",
+            "MY_CFUNC"
+        ));
+        for cmd in ["removeComparisonFunction", "deleteComparisonFunction"] {
+            let out = execute_command(&added, cmd, &json!({"function": "MY_CFUNC"})).unwrap();
+            assert!(!has_row(
+                &parsed(&out),
+                "CFG_CFUNC",
+                "CFUNC_CODE",
+                "MY_CFUNC"
+            ));
+        }
+
+        let out = parsed(
+            &run(
+                "addExpressionFunction",
+                json!({
+                    "function": "MY_EFUNC",
+                    "connectStr": "g2MyEfunc",
+                    "description": "mine",
+                    "language": "en"
+                }),
+            )
+            .unwrap(),
+        );
+        assert!(has_row(&out, "CFG_EFUNC", "EFUNC_CODE", "MY_EFUNC"));
+    }
+
+    #[test]
+    fn test_threshold_commands_succeed() {
+        let threshold = |feature: &str| {
+            json!({
+                "function": "STR_COMP",
+                "feature": feature,
+                "scoreName": "MY_SCORE",
+                "sameScore": 100,
+                "closeScore": 90,
+                "likelyScore": 80,
+                "plausibleScore": 70,
+                "unlikelyScore": 60
+            })
+        };
+
+        // NAME is FTYPE_ID 1 in the template.
+        let out = parsed(&run("addComparisonThreshold", threshold("NAME")).unwrap());
+        let row = rows(&out, "CFG_CFRTN")
+            .iter()
+            .find(|r| r["CFUNC_RTNVAL"] == "MY_SCORE")
+            .unwrap();
+        assert_eq!(row["FTYPE_ID"], 1);
+        assert_eq!(row["UN_LIKELY_SCORE"], 60);
+
+        // Current behavior: the processor maps "ALL" to ftype_code=None, which
+        // the SDK rejects (the SDK itself resolves "all" when passed through).
+        let err = run("addComparisonThreshold", threshold("ALL")).unwrap_err();
+        assert_eq!(err.kind(), SzErrorKind::MissingField);
+        assert_eq!(err.to_string(), "Missing required field: ftype_code");
+
+        let before = rows(&parsed(TEMPLATE), "CFG_GENERIC_THRESHOLD").len();
+        let out = parsed(
+            &run(
+                "addGenericThreshold",
+                json!({
+                    "plan": "SEARCH",
+                    "behavior": "A1E",
+                    "feature": "ALL",
+                    "candidateCap": 3,
+                    "scoringCap": 4,
+                    "sendToRedo": "No"
+                }),
+            )
+            .unwrap(),
+        );
+        assert_eq!(rows(&out, "CFG_GENERIC_THRESHOLD").len(), before + 1);
+    }
+
+    #[test]
+    fn test_add_expression_call_command_succeeds() {
+        let before = rows(&parsed(TEMPLATE), "CFG_EFCALL").len();
+        let out = parsed(
+            &run(
+                "addExpressionCall",
+                json!({
+                    "feature": "NAME",
+                    "function": "NAME_HASHER",
+                    "execOrder": 900,
+                    "expressionFeature": "NAME_KEY",
+                    "virtual": "No",
+                    "elementList": [
+                        {"element": "FULL_NAME", "required": "Yes", "feature": "NAME"},
+                        {"element": "SUR_NAME"}
+                    ]
+                }),
+            )
+            .unwrap(),
+        );
+        assert_eq!(rows(&out, "CFG_EFCALL").len(), before + 1);
+    }
+
+    /// The optional `elementFeature` disambiguator is passed through.
+    #[test]
+    fn test_delete_call_element_with_element_feature() {
+        // NAME (FTYPE_ID 1) calls carry FULL_NAME (FELEM_ID 2) under NAME.
+        for (cmd, bom, call_key) in [
+            ("deleteComparisonCallElement", "CFG_CFBOM", "CFCALL_ID"),
+            ("deleteDistinctCallElement", "CFG_DFBOM", "DFCALL_ID"),
+        ] {
+            let out = parsed(
+                &run(
+                    cmd,
+                    json!({"feature": "NAME", "element": "FULL_NAME", "elementFeature": "NAME"}),
+                )
+                .unwrap(),
+            );
+            assert!(
+                !rows(&out, bom)
+                    .iter()
+                    .any(|r| r[call_key] == 1 && r["FTYPE_ID"] == 1 && r["FELEM_ID"] == 2),
+                "{cmd}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_save_with_params_is_a_no_op() {
+        assert_eq!(run("save", json!({})).unwrap(), TEMPLATE);
+    }
+
+    #[test]
+    fn test_parse_element_list_defaults() {
+        let list = parse_element_list(&json!([
+            {"element": "A", "required": "Yes", "feature": "F"},
+            {"element": "B"}
+        ]))
+        .unwrap();
+        assert_eq!(
+            list,
+            vec![
+                ("A".to_string(), "Yes".to_string(), Some("F".to_string())),
+                ("B".to_string(), "No".to_string(), None),
+            ]
+        );
+    }
 }

@@ -27,6 +27,51 @@ namespace Sz.ConfigTool.Tests
 
             Assert.Equal(SzConfigToolErrorKind.Unknown, SzConfigToolErrorKinds.FromReasonCode(null));
             Assert.Equal(SzConfigToolErrorKind.Unknown, SzConfigToolErrorKinds.FromReasonCode("NOPE"));
+            Assert.Null(SzConfigToolErrorKinds.ToReasonCode(SzConfigToolErrorKind.Unknown));
+        }
+
+        [Fact]
+        public void Null_name_or_config_throws_before_the_native_call()
+        {
+            Assert.Equal("name", Assert.Throws<ArgumentNullException>(() => SzConfigTool.Invoke(null!, Repo.Fixture)).ParamName);
+            Assert.Equal("configJson", Assert.Throws<ArgumentNullException>(() => SzConfigTool.Invoke("list_data_sources", null!)).ParamName);
+        }
+
+        [Fact]
+        public void Null_args_are_sent_as_an_empty_object()
+        {
+            InvokeResult r = SzConfigTool.Invoke("list_data_sources", Repo.Fixture);
+            Assert.Equal("json", r.Kind);
+            Assert.Equal(SzConfigTool.ListDataSources(Repo.Fixture), r.Result);
+        }
+
+        public static TheoryData<string, Action<string>> KindMismatches => new()
+        {
+            // A real `json` function read through each other typed seam.
+            { "config", config => NativeCall.Config("list_data_sources", config, "{}") },
+            { "config_and_json", config => NativeCall.ConfigAndJson("list_data_sources", config, "{}") },
+            { "int", config => NativeCall.Int("list_data_sources", config, "{}") },
+            { "unit", config => NativeCall.Unit("list_data_sources", config, "{}") },
+        };
+
+        [Theory]
+        [MemberData(nameof(KindMismatches))]
+        public void Envelope_kind_mismatch_is_a_protocol_error(string expected, Action<string> call)
+        {
+            var e = Assert.Throws<SzConfigToolException>(() => call(Repo.Fixture));
+            Assert.Equal(SzConfigToolErrorKind.Internal, e.Kind);
+            Assert.Equal($"Sz.ConfigTool protocol error: list_data_sources: envelope kind 'json', expected '{expected}'", e.Message);
+        }
+
+        [Fact]
+        public void Record_members_must_exist_in_a_json_object()
+        {
+            Assert.Equal(new[] { "1", "\"b\"" }, NativeCall.Members("{\"a\":1,\"b\":\"b\"}", "a", "b"));
+            var missing = Assert.Throws<SzConfigToolException>(() => NativeCall.Members("{\"a\":1}", "a", "z"));
+            Assert.Equal("Sz.ConfigTool protocol error: record has no field 'z'", missing.Message);
+            var notObject = Assert.Throws<SzConfigToolException>(() => NativeCall.Members("[1]", "a"));
+            Assert.Equal(SzConfigToolErrorKind.Internal, notObject.Kind);
+            Assert.StartsWith("Sz.ConfigTool protocol error: record is not a JSON object: invalid JSON", notObject.Message);
         }
 
         [Fact]

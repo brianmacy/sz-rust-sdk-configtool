@@ -6,7 +6,7 @@ use std::path::{Component, Path, PathBuf};
 use serde_json::json;
 
 use crate::load::Inputs;
-use crate::model::{Arg, ArgType, Function, Returns};
+use crate::model::{Arg, ArgType, Function, Returns, Status};
 
 /// Banner placed at the top of every generated file.
 pub const GENERATED_BANNER: &str = "GENERATED — do not edit. Source: api/manifest/*.yaml; \
@@ -95,6 +95,18 @@ fn tuple_record(f: &Function) -> (String, String) {
 
 fn handler(root: &str, f: &Function) -> String {
     let known: Vec<String> = f.args.iter().map(|a| format!("\"{}\"", a.name)).collect();
+    if f.status == Status::NotImplemented {
+        // The library call always fails (NOT_IMPLEMENTED), so there is no
+        // success conversion to emit: the shared helper returns its error.
+        return format!(
+            "fn call_{name}(config: &str, args: &Args<'_>) -> Result<Output, ApiError> {{\n    \
+             args.check_known(&[{known}])?;\n    \
+             crate::output::not_implemented(\"{name}\", {call})\n}}\n",
+            name = f.name,
+            known = known.join(", "),
+            call = call_expr(root, f),
+        );
+    }
     let binding = if f.returns == Returns::Unit {
         String::new()
     } else {
@@ -295,6 +307,19 @@ mod tests {
         let h = handler("lib", &func(vec![], Returns::Unit));
         assert!(!h.contains("let result"), "{h}");
         assert!(h.contains("Ok(Output::Unit)"), "{h}");
+    }
+
+    #[test]
+    fn test_not_implemented_handler_returns_library_error_via_helper() {
+        let mut f = func(vec![arg("code", ArgType::Str)], Returns::ConfigAndJson);
+        f.status = Status::NotImplemented;
+        let h = handler("lib", &f);
+        assert!(
+            h.contains("crate::output::not_implemented(\"do_it\", lib::m::do_it(\n"),
+            "{h}"
+        );
+        assert!(h.contains("args.req_str(\"code\")?,"), "{h}");
+        assert!(!h.contains("let result"), "{h}");
     }
 
     #[test]

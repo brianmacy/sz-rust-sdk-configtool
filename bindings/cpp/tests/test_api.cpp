@@ -176,6 +176,45 @@ TEST(IntOrStr, DeleteElementByFeatureAndById) {
     EXPECT_NE(by_id, Fixture());
 }
 
+TEST(IntOrStr, DeleteElementByFeatureSelectorWithElementFeature) {
+    const std::string without = sz::DeleteExpressionCallElement(Fixture(), "PHONE", "PHONE_LAST_10");
+    const std::string with = sz::DeleteExpressionCallElement(Fixture(), "phone", "phone_last_10",
+                                                            {.element_feature = "PHONE"});
+    EXPECT_EQ(with, without);
+    EXPECT_NE(with, Fixture());
+}
+
+// The one CFG_CFRTN row whose rendering contains `rtnval`.
+json::Value ThresholdRow(const std::string& cfg, const std::string& rtnval) {
+    const json::Value rows = ParseText(sz::GetConfigSection(cfg, "CFG_CFRTN", {.filter = rtnval}));
+    EXPECT_EQ(rows.items.size(), 1U);
+    return rows.items.at(0);
+}
+
+void ExpectScores(const json::Value& row, const char* exec, const char* same, const char* close,
+                  const char* likely, const char* plausible, const char* unlikely) {
+    EXPECT_EQ(row.Find("EXEC_ORDER")->text, exec);
+    EXPECT_EQ(row.Find("SAME_SCORE")->text, same);
+    EXPECT_EQ(row.Find("CLOSE_SCORE")->text, close);
+    EXPECT_EQ(row.Find("LIKELY_SCORE")->text, likely);
+    EXPECT_EQ(row.Find("PLAUSIBLE_SCORE")->text, plausible);
+    EXPECT_EQ(row.Find("UN_LIKELY_SCORE")->text, unlikely);
+}
+
+TEST(Args, ComparisonThresholdEveryScoreOption) {
+    const std::string added = sz::AddComparisonThreshold(
+        Fixture(), "GNR_COMP", "all", "cpp_rtn",
+        {.exec_order = 20, .same_score = 90, .close_score = 80, .likely_score = 70,
+         .plausible_score = 60, .un_likely_score = 50});
+    ExpectScores(ThresholdRow(added, "CPP_RTN"), "20", "90", "80", "70", "60", "50");
+
+    const std::string set = sz::SetComparisonThreshold(
+        added, "gnr_comp", "ALL", "cpp_rtn",
+        {.exec_order = 21, .same_score = 91, .close_score = 81, .likely_score = 71,
+         .plausible_score = 61, .un_likely_score = -1});
+    ExpectScores(ThresholdRow(set, "CPP_RTN"), "21", "91", "81", "71", "61", "-1");
+}
+
 TEST(Returns, UnitAndInvoke) {
     sz::ValidateConfig(Fixture());
     const sz::InvokeResult r = sz::Invoke("list_data_sources", Fixture());
@@ -183,6 +222,18 @@ TEST(Returns, UnitAndInvoke) {
     EXPECT_FALSE(r.config.has_value());
     EXPECT_EQ(ParseText(*r.result).type, JType::Array);
     EXPECT_EQ(*r.result, sz::ListDataSources(Fixture()));
+}
+
+TEST(Returns, EnvelopeKindMismatchIsInternal) {
+    // A real `json` function read through each other typed result kind.
+    for (const auto kind : {sz::ResultKind::Config, sz::ResultKind::ConfigAndJson,
+                            sz::ResultKind::Int, sz::ResultKind::Unit}) {
+        const SzConfigToolException e = Throws([kind] {
+            (void)sz::detail::Call("list_data_sources", Fixture(), "{}", kind);
+        });
+        EXPECT_EQ(e.Kind(), ErrorKind::Internal);
+        EXPECT_STREQ(e.what(), "list_data_sources: unexpected envelope kind 'json'");
+    }
 }
 
 TEST(Library, VersionAndAbi) {

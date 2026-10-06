@@ -48,6 +48,106 @@ namespace Sz.ConfigTool.Tests
         }
 
         [Fact]
+        public void Installing_over_an_existing_resolver_keeps_the_existing_one()
+        {
+            NativeLoader.EnsureInstalled();
+
+            // A second registration for the same assembly is rejected by the
+            // runtime (InvalidOperationException); the installed resolver wins.
+            InvokePrivate("Install");
+            Assert.NotEmpty(SzConfigTool.LibraryVersion);
+        }
+
+        [Fact]
+        public void Resolver_only_answers_for_the_native_library()
+        {
+            NativeLoader.EnsureInstalled();
+            Assembly asm = typeof(SzConfigTool).Assembly;
+            Assert.Equal(IntPtr.Zero, (IntPtr)InvokePrivate("Resolve", "SomeOtherLibrary", asm, null)!);
+            Assert.NotEqual(IntPtr.Zero, (IntPtr)InvokePrivate("Resolve", NativeMethods.LibraryName, asm, null)!);
+        }
+
+        [Fact]
+        public void Assembly_without_a_location_loads_from_the_app_directory()
+        {
+            NativeLoader.EnsureInstalled();
+            // Loaded from bytes, like a single-file app: Location is empty.
+            Assembly inMemory = Assembly.Load(File.ReadAllBytes(typeof(Assert).Assembly.Location));
+            Assert.Equal(string.Empty, inMemory.Location);
+            Assert.True(File.Exists(NativeLoader.BundledPath(AppContext.BaseDirectory)));
+            Assert.NotEqual(IntPtr.Zero, NativeLoader.LoadBundled(inMemory));
+        }
+
+        [Fact]
+        public void Missing_bundled_library_yields_zero()
+        {
+            NativeLoader.EnsureInstalled();
+            using var dir = new TempDir();
+            Assert.Equal(IntPtr.Zero, NativeLoader.LoadBundled(CopyAssemblyInto(dir.Path)));
+        }
+
+        [Fact]
+        public void Unloadable_bundled_library_yields_zero()
+        {
+            NativeLoader.EnsureInstalled();
+            using var dir = new TempDir();
+            string bundled = NativeLoader.BundledPath(dir.Path)!;
+            Directory.CreateDirectory(Path.GetDirectoryName(bundled)!);
+            File.WriteAllText(bundled, "not a shared library");
+            Assert.Equal(IntPtr.Zero, NativeLoader.LoadBundled(CopyAssemblyInto(dir.Path)));
+        }
+
+        [Fact]
+        public void Real_library_copy_next_to_an_assembly_is_loaded()
+        {
+            NativeLoader.EnsureInstalled();
+            using var dir = new TempDir();
+            string bundled = NativeLoader.BundledPath(dir.Path)!;
+            Directory.CreateDirectory(Path.GetDirectoryName(bundled)!);
+            File.Copy(NativeLoader.BundledPath(AssemblyDir)!, bundled);
+            Assert.NotEqual(IntPtr.Zero, NativeLoader.LoadBundled(CopyAssemblyInto(dir.Path)));
+        }
+
+        private static object? InvokePrivate(string method, params object?[] args) =>
+            typeof(NativeLoader).GetMethod(method, BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, args);
+
+        // A real assembly file (xunit.assert) loaded from inside dir, so its
+        // Location is under dir.
+        private static Assembly CopyAssemblyInto(string dir)
+        {
+            string source = typeof(Assert).Assembly.Location;
+            string copy = Path.Combine(dir, Path.GetFileName(source));
+            File.Copy(source, copy);
+            return Assembly.LoadFile(copy);
+        }
+
+        private sealed class TempDir : IDisposable
+        {
+            public TempDir()
+            {
+                Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "szct-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(Path);
+            }
+
+            public string Path { get; }
+
+            // Loaded assemblies keep their file open on Windows; best effort.
+            public void Dispose()
+            {
+                try
+                {
+                    Directory.Delete(Path, true);
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
+                catch (IOException)
+                {
+                }
+            }
+        }
+
+        [Fact]
         public void Package_version_equals_native_library_version()
         {
             string info = typeof(SzConfigTool).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion;

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 
 import * as sz from "../dist/index.js";
+import { toSzConfigToolError } from "../dist/errors.js";
 import { loadNative } from "../dist/native.js";
 import { camel, errorExamples, fixture, manifest, type Json } from "./helpers.ts";
 
@@ -115,5 +116,50 @@ describe("raw native error object", () => {
       assert.equal(n.reasonCode, "NOT_FOUND");
       assert.equal(n.kind, "NOT_FOUND");
     }
+  });
+
+  // The typed layer always passes argsJson as a string; only a direct native
+  // caller can hand napi a value it cannot convert (no reason code: napi's own).
+  for (const argsJson of [42, {}]) {
+    test(`a non-string argsJson (${JSON.stringify(argsJson)}) is napi's StringExpected`, () => {
+      const native = loadNative() as unknown as { invoke(n: string, c: string, a: unknown): unknown };
+      assert.throws(
+        () => native.invoke("list_data_sources", fixture, argsJson),
+        (e: unknown) =>
+          e instanceof Error &&
+          (e as { code?: string }).code === "StringExpected" &&
+          (e as { reasonCode?: string }).reasonCode === undefined &&
+          /into rust type `String`/.test(e.message),
+      );
+    });
+  }
+});
+
+describe("toSzConfigToolError (anything thrown at the native boundary)", () => {
+  test("an SzConfigToolError passes through unchanged", () => {
+    const e = new sz.SzConfigToolError("NOT_FOUND", "x");
+    assert.equal(toSzConfigToolError(e), e);
+  });
+
+  const inputs: Array<[string, unknown, string]> = [
+    ["a thrown string", "boom", "boom"],
+    ["a thrown null", null, "null"],
+    ["an object without a string message", { message: 5 }, "[object Object]"],
+    ["an object with an unknown reason code", { message: "m", reasonCode: "NOPE" }, "m"],
+  ];
+  for (const [label, thrown, message] of inputs) {
+    test(`${label} is INVALID_INPUT with the value as cause`, () => {
+      const err = toSzConfigToolError(thrown);
+      assert.equal(err.code, "INVALID_INPUT");
+      assert.equal(err.message, message);
+      assert.equal(err.cause, thrown);
+      assert.equal(err.details, undefined);
+    });
+  }
+
+  test("a reason code keeps its code; non-string details are dropped", () => {
+    const err = toSzConfigToolError({ message: "m", reasonCode: "VALIDATION_ERRORS", details: 7 });
+    assert.equal(err.code, "VALIDATION_ERRORS");
+    assert.equal(err.details, undefined);
   });
 });

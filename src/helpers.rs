@@ -1257,4 +1257,17 @@ mod tests {
             3
         );
     }
+
+    /// An in-scope row lacking the order field is ignored rather than counted.
+    #[test]
+    fn test_get_desired_or_next_order_skips_rows_without_order() {
+        let rows = vec![
+            json!({"CALL_ID": 1}),
+            json!({"CALL_ID": 1, "EXEC_ORDER": 4}),
+        ];
+        assert_eq!(
+            get_desired_or_next_order(&rows, "EXEC_ORDER", &[("CALL_ID", 1)], None).unwrap(),
+            5
+        );
+    }
 }

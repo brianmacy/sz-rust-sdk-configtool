@@ -149,6 +149,11 @@ describe("error mapping", () => {
     const e = new TRPCError({ code: "CONFLICT" });
     assert.equal(toTRPCError(e), e);
     assert.equal(toTRPCError("boom").code, "INTERNAL_SERVER_ERROR");
+    const plain = new Error("plain failure");
+    const wrapped = toTRPCError(plain);
+    assert.equal(wrapped.code, "INTERNAL_SERVER_ERROR");
+    assert.equal(wrapped.message, "plain failure");
+    assert.equal(wrapped.cause, plain);
     const internal = new sz.SzConfigToolError("INTERNAL", "x");
     assert.equal(toTRPCError(internal).code, "INTERNAL_SERVER_ERROR");
   });

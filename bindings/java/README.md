@@ -116,6 +116,10 @@ optional/required/tri-state args, error mapping, byte-exact config opacity,
 extraction (threads and concurrent JVMs, overrides) and an `nm` check that the
 library exports only `Java_*` symbols (no `SzConfigTool_*`).
 
+Coverage: `mvn -Pcoverage test` writes a JaCoCo report
+(`target/site/jacoco/`); `packaging/coverage.sh rust java` (repository root)
+runs it against an instrumented JNI library (see `packaging/README.md`, Coverage).
+
 ## Regenerating
 
 `SzConfigTool.java`, `SzConfigToolErrorKind.java` and the test

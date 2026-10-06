@@ -92,9 +92,46 @@ pyo3 libraries may export only their entry symbol (no `SzConfigTool_*`). The
 lists are compared, never passed to the linker. A per-OS
 `<name>.<linux|macos|windows>.exports` overrides when a platform differs.
 
-The C++ ASan + UBSan run is CI-only (`ci.yml`, job `linux`); no release job
-or packaging script builds with sanitizers (`build-env.sh` and
-`package-cpp.sh` refuse sanitizer flags).
+The C++ ASan + UBSan run is CI-only (`coverage.sh cpp`, run by `ci.yml`, job
+`linux`); no release job or packaging script builds with sanitizers or
+coverage instrumentation (`build-env.sh` and `package-cpp.sh` refuse
+sanitizer flags, `package-cpp.sh` also coverage flags).
+
+## Coverage
+
+`packaging/coverage.sh` is CI's test run (job `linux`): ONE instrumented pass
+measures every component, then `lib/coverage_gate.py` enforces
+`coverage/policy.yaml` — 100% of lines, branches and (Rust) code regions of
+every gated file, hand-written and generated; the only allowed gaps are the
+policy's `exclusions`, each with its justification, and an exclusion that no
+longer matches an uncovered line fails the gate.
+
+| Step | Tool (pin) | What runs |
+|---|---|---|
+| `rust` | cargo-llvm-cov `0.9.1` (`config.yaml`, `cargo install --locked`) + rustup `llvm-tools` | `cargo test --workspace` instrumented; then the C ABI, JNI, napi and pyo3 cdylibs are built instrumented (debug) |
+| `python` | coverage.py `7.16.2` (`requirements-test.txt`, `--require-hashes`) | pytest against a wheel of the instrumented pyo3 extension |
+| `node` | Node `--experimental-test-coverage` (built in) | `bindings/node` and `bindings/node/trpc` tests against the instrumented `.node` |
+| `java` | JaCoCo `0.8.15` (`pom.xml` profile `coverage`) | `mvn test` against the instrumented JNI library |
+| `dotnet` | coverlet.msbuild `10.1.0` (test `.csproj`) | `dotnet test` against the instrumented C ABI |
+| `cpp` | clang source coverage (`-DSZCONFIGTOOL_ENABLE_COVERAGE=ON`) | the C++ suite under ASan + UBSan + coverage, against a release (non-instrumented) C ABI |
+| `gate` | `lib/coverage_gate.py` | merges the Rust profiles (seams included: they ran in the host suites), writes `target/coverage/*` and applies the policy |
+
+The Rust seams (pyo3, JNI, napi) are measured through the host suites that
+call them; the C ABI's Rust code through the Rust tests (incl. the C programs
+of `ffi/tests/c_abi.rs`) and the .NET suite. Doc tests run separately
+(`cargo test --doc`): their coverage needs nightly rustc, as does Rust branch
+coverage (Rust is gated on lines + code regions, which include every `?`,
+`match` arm and closure). Reports (`target/coverage/`) are not committed or
+uploaded.
+
+```bash
+packaging/install-tools.sh macos-arm64 && packaging/install-tools.sh macos-arm64 coverage
+packaging/coverage.sh                  # everything + gate
+packaging/coverage.sh rust python gate # a subset (gate needs every report)
+```
+
+C++ coverage needs clang and its own `llvm-profdata`/`llvm-cov` (Xcode on
+macOS; the clang install's on Linux, e.g. Ubuntu package `llvm-<major>`).
 
 ## Cutting a release
 

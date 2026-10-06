@@ -33,6 +33,39 @@ class JsonTest {
     }
 
     @Test
+    void writesEveryNumberShapeAndRejectsNonJsonValues() {
+        assertEquals("[7,8,1.5,2.5,3,true,9]", Json.write(List.of(7, 8L, 1.5d, 2.5f, (short) 3,
+                Boolean.TRUE, BigInteger.valueOf(9))));
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> Json.write(List.of(new Object())));
+        assertEquals("not a JSON value: java.lang.Object", e.getMessage());
+    }
+
+    @Test
+    void quotesEveryShortEscape() {
+        assertEquals("\"\\\"\\\\\\n\\r\\t\\b\\f\\u001f/\"", Json.write("\"\\\n\r\t\b\f\u001f/"));
+    }
+
+    @Test
+    void parsesEveryEscapeAndNumberForm() {
+        assertEquals("\"\\/\n\r\t\b\fA", Json.parse("\"\\\"\\\\\\/\\n\\r\\t\\b\\f\\u0041\""));
+        assertEquals(List.of(new BigDecimal("1E+2"), new BigDecimal("1e-2"), new BigDecimal("-0.5")),
+                Json.parse("[1E+2,1e-2,-0.5]"));
+    }
+
+    @Test
+    void rejectionMessagesNameTheFault() {
+        Map<String, String> cases = Map.of(
+                "\"a\u0001\"", "invalid JSON at offset 3: control character in string",
+                "\"\\uZZZZ\"", "invalid JSON at offset 3: bad \\u escape",
+                "1e", "invalid JSON at offset 2: bad number '1e'",
+                "1.2.3", "invalid JSON at offset 5: bad number '1.2.3'",
+                "x", "invalid JSON at offset 0: unexpected character");
+        cases.forEach((bad, message) -> assertEquals(message,
+                assertThrows(IllegalArgumentException.class, () -> Json.parse(bad), bad).getMessage()));
+    }
+
+    @Test
     void argsRendering() {
         Args a = new Args().str("s", "x\"y").integer("i", -3).bool("b", true)
                 .strList("l", List.of("p", "q")).json("j", " {\"k\": [1]} ");

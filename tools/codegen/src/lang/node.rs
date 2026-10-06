@@ -347,14 +347,17 @@ fn functions_ts(typed: &[&Function]) -> String {
     out
 }
 
+/// The type alias comes first so the file ends with emitted JavaScript: Node's
+/// source-mapped coverage cannot attribute type-only lines after the last
+/// mapping and reports them as uncovered.
 fn reason_codes_ts(codes: &[String]) -> String {
     let list: Vec<String> = codes.iter().map(|c| format!("  \"{c}\",")).collect();
     format!(
         "// {GENERATED_BANNER}\n\n\
-         /** The complete wire error taxonomy (`project.yaml` `reason_codes`). */\n\
-         export const REASON_CODES = [\n{}\n] as const;\n\n\
          /** One wire reason code. */\n\
-         export type ReasonCode = (typeof REASON_CODES)[number];\n",
+         export type ReasonCode = (typeof REASON_CODES)[number];\n\n\
+         /** The complete wire error taxonomy (`project.yaml` `reason_codes`). */\n\
+         export const REASON_CODES = [\n{}\n] as const;\n",
         list.join("\n")
     )
 }
@@ -435,13 +438,16 @@ fn router_ts(typed: &[&Function]) -> String {
          import {{ szCall }} from \"../sz-call.js\";\n\
          import {{ t }} from \"../trpc.js\";\n\
          import * as schemas from \"./schemas.js\";\n\n\
+         /** Type of {{@link configToolRouter}}, for typed clients. */\n\
+         export type ConfigToolRouter = typeof configToolRouter;\n\n\
          /** The configuration-tool router. */\n\
          export const configToolRouter = t.router({{\n"
     );
     for f in typed {
         out.push_str(&procedure(f));
     }
-    out.push_str("});\n\n/** Type of {@link configToolRouter}, for typed clients. */\nexport type ConfigToolRouter = typeof configToolRouter;\n");
+    // Ends with emitted JS: see reason_codes_ts (source-mapped coverage).
+    out.push_str("});\n");
     out
 }
 
@@ -720,6 +726,11 @@ mod tests {
             r.contains("    .query(({ input }) =>\n      szCall(() => api.listX(input.config)),"),
             "{r}"
         );
+        assert!(
+            r.contains("export type ConfigToolRouter = typeof configToolRouter;\n\n/** The configuration-tool router. */"),
+            "{r}"
+        );
+        assert!(r.ends_with("    ),\n});\n"), "ends with emitted JS: {r}");
         let s = schemas_ts(&[&add]);
         assert!(s.contains("export const addXInput = z.strictObject({\n  config: z.string(),\n  code: z.string().optional(),\n});"), "{s}");
     }
@@ -752,7 +763,11 @@ mod tests {
         assert!(funcs.contains("TYPED_FUNCTION_NAMES: readonly string[] = [\n  \"list_x\",\n];"));
         let codes = &a[1].contents;
         assert!(
-            codes.contains("  \"NOT_FOUND\",\n  \"INTERNAL\",\n] as const;"),
+            codes.ends_with("  \"NOT_FOUND\",\n  \"INTERNAL\",\n] as const;\n"),
+            "ends with emitted JS (source-mapped coverage): {codes}"
+        );
+        assert!(
+            codes.contains("export type ReasonCode = (typeof REASON_CODES)[number];"),
             "{codes}"
         );
         let paths = &a[4].contents;

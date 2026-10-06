@@ -38,6 +38,25 @@ namespace Sz.ConfigTool.Tests
         }
 
         [Fact]
+        public void FieldUpdate_object_equality_operators_and_hash()
+        {
+            FieldUpdate<string> a = "x";
+            object boxed = FieldUpdate<string>.Set("x");
+            Assert.True(a.Equals(boxed));
+            Assert.False(a.Equals((object)"x"));
+            Assert.False(a.Equals((object?)null));
+            Assert.True(a == FieldUpdate<string>.Set("x"));
+            Assert.False(a != FieldUpdate<string>.Set("x"));
+            Assert.True(a != FieldUpdate<string>.Clear);
+            Assert.False(a == FieldUpdate<string>.Leave);
+
+            // Equal values hash equally; the state alone hashes Clear and Leave.
+            Assert.Equal(FieldUpdate<string>.Set("x").GetHashCode(), a.GetHashCode());
+            Assert.Equal(397, FieldUpdate<string>.Clear.GetHashCode());
+            Assert.Equal(0, FieldUpdate<string>.Leave.GetHashCode());
+        }
+
+        [Fact]
         public void FieldUpdate_set_null_is_rejected()
         {
             Assert.Throws<ArgumentNullException>(() => FieldUpdate<string>.Set(null!));

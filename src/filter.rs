@@ -456,7 +456,7 @@ mod tests {
             env!("CARGO_MANIFEST_DIR")
         );
         let raw = std::fs::read_to_string(&path)
-            .unwrap_or_else(|e| panic!("cannot read template fixture '{path}': {e}"));
+            .expect("cannot read template fixture tests/fixtures/g2config_template.json");
         let config: Value = serde_json::from_str(&raw).expect("template is not valid JSON");
         let g2 = &config["G2_CONFIG"];
 

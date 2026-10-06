@@ -687,4 +687,14 @@ mod tests {
         // Source untouched (Leave).
         assert_eq!(frag["ERFRAG_SOURCE"], json!("NAME"));
     }
+
+    /// The validator reports an unparseable config as an error message rather
+    /// than panicking (its public callers parse the config first, so this is
+    /// only reachable directly).
+    #[test]
+    fn test_validate_fragment_source_invalid_json() {
+        let (deps, err) = validate_fragment_source("{not json", "./FRAGMENT[./A>0]");
+        assert!(deps.is_empty());
+        assert!(err.starts_with("Invalid JSON: "), "{err}");
+    }
 }

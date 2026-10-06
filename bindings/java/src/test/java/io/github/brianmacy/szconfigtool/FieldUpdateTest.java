@@ -35,6 +35,19 @@ class FieldUpdateTest {
         assertNotEquals(FieldUpdate.clear(), FieldUpdate.leave());
         assertEquals("FieldUpdate.set(x)", FieldUpdate.set("x").toString());
         assertEquals("FieldUpdate.CLEAR", FieldUpdate.clear().toString());
+        assertNotEquals(FieldUpdate.set("x"), "x");
+        assertNotEquals(FieldUpdate.set(5L), FieldUpdate.clear());
+    }
+
+    @Test
+    void predicatesAreExclusive() {
+        for (FieldUpdate<String> u : java.util.List.of(FieldUpdate.<String>leave(),
+                FieldUpdate.<String>clear(), FieldUpdate.set("v"))) {
+            FieldUpdate.State s = u.getState();
+            assertEquals(s == FieldUpdate.State.LEAVE, u.isLeave(), s.name());
+            assertEquals(s == FieldUpdate.State.CLEAR, u.isClear(), s.name());
+            assertEquals(s == FieldUpdate.State.SET, u.isSet(), s.name());
+        }
     }
 
     @Test

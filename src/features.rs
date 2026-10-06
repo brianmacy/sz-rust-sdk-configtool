@@ -2158,4 +2158,29 @@ mod tests {
                 .is_empty()
         );
     }
+
+    /// The private by-code function lookups resolve a known code
+    /// (case-insensitively) and report NotFound with the upper-cased code.
+    #[test]
+    fn test_private_function_lookups() {
+        let config = json!({"G2_CONFIG": {
+            "CFG_SFUNC": [{"SFUNC_ID": 11, "SFUNC_CODE": "S_FN"}],
+            "CFG_EFUNC": [{"EFUNC_ID": 12, "EFUNC_CODE": "E_FN"}],
+            "CFG_CFUNC": [{"CFUNC_ID": 13, "CFUNC_CODE": "C_FN"}]
+        }});
+        type Lookup = fn(&Value, &str) -> Result<i64>;
+        let cases: [(Lookup, &str, i64, &str); 3] = [
+            (lookup_sfunc_id, "s_fn", 11, "Standardize function: NOPE"),
+            (lookup_efunc_id, "e_fn", 12, "Expression function: NOPE"),
+            (lookup_cfunc_id, "c_fn", 13, "Comparison function: NOPE"),
+        ];
+        for (lookup, code, id, missing_msg) in cases {
+            assert_eq!(lookup(&config, code).unwrap(), id);
+            let err = lookup(&config, "nope").unwrap_err();
+            assert!(
+                matches!(&err, SzConfigError::NotFound(msg) if msg == missing_msg),
+                "{err:?}"
+            );
+        }
+    }
 }

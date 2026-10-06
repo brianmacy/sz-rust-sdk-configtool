@@ -1,5 +1,8 @@
 // GENERATED — do not edit. Source: api/manifest/*.yaml; regenerate with `cargo run -p sz-configtool-codegen`.
 
+/** One wire reason code. */
+export type ReasonCode = (typeof REASON_CODES)[number];
+
 /** The complete wire error taxonomy (`project.yaml` `reason_codes`). */
 export const REASON_CODES = [
   "JSON_PARSE",
@@ -17,6 +20,3 @@ export const REASON_CODES = [
   "VALIDATION_ERRORS",
   "INTERNAL",
 ] as const;
-
-/** One wire reason code. */
-export type ReasonCode = (typeof REASON_CODES)[number];

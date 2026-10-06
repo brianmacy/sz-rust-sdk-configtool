@@ -243,7 +243,7 @@ private:
             ++pos_;
             return;
         }
-        while (true) {
+        for (;;) {
             if (Peek() != '"') {
                 Fail("expected key");
             }
@@ -265,7 +265,7 @@ private:
             ++pos_;
             return;
         }
-        while (true) {
+        for (;;) {
             v.items.push_back(ParseValue(depth + 1));
             if (Peek() == ']') {
                 ++pos_;
@@ -358,7 +358,7 @@ private:
     std::string ParseString() {
         ++pos_;  // opening quote
         std::string out;
-        while (true) {
+        for (;;) {
             const std::size_t run = pos_;
             while (pos_ < src_.size() && src_[pos_] != '"' && src_[pos_] != '\\') {
                 ++pos_;

@@ -678,14 +678,57 @@ fn dispatch_option(out: &mut String, a: &Arg) {
     }
 }
 
-fn dispatch_method(out: &mut String, f: &Function) {
+/// The overload-selecting calls of `f` (each a `return`), indented by
+/// `indent`; `with_options` passes the built `o`, else the overload without
+/// an Options parameter is called.
+fn dispatch_calls(out: &mut String, f: &Function, with_options: bool, indent: &str) {
     let java = camel(&f.name);
+    for ov in overloads(f) {
+        let mut call_args = vec!["config".to_string()];
+        for (a, ty, _) in positional_params(f, &ov) {
+            call_args.push(conv_positional(a, ty));
+        }
+        if with_options {
+            call_args.push("o".to_string());
+        }
+        let call = format!("SzConfigTool.{java}({})", call_args.join(", "));
+        let body = normalize(f, &call).replace("\n        ", &format!("\n{indent}"));
+        match overload_condition(f, &ov) {
+            Some(cond) => {
+                let inner = body.replace(&format!("\n{indent}"), &format!("\n{indent}    "));
+                let _ = writeln!(
+                    out,
+                    "{indent}if ({cond}) {{\n{indent}    {inner}\n{indent}}}"
+                );
+            }
+            None => {
+                let _ = writeln!(out, "{indent}{body}");
+            }
+        }
+    }
+}
+
+/// One `TypedDispatch` method. A step that passes none of the optional args
+/// calls the overload WITHOUT an Options parameter (so both generated
+/// overloads, and the `options == null` path, are exercised); otherwise the
+/// Options builder is filled from the step's args.
+fn dispatch_method(out: &mut String, f: &Function) {
     let _ = writeln!(
         out,
-        "    private static String[] {java}(String config, Map<String, Object> in)\n            \
-         throws SzConfigToolException {{"
+        "    private static String[] {}(String config, Map<String, Object> in)\n            \
+         throws SzConfigToolException {{",
+        camel(&f.name)
     );
     if has_options(f) {
+        let absent: Vec<String> = f
+            .args
+            .iter()
+            .filter(|a| !is_positional(a))
+            .map(|a| format!("!in.containsKey(\"{}\")", a.name))
+            .collect();
+        let _ = writeln!(out, "        if ({}) {{", absent.join(" && "));
+        dispatch_calls(out, f, false, "            ");
+        out.push_str("        }\n");
         let _ = writeln!(
             out,
             "        SzConfigTool.{0} o = new SzConfigTool.{0}();",
@@ -695,29 +738,7 @@ fn dispatch_method(out: &mut String, f: &Function) {
             dispatch_option(out, a);
         }
     }
-    for ov in overloads(f) {
-        let mut call_args = vec!["config".to_string()];
-        for (a, ty, _) in positional_params(f, &ov) {
-            call_args.push(conv_positional(a, ty));
-        }
-        if has_options(f) {
-            call_args.push("o".to_string());
-        }
-        let call = format!("SzConfigTool.{java}({})", call_args.join(", "));
-        let body = normalize(f, &call);
-        match overload_condition(f, &ov) {
-            Some(cond) => {
-                let _ = writeln!(
-                    out,
-                    "        if ({cond}) {{\n            {}\n        }}",
-                    body.replace("\n        ", "\n            ")
-                );
-            }
-            None => {
-                let _ = writeln!(out, "        {body}");
-            }
-        }
-    }
+    dispatch_calls(out, f, has_options(f), "        ");
     out.push_str("    }\n\n");
 }
 
@@ -962,6 +983,45 @@ mod tests {
              return Conv.json(SzConfigTool.getCall(config, Conv.lng(in.get(\"call\")), o));\n        }\n        \
              return Conv.json(SzConfigTool.getCall(config, Conv.str(in.get(\"call\")), o));\n"
         ));
+        // A step without the optional arg calls the overloads without Options.
+        assert!(dispatch.contains(
+            "        if (!in.containsKey(\"tag\")) {\n            \
+             if ((in.get(\"call\") instanceof Long)) {\n                \
+             return Conv.json(SzConfigTool.getCall(config, Conv.lng(in.get(\"call\"))));\n            }\n            \
+             return Conv.json(SzConfigTool.getCall(config, Conv.str(in.get(\"call\"))));\n        }\n        \
+             SzConfigTool.GetCallOptions o = new SzConfigTool.GetCallOptions();\n"
+        ));
+    }
+
+    #[test]
+    fn test_dispatch_without_options_indents_multiline_bodies() {
+        let mut opt = arg("tag", ArgType::Str);
+        opt.optional = true;
+        let mut f = func(
+            "make",
+            Returns::ConfigAndJson,
+            vec![arg("call", ArgType::IntOrStr), opt],
+        );
+        f.tuple_names = vec!["id".into()];
+        let dispatch = typed_dispatch(&inputs(vec![f]));
+        assert!(dispatch.contains(
+            "        if (!in.containsKey(\"tag\")) {\n            \
+             if ((in.get(\"call\") instanceof Long)) {\n                \
+             var r = SzConfigTool.make(config, Conv.lng(in.get(\"call\")));\n                \
+             return Conv.configAndJson(new ConfigAndJson(r.config(), Conv.record(new String[] {\"id\"}, r.id())));\n            }\n            \
+             var r = SzConfigTool.make(config, Conv.str(in.get(\"call\")));\n            \
+             return Conv.configAndJson(new ConfigAndJson(r.config(), Conv.record(new String[] {\"id\"}, r.id())));\n        }\n"
+        ));
+        // A function without optional args has no Options branch at all.
+        let plain = typed_dispatch(&inputs(vec![func(
+            "plain",
+            Returns::Config,
+            vec![arg("code", ArgType::Str)],
+        )]));
+        assert!(!plain.contains("containsKey"));
+        assert!(plain.contains(
+            "        return Conv.config(SzConfigTool.plain(config, Conv.str(in.get(\"code\"))));\n"
+        ));
     }
 
     #[test]
@@ -1007,7 +1067,9 @@ mod tests {
         );
         assert!(dispatch.contains("if (in.get(\"sel\") instanceof Long v) {"));
         assert!(dispatch.contains("o.sel(Conv.str(in.get(\"sel\")));"));
-        assert_eq!(dispatch.matches("SzConfigTool.pick(").count(), 4);
+        // Four overloads, each called with and without Options.
+        assert_eq!(dispatch.matches("SzConfigTool.pick(").count(), 8);
+        assert!(dispatch.contains("if (!in.containsKey(\"sel\")) {"));
         assert!(overloads(&func("none", Returns::Unit, vec![])) == vec![Vec::<bool>::new()]);
     }
 

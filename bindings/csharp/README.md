@@ -74,6 +74,9 @@ The tests copy the native library from `target/release` (or
 `runtimes/<rid>/native/` in the test output and run every conformance case in
 `api/manifest/generated/conformance.json` through the typed API.
 
+Coverage (coverlet, `-p:CollectCoverage=true`): `packaging/coverage.sh rust dotnet`
+from the repository root (see `packaging/README.md`, Coverage).
+
 After editing `api/manifest/*.yaml`, regenerate with
 `cargo run -p sz-configtool-codegen`.
 

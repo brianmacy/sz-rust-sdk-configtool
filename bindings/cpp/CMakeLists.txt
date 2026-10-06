@@ -35,6 +35,11 @@ option(SZCONFIGTOOL_BUILD_TESTS "Build the googletest suite" ${SZCONFIGTOOL_TOP_
 option(SZCONFIGTOOL_BUILD_EXAMPLES "Build the example program" ${SZCONFIGTOOL_TOP_LEVEL})
 option(SZCONFIGTOOL_ENABLE_SANITIZERS
        "Build tests/examples with AddressSanitizer + UndefinedBehaviorSanitizer" OFF)
+option(SZCONFIGTOOL_ENABLE_COVERAGE
+       "Build tests/examples with clang source-based coverage (packaging/coverage.sh)" OFF)
+if(SZCONFIGTOOL_ENABLE_COVERAGE AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(FATAL_ERROR "SZCONFIGTOOL_ENABLE_COVERAGE needs clang (got ${CMAKE_CXX_COMPILER_ID})")
+endif()
 option(SZCONFIGTOOL_LINK_STATIC
        "SzConfigTool::szconfigtool links libSzConfigTool.a instead of the shared library" OFF)
 
@@ -205,6 +210,10 @@ function(szconfigtool_harden target)
         target_compile_options(${target} PRIVATE
             -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer)
         target_link_options(${target} PRIVATE -fsanitize=address,undefined)
+    endif()
+    if(SZCONFIGTOOL_ENABLE_COVERAGE)
+        target_compile_options(${target} PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+        target_link_options(${target} PRIVATE -fprofile-instr-generate)
     endif()
 endfunction()
 
