@@ -1,0 +1,25 @@
+# G2_CONFIG.SETTINGS object. Root module: src/settings.rs (1 pub fn, here).
+group: settings
+
+functions:
+  - name: set_setting
+    doc: Create or overwrite a named setting in the G2_CONFIG.SETTINGS object.
+    rust: settings::set_setting
+    c_symbol: SzConfigTool_setSetting
+    args:
+      - name: name
+        type: str
+        semantics: Uppercased; an existing setting of that name is overwritten silently.
+      - name: value
+        type: json
+        owned: true
+        semantics: Stored VERBATIM as its typed JSON value (an integer stays an integer, a string a string); no validation.
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION]
+    notes: >-
+      SETTINGS is created when absent, and a non-object SETTINGS value (null, string,
+      array) is REPLACED by a fresh object (prior content lost). A missing or non-object
+      G2_CONFIG is MISSING_SECTION.
+    c_notes: >-
+      C typed export takes the value as JSON text; text that is not valid JSON is
+      INVALID_INPUT there.

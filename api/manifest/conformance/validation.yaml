@@ -1,0 +1,33 @@
+# Conformance cases for the `validation` group. Every case starts from the REAL
+# template config (project.yaml paths.fixture).
+group: validation
+
+cases:
+  - name: template_is_valid
+    fn: validate_config
+    expect: {kind: unit}
+
+  - name: unknown_and_non_cfg_keys_are_unchecked
+    fn: validate_config
+    config_literal: '{"G2_CONFIG": {"SETTINGS": 5, "CFG_CUSTOM": {}}}'
+    expect: {kind: unit}
+
+  - name: missing_g2_config_is_missing_section
+    fn: validate_config
+    config_literal: '{}'
+    expect: {error: MISSING_SECTION}
+
+  - name: non_object_g2_config_is_invalid_structure
+    fn: validate_config
+    config_literal: '{"G2_CONFIG": 42}'
+    expect: {error: INVALID_STRUCTURE}
+
+  - name: non_array_cfg_section_is_invalid_structure
+    fn: validate_config
+    config_literal: '{"G2_CONFIG": {"CFG_DSRC": {}}}'
+    expect: {error: INVALID_STRUCTURE}
+
+  - name: invalid_json_is_json_parse
+    fn: validate_config
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}

@@ -1,0 +1,215 @@
+# Conformance cases for the `search_profiles` group. Every case starts from the
+# REAL template config (project.yaml paths.fixture).
+group: search_profiles
+
+cases:
+  - name: add_full_then_get_and_list
+    steps:
+      - fn: add_search_profile
+        args:
+          code: " embedded "
+          generic_plan: search
+          candidates: " off "
+          description: My profile
+          elements:
+            - {feature: address, flag: "no"}
+            - {feature: name, flag: y}
+        expect: {kind: config}
+      - fn: get_search_profile
+        args: {code: Embedded}
+        expect:
+          kind: json
+          result: {SPROFILE_ID: 3, SPROFILE_CODE: EMBEDDED, SPROFILE_DESC: My profile, GPLAN_ID: 2, DEFAULT_USED_FOR_CAND: "Off", FTYPE_OVERRIDES: "[{1,Y},{5,N}]"}
+      - fn: list_search_profiles
+        expect:
+          len: 2
+          contains:
+            - id: 3
+              profile: EMBEDDED
+              description: My profile
+              genericPlan: SEARCH
+              candidates: "Off"
+              overrides:
+                - {feature: NAME, flag: "Yes"}
+                - {feature: ADDRESS, flag: "No"}
+              overridesRaw: "[{1,Y},{5,N}]"
+
+  - name: add_defaults
+    steps:
+      - fn: add_search_profile
+        args: {code: p2, generic_plan: INGEST}
+      - fn: get_search_profile
+        args: {code: P2}
+        expect:
+          result: {SPROFILE_ID: 3, SPROFILE_DESC: "", GPLAN_ID: 1, DEFAULT_USED_FOR_CAND: Normal, FTYPE_OVERRIDES: "[]"}
+
+  - name: add_creates_missing_section
+    steps:
+      - fn: add_search_profile
+        config_literal: '{"G2_CONFIG": {"CFG_GPLAN": [{"GPLAN_ID": 2, "GPLAN_CODE": "SEARCH"}]}}'
+        args: {code: FIRST, generic_plan: SEARCH}
+      - fn: get_search_profile
+        args: {code: FIRST}
+        expect:
+          result: {SPROFILE_ID: 1, GPLAN_ID: 2}
+
+  - name: add_element_missing_key_is_missing_field
+    fn: add_search_profile
+    args:
+      code: P3
+      generic_plan: SEARCH
+      elements:
+        - {feature: NAME}
+    expect: {error: MISSING_FIELD}
+
+  - name: add_blank_code_is_invalid_input
+    fn: add_search_profile
+    args: {code: "  ", generic_plan: SEARCH}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_bad_candidates_is_validation_errors
+    fn: add_search_profile
+    args: {code: P2, generic_plan: SEARCH, candidates: Sometimes}
+    expect: {error: VALIDATION_ERRORS}
+
+  - name: add_unknown_plan_is_not_found
+    fn: add_search_profile
+    args: {code: P2, generic_plan: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: add_unknown_feature_is_not_found
+    fn: add_search_profile
+    args:
+      code: P2
+      generic_plan: SEARCH
+      elements: [{feature: NO_SUCH_FEATURE, flag: "Yes"}]
+    expect: {error: NOT_FOUND}
+
+  - name: add_duplicate_feature_is_validation_errors
+    fn: add_search_profile
+    args:
+      code: P2
+      generic_plan: SEARCH
+      elements: [{feature: NAME, flag: "Yes"}, {feature: name, flag: "No"}]
+    expect: {error: VALIDATION_ERRORS}
+
+  - name: add_bad_flag_is_validation_errors
+    fn: add_search_profile
+    args:
+      code: P2
+      generic_plan: SEARCH
+      elements: [{feature: NAME, flag: Maybe}]
+    expect: {error: VALIDATION_ERRORS}
+
+  - name: add_malformed_elements_is_invalid_input
+    fn: add_search_profile
+    args:
+      code: P2
+      generic_plan: SEARCH
+      elements: [{feature: NAME, flag: 1}]
+    expect: {error: INVALID_INPUT}
+
+  - name: add_duplicate_code_is_already_exists
+    fn: add_search_profile
+    args: {code: search, generic_plan: SEARCH}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_without_g2_config_is_not_found_plan
+    fn: add_search_profile
+    config_literal: '{"CFG_GPLAN": []}'
+    args: {code: P2, generic_plan: SEARCH}
+    expect: {error: NOT_FOUND}
+
+  - name: add_non_array_section_is_invalid_structure
+    fn: add_search_profile
+    config_literal: '{"G2_CONFIG": {"CFG_GPLAN": [{"GPLAN_ID": 2, "GPLAN_CODE": "SEARCH"}], "CFG_SPROFILE": {}}}'
+    args: {code: P2, generic_plan: SEARCH}
+    expect: {error: INVALID_STRUCTURE}
+
+  - name: add_invalid_json_is_json_parse
+    fn: add_search_profile
+    config_literal: "not json"
+    args: {code: P2, generic_plan: SEARCH}
+    expect: {error: JSON_PARSE}
+
+  - name: get_template_row
+    fn: get_search_profile
+    args: {code: search}
+    expect:
+      result: {SPROFILE_ID: 2, SPROFILE_CODE: SEARCH, SPROFILE_DESC: Standard Search, GPLAN_ID: 2, DEFAULT_USED_FOR_CAND: Normal, FTYPE_OVERRIDES: "[]"}
+
+  - name: get_missing_is_not_found
+    fn: get_search_profile
+    args: {code: INGEST}
+    expect: {error: NOT_FOUND}
+
+  - name: get_invalid_json_is_json_parse
+    fn: get_search_profile
+    config_literal: "not json"
+    args: {code: SEARCH}
+    expect: {error: JSON_PARSE}
+
+  - name: list_template
+    fn: list_search_profiles
+    expect:
+      kind: json
+      result:
+        - {id: 2, profile: SEARCH, description: Standard Search, genericPlan: SEARCH, candidates: Normal, overrides: [], overridesRaw: "[]"}
+
+  - name: list_filter_uses_compact_raw_row
+    steps:
+      - fn: list_search_profiles
+        args: {filter: '"gplan_id":2'}
+        expect: {len: 1}
+      - fn: list_search_profiles
+        args: {filter: '"GPLAN_ID": 2'}
+        expect: {len: 0}
+
+  - name: list_without_section_is_empty
+    fn: list_search_profiles
+    config_literal: '{"G2_CONFIG": {}}'
+    expect: {len: 0}
+
+  - name: list_invalid_json_is_json_parse
+    fn: list_search_profiles
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}
+
+  - name: delete_by_id
+    steps:
+      - fn: add_search_profile
+        args: {code: TEMP, generic_plan: SEARCH}
+      - fn: delete_search_profile
+        args: {search_value: "3"}
+        expect: {kind: config}
+      - fn: list_search_profiles
+        expect:
+          len: 1
+          excludes:
+            - {profile: TEMP}
+
+  - name: delete_by_code_case_insensitive
+    steps:
+      - fn: add_search_profile
+        args: {code: TEMP, generic_plan: SEARCH}
+      - fn: delete_search_profile
+        args: {search_value: temp}
+      - fn: get_search_profile
+        args: {code: TEMP}
+        expect: {error: NOT_FOUND}
+
+  - name: delete_reserved_is_invalid_input
+    fn: delete_search_profile
+    args: {search_value: search}
+    expect: {error: INVALID_INPUT}
+
+  - name: delete_absent_reserved_is_not_found
+    fn: delete_search_profile
+    args: {search_value: INGEST}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_invalid_json_is_json_parse
+    fn: delete_search_profile
+    config_literal: "not json"
+    args: {search_value: SEARCH}
+    expect: {error: JSON_PARSE}

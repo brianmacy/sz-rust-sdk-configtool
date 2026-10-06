@@ -19,13 +19,13 @@ The sz_configtool_lib provides a C-compatible FFI layer that allows the library 
 ### Build Commands
 
 ```bash
-# Build release version with optimizations
-cargo build --lib --release
+# Build the C library (workspace crate ffi/, package sz-configtool-ffi)
+cargo build -p sz-configtool-ffi --release
 
-# The shared library will be at:
-# Linux:   target/release/libsz_configtool_lib.so
-# macOS:   target/release/libsz_configtool_lib.dylib
-# Windows: target/release/sz_configtool_lib.dll
+# Outputs:
+# Linux:   target/release/libSzConfigTool.so   (+ libSzConfigTool.a)
+# macOS:   target/release/libSzConfigTool.dylib (+ libSzConfigTool.a)
+# Windows: target/release/SzConfigTool.dll     (+ SzConfigTool.dll.lib import library)
 ```
 
 ### Installation
@@ -34,49 +34,54 @@ Copy the shared library to a system location or use it directly:
 
 ```bash
 # Linux
-sudo cp target/release/libsz_configtool_lib.so /usr/local/lib/
+sudo cp target/release/libSzConfigTool.so /usr/local/lib/
 sudo ldconfig
 
 # macOS
-sudo cp target/release/libsz_configtool_lib.dylib /usr/local/lib/
+sudo cp target/release/libSzConfigTool.dylib /usr/local/lib/
 
-# Or use LD_LIBRARY_PATH/DYLD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/path/to/target/release:$LD_LIBRARY_PATH
+# Or embed an rpath when linking (see below), or use LD_LIBRARY_PATH/DYLD_LIBRARY_PATH
 ```
 
 ## C/C++ Usage
 
 ### Header File
 
-The C header file is located at `include/libSzConfigTool.h`. Include it in your C/C++ projects:
+The C header is [`ffi/include/libSzConfigTool.h`](../ffi/include/libSzConfigTool.h)
+and is the authoritative list of functions and signatures:
 
 ```c
 #include "libSzConfigTool.h"
 ```
 
+Every function is marked `SZCONFIGTOOL_API`. When linking the static archive,
+`#define SZCONFIGTOOL_STATIC` before including the header (on Windows this
+avoids `__declspec(dllimport)`).
+
 ### Core Types
 
 #### SzConfigTool_result
 
-All FFI functions return this structure:
+All functions that return configuration or data return this structure:
 
 ```c
-typedef struct {
-    int32_t return_code;  // 0 = success, 1 = error
-    char *response;       // Response string (owned by Rust, must be freed)
+typedef struct SzConfigTool_result {
+    char *response;      // Response string (owned by the library; free with SzConfigTool_free)
+    int64_t returnCode;  // 0 = success, negative = error
 } SzConfigTool_result;
 ```
 
-**Important**: Always check `return_code` before using `response`. Always free `response` using `SzConfigTool_free()` when done.
+**Important**: Always check `returnCode` before using `response`. Always free `response` using `SzConfigTool_free()` when done.
 
 ### Memory Management
 
 **Critical Rules**:
 
-1. All strings returned by FFI functions are owned by Rust
-2. You MUST call `SzConfigTool_free()` on every `response` string
-3. Never call `free()` or `delete` on FFI-returned strings - use `SzConfigTool_free()`
-4. Copy strings if you need to keep them beyond the FFI call scope
+1. All strings in `response` are allocated by the library
+2. You MUST call `SzConfigTool_free()` on every non-NULL `response`
+3. Never call `free()` or `delete` on them - use `SzConfigTool_free()`
+4. Strings from `SzConfigTool_getLastError*()` and `SzConfigTool_getLibraryVersion()` are
+   owned by the library: never free them
 
 #### Free Function
 
@@ -86,91 +91,69 @@ void SzConfigTool_free(char *ptr);
 
 ### Error Handling
 
-Errors are stored in thread-local storage and retrieved with:
+Each call records its outcome in a **per-thread** last-error slot (cleared on success):
 
 ```c
-const char *SzConfigTool_getLastError(void);
+const char *SzConfigTool_getLastError(void);           // message, or NULL
+int64_t     SzConfigTool_getLastErrorCode(void);       // 0 or negative
+const char *SzConfigTool_getLastErrorReasonCode(void); // e.g. "VALIDATION_ERRORS", or NULL
+const char *SzConfigTool_getLastErrorDetails(void);    // versioned JSON, or NULL
 ```
+
+Returned strings are NUL-terminated and stay valid until the next `SzConfigTool_*`
+call on the same thread. A Rust panic is never propagated into C: it is reported
+as returnCode `-2` with an `internal panic in <function>: ...` message.
+
+**Return codes.** `SzConfigTool_invoke` returns only `0`, `-1` (NULL or invalid
+UTF-8 argument) and `-2` (failure; library errors always carry a reason code).
+The typed exports do not share one numbering: depending on the function a
+library error is `-2` (with a reason code), `-2` without one, or `-5` (message
+only); invalid UTF-8 is `-1` or `-2`; argument-JSON failures are `-3`; and
+`SzConfigTool_setGenericThreshold` returns `-4` for an unknown plan id. The
+exact per-function lists are in the header's "Return codes" section (checked
+against the source by `ffi/tests/return_codes.rs`). Treat any non-zero code as
+failure and read `SzConfigTool_getLastErrorReasonCode()` when you need to
+classify it.
 
 **Pattern**:
 
 ```c
-SzConfigTool_result result = SzConfigTool_someFunction(params);
+SzConfigTool_result result = SzConfigTool_addDataSource(config, "MY_SOURCE");
 
-if (result.return_code == 0) {
-    // Success - use result.response
-    printf("Success: %s\n", result.response);
+if (result.returnCode == 0) {
+    // Use result.response, then:
     SzConfigTool_free(result.response);  // REQUIRED!
 } else {
-    // Error - get error message
-    const char *error = SzConfigTool_getLastError();
-    fprintf(stderr, "Error: %s\n", error);
+    fprintf(stderr, "Error: %s\n", SzConfigTool_getLastError());
 }
 ```
 
-### Complete C Example
+### C Example
+
+A complete, compiled-and-run-in-CI example is
+[`ffi/examples/c_ffi_example.c`](../ffi/examples/c_ffi_example.c). Core loop:
 
 ```c
 #include "libSzConfigTool.h"
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
-int main() {
-    // Load configuration from file
-    FILE *f = fopen("g2config.json", "r");
-    if (!f) {
-        perror("Failed to open config file");
+int main(void) {
+    const char *initial = "{\"G2_CONFIG\":{\"CFG_DSRC\":[]}}";
+
+    SzConfigTool_result added = SzConfigTool_addDataSource(initial, "MY_SOURCE");
+    if (added.returnCode != 0) {
+        fprintf(stderr, "Add failed: %s\n", SzConfigTool_getLastError());
         return 1;
     }
+    char *config = added.response;  /* library-owned; free with SzConfigTool_free */
 
-    fseek(f, 0, SEEK_END);
-    long len = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    char *config = malloc(len + 1);
-    fread(config, 1, len, f);
-    config[len] = '\0';
-    fclose(f);
-
-    // Add a data source
-    SzConfigTool_result result = SzConfigTool_addDataSource(
-        config,
-        "MY_SOURCE",  // dsrc_code
-        NULL,         // dsrc_id (optional)
-        NULL,         // dsrc_desc (optional)
-        NULL          // retention_level (optional)
-    );
-
-    if (result.return_code == 0) {
-        printf("Data source added successfully!\n");
-
-        // Use the modified configuration
-        free(config);
-        config = result.response;  // Take ownership
-
-        // List all data sources
-        SzConfigTool_result list_result = SzConfigTool_listDataSources(
-            config,
-            "JSON"  // output_format
-        );
-
-        if (list_result.return_code == 0) {
-            printf("Data sources:\n%s\n", list_result.response);
-            SzConfigTool_free(list_result.response);
-        } else {
-            const char *error = SzConfigTool_getLastError();
-            fprintf(stderr, "List failed: %s\n", error);
-        }
-
-    } else {
-        const char *error = SzConfigTool_getLastError();
-        fprintf(stderr, "Add failed: %s\n", error);
-        free(config);
-        return 1;
+    SzConfigTool_result list = SzConfigTool_listDataSources(config);
+    if (list.returnCode == 0) {
+        printf("Data sources:\n%s\n", list.response);
+        SzConfigTool_free(list.response);
     }
 
-    free(config);
+    SzConfigTool_free(config);
     return 0;
 }
 ```
@@ -178,55 +161,43 @@ int main() {
 ### Compiling C Programs
 
 ```bash
-# Compile
-gcc -o myapp myapp.c -I./include -L./target/release -lsz_configtool_lib
+cc -o myapp myapp.c -Iffi/include -Ltarget/release -lSzConfigTool \
+   -Wl,-rpath,"$PWD/target/release"
+./myapp
+```
 
-# Run with library path
-LD_LIBRARY_PATH=./target/release ./myapp  # Linux
-DYLD_LIBRARY_PATH=./target/release ./myapp  # macOS
+### Versioning
+
+```c
+printf("libSzConfigTool %s\n", SzConfigTool_getLibraryVersion());
+if (SzConfigTool_getAbiVersion() != SZCONFIGTOOL_ABI_VERSION) { /* incompatible */ }
 ```
 
 ### C++ Example
 
 ```cpp
 #include "libSzConfigTool.h"
-#include <iostream>
 #include <fstream>
-#include <sstream>
+#include <iostream>
 #include <memory>
+#include <sstream>
 
-// RAII wrapper for FFI strings
-struct SzString {
-    char *ptr;
-    SzString(char *p) : ptr(p) {}
-    ~SzString() { if (ptr) SzConfigTool_free(ptr); }
-    operator const char*() const { return ptr; }
-};
+// RAII owner for library-allocated strings
+using SzString = std::unique_ptr<char, decltype(&SzConfigTool_free)>;
 
 int main() {
-    // Load config
     std::ifstream file("g2config.json");
     std::stringstream buffer;
     buffer << file.rdbuf();
     std::string config = buffer.str();
 
-    // Add data source
-    auto result = SzConfigTool_addDataSource(
-        config.c_str(),
-        "MY_SOURCE",
-        nullptr,
-        nullptr,
-        nullptr
-    );
-
-    if (result.return_code == 0) {
-        SzString response(result.response);
-        std::cout << "Success! New config:\n" << response << std::endl;
-    } else {
+    auto result = SzConfigTool_addDataSource(config.c_str(), "MY_SOURCE");
+    if (result.returnCode != 0) {
         std::cerr << "Error: " << SzConfigTool_getLastError() << std::endl;
         return 1;
     }
-
+    SzString response(result.response, &SzConfigTool_free);
+    std::cout << "Success! New config:\n" << response.get() << std::endl;
     return 0;
 }
 ```
@@ -237,101 +208,37 @@ int main() {
 
 ```python
 import ctypes
-import json
 from pathlib import Path
 
-# Load shared library
-lib_path = Path("target/release/libsz_configtool_lib.so")  # or .dylib/.dll
-lib = ctypes.CDLL(str(lib_path))
+lib = ctypes.CDLL(str(Path("target/release/libSzConfigTool.so")))  # or .dylib / SzConfigTool.dll
 
-# Define result structure
+# Field order and types must match the C struct exactly.
 class SzResult(ctypes.Structure):
     _fields_ = [
-        ("return_code", ctypes.c_int32),
-        ("response", ctypes.c_char_p),
+        ("response", ctypes.c_void_p),  # void* so the original pointer can be freed
+        ("returnCode", ctypes.c_int64),
     ]
 
-# Configure function signatures
-lib.SzConfigTool_addDataSource.argtypes = [
-    ctypes.c_char_p,  # config_json
-    ctypes.c_char_p,  # dsrc_code
-    ctypes.c_char_p,  # dsrc_id
-    ctypes.c_char_p,  # dsrc_desc
-    ctypes.c_char_p,  # retention_level
-]
+lib.SzConfigTool_addDataSource.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
 lib.SzConfigTool_addDataSource.restype = SzResult
-
 lib.SzConfigTool_getLastError.restype = ctypes.c_char_p
-lib.SzConfigTool_free.argtypes = [ctypes.c_char_p]
+lib.SzConfigTool_free.argtypes = [ctypes.c_void_p]
 
-# Helper function
 def call_ffi(func, *args):
-    """Call FFI function and handle errors."""
+    """Call an SzConfigTool function; return the response str or raise."""
     result = func(*args)
-    if result.return_code == 0:
-        response = result.response.decode('utf-8')
+    if result.returnCode != 0:
+        raise RuntimeError(lib.SzConfigTool_getLastError().decode("utf-8"))
+    try:
+        return ctypes.string_at(result.response).decode("utf-8")
+    finally:
         lib.SzConfigTool_free(result.response)
-        return response
-    else:
-        error = lib.SzConfigTool_getLastError().decode('utf-8')
-        raise RuntimeError(f"FFI error: {error}")
 
-# Usage
 with open("g2config.json", "r") as f:
     config = f.read()
 
-# Add data source
-config = call_ffi(
-    lib.SzConfigTool_addDataSource,
-    config.encode('utf-8'),
-    b"MY_SOURCE",
-    None,  # Optional parameters
-    None,
-    None,
-)
-
-print("Data source added!")
+config = call_ffi(lib.SzConfigTool_addDataSource, config.encode("utf-8"), b"MY_SOURCE")
 print(config)
-```
-
-### Python Wrapper Class
-
-```python
-class SzConfigTool:
-    def __init__(self, lib_path):
-        self.lib = ctypes.CDLL(str(lib_path))
-        self._setup_functions()
-
-    def _setup_functions(self):
-        # Setup all function signatures
-        self.lib.SzConfigTool_addDataSource.argtypes = [
-            ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
-            ctypes.c_char_p, ctypes.c_char_p
-        ]
-        self.lib.SzConfigTool_addDataSource.restype = SzResult
-        # ... setup other functions
-
-    def add_data_source(self, config, dsrc_code, dsrc_id=None,
-                       dsrc_desc=None, retention_level=None):
-        result = self.lib.SzConfigTool_addDataSource(
-            config.encode('utf-8'),
-            dsrc_code.encode('utf-8'),
-            dsrc_id.encode('utf-8') if dsrc_id else None,
-            dsrc_desc.encode('utf-8') if dsrc_desc else None,
-            retention_level.encode('utf-8') if retention_level else None,
-        )
-
-        if result.return_code == 0:
-            response = result.response.decode('utf-8')
-            self.lib.SzConfigTool_free(result.response)
-            return response
-        else:
-            error = self.lib.SzConfigTool_getLastError().decode('utf-8')
-            raise RuntimeError(error)
-
-# Usage
-tool = SzConfigTool("target/release/libsz_configtool_lib.so")
-config = tool.add_data_source(config, "MY_SOURCE")
 ```
 
 ## JSON Parameter Marshalling
@@ -360,7 +267,7 @@ int main() {
         updates
     );
 
-    if (result.return_code == 0) {
+    if (result.returnCode == 0) {
         printf("Function updated!\n");
         SzConfigTool_free(result.response);
     } else {
@@ -395,22 +302,27 @@ config = tool.set_standardize_function(
 
 ## Available FFI Functions
 
-The FFI provides 98 functions covering all library operations. See `include/libSzConfigTool.h` for complete declarations.
+The C library exports 149 functions. See [`ffi/include/libSzConfigTool.h`](../ffi/include/libSzConfigTool.h) for complete declarations.
 
 ### Function Categories
 
-- **Data Sources**: 7 functions (add, delete, get, list, set, setId, getById)
-- **Attributes**: 8 functions (add, delete, get, list, set, clone, setId, getById)
-- **Features**: 24 functions (CRUD, elements, comparisons, distinct calls)
-- **Elements**: 8 functions (add, delete, get, list, set, clone, setId, getById)
-- **Thresholds**: 6 functions (comparison and generic thresholds)
-- **Functions**: 28 functions (standardize, expression, comparison, distinct)
-- **Calls**: 32 functions (all function types with BOM variants)
-- **System**: Multiple functions (config sections, parameters, versioning)
+| Category | Exports |
+|---|---|
+| Infrastructure (`free`, last-error accessors, versions, `invoke`) | 9 |
+| Data sources | 5 |
+| Attributes | 5 |
+| Elements | 7 |
+| Features | 6 |
+| Behavior overrides | 4 |
+| Thresholds (comparison + generic) | 10 |
+| Functions (standardize 7, expression 7, comparison 7, distinct 6, candidate 5, matching 5, scoring 5, validation 5) | 47 |
+| Calls (standardize 6, expression 7, comparison 7, distinct 7) | 27 |
+| Config sections 7, rules 5, fragments 5, generic plans 3, system parameters 2, versioning 4, settings 1, export 1, validation 1 | 29 |
+| **Total** | **149** |
 
 ## Best Practices
 
-1. **Always Check Return Codes**: Never use `response` without checking `return_code`
+1. **Always Check Return Codes**: Never use `response` without checking `returnCode`
 2. **Always Free Strings**: Memory leaks occur if you don't free FFI strings
 3. **Copy Strings if Needed**: If storing strings, copy them before freeing
 4. **Handle Errors Gracefully**: Use `SzConfigTool_getLastError()` for debugging
@@ -462,4 +374,4 @@ export DYLD_LIBRARY_PATH=/path/to/library:$DYLD_LIBRARY_PATH
 - [API Documentation](API.md) - Complete API reference
 - [README](../README.md) - Quick start guide
 - [Contributing](CONTRIBUTING.md) - Contribution guidelines
-- [C Header File](../include/libSzConfigTool.h) - Complete FFI declarations
+- [C Header File](../ffi/include/libSzConfigTool.h) - Complete FFI declarations

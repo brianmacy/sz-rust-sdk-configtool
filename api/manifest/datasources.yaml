@@ -1,0 +1,94 @@
+# CFG_DSRC — data sources. Root module: src/datasources.rs (5 pub fns, all here).
+group: datasources
+
+functions:
+  - name: add_data_source
+    doc: Add a data source (CFG_DSRC row) to the configuration.
+    rust: datasources::add_data_source
+    rust_params_struct: datasources::AddDataSourceParams
+    c_symbol: SzConfigTool_addDataSource
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before storage and duplicate check; DSRC_DESC is set to the same uppercased code.
+      - name: retention_level
+        type: str
+        optional: true
+        default: Remember
+        semantics: Case-insensitive; normalized to Remember or Forget. Any other value is INVALID_INPUT.
+      - name: id
+        type: int
+        optional: true
+        semantics: Requested DSRC_ID. Absent OR <= 0 means auto-allocate (next free id, floor 1000). A taken id > 0 is ALREADY_EXISTS.
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, INVALID_INPUT]
+    c_notes: >-
+      C typed export SzConfigTool_addDataSource exposes only `code` (retention_level and
+      id always take their defaults); use SzConfigTool_invoke for the full surface.
+
+  - name: delete_data_source
+    doc: Delete a data source by code.
+    rust: datasources::delete_data_source
+    c_symbol: SzConfigTool_deleteDataSource
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup.
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT]
+    notes: >-
+      System data sources (DSRC_ID <= 2, e.g. TEST and SEARCH in the template) are
+      protected and fail with INVALID_INPUT. No dependency check is made against
+      other sections.
+
+  - name: get_data_source
+    doc: Get one data source's raw CFG_DSRC row by code.
+    rust: datasources::get_data_source
+    c_symbol: SzConfigTool_getDataSource
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup.
+    returns: json
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND]
+    notes: >-
+      Result is the stored row with on-disk keys (DSRC_ID, DSRC_CODE, DSRC_DESC,
+      RETENTION_LEVEL).
+    c_notes: >-
+      LEGACY TRAP: the C typed export reports a library error with returnCode -5 and
+      records NO reason code (it uses set_error, not set_error_from);
+      SzConfigTool_invoke reports -2 with the reason code.
+
+  - name: list_data_sources
+    doc: List all data sources as {id, dataSource} summaries.
+    rust: datasources::list_data_sources
+    c_symbol: SzConfigTool_listDataSources
+    args: []
+    returns: json
+    errors: [JSON_PARSE, MISSING_SECTION]
+    notes: >-
+      Result is an array of {"id": DSRC_ID, "dataSource": DSRC_CODE} in config
+      order.
+
+  - name: set_data_source
+    doc: Update a data source's retention level.
+    rust: datasources::set_data_source
+    rust_params_struct: datasources::SetDataSourceParams
+    c_symbol: SzConfigTool_setDataSource
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup.
+      - name: retention_level
+        type: str
+        optional: true
+        semantics: >-
+          Absent leaves RETENTION_LEVEL unchanged. TRAP: unlike add_data_source the
+          value is written VERBATIM, with no domain validation or case
+          normalization.
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND]
+    c_notes: >-
+      C typed export takes an updates JSON object whose key is camelCase
+      `retentionLevel`; a non-string value there is silently ignored (treated as
+      absent).

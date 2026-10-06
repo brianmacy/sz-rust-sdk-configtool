@@ -1,0 +1,110 @@
+# CFG_RTYPE scoring functions. Root module: src/functions/scoring.rs (6 pub fns:
+# 5 C-exported placeholders here, remove_scoring_function excluded).
+group: functions_scoring
+
+functions:
+  - name: add_scoring_function
+    doc: Add a scoring function (placeholder; always NOT_IMPLEMENTED).
+    rust: functions::scoring::add_scoring_function
+    c_symbol: SzConfigTool_addScoringFunction
+    args:
+      - name: rtype_code
+        type: str
+        semantics: Ignored by the placeholder implementation.
+      - name: scoring_func
+        type: str
+        semantics: Ignored by the placeholder implementation.
+    returns: config_and_json
+    errors: [NOT_IMPLEMENTED]
+    status: not_implemented
+    notes: >-
+      PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so
+      even invalid JSON) and always returns NOT_IMPLEMENTED ("Scoring functions are not
+      yet fully implemented").
+    c_notes: >-
+      C typed export reports the error with returnCode -5 and NO reason code (set_error,
+      not set_error_from); on success it would DROP the record.
+
+  - name: delete_scoring_function
+    doc: Delete a scoring function (placeholder; always NOT_IMPLEMENTED).
+    rust: functions::scoring::delete_scoring_function
+    c_symbol: SzConfigTool_deleteScoringFunction
+    args:
+      - name: rtype_code
+        type: str
+        semantics: Ignored by the placeholder implementation.
+    returns: config_and_json
+    errors: [NOT_IMPLEMENTED]
+    status: not_implemented
+    notes: >-
+      PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so
+      even invalid JSON) and always returns NOT_IMPLEMENTED ("Scoring functions are not
+      yet fully implemented").
+    c_notes: >-
+      C typed export reports the error with returnCode -5 and NO reason code (set_error,
+      not set_error_from); on success it would DROP the record.
+
+  - name: get_scoring_function
+    doc: Get a scoring function (placeholder; always NOT_IMPLEMENTED).
+    rust: functions::scoring::get_scoring_function
+    c_symbol: SzConfigTool_getScoringFunction
+    args:
+      - name: rtype_code
+        type: str
+        semantics: Ignored by the placeholder implementation.
+    returns: json
+    errors: [NOT_IMPLEMENTED]
+    status: not_implemented
+    notes: >-
+      PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so
+      even invalid JSON) and always returns NOT_IMPLEMENTED ("Scoring functions are not
+      yet fully implemented").
+    c_notes: >-
+      C typed export reports the error with returnCode -5 and NO reason code (set_error,
+      not set_error_from).
+
+  - name: list_scoring_functions
+    doc: List scoring functions (placeholder; always NOT_IMPLEMENTED).
+    rust: functions::scoring::list_scoring_functions
+    c_symbol: SzConfigTool_listScoringFunctions
+    args: []
+    returns: json
+    errors: [NOT_IMPLEMENTED]
+    status: not_implemented
+    notes: >-
+      PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so
+      even invalid JSON) and always returns NOT_IMPLEMENTED ("Scoring functions are not
+      yet fully implemented").
+    c_notes: >-
+      C typed export reports the error with returnCode -5 and NO reason code (set_error,
+      not set_error_from).
+
+  - name: set_scoring_function
+    doc: Set a scoring function (placeholder; always NOT_IMPLEMENTED).
+    rust: functions::scoring::set_scoring_function
+    c_symbol: SzConfigTool_setScoringFunction
+    args:
+      - name: rtype_code
+        type: str
+        semantics: Ignored by the placeholder implementation.
+      - name: scoring_func
+        type: str
+        optional: true
+        semantics: Ignored by the placeholder implementation.
+    returns: config_and_json
+    errors: [NOT_IMPLEMENTED]
+    status: not_implemented
+    notes: >-
+      PLACEHOLDER: the root fn ignores every argument (the config is never parsed, so
+      even invalid JSON) and always returns NOT_IMPLEMENTED ("Scoring functions are not
+      yet fully implemented").
+    c_notes: >-
+      `scoring_func`: C NULL = None.
+      C typed export reports the error with returnCode -5 and NO reason code (set_error,
+      not set_error_from); on success it would DROP the record.
+
+excluded:
+  - rust: functions::scoring::remove_scoring_function
+    reason: >-
+      not-implemented: placeholder that always returns NOT_IMPLEMENTED and has no
+      C export (only add/delete/get/list/setScoringFunction are exported).

@@ -3,7 +3,227 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html) up to
+0.10.0. From 4.4.0-1 versions are `X.Y.Z-N`: `X.Y` is the Senzing line whose configuration
+template the release is tested against, `Z` and the release counter `-N` are this project's,
+and the Rust API is additive only within `4.x` (README, "Versioning").
+
+## [Unreleased]
+
+## [4.4.0-1] - 2026-10-06
+
+First release under the Senzing-aligned version scheme (0.10.0 -> 4.4.0-1; tag `v4.4.0-1`).
+SemVer tools (Cargo, npm, NuGet) order `4.4.0-1` BEFORE `4.4.0` (a prerelease), while Python
+(`4.4.0.post1`) and Maven order it AFTER; releases are GitHub-only with exact pins, so this
+matters only to range resolvers (README, "Versioning").
+
+### Removed
+
+- **BREAKING (Rust API and C ABI; `SZCONFIGTOOL_ABI_VERSION` 1 -> 2):** the SYS_OOM hash
+  functions. Rust `hashes` module (`add_to_name_hash`, `delete_from_name_hash`,
+  `add_to_ssn_last4_hash`, `delete_from_ssn_last4_hash`), the C exports
+  `SzConfigTool_addToSsnLast4Hash` / `SzConfigTool_deleteFromSsnLast4Hash`, the manifest
+  `hashes` group and its typed wrappers in every binding (`invoke` now reports
+  `INVALID_INPUT` "unknown function"). Reason: they required `SYS_OOM` to be an object, but in
+  real configurations (and the shipped template) `SYS_OOM` is an array of OOM rows, so the adds
+  were silent no-ops and the deletes always `NOT_FOUND`; G2's own CLI retired the commands.
+
+### Changed
+
+- **BREAKING (packaging): the C ABI moved to its own workspace crate.** The repo is now a Cargo
+  workspace. `sz_configtool_lib` is a pure `lib` crate (no `cdylib`, no `ffi` module —
+  `sz_configtool_lib::ffi` is gone); its Rust API is otherwise unchanged and plain `cargo test`
+  still covers only it. The C interface lives in `ffi/` (package `sz-configtool-ffi`,
+  crate-type `cdylib` + `staticlib`). Previously every downstream cdylib depending on the crate
+  re-exported all 144 `SzConfigTool_*` symbols; now it exports none.
+- **BREAKING (packaging): library renamed** from `libsz_configtool_lib.{so,dylib}` /
+  `sz_configtool_lib.dll` to `libSzConfigTool.{so,dylib}` / `SzConfigTool.dll`, plus a new static
+  `libSzConfigTool.a`. The header moved to `ffi/include/libSzConfigTool.h`.
+- Header: every declaration carries the new `SZCONFIGTOOL_API` export macro (dllexport/dllimport
+  on Windows, default visibility elsewhere; define `SZCONFIGTOOL_STATIC` for static linking), and
+  `SZCONFIGTOOL_ABI_VERSION` is defined.
+- `helpers::field_update_str`, `helpers::field_update_i64`, `helpers::lookup_gplan_code` and
+  `thresholds::{add,set,delete}_comparison_threshold_by_id` are now `#[doc(hidden)] pub` (were
+  `pub(crate)`) so the FFI crate can reach them; they are not supported Rust API.
+
+### Added
+
+- Binding manifest (`api/manifest/*.yaml`, one file per group; see `api/manifest/schema.md`):
+  146 functions in 28 groups (126 implemented; coverage enforced by the drift test) and 742
+  conformance cases run against the real template config by Rust and every binding. New
+  workspace crates: `sz-configtool-api` (`invoke(name, config, args_json)` dynamic dispatcher,
+  generated `dispatch_gen.rs`, and the shared `validation_details_json` used by the C ABI and
+  every native seam) and `sz-configtool-codegen` (`cargo run -p sz-configtool-codegen`
+  regenerates the dispatcher, JSON manifests and all five language wrappers; `-- --check`
+  fails when stale). Output locations come from `api/manifest/project.yaml` (`paths`,
+  `bindings`).
+- Language bindings generated from the manifest, all functional/stateless (`f(config_json,
+  ...)`), one error class each whose `kind` is the reason code, `json` results as JSON text,
+  `ConfigAndJson` / `<Fn>Result` named records, and natural `int | str` call selectors:
+  - Python (`bindings/python`, distribution `sz-configtool`, import `sz_configtool`, pyo3
+    abi3-py310, maturin). **Breaking vs earlier development snapshots of this unreleased
+    binding:** it was `senzing-configtool` / `senzing_configtool` (renamed: the official Senzing
+    packages are `senzing` / `senzing_core`, so a `senzing_*` name was misleading). A `config`
+    that is not a `str` or holds a lone surrogate raises `SzConfigToolError` `INVALID_INPUT`
+    (was `TypeError` / `UnicodeEncodeError`).
+  - Java (`bindings/java` + JNI seam `bindings/jni`, package `io.github.brianmacy.szconfigtool`,
+    JDK 17, natives bundled in the jar).
+  - C# (`bindings/csharp`, namespace `Sz.ConfigTool`, netstandard2.0, P/Invoke over
+    `SzConfigTool_invoke`). A string with a lone surrogate raises `SzConfigToolException`
+    `INVALID_INPUT` (was `ArgumentException`), like every other binding.
+  - C++ (`bindings/cpp`, header-only C++20 `szconfigtool.hpp`, CMake package, over
+    `SzConfigTool_invoke`).
+  - Node/TypeScript (`bindings/node`, napi-rs v3) plus a tRPC router (`bindings/node/trpc`).
+- `config_sections::AddFieldCounts` and `thresholds::GenericThresholdCheck` implement
+  `serde::Serialize` (the latter as the versioned `sz-configtool.generic-threshold-check/v1`
+  object, now the single serializer behind `SzConfigTool_validateGenericThreshold`; new const
+  `thresholds::GENERIC_THRESHOLD_CHECK_SCHEMA`). `add_config_section_field` and
+  `validate_generic_threshold` are now in the binding manifest.
+- Manifest schema: arg type `int_or_str` (call selectors: id or feature code), arg
+  `required: true` (library-required `Option` args), function
+  `status: not_implemented` (placeholders typed generators skip), `tuple_names` on `json`
+  returns (`verify_compatibility_version` now returns `{current_version, matches}`, not an
+  array), and computed conformance `wire_only` steps.
+- `SzConfigTool_invoke(name, config_json, args_json)`: calls any
+  manifest function by name, returning a `{"kind","config","result"}` JSON envelope and stable
+  reason codes on error.
+- `SzConfigTool_getLibraryVersion()` (static NUL-terminated crate version) and
+  `SzConfigTool_getAbiVersion()`.
+- `SzConfigTool_set{Standardize,Expression,Comparison,Distinct}FunctionWithJson` — these were
+  declared in the header but never implemented. `CONNECT_STR` is tri-state (absent = leave,
+  `null` = clear, string = set), which the direct-arg setters cannot express.
+- Version accessors in every binding, from ONE definition (`sz_configtool_api::{LIBRARY_VERSION,
+  ABI_VERSION}`, also behind `SzConfigTool_getLibraryVersion` / `SzConfigTool_getAbiVersion`):
+  Python `__version__` / `library_version()` / `abi_version()`, Java
+  `SzConfigToolVersion.libraryVersion()` / `abiVersion()`, TS `libraryVersion()` /
+  `abiVersion()`, C++ `AbiVersion()` (C# `LibraryVersion` / `AbiVersion` and C++
+  `LibraryVersion()` already existed). See `bindings/CONTRACT.md`.
+- Manifest `c_notes` field: C-ABI-only deltas (typed `SzConfigTool_*` exports, return codes) moved
+  out of `notes`, so Python/Java/C#/C++/TS docs no longer carry C-specific text; codegen rejects
+  C-ABI text in `doc`/`notes`/`semantics`.
+- Header declarations for the already-exported `SzConfigTool_addBehaviorOverride`,
+  `SzConfigTool_deleteBehaviorOverride`, `SzConfigTool_deleteExpressionFunction` and
+  `SzConfigTool_deleteStandardizeFunction`.
+- `ffi/tests/header_sync.rs` (fails on header/export drift in names or signatures) and
+  `ffi/tests/c_abi.rs` (builds the library, then compiles and runs the C test and C example).
+
+### Removed
+
+- Stale header declarations with no implementation:
+  `SzConfigTool_set{Matching,Candidate,Validation,Scoring}FunctionWithJson` (the underlying
+  Rust functions are `NotImplemented` stubs; the direct-arg `set*Function` exports remain), and
+  12 duplicate `get*/list*Function(s)` declarations.
+
+### Fixed
+
+- `calls::expression::add_expression_call` stored BOM `FTYPE_ID -1` for an element-list item
+  with feature `"PARENT"`: a `.filter(!"PARENT")` dropped it before the intended `parent -> 0`
+  branch ran. It now stores `0` (case-insensitive), the G2 parent feature link
+  (`EFBomConfig::PARENT_FEATURE_LINKED_FTYPE`, `G2/dev/libs/configTables/EFBomConfig.cpp:26`;
+  `-1` = `WILDCARDED_FTYPE`, any feature, `:27`), matching Senzing's Python configtool
+  (`G2ConfigTool.py:3079,3120` store 0; `:3569` reads 0 back as `featureLink: parent`). An
+  absent feature still stores `-1`. Comparison/distinct call BOMs are unchanged (they require a
+  real FTYPE).
+- `SzConfigTool_getLastError()` returned a pointer to a Rust `String` with no NUL terminator, so C
+  callers read past the message. All last-error strings are now NUL-terminated `CString`s.
+- The last-error slots were process-global `Mutex` statics, so concurrent threads overwrote each
+  other's errors (and a poisoned lock would panic). They are now per-thread (`thread_local!`);
+  returned pointers stay valid until the next `SzConfigTool_*` call on the same thread.
+- A Rust panic inside any `extern "C"` function unwound across the C boundary (undefined
+  behaviour). Every export now catches panics and returns `-2` / NULL with an
+  `internal panic in <function>: ...` last error.
+- Six header declarations disagreed with the exported ABI (C callers following the header passed
+  wrong argument types or counts): `updateCompatibilityVersion`, `updateFeatureVersion` and
+  `verifyCompatibilityVersion` take the version as `const char *` (header said `int64_t`);
+  `addConfigSection` takes no `section_json`; `setGenericPlan` takes no `updates_json`;
+  `listStandardizeCalls` takes no filter arguments. The header now matches the exports.
+- Removed `expect`/`unwrap` calls from library code paths (`settings::set_setting`,
+  `thresholds::add_generic_threshold`, `config_sections::get_config_section`); each was guarded
+  by an earlier check, so behaviour is unchanged, but no panic path remains.
+- `ffi/examples/c_ffi_example.c` did not compile against the header (wrong field name and
+  argument counts) and released library memory with `free()`; rewritten and now run in tests.
+- `SzConfigTool_deleteGenericThreshold` parsed its `plan` argument but ignored it, always deleting
+  the matching row from plan `INGEST` (so a `SEARCH` delete removed the `INGEST` row, and an
+  unknown plan succeeded). It now deletes from the given plan; an unknown plan is an error.
+
+- Java (JNI) and TS (napi) silently replaced a lone UTF-16 surrogate with U+FFFD (e.g. a data
+  source code `"A\uD800"` was stored as `"A\uFFFD"`); it is now `INVALID_INPUT`. The JNI seam
+  decodes modified UTF-8 strictly.
+- TS: `NaN` / `±Infinity` args became JSON `null` (a tri-state Clear) and integers beyond
+  `Number.MAX_SAFE_INTEGER` were sent rounded; both are now `INVALID_INPUT`.
+- C ABI: an FFI call from a thread-local destructor (thread teardown) could abort the process
+  (last-error slot already destroyed, then a double panic in the panic guard). The slot is now
+  accessed with `try_with`; during teardown the error is reported by return code only.
+- `SzConfigTool_set*FunctionWithJson`: a non-string value, both spellings of one field (e.g.
+  `{"SFUNC_DESC": null, "description": "x"}` ignored `"x"`), an unknown key, or `ANON_SUPPORT`
+  for standardize/expression functions (accepted, then dropped) are now `INVALID_INPUT` instead
+  of being silently ignored.
+- `invoke`: a missing `feature`/`flag` key in an `add_search_profile` `elements` item is now
+  `MISSING_FIELD` (was `INVALID_INPUT`), matching the expression-call element list and missing
+  required args.
+- Manifest `errors[]` completed: `add_feature` (`INVALID_STRUCTURE`), `delete_element` and
+  `add_expression_call` (`MISSING_FIELD`), `add_search_profile` (`MISSING_FIELD`); a new probe
+  test calls every function with systematic argument sets and fails on any unlisted code.
+- Conformance runners (Rust, Python, Java, C#, C++) treated a non-array result as `[]`, so
+  `excludes` and `len: 0` passed vacuously; they now fail, and codegen rejects
+  `len`/`contains`/`excludes` on functions whose result cannot be an array.
+- C#: `SzConfigToolException.ReasonCode` is non-null (`INTERNAL` when none was reported), like
+  Java.
+- Header return-code documentation was wrong (it said -2 = library error, <= -3 = JSON
+  failures). It now documents what the exports actually return (no behaviour change): 77
+  typed exports return -5 for library errors without a reason code, four `get*CallByFeature`
+  return -2 without one, `setGenericThreshold` returns -4 for an unknown plan id, and invalid
+  UTF-8 is -1 for 16 exports and -2 for the rest; `SzConfigTool_invoke` uses only 0/-1/-2 with
+  reason codes. `ffi/tests/return_codes.rs` fails when the header lists drift from the source.
+- TS: `int` args accept `bigint` (sent with exact digits; full i64 range, e.g. 2^63-1) and the
+  generated types are `number | bigint`; unsafe `number`s stay `INVALID_INPUT`. Named results
+  (`memberTexts`) now keep each member's exact JSON text on every Node version (Node 20
+  re-serialized it). The runtime supports Node 20 (compiled `dist/`); running the tests and
+  `.ts` examples directly needs Node 22.6+.
+- Python: a non-`str` function name, non-mapping args, or an arg that cannot be JSON-encoded
+  (`set`, `Decimal`, `bytes`, NaN) raises `SzConfigToolError` `INVALID_INPUT` (was `TypeError` /
+  `ValueError`), like TS.
+- C#: a NUL character in the name, config or raw args JSON raises `SzConfigToolException`
+  `INVALID_INPUT` (was `ArgumentException`); NUL handling per binding is in
+  `bindings/CONTRACT.md`.
+- JNI: the strict modified-UTF-8 decoder accepted overlong encodings other than `C0 80` (the
+  modified-UTF-8 NUL), e.g. `C0 81` or `E0 80 80`; they are now rejected.
+
+### Releases and CI
+
+- Releases: GitHub Releases only (no public registries); see packaging/README.md.
+- Per-target release pipeline in `packaging/` (C ABI archive, C++ package, Python wheel, Node
+  and tRPC tarballs, Java jar, NuGet package, `SHA256SUMS`, build-provenance attestation) for
+  `linux-x64`, `linux-arm64`, `macos-arm64` and `windows-x64`, with export, linkage, glibc
+  2.34, build-path and C-test gates.
+- CI (`ci.yml`): one Linux job per PR runs lint, codegen check, Rust tests, MSRV, the
+  `linux-x64` release pipeline with every binding's tests, and the C++ ASan + UBSan suite (plus
+  a plain `cargo test` on macOS and Windows); the full 4-platform matrix (`release.yml`) runs
+  only on tags and manual dispatch.
+- `security.yml`: PRs run only `cargo deny check` (prebuilt, sha256-verified binary);
+  `cargo audit` and `cargo vet` run weekly, on tags and on manual dispatch.
+- Release assets include per-artifact CycloneDX SBOMs
+  (`sz-configtool[-jni|-node|-python]-<v>-<os>-<arch>.cdx.json`), listed in `SHA256SUMS` and
+  covered by the attestation. Only a tag **push** publishes; a manual dispatch (even on a tag)
+  is a dry run that uploads the assembled assets as the `release-assets` workflow artifact.
+- Windows DLL / `.node` / `.pyd` are linked with the static MSVC runtime: no VC++
+  Redistributable needed (`SzConfigTool_static.lib` stays `/MD`). Binaries are not
+  code-signed; packaging/README.md documents verification and the macOS quarantine workaround.
+- Version policy enforced by `packaging/gates/check-versions.sh` (self-test
+  `test-version-spellings.sh`, run in CI): only `X.Y.Z`, `X.Y.Z-N` (wheel `X.Y.Z.postN`) and
+  `X.Y.Z-rc.N` / `-alpha.N` / `-beta.N` (wheel `rcN` / `aN` / `bN`); dev/post/pre spellings are
+  rejected (PEP 440 and Maven sort some above the release). The gate also checks both npm
+  lockfiles. Numeric macOS dylib `current_version`; numeric CMake package version. Only
+  `-rc.N` / `-alpha.N` / `-beta.N` tags become GitHub prereleases (`-N` is a full release).
+- Supported platforms documented: Linux x86_64/arm64 glibc >= 2.34 (RHEL 9+, Amazon Linux
+  2023, Ubuntu 22.04+, Debian 12+), macOS 15+ arm64, Windows x64. RHEL 8 (glibc 2.28) is not
+  supported by the binaries (build from source).
+- `gates/check-glibc-ceiling.sh` fails closed when `objdump -T` fails or prints no dynamic
+  symbol table (it passed as "(none)"); `run-c-tests.sh` / `package-cpp.sh` no longer abort
+  under macOS bash 3.2 `set -u` when ninja is missing; `lib/build-env.sh` no longer masks an
+  `msvc_tool` failure behind `cygpath` and documents that it replaces caller `RUSTFLAGS`.
+- `.gitattributes` forces LF checkouts (Windows runners); `release-target.sh all` no longer
+  ignores a failing gate (`set -e` was suspended inside an `&&` chain).
 
 ## [0.10.0] - 2026-09-10
 

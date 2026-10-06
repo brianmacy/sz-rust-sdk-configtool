@@ -5,13 +5,15 @@
 
 use crate::error::{Result, SzConfigError};
 use crate::filter::to_json_dumps_string;
+use serde::Serialize;
 use serde_json::{Value, json};
 
 /// Outcome counts for [`add_config_section_field`].
 ///
 /// `existed` counts items that already carried the field (and were therefore
 /// left untouched); `updated` counts items the field was newly inserted into.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+/// Serializes as `{"existed": n, "updated": n}`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
 pub struct AddFieldCounts {
     /// Number of items that already had the field (value preserved, not overwritten).
     pub existed: usize,
@@ -162,9 +164,7 @@ pub fn get_config_section(
         })?;
 
     // Handle empty section
-    if section_data.is_null()
-        || (section_data.is_array() && section_data.as_array().unwrap().is_empty())
-    {
+    if section_data.is_null() || section_data.as_array().is_some_and(Vec::is_empty) {
         return Ok(Vec::new());
     }
 
@@ -431,6 +431,32 @@ pub fn remove_config_section_field(
 mod tests {
     use super::*;
     use crate::error::SzErrorKind;
+
+    /// `AddFieldCounts` serializes as `{"existed": n, "updated": n}` (the
+    /// binding record for add_config_section_field).
+    #[test]
+    fn test_add_field_counts_serializes() {
+        let counts = AddFieldCounts {
+            existed: 2,
+            updated: 3,
+        };
+        assert_eq!(
+            serde_json::to_string(&counts).unwrap(),
+            r#"{"existed":2,"updated":3}"#
+        );
+    }
+
+    #[test]
+    fn test_get_config_section_empty_or_null_returns_empty() {
+        for section in ["[]", "null"] {
+            let config = format!(r#"{{"G2_CONFIG": {{"CFG_ATTR": {section}}}}}"#);
+            assert!(
+                get_config_section(&config, "CFG_ATTR", None)
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+    }
 
     #[test]
     fn test_add_config_section_field_added() {

@@ -1,0 +1,217 @@
+# CFG_EFCALL / CFG_EFBOM — expression calls. Root module: src/calls/expression.rs
+# (8 pub fns: 6 here, 2 no-op stubs excluded).
+group: calls_expression
+
+functions:
+  - name: add_expression_call
+    doc: Add an expression call (CFG_EFCALL row) plus its element list (CFG_EFBOM rows).
+    rust: calls::expression::add_expression_call
+    rust_params_struct: calls::expression::AddExpressionCallParams
+    c_symbol: SzConfigTool_addExpressionCall
+    args:
+      - name: efunc_code
+        type: str
+        semantics: Expression function code (CFG_EFUNC, case-insensitive) or NOT_FOUND.
+      - name: element_list
+        type: json
+        rust_convert: expression_element_list
+        semantics: >-
+          JSON array of {"element": str, "required": str, "feature"?: str} objects
+          (unknown keys, non-objects, non-string values = INVALID_INPUT; missing
+          element/required = MISSING_FIELD). One CFG_EFBOM row per item, EXEC_ORDER =
+          1-based list position. element: global CFG_FELEM lookup (case-insensitive)
+          or NOT_FOUND. required: stored verbatim in FELEM_REQ (not validated or
+          normalized). feature: absent stores BOM FTYPE_ID -1 (G2 WILDCARDED_FTYPE: any
+          feature in the record carrying the element); "PARENT" (case-insensitive)
+          stores BOM FTYPE_ID 0 (G2 PARENT_FEATURE_LINKED_FTYPE: the feature that
+          triggered the call); otherwise a feature code (case-insensitive) or
+          NOT_FOUND. The element is NOT checked for membership in that feature. []
+          is allowed.
+      - name: ftype_code
+        type: str
+        optional: true
+        semantics: >-
+          Feature code (case-insensitive) or NOT_FOUND; "ALL" (case-insensitive) =
+          absent; absent stores FTYPE_ID -1.
+      - name: felem_code
+        type: str
+        optional: true
+        semantics: >-
+          Element code (case-insensitive) or NOT_FOUND; "N/A" (case-insensitive) =
+          absent; absent stores FELEM_ID -1. Exactly one of ftype_code / felem_code
+          must resolve, else INVALID_INPUT.
+      - name: exec_order
+        type: int
+        optional: true
+        semantics: >-
+          CFG_EFCALL EXEC_ORDER scoped per (FTYPE_ID, FELEM_ID). Absent or <= 0 =
+          auto-allocate (max in scope + 1); > 0 and free = verbatim; > 0 and taken =
+          ALREADY_EXISTS.
+      - name: expression_feature
+        type: str
+        optional: true
+        semantics: >-
+          Feature code stored as EFEAT_FTYPE_ID (case-insensitive) or NOT_FOUND;
+          absent or "N/A" (case-insensitive) stores -1.
+      - name: is_virtual
+        type: str
+        semantics: Stored verbatim in IS_VIRTUAL (not validated or normalized; the Rust `new()` default is "No").
+    returns: config_and_json
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS, MISSING_FIELD]
+    notes: >-
+      Returns (modified config, the new CFG_EFCALL row {EFCALL_ID, FTYPE_ID, FELEM_ID,
+      EFUNC_ID, EXEC_ORDER, EFEAT_FTYPE_ID, IS_VIRTUAL}); the created CFG_EFBOM rows are
+      NOT in the record (see list_expression_calls). EFCALL_ID is auto-allocated (max +
+      1, floor 1000). Check order: EFCALL_ID allocation (MISSING_SECTION if CFG_EFCALL
+      absent), efunc, feature, element, exactly-one rule, exec order,
+      expression_feature, element list, then MISSING_SECTION if CFG_EFBOM absent. BOM
+      FTYPE_ID sentinels (G2 EFBomConfig.cpp): 0 = parent feature link, -1 = any
+      feature. The BOM-feature column is not rendered by get/list_expression_calls;
+      read raw rows with get_config_section("CFG_EFBOM").
+    c_notes: >-
+      C export deltas (SzConfigTool_addExpressionCall): DROPS the new row; negative
+      exec_order = None; empty ftype_code / felem_code / expression_feature are NOT
+      coerced to None (they hit NOT_FOUND); is_virtual must be non-NULL;
+      element_list_json also accepts [element, required, feature?] arrays, silently
+      skips items that are neither an object nor an array of >= 2, defaults a missing
+      required to "Yes" and a missing element to "" (then NOT_FOUND); invalid element
+      JSON returns -3; library errors return -5 with no reason code.
+
+  - name: delete_expression_call
+    doc: Delete an expression call by EFCALL_ID, cascading its CFG_EFBOM rows.
+    rust: calls::expression::delete_expression_call
+    c_symbol: SzConfigTool_deleteExpressionCall
+    args:
+      - name: efcall_id
+        type: int
+        semantics: Must match an existing EFCALL_ID, else NOT_FOUND.
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: Removes the CFG_EFCALL row(s) with that id and every CFG_EFBOM row with that EFCALL_ID.
+
+  - name: get_expression_call
+    doc: Get one expression call's raw CFG_EFCALL row, by EFCALL_ID or by feature code.
+    rust: calls::expression::get_expression_call
+    c_symbol: SzConfigTool_getExpressionCall
+    c_aliases: [SzConfigTool_getExpressionCallByFeature]
+    args:
+      - name: call
+        type: int_or_str
+        rust_convert: call_selector
+        semantics: >-
+          Call selector: an integer = EFCALL_ID (NOT_FOUND if absent); a string =
+          feature code (case-insensitive; unknown feature = NOT_FOUND, no call on the
+          feature = NOT_FOUND, more than one call on the feature = INVALID_INPUT —
+          address such calls by id). Any other JSON type = INVALID_INPUT.
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND, INVALID_INPUT]
+    notes: >-
+      Result uses on-disk keys (EFCALL_ID, FTYPE_ID, FELEM_ID, EFUNC_ID, EXEC_ORDER,
+      EFEAT_FTYPE_ID, IS_VIRTUAL); BOM rows are not included. Expression calls are
+      many-per-feature (template NAME has 7), so by-feature is often ambiguous.
+    c_notes: >-
+      C export deltas: SzConfigTool_getExpressionCall takes only an id and returns -5
+      (no reason code) on library errors; SzConfigTool_getExpressionCallByFeature takes
+      only a feature code and returns -2 with no reason code.
+
+  - name: list_expression_calls
+    doc: List all expression calls with resolved codes and element lists.
+    rust: calls::expression::list_expression_calls
+    c_symbol: SzConfigTool_listExpressionCalls
+    args: []
+    returns: json
+    errors: [JSON_PARSE]
+    notes: >-
+      Array of {id, feature, element, execOrder, function, isVirtual, expressionFeature,
+      elementList}, stably sorted by (FTYPE_ID, FELEM_ID, EXEC_ORDER). feature "all" /
+      element "n/a" / function "unknown" when the id is <= 0 or unresolved;
+      expressionFeature "n/a" when EFEAT_FTYPE_ID <= 0. elementList is the BOM element
+      codes ordered by BOM EXEC_ORDER (BOM feature and FELEM_REQ are not shown). Missing
+      sections yield [].
+    c_notes: >-
+      C export returns -5 (no reason code) on library errors.
+
+  - name: add_expression_call_element
+    doc: Add one CFG_EFBOM row to an expression call, addressed by raw ids.
+    rust: calls::expression::add_expression_call_element
+    rust_params_struct: calls::expression::ExpressionCallElementParams
+    c_symbol: null
+    args:
+      - name: efcall_id
+        type: int
+        positional: true
+        semantics: Stored as EFCALL_ID. NOT validated — the call need not exist.
+      - name: ftype_id
+        type: int
+        semantics: >-
+          The ELEMENT's feature id, stored verbatim as BOM FTYPE_ID. < 0 =
+          INVALID_INPUT; 0 is accepted and is the G2 parent feature link (same as
+          add_expression_call's feature "PARENT"); -1 (any feature) is not
+          addable here; NOT validated against CFG_FTYPE.
+      - name: felem_id
+        type: int
+        semantics: Stored verbatim as FELEM_ID. NOT validated against CFG_FELEM.
+      - name: exec_order
+        type: int
+        optional: true
+        semantics: >-
+          BOM EXEC_ORDER scoped per EFCALL_ID. Absent or <= 0 = auto-allocate (max on
+          the call + 1); > 0 and free = verbatim; > 0 and taken = ALREADY_EXISTS.
+      - name: felem_req
+        type: str
+        rust_convert: owned_str
+        semantics: Stored verbatim in FELEM_REQ (not validated or normalized).
+    returns: config_and_json
+    errors: [JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION]
+    notes: >-
+      Returns (modified config, the new CFG_EFBOM row {EFCALL_ID, FTYPE_ID, FELEM_ID,
+      EXEC_ORDER, FELEM_REQ}). Check order: ftype_id < 0, ALREADY_PRESENT when
+      (EFCALL_ID, FTYPE_ID, FELEM_ID) already exists (EXEC_ORDER ignored), exec order,
+      then MISSING_SECTION if CFG_EFBOM is absent.
+    c_notes: >-
+      No C export.
+
+  - name: delete_expression_call_element
+    doc: Delete one CFG_EFBOM row from an expression call, addressed by call + element code.
+    rust: calls::expression::delete_expression_call_element
+    c_symbol: SzConfigTool_deleteExpressionCallElement
+    args:
+      - name: call
+        type: int_or_str
+        rust_convert: call_selector
+        semantics: >-
+          Call selector: an integer = EFCALL_ID; a string = feature code (unknown
+          feature = NOT_FOUND, no call = NOT_FOUND, more than one call =
+          INVALID_INPUT). A call id that does not exist = NOT_FOUND.
+      - name: element_code
+        type: str
+        semantics: >-
+          Element code (case-insensitive). Without element_feature: global lookup,
+          unknown = NOT_FOUND. With element_feature: unknown OR not in that feature's
+          CFG_FBOM = NOT_IN_FEATURE. Known but not on the call = NOT_ON_CALL.
+      - name: element_feature
+        type: str
+        optional: true
+        semantics: >-
+          The element's feature code (case-insensitive; unknown = NOT_FOUND). Narrows
+          the BOM match to that FTYPE_ID. Without it, an element present under more
+          than one feature on the call is INVALID_INPUT (ambiguous) — e.g. template
+          EFCALL 97 carries TOKENIZED_NM under GROUP_ASSOCIATION and EMPLOYER.
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND, INVALID_INPUT, NOT_IN_FEATURE, NOT_ON_CALL]
+    notes: >-
+      The BOM EXEC_ORDER is derived from the located row; only that row is removed.
+      Check order: call selector, call existence, element_feature, element, BOM row.
+    c_notes: >-
+      C export deltas (SzConfigTool_deleteExpressionCallElement): addresses the call by
+      EFCALL_ID only; element_feature NULL = None but "" is NOT coerced (NOT_FOUND);
+      invalid UTF-8 in element_feature returns -1.
+
+excluded:
+  - rust: calls::expression::set_expression_call
+    reason: >-
+      No-op stub (returns the config unchanged; Python has no equivalent). Exposing
+      it would advertise an update that never happens. C export
+      SzConfigTool_setExpressionCall wraps the same no-op.
+  - rust: calls::expression::set_expression_call_element
+    reason: No-op stub (returns the config unchanged); no C export.

@@ -1,0 +1,4 @@
+bin/
+obj/
+# Pack-time input (natives/<rid>/<library>); never checked in.
+natives/

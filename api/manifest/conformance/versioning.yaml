@@ -1,0 +1,109 @@
+# Conformance cases for the `versioning` group. Every case starts from the
+# REAL template config (project.yaml paths.fixture) unless a step sets
+# config_literal. See schema.md ("Conformance files").
+group: versioning
+
+cases:
+  - name: get_version_template
+    fn: get_version
+    expect: {kind: json, result: "4.4.0"}
+
+  - name: get_version_missing_is_not_found
+    steps:
+      - fn: get_version
+        config_literal: '{"G2_CONFIG": {"CONFIG_BASE_VERSION": {}}}'
+        expect: {error: NOT_FOUND}
+
+  - name: get_version_bad_config_is_json_parse
+    steps:
+      - fn: get_version
+        config_literal: 'x'
+        expect: {error: JSON_PARSE}
+
+  - name: get_compatibility_version_template
+    fn: get_compatibility_version
+    expect: {kind: json, result: "11"}
+
+  - name: get_compatibility_version_missing_is_not_found
+    steps:
+      - fn: get_compatibility_version
+        config_literal: '{"G2_CONFIG": {"CONFIG_BASE_VERSION": {"VERSION": "4.4.0"}}}'
+        expect: {error: NOT_FOUND}
+
+  - name: get_compatibility_version_bad_config_is_json_parse
+    steps:
+      - fn: get_compatibility_version
+        config_literal: 'x'
+        expect: {error: JSON_PARSE}
+
+  - name: update_then_get_and_verify
+    steps:
+      - fn: update_compatibility_version
+        args: {new_version: "12"}
+        expect: {kind: config}
+      - fn: get_compatibility_version
+        expect: {result: "12"}
+      - fn: verify_compatibility_version
+        args: {expected_version: "12"}
+        expect: {result: {current_version: "12", matches: true}}
+
+  - name: update_missing_compat_is_not_found
+    steps:
+      - fn: update_compatibility_version
+        config_literal: '{"G2_CONFIG": {"CONFIG_BASE_VERSION": {}}}'
+        args: {new_version: "12"}
+        expect: {error: NOT_FOUND}
+
+  - name: update_missing_base_is_not_found
+    steps:
+      - fn: update_compatibility_version
+        config_literal: '{"G2_CONFIG": {}}'
+        args: {new_version: "12"}
+        expect: {error: NOT_FOUND}
+
+  - name: update_non_object_compat_is_invalid_config
+    steps:
+      - fn: update_compatibility_version
+        config_literal: '{"G2_CONFIG": {"CONFIG_BASE_VERSION": {"COMPATIBILITY_VERSION": "11"}}}'
+        args: {new_version: "12"}
+        expect: {error: INVALID_CONFIG}
+
+  - name: update_without_g2_config_is_silent_noop
+    steps:
+      - fn: update_compatibility_version
+        config_literal: '{}'
+        args: {new_version: "12"}
+        expect: {kind: config}
+      - fn: get_compatibility_version
+        expect: {error: NOT_FOUND}
+
+  - name: update_bad_config_is_json_parse
+    steps:
+      - fn: update_compatibility_version
+        config_literal: 'x'
+        args: {new_version: "12"}
+        expect: {error: JSON_PARSE}
+
+  - name: verify_match
+    fn: verify_compatibility_version
+    args: {expected_version: "11"}
+    expect: {kind: json, result: {current_version: "11", matches: true}}
+
+  - name: verify_mismatch
+    fn: verify_compatibility_version
+    args: {expected_version: "11.0"}
+    expect: {result: {current_version: "11", matches: false}}
+
+  - name: verify_missing_is_not_found
+    steps:
+      - fn: verify_compatibility_version
+        config_literal: '{"G2_CONFIG": {}}'
+        args: {expected_version: "11"}
+        expect: {error: NOT_FOUND}
+
+  - name: verify_bad_config_is_json_parse
+    steps:
+      - fn: verify_compatibility_version
+        config_literal: 'x'
+        args: {expected_version: "11"}
+        expect: {error: JSON_PARSE}

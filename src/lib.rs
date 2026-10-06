@@ -92,7 +92,6 @@ pub mod config_sections;
 pub mod export;
 pub mod fragments;
 pub mod generic_plans;
-pub mod hashes;
 pub mod rules;
 pub mod search_profiles;
 pub mod settings;
@@ -131,6 +130,3 @@ pub use search_profiles::{
 pub use settings::set_setting;
 pub use thresholds::{GenericThresholdCheck, GenericThresholdRef, validate_generic_threshold};
 pub use validation::validate_config;
-
-// C FFI module
-pub mod ffi;

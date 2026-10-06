@@ -1,0 +1,250 @@
+# Conformance cases for the `functions_comparison` group (CFG_CFUNC). Every
+# case starts from the REAL template config (project.yaml paths.fixture).
+group: functions_comparison
+
+cases:
+  - name: add_returns_config_and_record
+    steps:
+      - fn: add_comparison_function
+        args: {code: my_cmp, connect_str: g2MyCmp, description: My cmp, language: C, anon_support: "yes"}
+        expect:
+          kind: config_and_json
+          result: {CFUNC_ID: 18, CFUNC_CODE: MY_CMP, CONNECT_STR: g2MyCmp, ANON_SUPPORT: "Yes", CFUNC_DESC: My cmp, LANGUAGE: C}
+      - fn: get_comparison_function
+        args: {code: MY_CMP}
+        expect:
+          kind: json
+          result: {CFUNC_ID: 18, CFUNC_CODE: MY_CMP, CONNECT_STR: g2MyCmp, ANON_SUPPORT: "Yes", CFUNC_DESC: My cmp, LANGUAGE: C}
+      - fn: list_comparison_functions
+        expect:
+          len: 17
+          contains:
+            - {id: 18, function: MY_CMP, description: My cmp, connectStr: g2MyCmp, anonSupport: "Yes", language: C}
+
+  - name: add_absent_optionals_store_null
+    fn: add_comparison_function
+    args: {code: BARE_CMP}
+    expect:
+      result: {CFUNC_ID: 18, CFUNC_CODE: BARE_CMP, CONNECT_STR: null, ANON_SUPPORT: "No", CFUNC_DESC: null, LANGUAGE: null}
+
+  - name: add_empty_connect_str_is_stored_verbatim
+    fn: add_comparison_function
+    args: {code: EMPTY_CMP, connect_str: ""}
+    expect:
+      result: {CONNECT_STR: ""}
+
+  - name: add_duplicate_is_invalid_input
+    fn: add_comparison_function
+    args: {code: str_comp}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_bad_anon_support_is_invalid_input
+    fn: add_comparison_function
+    args: {code: NEW_CMP, anon_support: Maybe}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_missing_section_is_missing_section
+    fn: add_comparison_function
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {code: X}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_invalid_config_is_json_parse
+    fn: add_comparison_function
+    config_literal: "not json"
+    args: {code: X}
+    expect: {error: JSON_PARSE}
+
+  - name: get_is_case_insensitive
+    fn: get_comparison_function
+    args: {code: str_comp}
+    expect:
+      result: {CFUNC_ID: 1, CFUNC_CODE: STR_COMP, CFUNC_DESC: String comparison, CONNECT_STR: g2StringComp, ANON_SUPPORT: "Yes", LANGUAGE: null}
+
+  - name: get_missing_is_not_found
+    fn: get_comparison_function
+    args: {code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: get_missing_section_is_not_found
+    fn: get_comparison_function
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {code: STR_COMP}
+    expect: {error: NOT_FOUND}
+
+  - name: get_invalid_config_is_json_parse
+    fn: get_comparison_function
+    config_literal: "not json"
+    args: {code: STR_COMP}
+    expect: {error: JSON_PARSE}
+
+  - name: list_template
+    fn: list_comparison_functions
+    expect:
+      kind: json
+      len: 16
+      contains:
+        - {id: 1, function: STR_COMP, description: String comparison, connectStr: g2StringComp, anonSupport: "Yes", language: null}
+        - {id: 17, function: WEBSITE_COMP, connectStr: g2WebsiteComp, language: null}
+
+  - name: list_missing_section_is_empty
+    fn: list_comparison_functions
+    config_literal: '{"G2_CONFIG": {}}'
+    expect: {len: 0}
+
+  - name: list_invalid_config_is_json_parse
+    fn: list_comparison_functions
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}
+
+  - name: delete_returns_row_then_get_is_not_found
+    steps:
+      - fn: delete_comparison_function
+        args: {code: gnr_comp}
+        expect:
+          kind: config_and_json
+          result: {CFUNC_ID: 2, CFUNC_CODE: GNR_COMP}
+      - fn: get_comparison_function
+        args: {code: GNR_COMP}
+        expect: {error: NOT_FOUND}
+      - fn: list_comparison_functions
+        expect:
+          len: 15
+          excludes:
+            - {function: GNR_COMP}
+
+  - name: delete_missing_is_not_found
+    fn: delete_comparison_function
+    args: {code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_invalid_config_is_json_parse
+    fn: delete_comparison_function
+    config_literal: "not json"
+    args: {code: GNR_COMP}
+    expect: {error: JSON_PARSE}
+
+  - name: cascade_returns_row_then_get_is_not_found
+    steps:
+      - fn: delete_comparison_function_cascade
+        args: {code: gnr_comp}
+        expect:
+          kind: config_and_json
+          result: {CFUNC_ID: 2, CFUNC_CODE: GNR_COMP, CONNECT_STR: g2GNRNameComp}
+      - fn: get_comparison_function
+        args: {code: GNR_COMP}
+        expect: {error: NOT_FOUND}
+      - fn: list_comparison_functions
+        expect:
+          len: 15
+          excludes:
+            - {function: GNR_COMP}
+
+  - name: cascade_removes_dependent_calls_boms_and_thresholds
+    steps:
+      - fn: delete_comparison_function_cascade
+        args: {code: gnr_comp}
+      - fn: list_comparison_calls
+        expect:
+          len: 49
+          excludes: [{function: GNR_COMP}, {function: unknown}]
+      - fn: get_comparison_call
+        args: {call: 1}
+        expect: {error: NOT_FOUND}
+      - fn: get_config_section
+        args: {section_name: CFG_CFBOM}
+        expect: {len: 96}
+      - fn: get_config_section
+        args: {section_name: CFG_CFBOM, filter: '"CFCALL_ID": 1,'}
+        expect: {len: 0}
+      - fn: list_comparison_thresholds
+        expect:
+          len: 19
+          excludes: [{function: GNR_COMP}, {function: unknown}]
+
+  - name: plain_delete_leaves_dependent_calls_boms_and_thresholds
+    steps:
+      - fn: delete_comparison_function
+        args: {code: gnr_comp}
+      - fn: get_comparison_call
+        args: {call: 1}
+        expect:
+          result: {CFCALL_ID: 1, CFUNC_ID: 2}
+      - fn: get_config_section
+        args: {section_name: CFG_CFBOM, filter: '"CFCALL_ID": 1,'}
+        expect: {len: 22}
+      - fn: list_comparison_thresholds
+        expect:
+          len: 24
+          contains:
+            - {id: 2, function: unknown, scoreName: GNR_FN}
+            - {id: 14, function: unknown, scoreName: GNR_ON}
+
+  - name: cascade_missing_is_not_found
+    fn: delete_comparison_function_cascade
+    args: {code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: cascade_row_without_id_is_missing_field
+    fn: delete_comparison_function_cascade
+    config_literal: '{"G2_CONFIG": {"CFG_CFUNC": [{"CFUNC_CODE": "NO_ID"}], "CFG_CFCALL": []}}'
+    args: {code: no_id}
+    expect: {error: MISSING_FIELD}
+
+  - name: cascade_invalid_config_is_json_parse
+    fn: delete_comparison_function_cascade
+    config_literal: "not json"
+    args: {code: GNR_COMP}
+    expect: {error: JSON_PARSE}
+
+  - name: set_writes_and_returns_row
+    steps:
+      - fn: set_comparison_function
+        args: {code: str_comp, connect_str: g2New, description: New desc, language: C}
+        expect:
+          kind: config_and_json
+          result: {CFUNC_ID: 1, CFUNC_CODE: STR_COMP, CONNECT_STR: g2New, CFUNC_DESC: New desc, LANGUAGE: C}
+      - fn: get_comparison_function
+        args: {code: STR_COMP}
+        expect:
+          result: {CONNECT_STR: g2New, CFUNC_DESC: New desc, LANGUAGE: C}
+
+  - name: set_anon_support_is_stored_verbatim
+    steps:
+      - fn: set_comparison_function
+        args: {code: STR_COMP, anon_support: maybe}
+        expect:
+          result: {ANON_SUPPORT: maybe}
+      - fn: get_comparison_function
+        args: {code: STR_COMP}
+        expect:
+          result: {ANON_SUPPORT: maybe, CONNECT_STR: g2StringComp}
+
+  - name: set_connect_str_null_clears
+    steps:
+      - fn: set_comparison_function
+        args: {code: STR_COMP, connect_str: null}
+      - fn: get_comparison_function
+        args: {code: STR_COMP}
+        expect:
+          result: {CONNECT_STR: null, CFUNC_DESC: String comparison}
+
+  - name: set_absent_leaves_fields
+    steps:
+      - fn: set_comparison_function
+        args: {code: STR_COMP, language: C}
+      - fn: get_comparison_function
+        args: {code: STR_COMP}
+        expect:
+          result: {CONNECT_STR: g2StringComp, CFUNC_DESC: String comparison, LANGUAGE: C}
+
+  - name: set_missing_is_not_found
+    fn: set_comparison_function
+    args: {code: NOPE, language: C}
+    expect: {error: NOT_FOUND}
+
+  - name: set_invalid_config_is_json_parse
+    fn: set_comparison_function
+    config_literal: "not json"
+    args: {code: STR_COMP}
+    expect: {error: JSON_PARSE}

@@ -1,0 +1,265 @@
+# Conformance cases for the `rules` group. Every case starts from the REAL
+# template config (project.yaml paths.fixture).
+group: rules
+
+cases:
+  - name: add_resolve_rule_auto_id_then_get
+    steps:
+      - fn: add_rule
+        args:
+          id: 0
+          rule_config: {ERRULE_CODE: my_rule, RESOLVE: "yes", RTYPE_ID: 2, ERRULE_TIER: 5, QUAL_ERFRAG_CODE: same_name}
+        expect: {kind: config_and_json, result: 1000}
+      - fn: get_rule
+        args: {code_or_id: my_rule}
+        expect:
+          kind: json
+          result: {id: 1000, rule: MY_RULE, resolve: "Yes", relate: "No", rtype_id: 1, fragment: same_name, disqualifier: null, tier: 5}
+
+  - name: add_relate_rule_explicit_id_ignores_config_id
+    steps:
+      - fn: add_rule
+        args:
+          id: 5000
+          rule_config: {ERRULE_ID: 7, ERRULE_CODE: REL_RULE, RELATE: "Yes", RTYPE_ID: 3, ERRULE_TIER: 9, QUAL_ERFRAG_CODE: SAME_NAME, DISQ_ERFRAG_CODE: ""}
+        expect: {result: 5000}
+      - fn: get_rule
+        args: {code_or_id: "5000"}
+        expect:
+          result: {id: 5000, rule: REL_RULE, resolve: "No", relate: "Yes", rtype_id: 3, fragment: SAME_NAME, disqualifier: "", tier: null}
+
+  - name: add_negative_id_auto_allocates
+    fn: add_rule
+    args:
+      id: -3
+      rule_config: {ERRULE_CODE: NEG_RULE, QUAL_ERFRAG_CODE: SAME_NAME}
+    expect: {result: 1000}
+
+  - name: add_taken_id_is_already_exists
+    fn: add_rule
+    args:
+      id: 100
+      rule_config: {ERRULE_CODE: NEW_RULE, QUAL_ERFRAG_CODE: SAME_NAME}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_duplicate_code_is_already_exists
+    fn: add_rule
+    args:
+      id: 0
+      rule_config: {ERRULE_CODE: same_a1, QUAL_ERFRAG_CODE: SAME_NAME}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_missing_code_is_missing_field
+    fn: add_rule
+    args:
+      id: 0
+      rule_config: {QUAL_ERFRAG_CODE: SAME_NAME}
+    expect: {error: MISSING_FIELD}
+
+  - name: add_missing_code_beats_invalid_config
+    fn: add_rule
+    config_literal: "not json"
+    args:
+      id: 0
+      rule_config: {}
+    expect: {error: MISSING_FIELD}
+
+  - name: add_missing_fragment_is_missing_field
+    fn: add_rule
+    args:
+      id: 0
+      rule_config: {ERRULE_CODE: NEW_RULE}
+    expect: {error: MISSING_FIELD}
+
+  - name: add_blank_fragment_is_not_found
+    fn: add_rule
+    args:
+      id: 0
+      rule_config: {ERRULE_CODE: NEW_RULE, QUAL_ERFRAG_CODE: ""}
+    expect: {error: NOT_FOUND}
+
+  - name: add_unknown_fragment_is_not_found
+    fn: add_rule
+    args:
+      id: 0
+      rule_config: {ERRULE_CODE: NEW_RULE, QUAL_ERFRAG_CODE: NO_SUCH_FRAG}
+    expect: {error: NOT_FOUND}
+
+  - name: add_unknown_disqualifier_is_not_found
+    fn: add_rule
+    args:
+      id: 0
+      rule_config: {ERRULE_CODE: NEW_RULE, QUAL_ERFRAG_CODE: SAME_NAME, DISQ_ERFRAG_CODE: NO_SUCH_FRAG}
+    expect: {error: NOT_FOUND}
+
+  - name: add_bad_resolve_is_invalid_input
+    fn: add_rule
+    args:
+      id: 0
+      rule_config: {ERRULE_CODE: NEW_RULE, QUAL_ERFRAG_CODE: SAME_NAME, RESOLVE: Maybe}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_resolve_and_relate_is_invalid_input
+    fn: add_rule
+    args:
+      id: 0
+      rule_config: {ERRULE_CODE: NEW_RULE, QUAL_ERFRAG_CODE: SAME_NAME, RESOLVE: "Yes", RELATE: "Yes", ERRULE_TIER: 5}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_resolve_without_tier_is_invalid_input
+    fn: add_rule
+    args:
+      id: 0
+      rule_config: {ERRULE_CODE: NEW_RULE, QUAL_ERFRAG_CODE: SAME_NAME, RESOLVE: "Yes"}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_relate_with_rtype_1_is_invalid_input
+    fn: add_rule
+    args:
+      id: 0
+      rule_config: {ERRULE_CODE: NEW_RULE, QUAL_ERFRAG_CODE: SAME_NAME, RELATE: "Yes", RTYPE_ID: 1}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_without_errule_section_is_missing_section
+    fn: add_rule
+    config_literal: '{"G2_CONFIG": {"CFG_ERFRAG": [{"ERFRAG_ID": 1, "ERFRAG_CODE": "F"}]}}'
+    args:
+      id: 0
+      rule_config: {ERRULE_CODE: NEW_RULE, QUAL_ERFRAG_CODE: F}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_invalid_json_is_json_parse
+    fn: add_rule
+    config_literal: "not json"
+    args:
+      id: 0
+      rule_config: {ERRULE_CODE: NEW_RULE, QUAL_ERFRAG_CODE: F}
+    expect: {error: JSON_PARSE}
+
+  - name: delete_then_list
+    steps:
+      - fn: delete_rule
+        args: {code: same_a1}
+        expect: {kind: config}
+      - fn: list_rules
+        expect:
+          len: 37
+          excludes:
+            - {rule: SAME_A1}
+
+  - name: delete_missing_is_not_found
+    fn: delete_rule
+    args: {code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_invalid_json_is_json_parse
+    fn: delete_rule
+    config_literal: "not json"
+    args: {code: SAME_A1}
+    expect: {error: JSON_PARSE}
+
+  - name: get_by_id_and_relate_tier_is_null
+    steps:
+      - fn: get_rule
+        args: {code_or_id: "100"}
+        expect:
+          result: {id: 100, rule: SAME_A1, resolve: "Yes", relate: "No", rtype_id: 1, fragment: SAME_A1, disqualifier: null, tier: 10}
+      - fn: get_rule
+        args: {code_or_id: cname_cff_dexcl}
+        expect:
+          result: {id: 164, resolve: "No", relate: "Yes", rtype_id: 2, tier: null}
+
+  - name: get_missing_is_not_found
+    fn: get_rule
+    args: {code_or_id: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: get_invalid_json_is_json_parse
+    fn: get_rule
+    config_literal: "not json"
+    args: {code_or_id: SAME_A1}
+    expect: {error: JSON_PARSE}
+
+  - name: list_template_sorted_by_id
+    fn: list_rules
+    expect:
+      kind: json
+      len: 38
+      contains:
+        - {id: 100, rule: SAME_A1, tier: 10}
+        - {id: 164, rule: CNAME_CFF_DEXCL, tier: null}
+
+  - name: list_without_section_is_empty
+    fn: list_rules
+    config_literal: '{"G2_CONFIG": {}}'
+    expect: {len: 0}
+
+  - name: list_invalid_json_is_json_parse
+    fn: list_rules
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}
+
+  - name: set_relate_rule_to_resolve_forces_rtype_1
+    steps:
+      - fn: set_rule
+        args: {code: cname_cff_dexcl, resolve: "yes", relate: "no", tier: 7}
+        expect: {kind: config}
+      - fn: get_rule
+        args: {code_or_id: CNAME_CFF_DEXCL}
+        expect:
+          result: {id: 164, resolve: "Yes", relate: "No", rtype_id: 1, tier: 7, fragment: CNAME_CFF_DEXCL}
+
+  - name: set_tristate_clear_and_uppercased_set
+    steps:
+      - fn: set_rule
+        args: {code: SAME_A1, fragment: null, disqualifier: diff_excl}
+      - fn: get_rule
+        args: {code_or_id: SAME_A1}
+        expect:
+          result: {fragment: null, disqualifier: DIFF_EXCL, tier: 10}
+      - fn: set_rule
+        args: {code: SAME_A1, disqualifier: null}
+      - fn: get_rule
+        args: {code_or_id: SAME_A1}
+        expect:
+          result: {disqualifier: null}
+
+  - name: set_without_updates_leaves_row
+    steps:
+      - fn: set_rule
+        args: {code: SAME_A1}
+      - fn: get_rule
+        args: {code_or_id: SAME_A1}
+        expect:
+          result: {id: 100, resolve: "Yes", relate: "No", rtype_id: 1, fragment: SAME_A1, disqualifier: null, tier: 10}
+
+  - name: set_clear_tier_on_resolve_rule_is_invalid_input
+    fn: set_rule
+    args: {code: SAME_A1, tier: null}
+    expect: {error: INVALID_INPUT}
+
+  - name: set_bad_resolve_is_invalid_input
+    fn: set_rule
+    args: {code: SAME_A1, resolve: Maybe}
+    expect: {error: INVALID_INPUT}
+
+  - name: set_relate_bad_rtype_is_invalid_input
+    fn: set_rule
+    args: {code: CNAME_CFF_DEXCL, rtype_id: 1}
+    expect: {error: INVALID_INPUT}
+
+  - name: set_unknown_fragment_is_not_found
+    fn: set_rule
+    args: {code: SAME_A1, fragment: NO_SUCH_FRAG}
+    expect: {error: NOT_FOUND}
+
+  - name: set_missing_rule_is_not_found
+    fn: set_rule
+    args: {code: NOPE, resolve: "No"}
+    expect: {error: NOT_FOUND}
+
+  - name: set_invalid_json_is_json_parse
+    fn: set_rule
+    config_literal: "not json"
+    args: {code: SAME_A1}
+    expect: {error: JSON_PARSE}

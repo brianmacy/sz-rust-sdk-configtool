@@ -175,20 +175,13 @@ pub fn add_expression_call(
         // EXEC_ORDER is 1-based over the element list.
         let bom_exec_order = idx as i64 + 1;
 
-        // Keep feature name for error messages (clone before consuming)
-        let _bom_feature_name_for_errors = feature_opt.clone();
-
-        // Determine BOM FTYPE_ID
-        let bom_ftype_id =
-            if let Some(bom_feature) = feature_opt.filter(|f| !f.eq_ignore_ascii_case("PARENT")) {
-                if bom_feature.eq_ignore_ascii_case("parent") {
-                    0 // Special value for parent feature link
-                } else {
-                    lookup_feature_id(config, &bom_feature)?
-                }
-            } else {
-                -1
-            };
+        // Determine BOM FTYPE_ID (G2 EFBomConfig.cpp: 0 = PARENT_FEATURE_LINKED_FTYPE,
+        // -1 = WILDCARDED_FTYPE). "PARENT" (any case) is the parent feature link.
+        let bom_ftype_id = match feature_opt.as_deref() {
+            Some(f) if f.eq_ignore_ascii_case("PARENT") => 0,
+            Some(f) => lookup_feature_id(config, f)?,
+            None => -1,
+        };
 
         // Lookup element ID (always global lookup - feature field is just metadata for EFBOM)
         let bom_felem_id = lookup_element_id(config, &element_code)?;
@@ -755,6 +748,66 @@ mod tests {
         assert_eq!(efbom["FELEM_ID"], json!(11));
         assert_eq!(efbom["FELEM_REQ"], json!("No"));
         assert_eq!(efbom["EXEC_ORDER"], json!(1));
+    }
+
+    /// BOM feature "PARENT" (any case) is the G2 parent feature link, stored as
+    /// FTYPE_ID 0 (EFBomConfig::PARENT_FEATURE_LINKED_FTYPE); an absent feature
+    /// stays FTYPE_ID -1 (WILDCARDED_FTYPE); a real code stores its FTYPE_ID.
+    #[test]
+    fn test_add_expression_call_bom_parent_feature_link() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_EFCALL": [],
+            "CFG_EFBOM": [],
+            "CFG_FTYPE": [{"FTYPE_ID": 5, "FTYPE_CODE": "NAME"}],
+            "CFG_EFUNC": [{"EFUNC_ID": 7, "EFUNC_CODE": "EXPRESS_BOM"}],
+            "CFG_FELEM": [
+                {"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"},
+                {"FELEM_ID": 12, "FELEM_CODE": "LAST_NAME"},
+                {"FELEM_ID": 13, "FELEM_CODE": "MIDDLE_NAME"},
+                {"FELEM_ID": 14, "FELEM_CODE": "FULL_NAME"},
+                {"FELEM_ID": 15, "FELEM_CODE": "SUR_NAME"}
+            ]
+        }}"#;
+        let element_list = vec![
+            (
+                "FIRST_NAME".to_string(),
+                "Yes".to_string(),
+                Some("PARENT".to_string()),
+            ),
+            (
+                "LAST_NAME".to_string(),
+                "Yes".to_string(),
+                Some("parent".to_string()),
+            ),
+            (
+                "MIDDLE_NAME".to_string(),
+                "No".to_string(),
+                Some("PaReNt".to_string()),
+            ),
+            ("FULL_NAME".to_string(), "No".to_string(), None),
+            (
+                "SUR_NAME".to_string(),
+                "No".to_string(),
+                Some("name".to_string()),
+            ),
+        ];
+        let params = AddExpressionCallParams {
+            ftype_code: Some("NAME"),
+            ..AddExpressionCallParams::new("EXPRESS_BOM", element_list)
+        };
+
+        let (modified, _) = add_expression_call(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let ftypes: Vec<Value> = value["G2_CONFIG"]["CFG_EFBOM"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["FTYPE_ID"].clone())
+            .collect();
+        assert_eq!(
+            ftypes,
+            vec![json!(0), json!(0), json!(0), json!(-1), json!(5)]
+        );
     }
 
     #[test]

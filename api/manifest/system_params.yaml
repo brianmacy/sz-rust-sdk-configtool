@@ -1,0 +1,45 @@
+# System parameters (stored in CFG_RTYPE). Root module: src/system_params.rs (2 pub fns, all here).
+group: system_params
+
+functions:
+  - name: list_system_parameters
+    doc: List system parameters as a name -> string-value map.
+    rust: system_params::list_system_parameters
+    c_symbol: SzConfigTool_listSystemParameters
+    args: []
+    returns: json
+    errors: [JSON_PARSE]
+    notes: >-
+      Result is an object. The only parameter is relationshipsBreakMatches, read from
+      BREAK_RES of the FIRST CFG_RTYPE row with RCLASS_ID 2 and reported as a decimal
+      STRING. TRAP: it is reported only when BREAK_RES is a JSON integer; the template's
+      DISCLOSED row stores the string "No", so the template yields {}. A missing
+      CFG_RTYPE/G2_CONFIG also yields {}.
+    c_notes: >-
+      C typed export reports library errors with returnCode -5 and no reason code.
+
+  - name: set_system_parameter
+    doc: Set a system parameter (relationshipsBreakMatches).
+    rust: system_params::set_system_parameter
+    c_symbol: SzConfigTool_setSystemParameterWithJson
+    args:
+      - name: parameter_name
+        type: str
+        semantics: >-
+          Case-insensitive; only relationshipsBreakMatches (or
+          relationships_break_matches) is known. Any other name is INVALID_CONFIG
+          (not INVALID_INPUT).
+      - name: parameter_value
+        type: json
+        semantics: >-
+          Written VERBATIM (any JSON value, no validation) to BREAK_RES of the
+          first CFG_RTYPE row with RCLASS_ID 2. Only an integer value is visible to
+          list_system_parameters afterwards.
+    returns: config
+    errors: [JSON_PARSE, INVALID_CONFIG, NOT_FOUND]
+    notes: >-
+      NOT_FOUND when no CFG_RTYPE row has RCLASS_ID 2 (or CFG_RTYPE/G2_CONFIG is
+      absent). The parameter name is checked AFTER the config is parsed.
+    c_notes: >-
+      C export SzConfigTool_setSystemParameterWithJson (the only C entry point) takes
+      the value as JSON text.

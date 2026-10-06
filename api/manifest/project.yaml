@@ -1,0 +1,68 @@
+# Project-level settings for the binding manifest and its code generator
+# (`cargo run -p sz-configtool-codegen`). All paths are relative to the
+# workspace root. See schema.md for the meaning of every field.
+
+# Rust crate name of the root library the generated dispatcher calls.
+root_crate: sz_configtool_lib
+
+paths:
+  # Root-library sources scanned by the coverage drift test.
+  root_src: src
+  # C header that every manifest `c_symbol` must be declared in.
+  c_header: ffi/include/libSzConfigTool.h
+  # The REAL configuration every conformance case starts from.
+  fixture: tests/fixtures/g2config_template.json
+  # Hand-maintained inputs.
+  manifest_dir: api/manifest
+  conformance_dir: api/manifest/conformance
+  excluded: api/manifest/excluded.yaml
+  # Generated outputs (checked in; CI and a codegen test fail when stale).
+  dispatch_out: api/src/dispatch_gen.rs
+  manifest_json_out: api/manifest/generated/manifest.json
+  conformance_json_out: api/manifest/generated/conformance.json
+
+# Per-language generated files (workspace-relative), by role. Generators read
+# these; they never hardcode output locations. See bindings/CONTRACT.md.
+bindings:
+  python:
+    module: bindings/python/python/sz_configtool/generated.py
+    stub: bindings/python/python/sz_configtool/generated.pyi
+    init: bindings/python/python/sz_configtool/__init__.py
+    test_paths: bindings/python/tests/generated_paths.py
+  java:
+    api: bindings/java/src/main/java/io/github/brianmacy/szconfigtool/SzConfigTool.java
+    error_kinds: bindings/java/src/main/java/io/github/brianmacy/szconfigtool/SzConfigToolErrorKind.java
+    test_dispatch: bindings/java/src/test/java/io/github/brianmacy/szconfigtool/TypedDispatch.java
+  csharp:
+    api: bindings/csharp/src/Sz.ConfigTool/Generated/SzConfigTool.g.cs
+    error_kinds: bindings/csharp/src/Sz.ConfigTool/Generated/SzConfigToolErrorKind.g.cs
+  cpp:
+    api: bindings/cpp/include/szconfigtool/generated/api.hpp
+    error_kinds: bindings/cpp/include/szconfigtool/generated/error_kinds.hpp
+    test_dispatch: bindings/cpp/tests/generated/typed_dispatch.hpp
+  node:
+    package_dir: bindings/node
+    functions: bindings/node/ts/generated/functions.ts
+    reason_codes: bindings/node/ts/generated/reason-codes.ts
+    trpc_schemas: bindings/node/trpc/src/generated/schemas.ts
+    trpc_router: bindings/node/trpc/src/generated/router.ts
+    test_paths: bindings/node/test/generated/paths.ts
+
+# The complete wire error taxonomy: the 13 `SzConfigError::reason_code()`
+# values plus INTERNAL (boundary/serialization/panic failures). Every
+# `errors[]` entry and every conformance `expect.error` must be one of these.
+reason_codes:
+  - JSON_PARSE
+  - NOT_FOUND
+  - NOT_ON_CALL
+  - NOT_IN_FEATURE
+  - ALREADY_EXISTS
+  - ALREADY_PRESENT
+  - INVALID_INPUT
+  - MISSING_SECTION
+  - INVALID_STRUCTURE
+  - MISSING_FIELD
+  - INVALID_CONFIG
+  - NOT_IMPLEMENTED
+  - VALIDATION_ERRORS
+  - INTERNAL

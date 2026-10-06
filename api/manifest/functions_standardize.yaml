@@ -1,0 +1,146 @@
+# CFG_SFUNC — standardize functions. Root module: src/functions/standardize.rs
+# (6 pub fns, all here).
+group: functions_standardize
+
+functions:
+  - name: add_standardize_function
+    doc: Add a standardize function (CFG_SFUNC row).
+    rust: functions::standardize::add_standardize_function
+    rust_params_struct: functions::standardize::AddStandardizeFunctionParams
+    c_symbol: SzConfigTool_addStandardizeFunction
+    args:
+      - name: code
+        type: str
+        positional: true
+        semantics: Uppercased before the duplicate check and storage (SFUNC_CODE).
+      - name: connect_str
+        type: str
+        optional: true
+        semantics: Absent stores CONNECT_STR null; any string (including "") is stored verbatim.
+      - name: description
+        type: str
+        optional: true
+        semantics: Absent stores SFUNC_DESC null; any string is stored verbatim.
+      - name: language
+        type: str
+        optional: true
+        semantics: Absent stores LANGUAGE null; any string is stored verbatim.
+    returns: config_and_json
+    errors: [JSON_PARSE, MISSING_SECTION, INVALID_INPUT]
+    notes: >-
+      Returns (modified config, the new complete CFG_SFUNC row: SFUNC_ID, SFUNC_CODE,
+      CONNECT_STR, SFUNC_DESC, LANGUAGE). SFUNC_ID is always auto-allocated (max
+      existing + 1, floor 1); no id can be requested. TRAP: a duplicate code is
+      INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS. MISSING_SECTION
+      only when CFG_SFUNC is absent.
+    c_notes: >-
+      C typed export SzConfigTool_addStandardizeFunction DROPS the new row; a NULL
+      connect_str = None but "" is stored as ""; an EMPTY sfunc_desc / language is
+      coerced to None (null); library errors return non-standard returnCode -5 (CString
+      failure -4) via set_error, so no reason code is recorded.
+
+  - name: delete_standardize_function
+    doc: Delete a standardize function's CFG_SFUNC row only (no cascade).
+    rust: functions::standardize::delete_standardize_function
+    c_symbol: SzConfigTool_deleteStandardizeFunction
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup.
+    returns: config_and_json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Returns (modified config, the deleted CFG_SFUNC row). Removes ONLY the CFG_SFUNC
+      row; CFG_SFCALL rows referencing it are left dangling (use
+      delete_standardize_function_cascade). A missing CFG_SFUNC section is NOT_FOUND
+      (not MISSING_SECTION).
+    c_notes: >-
+      C typed export drops the deleted row and returns non-standard returnCode -5 on
+      library errors (no reason code).
+
+  - name: delete_standardize_function_cascade
+    doc: Delete a standardize function and its CFG_SFCALL rows.
+    rust: functions::standardize::delete_standardize_function_cascade
+    c_symbol: SzConfigTool_deleteStandardizeFunctionCascade
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup.
+    returns: config_and_json
+    errors: [JSON_PARSE, NOT_FOUND, MISSING_FIELD]
+    notes: >-
+      Returns (modified config, the deleted CFG_SFUNC row). Removes every CFG_SFCALL row
+      whose SFUNC_ID matches (skipped if CFG_SFCALL is absent), then the CFG_SFUNC row;
+      no other section is touched. MISSING_FIELD when the found row has no integer
+      SFUNC_ID. A missing CFG_SFUNC section is NOT_FOUND.
+    c_notes: >-
+      C export (handle_result, standard -2) drops the deleted row.
+
+  - name: get_standardize_function
+    doc: Get one standardize function's raw CFG_SFUNC row by code.
+    rust: functions::standardize::get_standardize_function
+    c_symbol: SzConfigTool_getStandardizeFunction
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup.
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Result uses on-disk keys (SFUNC_ID, SFUNC_CODE, SFUNC_DESC, CONNECT_STR,
+      LANGUAGE). A missing CFG_SFUNC section is NOT_FOUND (not MISSING_SECTION).
+    c_notes: >-
+      C typed export returns non-standard returnCode -5 on library errors.
+
+  - name: list_standardize_functions
+    doc: List all standardize functions as camelCase summaries.
+    rust: functions::standardize::list_standardize_functions
+    c_symbol: SzConfigTool_listStandardizeFunctions
+    args: []
+    returns: json
+    errors: [JSON_PARSE]
+    notes: >-
+      Result is an array of {id, function, connectStr, language} in config order
+      (description is NOT included); connectStr/language are null-preserving. A missing
+      CFG_SFUNC section yields [] (no error).
+    c_notes: >-
+      C typed export returns non-standard returnCode -5 on library errors.
+
+  - name: set_standardize_function
+    doc: Update a standardize function's connect string / description / language.
+    rust: functions::standardize::set_standardize_function
+    rust_params_struct: functions::standardize::SetStandardizeFunctionParams
+    c_symbol: SzConfigTool_setStandardizeFunction
+    c_aliases: [SzConfigTool_setStandardizeFunctionWithJson]
+    args:
+      - name: code
+        type: str
+        positional: true
+        semantics: Uppercased before lookup.
+      - name: connect_str
+        type: str
+        tristate: true
+        semantics: Absent leaves CONNECT_STR; null clears it to null; a string (including "") sets it.
+      - name: description
+        type: str
+        optional: true
+        semantics: Absent leaves SFUNC_DESC; a string is stored verbatim. Cannot be cleared to null.
+      - name: language
+        type: str
+        optional: true
+        semantics: Absent leaves LANGUAGE; a string is stored verbatim. Cannot be cleared to null.
+    returns: config_and_json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Returns (modified config, the updated CFG_SFUNC row). No value validation. The row
+      is deleted and re-appended, so it moves to the END of CFG_SFUNC. A missing
+      CFG_SFUNC section is NOT_FOUND.
+    c_notes: >-
+      C deltas: both exports drop the updated row. SzConfigTool_setStandardizeFunction
+      (direct args) cannot Clear: NULL connect_str = Leave, "" = Set(""); an EMPTY
+      sfunc_desc / language = None (leave); library errors return non-standard -5.
+      SzConfigTool_setStandardizeFunctionWithJson takes an updates object with keys
+      CONNECT_STR|connectStr (tri-state: null clears), SFUNC_DESC|description,
+      LANGUAGE|language (one spelling per field; null = leave); a non-object, an unknown key (including ANON_SUPPORT), a
+      non-string value, or both spellings of a field is INVALID_INPUT; unparsable
+      JSON is returnCode -3.

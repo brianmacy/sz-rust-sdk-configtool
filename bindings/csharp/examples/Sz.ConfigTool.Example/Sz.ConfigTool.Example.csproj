@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <!-- In-repo build: reference the project and copy the locally built native.
+       A consumer instead uses <PackageReference Include="Sz.ConfigTool" />
+       (see ../../README.md), which brings runtimes/<rid>/native itself. -->
+  <ItemGroup>
+    <ProjectReference Include="../../src/Sz.ConfigTool/Sz.ConfigTool.csproj" />
+  </ItemGroup>
+
+  <Import Project="../../natives.local.targets" />
+
+</Project>

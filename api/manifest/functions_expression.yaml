@@ -1,0 +1,147 @@
+# CFG_EFUNC — expression functions. Root module: src/functions/expression.rs
+# (6 pub fns, all here).
+group: functions_expression
+
+functions:
+  - name: add_expression_function
+    doc: Add an expression function (CFG_EFUNC row).
+    rust: functions::expression::add_expression_function
+    rust_params_struct: functions::expression::AddExpressionFunctionParams
+    c_symbol: SzConfigTool_addExpressionFunction
+    args:
+      - name: code
+        type: str
+        positional: true
+        semantics: Uppercased before the duplicate check and storage (EFUNC_CODE).
+      - name: connect_str
+        type: str
+        optional: true
+        semantics: Absent stores CONNECT_STR null; any string (including "") is stored verbatim.
+      - name: description
+        type: str
+        optional: true
+        semantics: Absent stores EFUNC_DESC null; any string is stored verbatim.
+      - name: language
+        type: str
+        optional: true
+        semantics: Absent stores LANGUAGE null; any string is stored verbatim.
+    returns: config_and_json
+    errors: [JSON_PARSE, MISSING_SECTION, INVALID_INPUT]
+    notes: >-
+      Returns (modified config, the new complete CFG_EFUNC row: EFUNC_ID, EFUNC_CODE,
+      CONNECT_STR, EFUNC_DESC, LANGUAGE). EFUNC_ID is always auto-allocated (max
+      existing + 1, floor 1); no id can be requested. TRAP: a duplicate code is
+      INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS. MISSING_SECTION
+      only when CFG_EFUNC is absent.
+    c_notes: >-
+      C typed export SzConfigTool_addExpressionFunction DROPS the new row; a NULL
+      connect_str = None but "" is stored as ""; an EMPTY efunc_desc / language is
+      coerced to None (null); library errors return non-standard returnCode -5 (CString
+      failure -4) via set_error, so no reason code is recorded.
+
+  - name: delete_expression_function
+    doc: Delete an expression function's CFG_EFUNC row only (no cascade).
+    rust: functions::expression::delete_expression_function
+    c_symbol: SzConfigTool_deleteExpressionFunction
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup.
+    returns: config_and_json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Returns (modified config, the deleted CFG_EFUNC row). Removes ONLY the CFG_EFUNC
+      row; CFG_EFCALL rows referencing it are left dangling (use
+      delete_expression_function_cascade). A missing CFG_EFUNC section is NOT_FOUND (not
+      MISSING_SECTION).
+    c_notes: >-
+      C typed export drops the deleted row and returns non-standard returnCode -5 on
+      library errors (no reason code).
+
+  - name: delete_expression_function_cascade
+    doc: Delete an expression function and its CFG_EFCALL / CFG_EFBOM rows.
+    rust: functions::expression::delete_expression_function_cascade
+    c_symbol: SzConfigTool_deleteExpressionFunctionCascade
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup.
+    returns: config_and_json
+    errors: [JSON_PARSE, NOT_FOUND, MISSING_FIELD]
+    notes: >-
+      Returns (modified config, the deleted CFG_EFUNC row). Removes the CFG_EFBOM rows
+      whose EFCALL_ID belongs to one of the function's CFG_EFCALL rows, then every
+      CFG_EFCALL row whose EFUNC_ID matches (each step skipped if its section is
+      absent), then the CFG_EFUNC row. MISSING_FIELD when the found row has no integer
+      EFUNC_ID. A missing CFG_EFUNC section is NOT_FOUND.
+    c_notes: >-
+      C export (handle_result, standard -2) drops the deleted row.
+
+  - name: get_expression_function
+    doc: Get one expression function's raw CFG_EFUNC row by code.
+    rust: functions::expression::get_expression_function
+    c_symbol: SzConfigTool_getExpressionFunction
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup.
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Result uses on-disk keys (EFUNC_ID, EFUNC_CODE, EFUNC_DESC, CONNECT_STR,
+      LANGUAGE). A missing CFG_EFUNC section is NOT_FOUND (not MISSING_SECTION).
+    c_notes: >-
+      C typed export returns non-standard returnCode -5 on library errors.
+
+  - name: list_expression_functions
+    doc: List all expression functions as camelCase summaries.
+    rust: functions::expression::list_expression_functions
+    c_symbol: SzConfigTool_listExpressionFunctions
+    args: []
+    returns: json
+    errors: [JSON_PARSE]
+    notes: >-
+      Result is an array of {id, function, connectStr, language} in config order
+      (description is NOT included); connectStr/language are null-preserving. A missing
+      CFG_EFUNC section yields [] (no error).
+    c_notes: >-
+      C typed export returns non-standard returnCode -5 on library errors.
+
+  - name: set_expression_function
+    doc: Update an expression function's connect string / description / language.
+    rust: functions::expression::set_expression_function
+    rust_params_struct: functions::expression::SetExpressionFunctionParams
+    c_symbol: SzConfigTool_setExpressionFunction
+    c_aliases: [SzConfigTool_setExpressionFunctionWithJson]
+    args:
+      - name: code
+        type: str
+        positional: true
+        semantics: Uppercased before lookup.
+      - name: connect_str
+        type: str
+        tristate: true
+        semantics: Absent leaves CONNECT_STR; null clears it to null; a string (including "") sets it.
+      - name: description
+        type: str
+        optional: true
+        semantics: Absent leaves EFUNC_DESC; a string is stored verbatim. Cannot be cleared to null.
+      - name: language
+        type: str
+        optional: true
+        semantics: Absent leaves LANGUAGE; a string is stored verbatim. Cannot be cleared to null.
+    returns: config_and_json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Returns (modified config, the updated CFG_EFUNC row). No value validation. The row
+      is deleted and re-appended, so it moves to the END of CFG_EFUNC. A missing
+      CFG_EFUNC section is NOT_FOUND.
+    c_notes: >-
+      C deltas: both exports drop the updated row. SzConfigTool_setExpressionFunction
+      (direct args) cannot Clear: NULL connect_str = Leave, "" = Set(""); an EMPTY
+      efunc_desc / language = None (leave); library errors return non-standard -5.
+      SzConfigTool_setExpressionFunctionWithJson takes an updates object with keys
+      CONNECT_STR|connectStr (tri-state: null clears), EFUNC_DESC|description,
+      LANGUAGE|language (one spelling per field; null = leave); a non-object, an unknown key (including ANON_SUPPORT), a
+      non-string value, or both spellings of a field is INVALID_INPUT; unparsable
+      JSON is returnCode -3.

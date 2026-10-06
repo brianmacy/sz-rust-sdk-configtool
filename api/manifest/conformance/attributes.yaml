@@ -1,0 +1,154 @@
+# Conformance cases for the `attributes` group. Every case starts from the
+# REAL template config (project.yaml paths.fixture). See schema.md
+# ("Conformance files") for the step/expect semantics.
+group: attributes
+
+cases:
+  - name: add_returns_config_and_record
+    steps:
+      - fn: add_attribute
+        args:
+          attribute: my_attr
+          feature: name
+          element: full_name
+          class: OTHER
+          internal: "yes"
+          required: desired
+        expect:
+          kind: config_and_json
+          result:
+            ATTR_ID: 2819
+            ATTR_CODE: MY_ATTR
+            ATTR_CLASS: OTHER
+            FTYPE_CODE: NAME
+            FELEM_CODE: FULL_NAME
+            FELEM_REQ: Desired
+            DEFAULT_VALUE: null
+            INTERNAL: "Yes"
+      - fn: get_attribute
+        args: {code: MY_ATTR}
+        expect:
+          kind: json
+          result: {ATTR_ID: 2819, FELEM_REQ: Desired, INTERNAL: "Yes", DEFAULT_VALUE: null}
+
+  - name: add_defaults_and_explicit_id
+    fn: add_attribute
+    args: {attribute: ID_ATTR, feature: NAME, element: FULL_NAME, class: NAME, id: 5000, default_value: ""}
+    expect:
+      result: {ATTR_ID: 5000, FELEM_REQ: "No", INTERNAL: "No", DEFAULT_VALUE: ""}
+
+  - name: add_non_positive_id_auto_allocates
+    fn: add_attribute
+    args: {attribute: NEG_ATTR, feature: NAME, element: FULL_NAME, class: NAME, id: -1}
+    expect:
+      result: {ATTR_ID: 2819}
+
+  - name: add_duplicate_is_already_exists
+    fn: add_attribute
+    args: {attribute: name_full, feature: NAME, element: FULL_NAME, class: NAME}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_taken_id_is_already_exists
+    fn: add_attribute
+    args: {attribute: NEW_ATTR, feature: NAME, element: FULL_NAME, class: NAME, id: 1102}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_class_is_case_sensitive
+    fn: add_attribute
+    args: {attribute: NEW_ATTR, feature: NAME, element: FULL_NAME, class: name}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_unknown_feature_is_not_found
+    fn: add_attribute
+    args: {attribute: NEW_ATTR, feature: NO_SUCH_FEATURE, element: FULL_NAME, class: NAME}
+    expect: {error: NOT_FOUND}
+
+  - name: add_unknown_element_is_not_found
+    fn: add_attribute
+    args: {attribute: NEW_ATTR, feature: NAME, element: NO_SUCH_ELEMENT, class: NAME}
+    expect: {error: NOT_FOUND}
+
+  - name: add_bad_required_is_invalid_input
+    fn: add_attribute
+    args: {attribute: NEW_ATTR, feature: NAME, element: FULL_NAME, class: NAME, required: Sometimes}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_bad_internal_is_invalid_input
+    fn: add_attribute
+    args: {attribute: NEW_ATTR, feature: NAME, element: FULL_NAME, class: NAME, internal: Maybe}
+    expect: {error: INVALID_INPUT}
+
+  - name: get_is_case_insensitive
+    fn: get_attribute
+    args: {code: name_full}
+    expect:
+      result:
+        ATTR_ID: 1102
+        ATTR_CODE: NAME_FULL
+        ATTR_CLASS: NAME
+        FTYPE_CODE: NAME
+        FELEM_CODE: FULL_NAME
+        FELEM_REQ: Any
+        DEFAULT_VALUE: null
+        INTERNAL: "No"
+
+  - name: get_missing_is_not_found
+    fn: get_attribute
+    args: {code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: list_template
+    fn: list_attributes
+    expect:
+      kind: json
+      len: 135
+      contains:
+        - {id: 1102, attribute: NAME_FULL, class: NAME, feature: NAME, element: FULL_NAME, required: Any, default: null, internal: "No"}
+
+  - name: delete_then_get_is_not_found
+    steps:
+      - fn: delete_attribute
+        args: {code: name_full}
+        expect: {kind: config}
+      - fn: get_attribute
+        args: {code: NAME_FULL}
+        expect: {error: NOT_FOUND}
+      - fn: list_attributes
+        expect:
+          len: 134
+          excludes:
+            - {attribute: NAME_FULL}
+
+  - name: delete_missing_is_not_found
+    fn: delete_attribute
+    args: {code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: set_normalizes_and_writes
+    steps:
+      - fn: set_attribute
+        args: {attribute: name_full, internal: "YES", required: "yes", default_value: x}
+        expect: {kind: config}
+      - fn: get_attribute
+        args: {code: NAME_FULL}
+        expect:
+          result: {INTERNAL: "Yes", FELEM_REQ: "Yes", DEFAULT_VALUE: x}
+
+  - name: set_without_updates_leaves_row
+    steps:
+      - fn: set_attribute
+        args: {attribute: NAME_FULL}
+      - fn: get_attribute
+        args: {code: NAME_FULL}
+        expect:
+          result: {INTERNAL: "No", FELEM_REQ: Any, DEFAULT_VALUE: null}
+
+  - name: set_bad_required_is_invalid_input
+    fn: set_attribute
+    args: {attribute: NAME_FULL, required: Sometimes}
+    expect: {error: INVALID_INPUT}
+
+  - name: set_missing_is_not_found
+    fn: set_attribute
+    args: {attribute: NOPE, internal: "No"}
+    expect: {error: NOT_FOUND}

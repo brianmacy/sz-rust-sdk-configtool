@@ -1,0 +1,26 @@
+<Project>
+  <!-- Shared settings for every project in bindings/csharp. -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Package/assembly version. Must equal the native library version
+         (SzConfigTool_getLibraryVersion); a test enforces this. Release
+         builds may override with -p:Version=<x.y.z>. -->
+    <Version>4.4.0-1</Version>
+    <Authors>Brian Macy</Authors>
+    <RepositoryUrl>https://github.com/brianmacy/sz-rust-sdk-configtool</RepositoryUrl>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+
+    <!-- Repository root (bindings/csharp/../..). -->
+    <SzRepoRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..'))</SzRepoRoot>
+
+    <!-- Directory holding the locally built native library used by the tests
+         and the example (built by: cargo build, package sz-configtool-ffi, release profile).
+         Override order: SZCONFIGTOOL_NATIVE_DIR, then $CARGO_TARGET_DIR/release,
+         then <repo>/target/release. -->
+    <SzLocalNativeDir Condition="'$(SZCONFIGTOOL_NATIVE_DIR)' != ''">$(SZCONFIGTOOL_NATIVE_DIR)</SzLocalNativeDir>
+    <SzLocalNativeDir Condition="'$(SzLocalNativeDir)' == '' and '$(CARGO_TARGET_DIR)' != ''">$(CARGO_TARGET_DIR)/release</SzLocalNativeDir>
+    <SzLocalNativeDir Condition="'$(SzLocalNativeDir)' == ''">$(SzRepoRoot)target/release</SzLocalNativeDir>
+  </PropertyGroup>
+</Project>

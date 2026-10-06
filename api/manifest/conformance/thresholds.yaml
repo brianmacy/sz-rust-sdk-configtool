@@ -1,0 +1,420 @@
+# Conformance cases for the `thresholds` group. Every case starts from the
+# REAL template config (project.yaml paths.fixture) unless a step sets
+# config_literal. See schema.md ("Conformance files").
+group: thresholds
+
+cases:
+  # ----- comparison thresholds (CFG_CFRTN) -----
+  - name: add_cfrtn_reuses_tier_exec_order
+    steps:
+      - fn: add_comparison_threshold
+        args: {cfunc_code: str_comp, ftype_code: name, cfunc_rtnval: full_score, exec_order: 9, same_score: 95}
+        expect: {kind: config}
+      - fn: list_comparison_thresholds
+        expect:
+          len: 25
+          contains:
+            - {id: 31, function: STR_COMP, returnOrder: 1, scoreName: FULL_SCORE, feature: NAME, sameScore: 95, closeScore: 0}
+
+  - name: add_cfrtn_auto_allocates_exec_order
+    steps:
+      - fn: add_comparison_threshold
+        args: {cfunc_code: GNR_COMP, ftype_code: ALL, cfunc_rtnval: new_rtn}
+      - fn: list_comparison_thresholds
+        expect:
+          contains:
+            - {id: 31, function: GNR_COMP, returnOrder: 6, scoreName: NEW_RTN, feature: all}
+
+  - name: add_cfrtn_non_positive_exec_order_auto_allocates
+    steps:
+      - fn: add_comparison_threshold
+        args: {cfunc_code: GNR_COMP, ftype_code: all, cfunc_rtnval: NEW_RTN, exec_order: 0}
+      - fn: list_comparison_thresholds
+        expect:
+          contains:
+            - {id: 31, returnOrder: 6, scoreName: NEW_RTN}
+
+  - name: add_cfrtn_honours_free_exec_order
+    steps:
+      - fn: add_comparison_threshold
+        args: {cfunc_code: GNR_COMP, ftype_code: all, cfunc_rtnval: NEW_RTN, exec_order: 20}
+      - fn: list_comparison_thresholds
+        expect:
+          contains:
+            - {id: 31, returnOrder: 20, scoreName: NEW_RTN}
+
+  - name: add_cfrtn_taken_exec_order_is_already_exists
+    fn: add_comparison_threshold
+    args: {cfunc_code: GNR_COMP, ftype_code: all, cfunc_rtnval: NEW_RTN, exec_order: 1}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_cfrtn_duplicate_is_already_exists
+    fn: add_comparison_threshold
+    args: {cfunc_code: STR_COMP, ftype_code: all, cfunc_rtnval: full_score}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_cfrtn_missing_field
+    fn: add_comparison_threshold
+    args: {cfunc_code: STR_COMP, ftype_code: all}
+    expect: {error: MISSING_FIELD}
+
+  - name: add_cfrtn_unknown_cfunc_is_not_found
+    fn: add_comparison_threshold
+    args: {cfunc_code: NO_SUCH_COMP, ftype_code: all, cfunc_rtnval: FULL_SCORE}
+    expect: {error: NOT_FOUND}
+
+  - name: add_cfrtn_unknown_feature_is_not_found
+    fn: add_comparison_threshold
+    args: {cfunc_code: STR_COMP, ftype_code: NO_SUCH_FEATURE, cfunc_rtnval: FULL_SCORE}
+    expect: {error: NOT_FOUND}
+
+  - name: add_cfrtn_missing_section
+    steps:
+      - fn: add_comparison_threshold
+        config_literal: '{"G2_CONFIG": {"CFG_CFUNC": [{"CFUNC_ID": 1, "CFUNC_CODE": "STR_COMP"}], "CFG_FTYPE": []}}'
+        args: {cfunc_code: STR_COMP, ftype_code: all, cfunc_rtnval: FULL_SCORE}
+        expect: {error: MISSING_SECTION}
+
+  - name: add_cfrtn_bad_config_is_json_parse
+    steps:
+      - fn: add_comparison_threshold
+        config_literal: 'not json'
+        args: {cfunc_code: STR_COMP, ftype_code: all, cfunc_rtnval: FULL_SCORE}
+        expect: {error: JSON_PARSE}
+
+  - name: set_cfrtn_writes_fields
+    steps:
+      - fn: set_comparison_threshold
+        args: {cfunc_code: gnr_comp, ftype_code: all, cfunc_rtnval: gnr_fn, exec_order: 1, same_score: 97, un_likely_score: -5}
+        expect: {kind: config}
+      - fn: list_comparison_thresholds
+        expect:
+          contains:
+            - {id: 2, function: GNR_COMP, returnOrder: 1, scoreName: GNR_FN, sameScore: 97, closeScore: 88, unlikelyScore: -5}
+
+  - name: set_cfrtn_missing_row_is_not_found
+    fn: set_comparison_threshold
+    args: {cfunc_code: STR_COMP, ftype_code: NAME, cfunc_rtnval: FULL_SCORE, same_score: 1}
+    expect: {error: NOT_FOUND}
+
+  - name: set_cfrtn_missing_field
+    fn: set_comparison_threshold
+    args: {cfunc_code: STR_COMP, cfunc_rtnval: FULL_SCORE}
+    expect: {error: MISSING_FIELD}
+
+  - name: set_cfrtn_missing_section
+    steps:
+      - fn: set_comparison_threshold
+        config_literal: '{"G2_CONFIG": {"CFG_CFUNC": [{"CFUNC_ID": 1, "CFUNC_CODE": "STR_COMP"}], "CFG_FTYPE": []}}'
+        args: {cfunc_code: STR_COMP, ftype_code: all, cfunc_rtnval: FULL_SCORE}
+        expect: {error: MISSING_SECTION}
+
+  - name: delete_cfrtn_then_list
+    steps:
+      - fn: delete_comparison_threshold
+        args: {cfunc_code: gnr_comp, ftype_code: ALL, cfunc_rtnval: Gnr_Sn}
+        expect: {kind: config}
+      - fn: list_comparison_thresholds
+        expect:
+          len: 23
+          excludes:
+            - {id: 3}
+
+  - name: delete_cfrtn_per_feature_row
+    steps:
+      - fn: delete_comparison_threshold
+        args: {cfunc_code: ID_COMP, ftype_code: national_id, cfunc_rtnval: FULL_SCORE}
+      - fn: list_comparison_thresholds
+        expect:
+          len: 23
+          excludes:
+            - {id: 24}
+
+  - name: delete_cfrtn_missing_row_is_not_found
+    fn: delete_comparison_threshold
+    args: {cfunc_code: STR_COMP, ftype_code: NAME, cfunc_rtnval: FULL_SCORE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_cfrtn_unknown_cfunc_is_not_found
+    fn: delete_comparison_threshold
+    args: {cfunc_code: NOPE, ftype_code: all, cfunc_rtnval: FULL_SCORE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_cfrtn_missing_section
+    steps:
+      - fn: delete_comparison_threshold
+        config_literal: '{"G2_CONFIG": {"CFG_CFUNC": [{"CFUNC_ID": 1, "CFUNC_CODE": "STR_COMP"}], "CFG_FTYPE": []}}'
+        args: {cfunc_code: STR_COMP, ftype_code: all, cfunc_rtnval: FULL_SCORE}
+        expect: {error: MISSING_SECTION}
+
+  - name: list_cfrtn_template
+    fn: list_comparison_thresholds
+    expect:
+      kind: json
+      len: 24
+      contains:
+        - {id: 1, function: STR_COMP, returnOrder: 1, scoreName: FULL_SCORE, feature: all, sameScore: 100, closeScore: 90, likelyScore: 80, plausibleScore: 70, unlikelyScore: 60}
+        - {id: 24, function: ID_COMP, feature: NATIONAL_ID}
+
+  - name: list_cfrtn_missing_section
+    steps:
+      - fn: list_comparison_thresholds
+        config_literal: '{"G2_CONFIG": {"CFG_CFUNC": [], "CFG_FTYPE": []}}'
+        expect: {error: MISSING_SECTION}
+
+  - name: list_cfrtn_bad_config_is_json_parse
+    steps:
+      - fn: list_comparison_thresholds
+        config_literal: '{'
+        expect: {error: JSON_PARSE}
+
+  # ----- generic thresholds (CFG_GENERIC_THRESHOLD) -----
+  - name: add_gthresh_then_list
+    steps:
+      - fn: add_generic_threshold
+        args: {plan: ingest, behavior: a1, scoring_cap: -1, candidate_cap: 7, send_to_redo: "yes"}
+        expect: {kind: config}
+      - fn: list_generic_thresholds
+        expect:
+          len: 47
+          contains:
+            - {id: 1, plan: INGEST, behavior: A1, feature: all, candidateCap: 7, scoringCap: -1, sendToRedo: "Yes"}
+
+  - name: add_gthresh_per_feature
+    steps:
+      - fn: add_generic_threshold
+        args: {plan: SEARCH, behavior: NAME, scoring_cap: 3, candidate_cap: 4, send_to_redo: "NO", feature: address}
+      - fn: list_generic_thresholds
+        expect:
+          contains:
+            - {id: 2, plan: SEARCH, behavior: NAME, feature: ADDRESS, candidateCap: 4, scoringCap: 3, sendToRedo: "No"}
+
+  - name: add_gthresh_duplicate_is_already_exists
+    fn: add_generic_threshold
+    args: {plan: INGEST, behavior: name, scoring_cap: 1, candidate_cap: 1, send_to_redo: "No", feature: ALL}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_gthresh_missing_fields
+    fn: add_generic_threshold
+    args: {plan: INGEST, behavior: A1}
+    expect: {error: MISSING_FIELD}
+
+  - name: add_gthresh_unknown_plan_is_not_found
+    fn: add_generic_threshold
+    args: {plan: NOPE, behavior: A1, scoring_cap: 1, candidate_cap: 1, send_to_redo: "No"}
+    expect: {error: NOT_FOUND}
+
+  - name: add_gthresh_unknown_feature_is_not_found
+    fn: add_generic_threshold
+    args: {plan: INGEST, behavior: A1, scoring_cap: 1, candidate_cap: 1, send_to_redo: "No", feature: NO_SUCH_FEATURE}
+    expect: {error: NOT_FOUND}
+
+  - name: add_gthresh_bad_behavior_and_redo_is_validation_errors
+    fn: add_generic_threshold
+    args: {plan: INGEST, behavior: BOGUS, scoring_cap: 1, candidate_cap: 1, send_to_redo: maybe}
+    expect: {error: VALIDATION_ERRORS}
+
+  - name: add_gthresh_missing_section
+    steps:
+      - fn: add_generic_threshold
+        config_literal: '{"G2_CONFIG": {"CFG_FTYPE": []}}'
+        args: {plan: INGEST, behavior: A1, scoring_cap: 1, candidate_cap: 1, send_to_redo: "No"}
+        expect: {error: MISSING_SECTION}
+
+  - name: add_gthresh_bad_config_is_json_parse
+    steps:
+      - fn: add_generic_threshold
+        config_literal: 'nope'
+        args: {plan: INGEST, behavior: A1, scoring_cap: 1, candidate_cap: 1, send_to_redo: "No"}
+        expect: {error: JSON_PARSE}
+
+  - name: validate_gthresh_ok_does_not_mutate
+    steps:
+      - fn: validate_generic_threshold
+        args: {plan: ingest, behavior: f1, send_to_redo: "yes", feature: phone}
+        expect:
+          kind: json
+          result: {schema: sz-configtool.generic-threshold-check/v1, result: ok}
+      - fn: list_generic_thresholds
+        expect: {len: 46}
+
+  - name: validate_gthresh_duplicate_is_data
+    fn: validate_generic_threshold
+    args: {plan: INGEST, behavior: name, send_to_redo: "No"}
+    expect:
+      result: {schema: sz-configtool.generic-threshold-check/v1, result: duplicate}
+
+  - name: validate_gthresh_unknown_plan_is_data
+    fn: validate_generic_threshold
+    args: {plan: nope, behavior: NAME, send_to_redo: "No"}
+    expect:
+      result: {schema: sz-configtool.generic-threshold-check/v1, result: notFound, which: plan, value: NOPE}
+
+  - name: validate_gthresh_unknown_feature_is_data
+    fn: validate_generic_threshold
+    args: {plan: INGEST, behavior: NAME, send_to_redo: "No", feature: no_feat}
+    expect:
+      result: {schema: sz-configtool.generic-threshold-check/v1, result: notFound, which: feature, value: NO_FEAT}
+
+  - name: validate_gthresh_invalid_fields_aggregate
+    fn: validate_generic_threshold
+    args: {plan: INGEST, behavior: bogus, send_to_redo: maybe, feature: PHONE}
+    expect:
+      result:
+        schema: sz-configtool.generic-threshold-check/v1
+        result: invalid
+        failures:
+          - {field: behavior, reasonCode: UNKNOWN_REFERENCE_CODE, offendingValue: BOGUS}
+          - {field: sendToRedo, reasonCode: OUT_OF_DOMAIN, offendingValue: maybe}
+
+  - name: validate_gthresh_missing_sections_is_plan_not_found
+    fn: validate_generic_threshold
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {plan: INGEST, behavior: NAME, send_to_redo: "No"}
+    expect:
+      result: {result: notFound, which: plan, value: INGEST}
+
+  - name: validate_gthresh_bad_config_is_json_parse
+    fn: validate_generic_threshold
+    config_literal: 'nope'
+    args: {plan: INGEST, behavior: NAME, send_to_redo: "No"}
+    expect: {error: JSON_PARSE}
+
+  - name: set_gthresh_writes_fields
+    steps:
+      - fn: set_generic_threshold
+        args: {plan: ingest, behavior: fm, candidate_cap: 9, scoring_cap: 8, send_to_redo: "YES"}
+        expect: {kind: config}
+      - fn: list_generic_thresholds
+        expect:
+          contains:
+            - {id: 1, plan: INGEST, behavior: FM, feature: all, candidateCap: 9, scoringCap: 8, sendToRedo: "Yes"}
+
+  - name: set_gthresh_per_feature_row
+    steps:
+      - fn: set_generic_threshold
+        args: {plan: INGEST, behavior: FF, feature: address, candidate_cap: 123}
+      - fn: list_generic_thresholds
+        expect:
+          contains:
+            - {plan: INGEST, behavior: FF, feature: ADDRESS, candidateCap: 123}
+
+  - name: set_gthresh_missing_row_is_not_found
+    fn: set_generic_threshold
+    args: {plan: INGEST, behavior: A1, candidate_cap: 1}
+    expect: {error: NOT_FOUND}
+
+  - name: set_gthresh_unknown_plan_is_not_found
+    fn: set_generic_threshold
+    args: {plan: NOPE, behavior: NAME, candidate_cap: 1}
+    expect: {error: NOT_FOUND}
+
+  - name: set_gthresh_missing_field
+    fn: set_generic_threshold
+    args: {plan: INGEST, candidate_cap: 1}
+    expect: {error: MISSING_FIELD}
+
+  - name: set_gthresh_bad_redo_is_validation_errors
+    fn: set_generic_threshold
+    args: {plan: INGEST, behavior: NAME, send_to_redo: sometimes}
+    expect: {error: VALIDATION_ERRORS}
+
+  - name: set_gthresh_missing_section
+    steps:
+      - fn: set_generic_threshold
+        config_literal: '{"G2_CONFIG": {"CFG_GPLAN": [{"GPLAN_ID": 1, "GPLAN_CODE": "INGEST"}], "CFG_FTYPE": []}}'
+        args: {plan: INGEST, behavior: NAME, candidate_cap: 1}
+        expect: {error: MISSING_SECTION}
+
+  - name: delete_gthresh_then_list
+    steps:
+      - fn: delete_generic_threshold
+        args: {plan: search, behavior: f1}
+        expect: {kind: config}
+      - fn: list_generic_thresholds
+        expect:
+          len: 45
+          excludes:
+            - {plan: SEARCH, behavior: F1, feature: all}
+
+  - name: delete_gthresh_per_feature_row
+    steps:
+      - fn: delete_generic_threshold
+        args: {plan: INGEST, behavior: FF, feature: address}
+      - fn: list_generic_thresholds
+        expect:
+          len: 45
+          excludes:
+            - {plan: INGEST, behavior: FF, feature: ADDRESS}
+
+  - name: delete_gthresh_missing_row_is_not_found
+    fn: delete_generic_threshold
+    args: {plan: INGEST, behavior: A1}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_gthresh_unknown_feature_is_not_found
+    fn: delete_generic_threshold
+    args: {plan: INGEST, behavior: FF, feature: NO_SUCH_FEATURE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_gthresh_missing_field
+    fn: delete_generic_threshold
+    args: {behavior: NAME}
+    expect: {error: MISSING_FIELD}
+
+  - name: delete_gthresh_missing_ftype_section
+    steps:
+      - fn: delete_generic_threshold
+        config_literal: '{"G2_CONFIG": {"CFG_GPLAN": [{"GPLAN_ID": 1, "GPLAN_CODE": "INGEST"}], "CFG_GENERIC_THRESHOLD": []}}'
+        args: {plan: INGEST, behavior: NAME, feature: ADDRESS}
+        expect: {error: MISSING_SECTION}
+
+  - name: list_gthresh_template_sorted
+    fn: list_generic_thresholds
+    expect:
+      kind: json
+      len: 46
+      contains:
+        - {id: 1, plan: INGEST, behavior: NAME, feature: all, candidateCap: 10, scoringCap: -1, sendToRedo: "Yes"}
+        - {id: 2, plan: SEARCH, behavior: NAME, feature: all, candidateCap: 100, scoringCap: -1, sendToRedo: "No"}
+
+  - name: list_gthresh_missing_section
+    steps:
+      - fn: list_generic_thresholds
+        config_literal: '{"G2_CONFIG": {"CFG_GPLAN": [], "CFG_FTYPE": []}}'
+        expect: {error: MISSING_SECTION}
+
+  - name: list_gthresh_bad_config_is_json_parse
+    steps:
+      - fn: list_generic_thresholds
+        config_literal: '['
+        expect: {error: JSON_PARSE}
+
+  # ----- JSON_PARSE for the remaining mutators -----
+  - name: set_cfrtn_bad_config_is_json_parse
+    steps:
+      - fn: set_comparison_threshold
+        config_literal: 'x'
+        args: {cfunc_code: STR_COMP, ftype_code: all, cfunc_rtnval: FULL_SCORE}
+        expect: {error: JSON_PARSE}
+
+  - name: delete_cfrtn_bad_config_is_json_parse
+    steps:
+      - fn: delete_comparison_threshold
+        config_literal: 'x'
+        args: {cfunc_code: STR_COMP, ftype_code: all, cfunc_rtnval: FULL_SCORE}
+        expect: {error: JSON_PARSE}
+
+  - name: set_gthresh_bad_config_is_json_parse
+    steps:
+      - fn: set_generic_threshold
+        config_literal: 'x'
+        args: {plan: INGEST, behavior: NAME}
+        expect: {error: JSON_PARSE}
+
+  - name: delete_gthresh_bad_config_is_json_parse
+    steps:
+      - fn: delete_generic_threshold
+        config_literal: 'x'
+        args: {plan: INGEST, behavior: NAME}
+        expect: {error: JSON_PARSE}

@@ -1,0 +1,192 @@
+# CFG_CFCALL / CFG_CFBOM — comparison calls. Root module: src/calls/comparison.rs
+# (8 pub fns: 6 mapped here, 2 no-op stubs excluded below).
+group: calls_comparison
+
+functions:
+  - name: add_comparison_call
+    doc: Add a comparison call (CFG_CFCALL row) binding a comparison function to a feature, with its element list (CFG_CFBOM rows).
+    rust: calls::comparison::add_comparison_call
+    rust_params_struct: calls::comparison::AddComparisonCallParams
+    c_symbol: SzConfigTool_addComparisonCall
+    args:
+      - name: ftype_code
+        type: str
+        rust_convert: owned_str
+        semantics: >-
+          Feature code; case-insensitive lookup in CFG_FTYPE, else NOT_FOUND. Only one
+          comparison call per feature: if any CFG_CFCALL row already has this FTYPE_ID
+          the call fails with ALREADY_PRESENT.
+      - name: cfunc_code
+        type: str
+        rust_convert: owned_str
+        semantics: Comparison function code; case-insensitive lookup in CFG_CFUNC, else NOT_FOUND.
+      - name: element_list
+        type: str_list
+        semantics: >-
+          Element codes, each a case-insensitive GLOBAL CFG_FELEM lookup (the element
+          need NOT be in the feature's CFG_FBOM), else NOT_FOUND. Empty list or a
+          blank/whitespace-only item is INVALID_INPUT. One CFG_CFBOM row is written per
+          item with FTYPE_ID = the call's feature and EXEC_ORDER = 1-based list position
+          (outside the exec-order allocation policy). Duplicate items are not rejected.
+      - name: id
+        type: int
+        optional: true
+        semantics: >-
+          Requested CFCALL_ID. Absent OR <= 0 means auto-allocate (max existing + 1,
+          floor 1000). A taken id > 0 is ALREADY_EXISTS (checked before any lookup).
+    returns: config_and_json
+    errors: [JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, NOT_FOUND, ALREADY_PRESENT, INVALID_INPUT]
+    notes: >-
+      Returns (modified config, the new CFG_CFCALL row {CFCALL_ID, FTYPE_ID, CFUNC_ID}).
+      Validation order: id (MISSING_SECTION if CFG_CFCALL is absent or not an array;
+      ALREADY_EXISTS if taken), feature, one-call-per-feature (ALREADY_PRESENT),
+      function, empty list, then per item blank check and element lookup;
+      MISSING_SECTION if CFG_CFBOM is absent. The function's applicability to the
+      feature is not checked.
+    c_notes: >-
+      TRAP: the C typed export SzConfigTool_addComparisonCall never exposes `id` (always
+      auto-allocates), DROPS the new row, takes the element list as a JSON-array string
+      (non-string items silently skipped; non-array is returnCode -3), and reports
+      library errors with returnCode -5 and NO reason code (set_error, not
+      set_error_from). invoke keeps the full surface.
+
+  - name: delete_comparison_call
+    doc: Delete a comparison call by CFCALL_ID, cascading to its CFG_CFBOM rows.
+    rust: calls::comparison::delete_comparison_call
+    c_symbol: SzConfigTool_deleteComparisonCall
+    args:
+      - name: cfcall_id
+        type: int
+        semantics: CFCALL_ID; must exist in CFG_CFCALL else NOT_FOUND (an absent section is also NOT_FOUND).
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Removes the CFG_CFCALL row and every CFG_CFBOM row with that CFCALL_ID. No
+      dependency or system-call protection: template calls (ids < 1000) can be deleted.
+    c_notes: >-
+      C typed export reports library errors with returnCode -2 and the reason code.
+
+  - name: get_comparison_call
+    doc: Get one comparison call's raw CFG_CFCALL row, addressed by call id or by feature code.
+    rust: calls::comparison::get_comparison_call
+    c_symbol: SzConfigTool_getComparisonCall
+    c_aliases: [SzConfigTool_getComparisonCallByFeature]
+    args:
+      - name: call
+        type: int_or_str
+        rust_convert: call_selector
+        semantics: >-
+          A JSON integer selects by CFCALL_ID; a JSON string selects the call bound to
+          that feature code (case-insensitive CFG_FTYPE lookup, then a CFG_CFCALL scan by
+          FTYPE_ID). Unknown id, unknown feature, or a feature with no comparison call is
+          NOT_FOUND; a feature matching 2+ calls (malformed config) is INVALID_INPUT.
+          Any other JSON type (or null) is INVALID_INPUT.
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND, INVALID_INPUT]
+    notes: >-
+      Result is the stored row with on-disk keys (CFCALL_ID, FTYPE_ID, CFUNC_ID); it
+      does not include the CFBOM elements (use list_comparison_calls).
+    c_notes: >-
+      C typed exports are split: SzConfigTool_getComparisonCall takes only an id,
+      SzConfigTool_getComparisonCallByFeature only a feature code. LEGACY TRAP: the
+      by-id export reports library errors with returnCode -5 and NO reason code; the
+      by-feature export with -2 and NO reason code (ffi_json_value uses set_error).
+
+  - name: list_comparison_calls
+    doc: List all comparison calls with feature/function codes resolved and their ordered element lists.
+    rust: calls::comparison::list_comparison_calls
+    c_symbol: SzConfigTool_listComparisonCalls
+    args: []
+    returns: json
+    errors: [JSON_PARSE]
+    notes: >-
+      Result is an array of {id, feature, function, elementList} sorted by (FTYPE_ID,
+      CFCALL_ID) — not config order. elementList is the call's CFG_CFBOM element codes
+      ordered by EXEC_ORDER. Unresolvable ids render as the string "unknown". Missing
+      sections are treated as empty (never MISSING_SECTION).
+    c_notes: >-
+      C typed export reports library errors with returnCode -5 and NO reason code.
+
+  - name: add_comparison_call_element
+    doc: Add one element (CFG_CFBOM row) to a comparison call, addressed by raw ids.
+    rust: calls::comparison::add_comparison_call_element
+    rust_params_struct: calls::comparison::AddComparisonCallElementParams
+    c_symbol: null
+    args:
+      - name: cfcall_id
+        type: int
+        semantics: CFCALL_ID written verbatim. NOT validated — the call need not exist.
+      - name: ftype_id
+        type: int
+        semantics: >-
+          The ELEMENT's feature id written to the BOM row's FTYPE_ID. Negative is
+          INVALID_INPUT; otherwise NOT validated against CFG_FTYPE.
+      - name: felem_id
+        type: int
+        semantics: FELEM_ID written verbatim. NOT validated against CFG_FELEM or CFG_FBOM.
+      - name: exec_order
+        type: int
+        optional: true
+        semantics: >-
+          Allocated per CFCALL_ID. Absent OR <= 0 means auto-allocate (max EXEC_ORDER on
+          this call + 1, seed 0 so an empty call starts at 1). A taken order > 0 on the
+          same call is ALREADY_EXISTS.
+    returns: config_and_json
+    errors: [JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION]
+    notes: >-
+      Returns (modified config, the new CFG_CFBOM row {CFCALL_ID, FTYPE_ID, FELEM_ID,
+      EXEC_ORDER}). Duplicate identity is (CFCALL_ID, FTYPE_ID, FELEM_ID) regardless of
+      EXEC_ORDER -> ALREADY_PRESENT. Order of checks: ftype_id < 0, duplicate,
+      exec_order, then MISSING_SECTION if CFG_CFBOM is absent. The same FELEM_ID may be
+      added under a different ftype_id, which makes a later feature-less
+      delete_comparison_call_element ambiguous.
+    c_notes: >-
+      No C typed export.
+
+  - name: delete_comparison_call_element
+    doc: Delete one element (CFG_CFBOM row) from a comparison call, addressed by call id or feature code plus element code.
+    rust: calls::comparison::delete_comparison_call_element
+    c_symbol: SzConfigTool_deleteComparisonCallElement
+    args:
+      - name: call
+        type: int_or_str
+        rust_convert: call_selector
+        semantics: >-
+          A JSON integer selects by CFCALL_ID (must exist, else NOT_FOUND); a JSON string
+          selects the call bound to that feature code (unknown feature or no call is
+          NOT_FOUND; 2+ calls is INVALID_INPUT). Any other JSON type is INVALID_INPUT.
+      - name: element_code
+        type: str
+        semantics: >-
+          Element code, case-insensitive. Without element_feature: global CFG_FELEM
+          lookup (unknown is NOT_FOUND). With element_feature: an unknown code or one not
+          in that feature's CFG_FBOM is NOT_IN_FEATURE.
+      - name: element_feature
+        type: str
+        optional: true
+        semantics: >-
+          The element's feature code (case-insensitive; unknown is NOT_FOUND). Narrows
+          the BOM row match by FTYPE_ID and requires CFG_FBOM membership.
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND, INVALID_INPUT, NOT_IN_FEATURE, NOT_ON_CALL]
+    notes: >-
+      EXEC_ORDER is derived from the matched BOM row (not supplied). Element not on an
+      existing call is the benign NOT_ON_CALL; an element matching 2+ BOM rows on the
+      call (same FELEM_ID under different FTYPE_IDs) without element_feature is
+      INVALID_INPUT (ambiguous). Only the matched row is removed; remaining rows keep
+      their EXEC_ORDER (no renumbering).
+    c_notes: >-
+      C typed export SzConfigTool_deleteComparisonCallElement addresses the call by
+      FEATURE CODE only (no id form); element_feature NULL = None but an empty string is
+      passed through (NOT_FOUND); errors are returnCode -2 with the reason code.
+
+excluded:
+  - rust: calls::comparison::set_comparison_call
+    reason: >-
+      No-op stub: returns the input config unchanged without parsing it or reading its
+      params (Python has no equivalent). Exposing it would advertise an update that
+      never happens. Legacy C export SzConfigTool_setComparisonCall wraps the same no-op.
+  - rust: calls::comparison::set_comparison_call_element
+    reason: >-
+      No-op stub: returns the input config unchanged without parsing it or reading its
+      params. No C export.

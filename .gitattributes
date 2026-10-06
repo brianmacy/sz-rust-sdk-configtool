@@ -1,0 +1,32 @@
+# Every text file is stored and checked out with LF on every OS (including
+# Windows runners with core.autocrlf=true): the shell scripts, the export
+# baselines (ffi/expected-exports/*.exports), generated bindings and their
+# `codegen --check` comparison all assume LF.
+* text=auto eol=lf
+
+# Windows-only script formats need CRLF (none are tracked today).
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary formats: never normalize or diff as text.
+*.png binary
+*.jpg binary
+*.ico binary
+*.gif binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tgz binary
+*.jar binary
+*.whl binary
+*.nupkg binary
+*.so binary
+*.dylib binary
+*.dll binary
+*.exe binary
+*.pdb binary
+*.lib binary
+*.a binary
+*.node binary
+*.pyd binary

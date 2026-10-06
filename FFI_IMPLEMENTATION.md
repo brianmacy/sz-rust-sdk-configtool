@@ -195,7 +195,7 @@ ctest --output-on-failure
 - Config sections, fragments, rules, thresholds
 - Standardize/expression/comparison/distinct functions
 - Call management (CFG_SFCALL, CFG_EFCALL, etc.)
-- Generic plans, hashes, system parameters
+- Generic plans, system parameters
 - Versioning and compatibility
 
 **Total: 121 FFI functions** (updated after removing duplicates and adding setAttribute)

@@ -1,0 +1,174 @@
+# Conformance cases for the `generic_plans` group. Every case starts from the
+# REAL template config (project.yaml paths.fixture) unless a step sets
+# config_literal. See schema.md ("Conformance files").
+group: generic_plans
+
+cases:
+  - name: clone_returns_new_id_and_copies_thresholds
+    steps:
+      - fn: clone_generic_plan
+        args: {source_gplan_code: ingest, new_gplan_code: custom}
+        expect:
+          kind: config_and_json
+          result: 3
+      - fn: list_generic_plans
+        expect:
+          len: 3
+          contains:
+            - {id: 3, plan: CUSTOM, description: CUSTOM}
+      - fn: list_generic_thresholds
+        expect:
+          len: 71
+          contains:
+            - {id: 3, plan: CUSTOM, behavior: NAME, feature: all, candidateCap: 10, scoringCap: -1, sendToRedo: "Yes"}
+            - {id: 3, plan: CUSTOM, behavior: FF, feature: ADDRESS}
+
+  - name: clone_with_description
+    steps:
+      - fn: clone_generic_plan
+        args: {source_gplan_code: SEARCH, new_gplan_code: MY_SEARCH, new_gplan_desc: My search plan}
+        expect: {result: 3}
+      - fn: list_generic_plans
+        args: {filter: my_search}
+        expect:
+          result: [{id: 3, plan: MY_SEARCH, description: My search plan}]
+
+  - name: clone_unknown_source_is_not_found
+    fn: clone_generic_plan
+    args: {source_gplan_code: NOPE, new_gplan_code: CUSTOM}
+    expect: {error: NOT_FOUND}
+
+  - name: clone_existing_target_is_already_exists
+    fn: clone_generic_plan
+    args: {source_gplan_code: INGEST, new_gplan_code: search}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: clone_non_integer_id_is_invalid_config
+    steps:
+      - fn: clone_generic_plan
+        config_literal: '{"G2_CONFIG": {"CFG_GPLAN": [{"GPLAN_ID": "1", "GPLAN_CODE": "INGEST"}]}}'
+        args: {source_gplan_code: INGEST, new_gplan_code: CUSTOM}
+        expect: {error: INVALID_CONFIG}
+
+  - name: clone_bad_config_is_json_parse
+    steps:
+      - fn: clone_generic_plan
+        config_literal: 'x'
+        args: {source_gplan_code: INGEST, new_gplan_code: CUSTOM}
+        expect: {error: JSON_PARSE}
+
+  - name: delete_user_plan_removes_plan_and_thresholds
+    steps:
+      - fn: clone_generic_plan
+        args: {source_gplan_code: INGEST, new_gplan_code: CUSTOM}
+      - fn: delete_generic_plan
+        args: {gplan_code: custom}
+        expect: {kind: config}
+      - fn: list_generic_plans
+        expect:
+          len: 2
+          excludes:
+            - {plan: CUSTOM}
+      - fn: list_generic_thresholds
+        expect:
+          len: 46
+          excludes:
+            - {id: 3}
+
+  - name: delete_system_plan_is_invalid_input
+    fn: delete_generic_plan
+    args: {gplan_code: ingest}
+    expect: {error: INVALID_INPUT}
+
+  - name: delete_missing_is_not_found
+    fn: delete_generic_plan
+    args: {gplan_code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_non_integer_id_is_invalid_config
+    steps:
+      - fn: delete_generic_plan
+        config_literal: '{"G2_CONFIG": {"CFG_GPLAN": [{"GPLAN_ID": "9", "GPLAN_CODE": "CUSTOM"}]}}'
+        args: {gplan_code: CUSTOM}
+        expect: {error: INVALID_CONFIG}
+
+  - name: delete_bad_config_is_json_parse
+    steps:
+      - fn: delete_generic_plan
+        config_literal: 'x'
+        args: {gplan_code: CUSTOM}
+        expect: {error: JSON_PARSE}
+
+  - name: list_template
+    fn: list_generic_plans
+    expect:
+      kind: json
+      result:
+        - {id: 1, plan: INGEST, description: Standard Ingestion}
+        - {id: 2, plan: SEARCH, description: Standard Search}
+
+  - name: list_filter_is_case_insensitive_substring
+    fn: list_generic_plans
+    args: {filter: sEaRcH}
+    expect:
+      result: [{id: 2, plan: SEARCH}]
+
+  - name: list_filter_matches_keys_too
+    fn: list_generic_plans
+    args: {filter: gplan_desc}
+    expect: {len: 2}
+
+  - name: list_filter_no_match_is_empty
+    fn: list_generic_plans
+    args: {filter: zzz_nothing}
+    expect: {len: 0}
+
+  - name: list_missing_section_is_empty
+    steps:
+      - fn: list_generic_plans
+        config_literal: '{"G2_CONFIG": {}}'
+        expect: {len: 0}
+
+  - name: list_bad_config_is_json_parse
+    steps:
+      - fn: list_generic_plans
+        config_literal: 'x'
+        expect: {error: JSON_PARSE}
+
+  - name: set_creates_new_plan
+    steps:
+      - fn: set_generic_plan
+        args: {gplan_code: new_plan, gplan_desc: New Plan}
+        expect:
+          kind: config_and_json
+          result: {plan_id: 3, was_created: true}
+      - fn: list_generic_plans
+        expect:
+          contains:
+            - {id: 3, plan: NEW_PLAN, description: New Plan}
+
+  - name: set_updates_existing_description
+    steps:
+      - fn: set_generic_plan
+        args: {gplan_code: search, gplan_desc: Updated}
+        expect:
+          result: {plan_id: 2, was_created: false}
+      - fn: list_generic_plans
+        expect:
+          len: 2
+          contains:
+            - {id: 2, plan: SEARCH, description: Updated}
+
+  - name: set_create_missing_section
+    steps:
+      - fn: set_generic_plan
+        config_literal: '{"G2_CONFIG": {}}'
+        args: {gplan_code: NEW_PLAN, gplan_desc: x}
+        expect: {error: MISSING_SECTION}
+
+  - name: set_bad_config_is_json_parse
+    steps:
+      - fn: set_generic_plan
+        config_literal: 'x'
+        args: {gplan_code: NEW_PLAN, gplan_desc: x}
+        expect: {error: JSON_PARSE}

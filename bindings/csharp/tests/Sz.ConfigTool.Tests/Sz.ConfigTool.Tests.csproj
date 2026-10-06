@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- Workspace-relative path of the generated manifest; every other input
+         (conformance.json, the fixture) is located through it. -->
+    <SzManifestJson>api/manifest/generated/manifest.json</SzManifestJson>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Sz.ConfigTool/Sz.ConfigTool.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>SzRepoRoot</_Parameter1>
+      <_Parameter2>$(SzRepoRoot)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>SzManifestJson</_Parameter1>
+      <_Parameter2>$(SzManifestJson)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <!-- Copy the REAL native library into runtimes/<rid>/native/. -->
+  <Import Project="../../natives.local.targets" />
+
+</Project>

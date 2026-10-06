@@ -36,7 +36,11 @@ Testing/
 *.dylib
 *.dll
 test_basic
-tests/c/test_basic
+ffi/tests/c/test_basic
+
+# Python bytecode
+__pycache__/
+*.pyc
 
 # Shell scripts (generated)
 create_senzing_lib.sh

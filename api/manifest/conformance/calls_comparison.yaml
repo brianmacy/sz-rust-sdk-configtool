@@ -1,0 +1,358 @@
+# Conformance cases for the `calls_comparison` group. Every case starts from the
+# REAL template config (project.yaml paths.fixture). Template facts used below:
+# 50 CFG_CFCALL rows (max CFCALL_ID 68); GENDER (FTYPE_ID 4) has call 4
+# (EXACT_DOMAIN_COMP) with one element GENDER; TAX_ID (FTYPE_ID 11) has call 34;
+# NAME_KEY (FTYPE_ID 18) has no comparison call; FULL_NAME is FELEM_ID 2 and is in
+# the CFG_FBOM of NAME (FTYPE_ID 1) and EMAIL (FTYPE_ID 14).
+group: calls_comparison
+
+cases:
+  # ---- add_comparison_call ------------------------------------------------
+  - name: add_returns_config_and_record
+    steps:
+      - fn: add_comparison_call
+        args: {ftype_code: name_key, cfunc_code: exact_comp, element_list: [full_name, given_name]}
+        expect:
+          kind: config_and_json
+          result: {CFCALL_ID: 1000, FTYPE_ID: 18, CFUNC_ID: 3}
+      - fn: get_comparison_call
+        args: {call: 1000}
+        expect:
+          kind: json
+          result: {CFCALL_ID: 1000, FTYPE_ID: 18, CFUNC_ID: 3}
+      - fn: get_comparison_call
+        args: {call: NAME_KEY}
+        expect:
+          result: {CFCALL_ID: 1000}
+      - fn: list_comparison_calls
+        expect:
+          len: 51
+          contains:
+            - {id: 1000, feature: NAME_KEY, function: EXACT_COMP, elementList: [FULL_NAME, GIVEN_NAME]}
+
+  - name: add_explicit_id_is_honoured
+    steps:
+      - fn: add_comparison_call
+        args: {ftype_code: NAME_KEY, cfunc_code: EXACT_COMP, element_list: [FULL_NAME], id: 5000}
+        expect:
+          result: {CFCALL_ID: 5000}
+      - fn: get_comparison_call
+        args: {call: 5000}
+        expect:
+          result: {FTYPE_ID: 18}
+
+  - name: add_non_positive_id_auto_allocates
+    fn: add_comparison_call
+    args: {ftype_code: NAME_KEY, cfunc_code: EXACT_COMP, element_list: [FULL_NAME], id: 0}
+    expect:
+      result: {CFCALL_ID: 1000}
+
+  - name: add_element_outside_feature_fbom_is_allowed
+    steps:
+      - fn: add_comparison_call
+        args: {ftype_code: NAME_KEY, cfunc_code: EXACT_COMP, element_list: [ADDR1]}
+      - fn: list_comparison_calls
+        expect:
+          contains:
+            - {id: 1000, elementList: [ADDR1]}
+
+  - name: add_taken_id_is_already_exists
+    fn: add_comparison_call
+    args: {ftype_code: NAME_KEY, cfunc_code: EXACT_COMP, element_list: [FULL_NAME], id: 1}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_second_call_for_feature_is_already_present
+    fn: add_comparison_call
+    args: {ftype_code: gender, cfunc_code: EXACT_COMP, element_list: [GENDER]}
+    expect: {error: ALREADY_PRESENT}
+
+  - name: add_unknown_feature_is_not_found
+    fn: add_comparison_call
+    args: {ftype_code: NO_SUCH_FEATURE, cfunc_code: EXACT_COMP, element_list: [FULL_NAME]}
+    expect: {error: NOT_FOUND}
+
+  - name: add_unknown_function_is_not_found
+    fn: add_comparison_call
+    args: {ftype_code: NAME_KEY, cfunc_code: NO_SUCH_FUNC, element_list: [FULL_NAME]}
+    expect: {error: NOT_FOUND}
+
+  - name: add_empty_element_list_is_invalid_input
+    fn: add_comparison_call
+    args: {ftype_code: NAME_KEY, cfunc_code: EXACT_COMP, element_list: []}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_blank_element_is_invalid_input
+    fn: add_comparison_call
+    args: {ftype_code: NAME_KEY, cfunc_code: EXACT_COMP, element_list: [FULL_NAME, "  "]}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_unknown_element_is_not_found
+    fn: add_comparison_call
+    args: {ftype_code: NAME_KEY, cfunc_code: EXACT_COMP, element_list: [NO_SUCH_ELEMENT]}
+    expect: {error: NOT_FOUND}
+
+  - name: add_missing_section
+    config_literal: '{"G2_CONFIG": {}}'
+    fn: add_comparison_call
+    args: {ftype_code: NAME_KEY, cfunc_code: EXACT_COMP, element_list: [FULL_NAME]}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_invalid_config_is_json_parse
+    config_literal: 'not json'
+    fn: add_comparison_call
+    args: {ftype_code: NAME_KEY, cfunc_code: EXACT_COMP, element_list: [FULL_NAME]}
+    expect: {error: JSON_PARSE}
+
+  # ---- delete_comparison_call ---------------------------------------------
+  - name: delete_cascades_and_get_is_not_found
+    steps:
+      - fn: delete_comparison_call
+        args: {cfcall_id: 4}
+        expect: {kind: config}
+      - fn: get_comparison_call
+        args: {call: 4}
+        expect: {error: NOT_FOUND}
+      - fn: get_comparison_call
+        args: {call: GENDER}
+        expect: {error: NOT_FOUND}
+      - fn: list_comparison_calls
+        expect:
+          len: 49
+          excludes:
+            - {id: 4}
+      # BOM rows were cascaded: a re-added call on GENDER starts clean.
+      - fn: add_comparison_call
+        args: {ftype_code: GENDER, cfunc_code: EXACT_COMP, element_list: [GENDER], id: 4}
+        expect:
+          result: {CFCALL_ID: 4}
+      - fn: list_comparison_calls
+        expect:
+          contains:
+            - {id: 4, feature: GENDER, function: EXACT_COMP, elementList: [GENDER]}
+
+  - name: delete_missing_is_not_found
+    fn: delete_comparison_call
+    args: {cfcall_id: 9999}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_invalid_config_is_json_parse
+    config_literal: 'not json'
+    fn: delete_comparison_call
+    args: {cfcall_id: 4}
+    expect: {error: JSON_PARSE}
+
+  # ---- get_comparison_call ------------------------------------------------
+  - name: get_by_id_and_by_feature_agree
+    steps:
+      - fn: get_comparison_call
+        args: {call: 34}
+        expect:
+          result: {CFCALL_ID: 34, FTYPE_ID: 11, CFUNC_ID: 9}
+      - fn: get_comparison_call
+        args: {call: tax_id}
+        expect:
+          result: {CFCALL_ID: 34, FTYPE_ID: 11, CFUNC_ID: 9}
+
+  - name: get_unknown_feature_is_not_found
+    fn: get_comparison_call
+    args: {call: NO_SUCH_FEATURE}
+    expect: {error: NOT_FOUND}
+
+  - name: get_feature_without_call_is_not_found
+    fn: get_comparison_call
+    args: {call: NAME_KEY}
+    expect: {error: NOT_FOUND}
+
+  - name: get_ambiguous_feature_is_invalid_input
+    config_literal: '{"G2_CONFIG": {"CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}], "CFG_CFCALL": [{"CFCALL_ID": 7, "FTYPE_ID": 3, "CFUNC_ID": 1}, {"CFCALL_ID": 8, "FTYPE_ID": 3, "CFUNC_ID": 1}]}}'
+    fn: get_comparison_call
+    args: {call: NAME}
+    expect: {error: INVALID_INPUT}
+
+  - name: get_invalid_config_is_json_parse
+    config_literal: 'not json'
+    fn: get_comparison_call
+    args: {call: 1}
+    expect: {error: JSON_PARSE}
+
+  # ---- list_comparison_calls ----------------------------------------------
+  - name: list_template_sorted_by_feature
+    fn: list_comparison_calls
+    expect:
+      kind: json
+      len: 50
+      contains:
+        - {id: 4, feature: GENDER, function: EXACT_DOMAIN_COMP, elementList: [GENDER]}
+        - {id: 34, feature: TAX_ID, function: ID_COMP, elementList: [ID_NUM_STD, COUNTRY]}
+
+  - name: list_missing_sections_is_empty
+    config_literal: '{"G2_CONFIG": {}}'
+    fn: list_comparison_calls
+    expect:
+      len: 0
+
+  - name: list_invalid_config_is_json_parse
+    config_literal: 'not json'
+    fn: list_comparison_calls
+    expect: {error: JSON_PARSE}
+
+  # ---- add_comparison_call_element ----------------------------------------
+  - name: add_element_auto_allocates_exec_order_per_call
+    steps:
+      - fn: add_comparison_call_element
+        args: {cfcall_id: 4, ftype_id: 4, felem_id: 2}
+        expect:
+          kind: config_and_json
+          result: {CFCALL_ID: 4, FTYPE_ID: 4, FELEM_ID: 2, EXEC_ORDER: 2}
+      - fn: list_comparison_calls
+        expect:
+          contains:
+            - {id: 4, elementList: [GENDER, FULL_NAME]}
+
+  - name: add_element_explicit_order_then_auto
+    steps:
+      - fn: add_comparison_call_element
+        args: {cfcall_id: 4, ftype_id: 4, felem_id: 2, exec_order: 5}
+        expect:
+          result: {EXEC_ORDER: 5}
+      - fn: add_comparison_call_element
+        args: {cfcall_id: 4, ftype_id: 1, felem_id: 3}
+        expect:
+          result: {EXEC_ORDER: 6}
+      - fn: list_comparison_calls
+        expect:
+          contains:
+            - {id: 4, elementList: [GENDER, FULL_NAME, ORG_NAME]}
+
+  - name: add_element_non_positive_order_auto_allocates
+    fn: add_comparison_call_element
+    args: {cfcall_id: 4, ftype_id: 4, felem_id: 2, exec_order: -1}
+    expect:
+      result: {EXEC_ORDER: 2}
+
+  - name: add_element_taken_order_is_already_exists
+    fn: add_comparison_call_element
+    args: {cfcall_id: 4, ftype_id: 4, felem_id: 2, exec_order: 1}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_element_duplicate_is_already_present
+    fn: add_comparison_call_element
+    args: {cfcall_id: 4, ftype_id: 4, felem_id: 13, exec_order: 9}
+    expect: {error: ALREADY_PRESENT}
+
+  - name: add_element_negative_ftype_is_invalid_input
+    fn: add_comparison_call_element
+    args: {cfcall_id: 4, ftype_id: -1, felem_id: 2}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_element_does_not_validate_ids
+    fn: add_comparison_call_element
+    args: {cfcall_id: 9999, ftype_id: 9999, felem_id: 9999}
+    expect:
+      result: {CFCALL_ID: 9999, FTYPE_ID: 9999, FELEM_ID: 9999, EXEC_ORDER: 1}
+
+  - name: add_element_missing_section
+    config_literal: '{"G2_CONFIG": {}}'
+    fn: add_comparison_call_element
+    args: {cfcall_id: 4, ftype_id: 4, felem_id: 2}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_element_invalid_config_is_json_parse
+    config_literal: 'not json'
+    fn: add_comparison_call_element
+    args: {cfcall_id: 4, ftype_id: 4, felem_id: 2}
+    expect: {error: JSON_PARSE}
+
+  # ---- delete_comparison_call_element -------------------------------------
+  - name: delete_element_by_feature_and_by_id
+    steps:
+      - fn: add_comparison_call_element
+        args: {cfcall_id: 4, ftype_id: 4, felem_id: 2}
+      - fn: delete_comparison_call_element
+        args: {call: gender, element_code: full_name}
+        expect: {kind: config}
+      - fn: list_comparison_calls
+        expect:
+          contains:
+            - {id: 4, elementList: [GENDER]}
+      - fn: delete_comparison_call_element
+        args: {call: 4, element_code: GENDER}
+      - fn: list_comparison_calls
+        expect:
+          contains:
+            - {id: 4, elementList: []}
+
+  - name: delete_element_ambiguous_then_disambiguated_by_feature
+    steps:
+      # FULL_NAME on call 4 under two element-features (EMAIL order 2, NAME order 3).
+      - fn: add_comparison_call_element
+        args: {cfcall_id: 4, ftype_id: 14, felem_id: 2}
+      - fn: add_comparison_call_element
+        args: {cfcall_id: 4, ftype_id: 1, felem_id: 2}
+      - fn: delete_comparison_call_element
+        args: {call: 4, element_code: FULL_NAME}
+        expect: {error: INVALID_INPUT}
+      - fn: delete_comparison_call_element
+        args: {call: 4, element_code: FULL_NAME, element_feature: email}
+      - fn: list_comparison_calls
+        expect:
+          contains:
+            - {id: 4, elementList: [GENDER, FULL_NAME]}
+      - fn: delete_comparison_call_element
+        args: {call: 4, element_code: FULL_NAME}
+      - fn: list_comparison_calls
+        expect:
+          contains:
+            - {id: 4, elementList: [GENDER]}
+
+  - name: delete_element_not_on_call
+    fn: delete_comparison_call_element
+    args: {call: GENDER, element_code: FULL_NAME}
+    expect: {error: NOT_ON_CALL}
+
+  - name: delete_element_in_feature_but_not_on_call
+    fn: delete_comparison_call_element
+    args: {call: NAME, element_code: ALL_NM, element_feature: NAME}
+    expect: {error: NOT_ON_CALL}
+
+  - name: delete_element_not_in_feature
+    fn: delete_comparison_call_element
+    args: {call: NAME, element_code: ADDR1, element_feature: NAME}
+    expect: {error: NOT_IN_FEATURE}
+
+  - name: delete_element_unknown_code_with_feature_is_not_in_feature
+    fn: delete_comparison_call_element
+    args: {call: NAME, element_code: NO_SUCH_ELEMENT, element_feature: NAME}
+    expect: {error: NOT_IN_FEATURE}
+
+  - name: delete_element_missing_call_id_is_not_found
+    fn: delete_comparison_call_element
+    args: {call: 9999, element_code: GENDER}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_element_feature_without_call_is_not_found
+    fn: delete_comparison_call_element
+    args: {call: NAME_KEY, element_code: FULL_NAME}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_element_unknown_element_is_not_found
+    fn: delete_comparison_call_element
+    args: {call: 4, element_code: NO_SUCH_ELEMENT}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_element_unknown_element_feature_is_not_found
+    fn: delete_comparison_call_element
+    args: {call: 4, element_code: GENDER, element_feature: NO_SUCH_FEATURE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_element_ambiguous_call_is_invalid_input
+    config_literal: '{"G2_CONFIG": {"CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}], "CFG_FELEM": [{"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"}], "CFG_CFCALL": [{"CFCALL_ID": 7, "FTYPE_ID": 3, "CFUNC_ID": 1}, {"CFCALL_ID": 8, "FTYPE_ID": 3, "CFUNC_ID": 1}], "CFG_CFBOM": []}}'
+    fn: delete_comparison_call_element
+    args: {call: NAME, element_code: FIRST_NAME}
+    expect: {error: INVALID_INPUT}
+
+  - name: delete_element_invalid_config_is_json_parse
+    config_literal: 'not json'
+    fn: delete_comparison_call_element
+    args: {call: 4, element_code: GENDER}
+    expect: {error: JSON_PARSE}

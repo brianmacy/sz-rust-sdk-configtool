@@ -1,0 +1,60 @@
+# Conformance cases for the `system_params` group. Every case starts from the
+# REAL template config (project.yaml paths.fixture).
+group: system_params
+
+cases:
+  - name: list_template_has_no_integer_break_res
+    steps:
+      - fn: list_system_parameters
+        expect: {kind: json}
+      - fn: get_config_section
+        args: {section_name: CFG_RTYPE, filter: '"RCLASS_ID": 2'}
+        expect:
+          result:
+            - {RTYPE_CODE: DISCLOSED, BREAK_RES: "No"}
+
+  - name: set_integer_then_list
+    steps:
+      - fn: set_system_parameter
+        args: {parameter_name: RELATIONSHIPSBREAKMATCHES, parameter_value: 1}
+        expect: {kind: config}
+      - fn: list_system_parameters
+        expect:
+          result: {relationshipsBreakMatches: "1"}
+      - fn: set_system_parameter
+        args: {parameter_name: relationships_break_matches, parameter_value: 0}
+      - fn: list_system_parameters
+        expect:
+          result: {relationshipsBreakMatches: "0"}
+
+  - name: set_value_is_written_verbatim
+    steps:
+      - fn: set_system_parameter
+        args: {parameter_name: relationshipsBreakMatches, parameter_value: "Yes"}
+      - fn: get_config_section
+        args: {section_name: CFG_RTYPE, filter: '"RCLASS_ID": 2'}
+        expect:
+          result:
+            - {RTYPE_CODE: DISCLOSED, BREAK_RES: "Yes"}
+
+  - name: set_unknown_parameter_is_invalid_config
+    fn: set_system_parameter
+    args: {parameter_name: noSuchParameter, parameter_value: 1}
+    expect: {error: INVALID_CONFIG}
+
+  - name: set_without_rclass_2_row_is_not_found
+    fn: set_system_parameter
+    config_literal: '{"G2_CONFIG": {"CFG_RTYPE": [{"RTYPE_ID": 1, "RCLASS_ID": 1}]}}'
+    args: {parameter_name: relationshipsBreakMatches, parameter_value: 1}
+    expect: {error: NOT_FOUND}
+
+  - name: set_invalid_json_is_json_parse
+    fn: set_system_parameter
+    config_literal: "not json"
+    args: {parameter_name: relationshipsBreakMatches, parameter_value: 1}
+    expect: {error: JSON_PARSE}
+
+  - name: list_invalid_json_is_json_parse
+    fn: list_system_parameters
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}

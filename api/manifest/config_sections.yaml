@@ -1,0 +1,141 @@
+# G2_CONFIG top-level sections. Root module: src/config_sections.rs (7 pub fns:
+# all mapped here).
+group: config_sections
+
+functions:
+  - name: add_config_section
+    doc: Add a new, empty top-level section (an empty array) to G2_CONFIG.
+    rust: config_sections::add_config_section
+    c_symbol: SzConfigTool_addConfigSection
+    args:
+      - name: section_name
+        type: str
+        semantics: Uppercased before the duplicate check and storage. The new section is always an empty JSON array.
+    returns: config
+    errors: [JSON_PARSE, ALREADY_EXISTS, NOT_FOUND]
+    notes: >-
+      An existing key of the same (uppercased) name, of ANY JSON type, is
+      ALREADY_EXISTS. A config without a G2_CONFIG key is NOT_FOUND (not
+      MISSING_SECTION). No validation of the name (any string, e.g. not CFG_*, is
+      accepted).
+
+  - name: remove_config_section
+    doc: Remove a top-level section from G2_CONFIG.
+    rust: config_sections::remove_config_section
+    c_symbol: SzConfigTool_removeConfigSection
+    args:
+      - name: section_name
+        type: str
+        semantics: Uppercased before lookup.
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      TRAP: no protection or dependency check; any section (including core
+      sections such as CFG_DSRC, SETTINGS) can be removed. A missing section or a
+      missing G2_CONFIG is NOT_FOUND.
+
+  - name: get_config_section
+    doc: Get the raw items of a top-level section, optionally filtered by a case-insensitive substring.
+    rust: config_sections::get_config_section
+    c_symbol: SzConfigTool_getConfigSection
+    args:
+      - name: section_name
+        type: str
+        semantics: >-
+          TRAP: matched EXACTLY (case-sensitive, NOT uppercased, unlike
+          add/remove_config_section). Unknown name is NOT_FOUND.
+      - name: filter
+        type: str
+        optional: true
+        semantics: >-
+          Absent returns every item. Otherwise keeps items whose json.dumps-spaced
+          rendering (`{"K": 1, "J": null}`, crate::filter::to_json_dumps_string)
+          contains the filter, case-insensitively.
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Result is an array. An array section returns its rows; a null or empty section
+      returns []; a non-array, non-null section (e.g. SETTINGS, CONFIG_BASE_VERSION
+      objects) returns a one-element array holding the value. An empty result does not
+      distinguish "section empty" from "filter matched nothing": use
+      config_section_is_empty.
+    c_notes: >-
+      C typed export reports a library error with returnCode -5 and NO reason code
+      (set_error); a NULL filter pointer = absent.
+
+  - name: config_section_is_empty
+    doc: Report whether a top-level section is empty (null or []).
+    rust: config_sections::config_section_is_empty
+    c_symbol: SzConfigTool_configSectionIsEmpty
+    args:
+      - name: section_name
+        type: str
+        semantics: Matched EXACTLY (case-sensitive, not uppercased). Unknown name is NOT_FOUND.
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Result is a JSON boolean: true for null or [], false otherwise (any non-array,
+      non-null value such as an object counts as non-empty).
+    c_notes: >-
+      C typed export returns the text "true"/"false"; library errors use returnCode -5
+      with no reason code.
+
+  - name: list_config_sections
+    doc: List the names of all top-level G2_CONFIG keys.
+    rust: config_sections::list_config_sections
+    c_symbol: SzConfigTool_listConfigSections
+    args: []
+    returns: json
+    errors: [JSON_PARSE]
+    notes: >-
+      Result is an array of key names in config order, including non-CFG keys (SETTINGS,
+      SYS_OOM, CONFIG_BASE_VERSION). A missing or non-object G2_CONFIG yields [] rather
+      than an error.
+    c_notes: >-
+      C typed export: library errors use returnCode -5 with no reason code.
+
+  - name: remove_config_section_field
+    doc: Remove a field from every item of an array section, returning how many items had it.
+    rust: config_sections::remove_config_section_field
+    c_symbol: SzConfigTool_removeConfigSectionField
+    args:
+      - name: section_name
+        type: str
+        semantics: Uppercased before lookup. Must name an ARRAY section, else NOT_FOUND.
+      - name: field_name
+        type: str
+        semantics: Uppercased before removal (a lowercase key in a row can never be removed).
+    returns: config_and_json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Record is the integer count of items the field was removed from (0 when no item
+      had it; the config is still returned). Non-object items are skipped. A config with
+      no G2_CONFIG key succeeds unchanged with count 0.
+    c_notes: >-
+      TRAP: the C typed export DROPS the count and reports library errors with
+      returnCode -5 and no reason code; invoke keeps both halves.
+
+  - name: add_config_section_field
+    doc: Add a field to every item of an array section that lacks it, returning existed/updated counts.
+    rust: config_sections::add_config_section_field
+    c_symbol: SzConfigTool_addConfigSectionField
+    args:
+      - name: section_name
+        type: str
+        semantics: Uppercased before lookup. Must name an ARRAY section, else NOT_FOUND.
+      - name: field_name
+        type: str
+        semantics: Uppercased before insertion.
+      - name: field_value
+        type: json
+        semantics: Any JSON value, stored verbatim (cloned) into each item that lacks the field.
+    returns: config_and_json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Record is {"existed": n, "updated": n}: items that already had the field (value
+      preserved, never overwritten) vs. items it was inserted into. Non-object items are
+      skipped (counted in neither). A config with no G2_CONFIG key succeeds unchanged
+      with both counts 0.
+    c_notes: >-
+      C-EXPORT DELTA: SzConfigTool_addConfigSectionField takes the value as JSON text
+      (invalid JSON = returnCode -3) and DROPS the counts; invoke keeps both halves.

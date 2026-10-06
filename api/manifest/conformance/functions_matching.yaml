@@ -1,0 +1,37 @@
+# Conformance for functions_matching: every exported placeholder returns NOT_IMPLEMENTED.
+group: functions_matching
+
+cases:
+  - name: add_is_not_implemented
+    fn: add_matching_function
+    args: {rtype_code: EXACTLY_ONE, matching_func: X}
+    expect: {error: NOT_IMPLEMENTED}
+
+  - name: delete_is_not_implemented
+    fn: delete_matching_function
+    args: {rtype_code: EXACTLY_ONE}
+    expect: {error: NOT_IMPLEMENTED}
+
+  - name: get_is_not_implemented
+    fn: get_matching_function
+    args: {rtype_code: EXACTLY_ONE}
+    expect: {error: NOT_IMPLEMENTED}
+
+  - name: list_is_not_implemented
+    fn: list_matching_functions
+    expect: {error: NOT_IMPLEMENTED}
+
+  - name: set_is_not_implemented
+    fn: set_matching_function
+    args: {rtype_code: EXACTLY_ONE, matching_func: X}
+    expect: {error: NOT_IMPLEMENTED}
+
+  - name: set_without_optional_is_not_implemented
+    fn: set_matching_function
+    args: {rtype_code: EXACTLY_ONE}
+    expect: {error: NOT_IMPLEMENTED}
+
+  - name: invalid_config_still_not_implemented
+    fn: list_matching_functions
+    config_literal: "not json"
+    expect: {error: NOT_IMPLEMENTED}

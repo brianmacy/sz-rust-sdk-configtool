@@ -1,0 +1,62 @@
+@PACKAGE_INIT@
+
+# szconfigtool-config.cmake -- find_package(szconfigtool).
+#
+# Imported target SzConfigTool::szconfigtool: the header-only C++20 binding
+# plus libSzConfigTool. Set SZCONFIGTOOL_USE_STATIC=ON before find_package to
+# link the static archive (libSzConfigTool.a; Windows SzConfigTool_static.lib)
+# instead of the shared library (Windows: bin/SzConfigTool.dll + import library
+# lib/SzConfigTool.lib).
+
+set(_szct_incdir "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
+set(_szct_libdir "@PACKAGE_CMAKE_INSTALL_LIBDIR@")
+set(_szct_bindir "@PACKAGE_CMAKE_INSTALL_BINDIR@")
+set(_szct_shared "@SZCONFIGTOOL_SHARED_NAME@")
+set(_szct_implib "@SZCONFIGTOOL_IMPLIB_NAME@")
+set(_szct_static "@SZCONFIGTOOL_STATIC_NAME@")
+
+if(NOT TARGET SzConfigTool::szconfigtool)
+    if(SZCONFIGTOOL_USE_STATIC)
+        if(_szct_static STREQUAL "" OR NOT EXISTS "${_szct_libdir}/${_szct_static}")
+            set(szconfigtool_FOUND FALSE)
+            set(szconfigtool_NOT_FOUND_MESSAGE "static libSzConfigTool not installed in ${_szct_libdir}")
+            return()
+        endif()
+        add_library(SzConfigTool::native STATIC IMPORTED)
+        set_target_properties(SzConfigTool::native PROPERTIES
+            IMPORTED_LOCATION "${_szct_libdir}/${_szct_static}"
+            INTERFACE_LINK_LIBRARIES "@SZCONFIGTOOL_STATIC_DEPS@"
+            INTERFACE_COMPILE_DEFINITIONS SZCONFIGTOOL_STATIC)
+    else()
+        if(WIN32)
+            set(_szct_shared_path "${_szct_bindir}/${_szct_shared}")
+        else()
+            set(_szct_shared_path "${_szct_libdir}/${_szct_shared}")
+        endif()
+        if(_szct_shared STREQUAL "" OR NOT EXISTS "${_szct_shared_path}"
+           OR (WIN32 AND NOT EXISTS "${_szct_libdir}/${_szct_implib}"))
+            set(szconfigtool_FOUND FALSE)
+            set(szconfigtool_NOT_FOUND_MESSAGE "shared libSzConfigTool not installed in ${_szct_libdir}")
+            return()
+        endif()
+        add_library(SzConfigTool::native SHARED IMPORTED)
+        set_target_properties(SzConfigTool::native PROPERTIES
+            IMPORTED_LOCATION "${_szct_shared_path}")
+        if(WIN32)
+            set_target_properties(SzConfigTool::native PROPERTIES
+                IMPORTED_IMPLIB "${_szct_libdir}/${_szct_implib}")
+        elseif(APPLE)
+            set_target_properties(SzConfigTool::native PROPERTIES
+                IMPORTED_SONAME "@rpath/${_szct_shared}")
+        elseif(UNIX)
+            set_target_properties(SzConfigTool::native PROPERTIES IMPORTED_NO_SONAME TRUE)
+        endif()
+    endif()
+    add_library(SzConfigTool::szconfigtool INTERFACE IMPORTED)
+    set_target_properties(SzConfigTool::szconfigtool PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${_szct_incdir}"
+        INTERFACE_COMPILE_FEATURES cxx_std_20
+        INTERFACE_LINK_LIBRARIES SzConfigTool::native)
+endif()
+
+check_required_components(szconfigtool)

@@ -1,0 +1,11 @@
+<Project>
+  <!-- The supported runtime identifiers and the native file name for each.
+       Single source for packing (Sz.ConfigTool.csproj) and for copying the
+       locally built library next to tests/examples (natives.local.targets). -->
+  <ItemGroup>
+    <SzNativeRid Include="linux-x64" NativeFile="libSzConfigTool.so" />
+    <SzNativeRid Include="linux-arm64" NativeFile="libSzConfigTool.so" />
+    <SzNativeRid Include="osx-arm64" NativeFile="libSzConfigTool.dylib" />
+    <SzNativeRid Include="win-x64" NativeFile="SzConfigTool.dll" />
+  </ItemGroup>
+</Project>

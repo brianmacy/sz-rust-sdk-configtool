@@ -29,7 +29,10 @@ pub(crate) fn field_or_null(item: &Value, key: &str) -> Value {
 /// ([`FieldUpdate::Leave`]). This encodes the JSON write contract where an
 /// omitted key means "leave", an explicit `null` means "clear", and a value
 /// means "set".
-pub(crate) fn field_update_str<'a>(json: &'a Value, keys: &[&str]) -> FieldUpdate<&'a str> {
+// Public only so the sibling `sz-configtool-ffi` crate can reach it; not part
+// of the supported Rust API.
+#[doc(hidden)]
+pub fn field_update_str<'a>(json: &'a Value, keys: &[&str]) -> FieldUpdate<&'a str> {
     for key in keys {
         if let Some(v) = json.get(*key) {
             if v.is_null() {
@@ -49,7 +52,10 @@ pub(crate) fn field_update_str<'a>(json: &'a Value, keys: &[&str]) -> FieldUpdat
 /// [`FieldUpdate::Clear`], a JSON integer maps to [`FieldUpdate::Set`], and an
 /// absent key (or present non-integer, non-null value) leaves the field
 /// untouched ([`FieldUpdate::Leave`]).
-pub(crate) fn field_update_i64(json: &Value, keys: &[&str]) -> FieldUpdate<i64> {
+// Public only so the sibling `sz-configtool-ffi` crate can reach it; not part
+// of the supported Rust API.
+#[doc(hidden)]
+pub fn field_update_i64(json: &Value, keys: &[&str]) -> FieldUpdate<i64> {
     for key in keys {
         if let Some(v) = json.get(*key) {
             if v.is_null() {
@@ -866,7 +872,10 @@ pub fn lookup_gplan_id(config_json: &str, plan_code: &str) -> Result<i64> {
 ///
 /// # Errors
 /// Returns error if plan not found or JSON is invalid
-pub(crate) fn lookup_gplan_code(config_json: &str, gplan_id: i64) -> Result<String> {
+// Public only so the sibling `sz-configtool-ffi` crate can reach it; not part
+// of the supported Rust API.
+#[doc(hidden)]
+pub fn lookup_gplan_code(config_json: &str, gplan_id: i64) -> Result<String> {
     let config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 

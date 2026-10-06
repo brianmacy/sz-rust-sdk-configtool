@@ -1,0 +1,28 @@
+<Project>
+  <!-- Copies the locally built native library ($(SzLocalNativeDir), see
+       Directory.Build.props) to $(OutDir)runtimes/<host-rid>/native/, the same
+       layout the NuGet package uses, so tests and examples exercise the
+       library's runtimes/ resolver against the REAL libSzConfigTool. -->
+  <Import Project="$(MSBuildThisFileDirectory)natives.props" />
+
+  <PropertyGroup>
+    <SzHostRid>$(NETCoreSdkRuntimeIdentifier)</SzHostRid>
+  </PropertyGroup>
+
+  <Target Name="SzCopyLocalNative" AfterTargets="Build">
+    <ItemGroup>
+      <_SzHostNative Include="@(SzNativeRid->WithMetadataValue('Identity', '$(SzHostRid)'))" />
+    </ItemGroup>
+    <PropertyGroup>
+      <_SzHostNativeFile>@(_SzHostNative->'%(NativeFile)')</_SzHostNativeFile>
+      <_SzHostNativeSource>$(SzLocalNativeDir)/$(_SzHostNativeFile)</_SzHostNativeSource>
+    </PropertyGroup>
+    <Error Condition="'$(_SzHostNativeFile)' == ''"
+           Text="Host RID '$(SzHostRid)' is not a supported Sz.ConfigTool RID (see natives.props)." />
+    <Error Condition="!Exists('$(_SzHostNativeSource)')"
+           Text="Native library not found: $(_SzHostNativeSource). Run 'cargo build -p sz-configtool-ffi --release' at the repository root, or set SZCONFIGTOOL_NATIVE_DIR." />
+    <Copy SourceFiles="$(_SzHostNativeSource)"
+          DestinationFolder="$(OutDir)runtimes/$(SzHostRid)/native/"
+          SkipUnchangedFiles="true" />
+  </Target>
+</Project>

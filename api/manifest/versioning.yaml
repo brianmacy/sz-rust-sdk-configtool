@@ -1,0 +1,68 @@
+# CONFIG_BASE_VERSION — version information. Root module: src/versioning.rs
+# (4 pub fns, all here).
+group: versioning
+
+functions:
+  - name: get_version
+    doc: Get the configuration VERSION string (G2_CONFIG.CONFIG_BASE_VERSION.VERSION).
+    rust: versioning::get_version
+    c_symbol: SzConfigTool_getVersion
+    args: []
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Result is a JSON string (e.g. "4.4.0" in the template). Absent or non-string
+      VERSION (or any missing parent) = NOT_FOUND.
+    c_notes: >-
+      C typed export returns the bare (unquoted) string and reports library errors with
+      returnCode -5 and no reason code.
+
+  - name: get_compatibility_version
+    doc: Get COMPATIBILITY_VERSION.CONFIG_VERSION.
+    rust: versioning::get_compatibility_version
+    c_symbol: SzConfigTool_getCompatibilityVersion
+    args: []
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Result is a JSON string (e.g. "11" in the template). Absent or non-string
+      CONFIG_VERSION (or any missing parent) = NOT_FOUND.
+    c_notes: >-
+      C typed export returns the bare string and reports library errors with returnCode
+      -5 and no reason code.
+
+  - name: update_compatibility_version
+    doc: Set COMPATIBILITY_VERSION.CONFIG_VERSION.
+    rust: versioning::update_compatibility_version
+    c_symbol: SzConfigTool_updateCompatibilityVersion
+    args:
+      - name: new_version
+        type: str
+        semantics: Stored verbatim as a JSON string; no format validation.
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND, INVALID_CONFIG]
+    notes: >-
+      Absent CONFIG_BASE_VERSION or COMPATIBILITY_VERSION = NOT_FOUND;
+      COMPATIBILITY_VERSION not an object = INVALID_CONFIG. TRAP: an absent
+      G2_CONFIG is NOT an error — the config is returned unchanged
+      (re-serialized).
+
+  - name: verify_compatibility_version
+    doc: Compare COMPATIBILITY_VERSION.CONFIG_VERSION with an expected value.
+    rust: versioning::verify_compatibility_version
+    c_symbol: SzConfigTool_verifyCompatibilityVersion
+    args:
+      - name: expected_version
+        type: str
+        semantics: Compared by exact, case-sensitive string equality.
+    returns: json
+    tuple_names: [current_version, matches]
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Rust returns (current_version, matches) where the String is NOT a config, so it is
+      `json`; tuple_names makes the result the object {"current_version": "11",
+      "matches": true}. Absent CONFIG_VERSION = NOT_FOUND.
+    c_notes: >-
+      C-EXPORT DELTA: SzConfigTool_verifyCompatibilityVersion returns only the bare
+      current version string and DROPS `matches`; library errors use returnCode -5 with
+      no reason code.

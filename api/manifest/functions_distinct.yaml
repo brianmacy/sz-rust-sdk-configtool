@@ -1,0 +1,140 @@
+# CFG_DFUNC — distinct functions. Root module: src/functions/distinct.rs
+# (5 pub fns, all here).
+group: functions_distinct
+
+functions:
+  - name: add_distinct_function
+    doc: Add a distinct function (CFG_DFUNC row) to the configuration.
+    rust: functions::distinct::add_distinct_function
+    rust_params_struct: functions::distinct::AddDistinctFunctionParams
+    c_symbol: SzConfigTool_addDistinctFunction
+    args:
+      - name: code
+        type: str
+        positional: true
+        semantics: Uppercased before the duplicate check and storage (DFUNC_CODE).
+      - name: connect_str
+        type: str
+        optional: true
+        semantics: Absent stores CONNECT_STR null; any string (including "") is stored verbatim.
+      - name: description
+        type: str
+        optional: true
+        semantics: Stored verbatim in DFUNC_DESC; absent stores null (NOT defaulted to the code).
+      - name: language
+        type: str
+        optional: true
+        semantics: Stored verbatim in LANGUAGE; absent stores null.
+      - name: anon_support
+        type: str
+        optional: true
+        default: "No"
+        semantics: Case-insensitive; normalized to Yes or No, any other value is INVALID_INPUT.
+    returns: config_and_json
+    errors: [JSON_PARSE, MISSING_SECTION, INVALID_INPUT]
+    notes: >-
+      Returns (modified config, the new complete CFG_DFUNC row: DFUNC_ID, DFUNC_CODE,
+      DFUNC_DESC, CONNECT_STR, ANON_SUPPORT, LANGUAGE; unset optionals are null).
+      DFUNC_ID is auto-allocated as max existing + 1 (floor 1); no id can be requested.
+      TRAP: a duplicate code is INVALID_INPUT, not ALREADY_EXISTS
+      (SzConfigError::validation). The duplicate check runs before anon_support
+      validation. MISSING_SECTION only when G2_CONFIG.CFG_DFUNC is absent.
+    c_notes: >-
+      C typed export SzConfigTool_addDistinctFunction takes (code, connect_str,
+      dfunc_desc, language) only: anon_support is not exposed (always "No"); NULL
+      pointers = absent, "" is stored as ""; it DROPS the new row; a library error
+      returns returnCode -5 with NO reason code (set_error, not set_error_from).
+
+  - name: delete_distinct_function
+    doc: Delete a distinct function by code.
+    rust: functions::distinct::delete_distinct_function
+    c_symbol: SzConfigTool_deleteDistinctFunction
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup.
+    returns: config_and_json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Returns (modified config, the deleted CFG_DFUNC row). No dependency check:
+      CFG_DFCALL rows referencing the DFUNC_ID are left in place. A config without
+      CFG_DFUNC is NOT_FOUND (not MISSING_SECTION).
+    c_notes: >-
+      C typed export DROPS the deleted row; a library error returns returnCode -5 with
+      NO reason code.
+
+  - name: get_distinct_function
+    doc: Get one distinct function's raw CFG_DFUNC row by code.
+    rust: functions::distinct::get_distinct_function
+    c_symbol: SzConfigTool_getDistinctFunction
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup.
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Result is the stored row with on-disk keys. A config without CFG_DFUNC is
+      NOT_FOUND.
+    c_notes: >-
+      C typed export reports a library error with returnCode -5 and NO reason code.
+
+  - name: list_distinct_functions
+    doc: List all distinct functions as {id, function, connectStr, anonSupport, language} summaries.
+    rust: functions::distinct::list_distinct_functions
+    c_symbol: SzConfigTool_listDistinctFunctions
+    args: []
+    returns: json
+    errors: [JSON_PARSE]
+    notes: >-
+      Result is an array in config order; id/connectStr/anonSupport/language are
+      null-preserving (stored null stays null), DFUNC_DESC is not included. A config
+      without G2_CONFIG.CFG_DFUNC yields [] (no MISSING_SECTION).
+    c_notes: >-
+      C typed export reports a library error with returnCode -5 and NO reason code.
+
+  - name: set_distinct_function
+    doc: Update a distinct function's connect string, description, language or anon support.
+    rust: functions::distinct::set_distinct_function
+    rust_params_struct: functions::distinct::SetDistinctFunctionParams
+    c_symbol: SzConfigTool_setDistinctFunction
+    c_aliases: [SzConfigTool_setDistinctFunctionWithJson]
+    args:
+      - name: code
+        type: str
+        positional: true
+        semantics: Uppercased before lookup.
+      - name: connect_str
+        type: str
+        tristate: true
+        semantics: Absent leaves CONNECT_STR; null writes null; a string (including "") is written.
+      - name: description
+        type: str
+        optional: true
+        semantics: Absent leaves DFUNC_DESC; a string is written verbatim.
+      - name: language
+        type: str
+        optional: true
+        semantics: Absent leaves LANGUAGE; a string is written verbatim.
+      - name: anon_support
+        type: str
+        optional: true
+        semantics: >-
+          Absent leaves ANON_SUPPORT. TRAP: unlike add_distinct_function the value is
+          written VERBATIM, with no Yes/No validation or case normalization.
+    returns: config_and_json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Returns (modified config, the updated CFG_DFUNC row). The row is removed and
+      re-appended, so it moves to the END of CFG_DFUNC (list order changes). A config
+      without CFG_DFUNC is NOT_FOUND.
+    c_notes: >-
+      C typed export SzConfigTool_setDistinctFunction takes (code, connect_str,
+      dfunc_desc, language): anon_support not exposed; NULL connect_str = Leave, so it
+      cannot Clear; DROPS the row; library error returnCode -5 with NO reason code.
+      Alias SzConfigTool_setDistinctFunctionWithJson takes an updates object with keys
+      CONNECT_STR|connectStr (tri-state: null clears), DFUNC_DESC|description,
+      LANGUAGE|language, ANON_SUPPORT|anonSupport (one spelling per field; null =
+      leave); a non-object, an unknown key, a non-string value, or both spellings of
+      a field is INVALID_INPUT; unparsable updates_json is returnCode -3;
+      it DROPS the row; library errors are -2 with the reason code.

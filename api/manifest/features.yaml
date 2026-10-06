@@ -1,0 +1,390 @@
+# CFG_FTYPE / CFG_FBOM / CFG_FCLASS / CFG_DFCALL — features. Root module:
+# src/features.rs (16 pub fns: 13 here, 3 excluded below).
+group: features
+
+functions:
+  - name: add_feature
+    doc: Add a feature (CFG_FTYPE row) with its element list (CFG_FBOM rows) and optional standardize/expression/comparison calls.
+    rust: features::add_feature
+    rust_params_struct: features::AddFeatureParams
+    c_symbol: SzConfigTool_addFeature
+    args:
+      - name: feature
+        type: str
+        semantics: Uppercased; stored as FTYPE_CODE and FTYPE_DESC. Duplicate (exact match on the uppercased code) is ALREADY_EXISTS.
+      - name: element_list
+        type: json
+        semantics: >-
+          Must be a non-empty JSON array, else INVALID_INPUT. Each item is either an
+          element-code string, or an object with `element` (or `ELEMENT`, required,
+          else INVALID_INPUT) and optional `expressed`/`EXPRESSED`,
+          `compared`/`COMPARED` ("yes" case-insensitive = true), `display`/`DISPLAY`
+          ("yes" = DISPLAY_LEVEL 1, anything else 0) or
+          `displaylevel`/`DISPLAYLEVEL`/`display_level` (int, default 1, negative =
+          INVALID_INPUT), `displaydelim`/`DISPLAYDELIM`/`display_delim`,
+          `derived`/`DERIVED` (Yes/No case-insensitive, else INVALID_INPUT; default No).
+          Any other item type is INVALID_INPUT. Element codes are uppercased; a code
+          not in CFG_FELEM is AUTO-CREATED (FELEM_ID max+1 floor 1000, DATA_TYPE
+          string, FELEM_DESC = code). The FBOM EXEC_ORDER is the item's 1-based
+          position (per feature, not whole-table).
+      - name: class
+        type: str
+        optional: true
+        default: OTHER
+        semantics: CFG_FCLASS code, case-insensitive; unknown is NOT_FOUND.
+      - name: behavior
+        type: str
+        optional: true
+        default: FM
+        semantics: >-
+          Behavior code (A1, F1, FF, FM, FVM, NONE, NAME; E/S suffixes set
+          FTYPE_EXCL/FTYPE_STAB), case-insensitive; otherwise INVALID_INPUT.
+      - name: candidates
+        type: str
+        optional: true
+        default: "No"
+        semantics: USED_FOR_CAND; case-insensitive Yes/No, normalized, else INVALID_INPUT.
+      - name: anonymize
+        type: str
+        optional: true
+        default: "No"
+        semantics: ANONYMIZE; case-insensitive Yes/No, normalized, else INVALID_INPUT.
+      - name: derived
+        type: str
+        optional: true
+        default: "No"
+        semantics: DERIVED; case-insensitive Yes/No, normalized, else INVALID_INPUT.
+      - name: history
+        type: str
+        optional: true
+        default: "Yes"
+        semantics: PERSIST_HISTORY; case-insensitive Yes/No, normalized, else INVALID_INPUT.
+      - name: matchkey
+        type: str
+        optional: true
+        semantics: >-
+          SHOW_IN_MATCH_KEY; case-insensitive Yes, No, Confirm or Denial, normalized,
+          else INVALID_INPUT. Absent defaults to Yes when `comparison` is given, else No.
+      - name: standardize
+        type: str
+        optional: true
+        semantics: >-
+          CFG_SFUNC code (case-insensitive) or NOT_FOUND (an empty string is looked
+          up too, so "" is NOT_FOUND). Creates a CFG_SFCALL row (SFCALL_ID max+1
+          floor 1000, EXEC_ORDER 1, FELEM_ID -1).
+      - name: expression
+        type: str
+        optional: true
+        semantics: >-
+          CFG_EFUNC code (case-insensitive) or NOT_FOUND ("" is NOT_FOUND). Requires
+          at least one element_list item with expressed=yes, else INVALID_INPUT.
+          Creates a CFG_EFCALL row (EFCALL_ID max+1 floor 1000, EXEC_ORDER 1) and a
+          CFG_EFBOM row (FELEM_REQ Yes) per expressed element.
+      - name: comparison
+        type: str
+        optional: true
+        semantics: >-
+          CFG_CFUNC code (case-insensitive) or NOT_FOUND ("" is NOT_FOUND). Requires
+          at least one element_list item with compared=yes, else INVALID_INPUT.
+          Creates a CFG_CFCALL row (CFCALL_ID max+1 floor 1000) and a CFG_CFBOM row
+          per compared element.
+      - name: version
+        type: int
+        optional: true
+        default: 1
+        semantics: Stored verbatim in VERSION.
+      - name: rtype_id
+        type: int
+        optional: true
+        default: 0
+        semantics: Stored verbatim in RTYPE_ID; not validated against CFG_RTYPE.
+      - name: id
+        type: int
+        optional: true
+        semantics: Requested FTYPE_ID. Absent OR <= 0 means auto-allocate (max existing + 1, floor 1000). A taken id > 0 is ALREADY_EXISTS.
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, INVALID_INPUT, NOT_FOUND, INVALID_STRUCTURE]
+    notes: >-
+      Validation order: CFG_FTYPE section, duplicate code, element_list shape,
+      candidates/anonymize/derived/history/matchkey domains, id, behavior, class,
+      function codes, expressed/compared counts, then per-element (display level,
+      derived). The input config is never modified on error.
+    c_notes: >-
+      C typed export SzConfigTool_addFeature takes the code positionally plus a feature
+      JSON with keys elementList (or element_list), class, behavior, candidates,
+      anonymize, derived, history, matchkey (or matchKey), standardize, expression,
+      comparison, version, rtype_id (or rtypeId), id; non-string/non-int values are
+      silently ignored. NON-STANDARD return codes: -3 for invalid feature JSON or a
+      missing elementList, -4 C-string failure, -5 for EVERY library error (not -2).
+
+  - name: delete_feature
+    doc: Delete a feature and cascade-delete its FBOM rows, attributes and standardize/expression/comparison/distinct calls.
+    rust: features::delete_feature
+    c_symbol: SzConfigTool_deleteFeature
+    args:
+      - name: feature
+        type: str
+        semantics: >-
+          A string that parses (after trim) as an integer is an FTYPE_ID; otherwise a
+          feature code, uppercased. Unknown is NOT_FOUND.
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT]
+    notes: >-
+      Locked features NAME, ADDRESS, PHONE, DOB, REL_LINK, REL_ANCHOR, REL_POINTER
+      are INVALID_INPUT. Cascade removes the feature's CFG_FBOM rows, CFG_ATTR rows
+      whose FTYPE_CODE matches, CFG_SFCALL, CFG_EFCALL (+ their CFG_EFBOM),
+      CFG_CFCALL (+ CFG_CFBOM) and CFG_DFCALL (+ CFG_DFBOM) rows; CFG_FELEM rows
+      are kept. A missing CFG_FTYPE is MISSING_SECTION for an id but NOT_FOUND for
+      a code.
+
+  - name: get_feature
+    doc: Get one feature as a display summary including its elementList.
+    rust: features::get_feature
+    c_symbol: SzConfigTool_getFeature
+    args:
+      - name: feature
+        type: str
+        semantics: Integer string (after trim) = FTYPE_ID; otherwise a code, uppercased.
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Result {id, feature, class, behavior, anonymize, candidates, standardize,
+      expression, comparison, matchKey, version, elementList}; elementList items
+      {element, expressed, compared, derived, display} sorted by EXEC_ORDER,
+      display = "No" iff DISPLAY_LEVEL is 0. standardize/expression/comparison are
+      "" when absent. DERIVED, PERSIST_HISTORY and RTYPE_ID of the feature are NOT
+      in the result. A missing CFG_FTYPE section is NOT_FOUND (never MISSING_SECTION).
+
+  - name: list_features
+    doc: List all features as display summaries, sorted by FTYPE_ID.
+    rust: features::list_features
+    c_symbol: SzConfigTool_listFeatures
+    args: []
+    returns: json
+    errors: [JSON_PARSE, MISSING_SECTION]
+    notes: Array of the same objects get_feature returns.
+
+  - name: set_feature
+    doc: Update a feature's flags, behavior, class, version or RTYPE_ID.
+    rust: features::set_feature
+    rust_params_struct: features::SetFeatureParams
+    c_symbol: SzConfigTool_setFeature
+    args:
+      - name: feature
+        type: str
+        semantics: Integer string (after trim) = FTYPE_ID; otherwise a code, uppercased. Unknown is NOT_FOUND.
+      - name: candidates
+        type: str
+        optional: true
+        semantics: USED_FOR_CAND; case-insensitive Yes/No, normalized, else INVALID_INPUT.
+      - name: anonymize
+        type: str
+        optional: true
+        semantics: TRAP — stored VERBATIM in ANONYMIZE (no validation or normalization, unlike add_feature).
+      - name: derived
+        type: str
+        optional: true
+        semantics: TRAP — stored VERBATIM in DERIVED (no validation or normalization).
+      - name: history
+        type: str
+        optional: true
+        semantics: TRAP — stored VERBATIM in PERSIST_HISTORY (no validation or normalization).
+      - name: matchkey
+        type: str
+        optional: true
+        semantics: SHOW_IN_MATCH_KEY; case-insensitive Yes, No, Confirm or Denial, normalized, else INVALID_INPUT.
+      - name: behavior
+        type: str
+        optional: true
+        semantics: Behavior code (case-insensitive) parsed into FTYPE_FREQ/FTYPE_EXCL/FTYPE_STAB, else INVALID_INPUT.
+      - name: class
+        type: str
+        optional: true
+        semantics: CFG_FCLASS code, case-insensitive; unknown is NOT_FOUND.
+      - name: version
+        type: int
+        optional: true
+        semantics: Stored verbatim in VERSION.
+      - name: rtype_id
+        type: int
+        optional: true
+        semantics: Stored verbatim in RTYPE_ID; not validated.
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT]
+    notes: >-
+      If no supplied value differs from the stored row (including when no update args
+      are given) the call fails with INVALID_INPUT "No changes detected". The input
+      config is never modified on error.
+    c_notes: >-
+      C typed export takes an updates JSON with keys candidates, anonymize, derived,
+      history, matchkey (or matchKey), behavior, class, version, rtypeId (or RTYPE_ID);
+      mistyped values are silently ignored.
+
+  - name: add_feature_comparison
+    doc: Add a feature-element (CFG_FBOM) row with an optional explicit EXEC_ORDER.
+    rust: features::add_feature_comparison
+    rust_params_struct: features::AddFeatureComparisonParams
+    c_symbol: null
+    args:
+      - name: feature_code
+        type: str
+        rust_convert: required_str_as_some
+        semantics: Required. Feature code, case-insensitive; unknown is NOT_FOUND.
+      - name: element_code
+        type: str
+        rust_convert: required_str_as_some
+        semantics: Required. Element code, case-insensitive; unknown is NOT_FOUND.
+      - name: exec_order
+        type: int
+        optional: true
+        semantics: >-
+          WHOLE-TABLE scope: absent or <= 0 auto-allocates max(EXEC_ORDER over all of
+          CFG_FBOM) + 1; a value > 0 already used by ANY CFG_FBOM row is ALREADY_EXISTS.
+      - name: display_level
+        type: int
+        optional: true
+        semantics: TRAP — stored verbatim, NOT validated, and absent stores DISPLAY_LEVEL null (no default 1, unlike add_element_to_feature).
+      - name: display_delim
+        type: str
+        optional: true
+        semantics: Stored verbatim; absent stores null.
+      - name: derived
+        type: str
+        optional: true
+        semantics: TRAP — stored verbatim, NOT validated; absent stores DERIVED null.
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND, ALREADY_EXISTS]
+    notes: >-
+      Writes the same table as elements.add_element_to_feature. Duplicate (FTYPE_ID,
+      FELEM_ID) is ALREADY_EXISTS. A missing CFG_FTYPE/CFG_FELEM section surfaces as
+      NOT_FOUND (code lookup); a missing CFG_FBOM as MISSING_SECTION.
+    c_notes: >-
+      No C typed export.
+
+  - name: delete_feature_comparison
+    doc: Delete one feature-element (CFG_FBOM) row.
+    rust: features::delete_feature_comparison
+    c_symbol: null
+    args:
+      - name: feature_code
+        type: str
+        semantics: Case-insensitive; unknown is NOT_FOUND.
+      - name: element_code
+        type: str
+        semantics: Case-insensitive; unknown is NOT_FOUND.
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Same effect as elements.delete_element_from_feature, except a missing CFG_FBOM
+      section is NOT_FOUND here (MISSING_SECTION there). An absent mapping is NOT_FOUND.
+    c_notes: >-
+      No C typed export.
+
+  - name: get_feature_comparison
+    doc: Get one raw CFG_FBOM row by feature and element code.
+    rust: features::get_feature_comparison
+    rust_params_struct: features::GetFeatureComparisonParams
+    c_symbol: null
+    args:
+      - name: feature_code
+        type: str
+        rust_convert: required_str_as_some
+        semantics: Required. Case-insensitive; unknown is NOT_FOUND.
+      - name: element_code
+        type: str
+        rust_convert: required_str_as_some
+        semantics: Required. Case-insensitive; unknown is NOT_FOUND.
+    returns: json
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND]
+    notes: >-
+      Result uses on-disk keys (FTYPE_ID, FELEM_ID, EXEC_ORDER, DISPLAY_LEVEL,
+      DISPLAY_DELIM, DERIVED).
+    c_notes: >-
+      No C typed export.
+
+  - name: list_feature_comparisons
+    doc: List all raw CFG_FBOM rows sorted by (FTYPE_ID, EXEC_ORDER).
+    rust: features::list_feature_comparisons
+    c_symbol: null
+    args: []
+    returns: json
+    errors: [JSON_PARSE, MISSING_SECTION]
+    c_notes: >-
+      No C typed export.
+
+  - name: add_feature_distinct_call_element
+    doc: Add a distinct-function call (CFG_DFCALL row) for a feature.
+    rust: features::add_feature_distinct_call_element
+    rust_params_struct: features::AddFeatureDistinctCallElementParams
+    c_symbol: null
+    args:
+      - name: feature_code
+        type: str
+        rust_convert: required_str_as_some
+        semantics: Required. Case-insensitive; unknown is NOT_FOUND.
+      - name: distinct_func_code
+        type: str
+        rust_convert: required_str_as_some
+        semantics: Required. CFG_DFUNC code, case-insensitive; unknown is NOT_FOUND.
+      - name: element_code
+        type: str
+        optional: true
+        semantics: TRAP — only validated (unknown is NOT_FOUND); it is NOT stored (CFG_DFCALL has no FELEM_ID column).
+      - name: exec_order
+        type: int
+        optional: true
+        semantics: TRAP — IGNORED entirely (CFG_DFCALL has no EXEC_ORDER column).
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND, ALREADY_EXISTS]
+    notes: >-
+      Duplicate (FTYPE_ID, DFUNC_ID) is ALREADY_EXISTS. New row is exactly {DFCALL_ID
+      (max+1 floor 1000), FTYPE_ID, DFUNC_ID}; no CFG_DFBOM rows are written.
+    c_notes: >-
+      No C typed export.
+
+  - name: list_feature_classes
+    doc: List all raw CFG_FCLASS rows sorted by FCLASS_ID.
+    rust: features::list_feature_classes
+    c_symbol: null
+    args: []
+    returns: json
+    errors: [JSON_PARSE, MISSING_SECTION]
+    c_notes: >-
+      No C typed export.
+
+  - name: get_feature_class
+    doc: Get one raw CFG_FCLASS row by id or code.
+    rust: features::get_feature_class
+    c_symbol: null
+    args:
+      - name: feature_class
+        type: str
+        semantics: Integer string (after trim) = FCLASS_ID; otherwise a code, uppercased. Unknown is NOT_FOUND.
+    returns: json
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND]
+    c_notes: >-
+      No C typed export.
+
+  - name: update_feature_version
+    doc: Set G2_CONFIG.CONFIG_BASE_VERSION.COMPATIBILITY_VERSION.FEATURE_VERSION.
+    rust: features::update_feature_version
+    c_symbol: SzConfigTool_updateFeatureVersion
+    args:
+      - name: version
+        type: str
+        semantics: Stored verbatim as a string (inserted or overwritten); not validated.
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION]
+    notes: >-
+      MISSING_SECTION when COMPATIBILITY_VERSION is absent or not an object. No
+      manifest function reads FEATURE_VERSION back (versioning reads CONFIG_VERSION).
+
+excluded:
+  - rust: features::build_feature_json
+    reason: >-
+      Internal display-summary builder used by get_feature/list_features; takes a
+      parsed config Value and a CFG_FTYPE row, not a config string.
+  - rust: features::add_feature_comparison_element
+    reason: Pure alias that delegates to add_feature_comparison (same params); exposed once as add_feature_comparison.
+  - rust: features::delete_feature_comparison_element
+    reason: Pure alias that delegates to delete_feature_comparison; exposed once as delete_feature_comparison.

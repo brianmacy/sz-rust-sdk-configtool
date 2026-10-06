@@ -23,7 +23,7 @@ Be respectful, professional, and collaborative. We value contributions from ever
 
 ### Prerequisites
 
-- Rust 1.85 or later
+- Rust 1.88 or later (MSRV; `rust-toolchain.toml` pins the toolchain used for builds)
 - Git
 - cargo-deny (for security checks): `cargo install cargo-deny`
 - cargo-audit (for vulnerability scanning): `cargo install cargo-audit`
@@ -54,6 +54,9 @@ cargo build --lib --release
 
 # Build examples
 cargo build --examples
+
+# Build the C library (libSzConfigTool)
+cargo build -p sz-configtool-ffi --release
 ```
 
 ### Run Tests
@@ -185,10 +188,10 @@ cargo fmt
 cargo fmt --check
 
 # 3. Run clippy (must pass with no warnings)
-cargo clippy --all-targets --all-features -- -D warnings
+cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 # 4. Run tests
-cargo test
+cargo test --workspace
 
 # 5. Check documentation builds
 cargo doc --no-deps
@@ -196,8 +199,8 @@ cargo doc --no-deps
 # 6. Security audit
 cargo deny check
 
-# 7. Build release
-cargo build --lib --release
+# 7. Build release (library + C library)
+cargo build --workspace --release
 ```
 
 ### Clippy Warnings
@@ -298,7 +301,7 @@ cargo build --lib --release
 ### Rust Edition and Version
 
 - **Edition**: 2024
-- **Rust Version**: 1.85+
+- **Rust Version**: 1.88+ (MSRV)
 - Use modern Rust features appropriately
 
 ### Function Signatures
@@ -417,29 +420,31 @@ When adding features:
 ### Adding FFI Functions
 
 1. Implement Rust function first
-2. Add FFI wrapper in `src/ffi.rs`:
+2. Add FFI wrapper in `ffi/src/lib.rs`, with the body wrapped in `ffi_guard`:
    ```rust
-   #[no_mangle]
+   #[unsafe(no_mangle)]
    pub extern "C" fn SzConfigTool_functionName(
        config_json: *const c_char,
        param: *const c_char,
    ) -> SzConfigTool_result {
-       handle_result!(|| {
-           let config = unsafe { CStr::from_ptr(config_json) }.to_str()?;
-           let param_str = unsafe { CStr::from_ptr(param) }.to_str()?;
-           module::function_name(config, param_str)
+       ffi_guard("SzConfigTool_functionName", || {
+           let config = ffi_required_str!(config_json, "config_json");
+           let param = ffi_required_str!(param, "param");
+           handle_result!(sz_configtool_lib::module::function_name(config, param))
        })
    }
    ```
-3. Add declaration to `include/libSzConfigTool.h`
+3. Add a `SZCONFIGTOOL_API` declaration to `ffi/include/libSzConfigTool.h`
+   (`cargo test -p sz-configtool-ffi` fails on any header/export drift)
 4. Document in FFI_GUIDE.md
 5. Update FFI function count in README
 
 ### FFI Guidelines
 
 - Handle NULL pointers for optional parameters
-- Use `handle_result!` macro for simple functions
-- Store errors in thread-local storage
+- Use `handle_result!` / `ffi_required_str!` for simple functions
+- Record errors only via `set_error` / `set_error_from` (per-thread storage)
+- Never set `panic = "abort"`; `ffi_guard` relies on unwinding
 - Ensure thread safety
 - Test memory management (no leaks)
 
@@ -471,12 +476,15 @@ When adding features:
 
 Maintainers follow this process for releases:
 
-1. Update version in `Cargo.toml`
+1. Update the version (`X.Y.Z-N`, e.g. `4.4.0-1`; see README "Versioning") in
+   `Cargo.toml` and the binding manifests/lockfiles (`packaging/README.md`,
+   "Cutting a release"); `packaging/gates/check-versions.sh v<version>` must pass
 2. Update `CHANGELOG.md`
-3. Create git tag: `git tag -a v0.x.0 -m "Release v0.x.0"`
-4. Push: `git push origin main && git push origin v0.x.0`
-5. Create GitHub release
-6. Publish to crates.io (when ready)
+3. Create git tag: `git tag -a v4.4.0-1 -m "Release v4.4.0-1"`
+4. Push: `git push origin main && git push origin v4.4.0-1` (the tag push
+   builds and publishes the GitHub Release)
+
+Nothing is published to crates.io or any other registry.
 
 ## License
 

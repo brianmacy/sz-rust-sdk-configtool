@@ -1,0 +1,30 @@
+[package]
+name = "sz-configtool-node"
+description = "Node.js (napi-rs) native seam over sz-configtool-api: one `invoke` function"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+# Only the Rust sources: keeps cargo from walking node_modules/ (and the
+# trpc -> .. symlink) when fingerprinting this package.
+include = ["Cargo.toml", "build.rs", "src/**/*.rs"]
+
+[lib]
+name = "szconfigtool_node"
+crate-type = ["cdylib"]
+
+[dependencies]
+# The manifest-driven dispatcher. NOT sz-configtool-ffi: this .node must not
+# export any `SzConfigTool_*` symbol (asserted by the npm test suite with nm).
+sz-configtool-api = { path = "../../api" }
+napi = { version = "3", default-features = false, features = ["napi4"] }
+napi-derive = { version = "3", default-features = false }
+
+[dev-dependencies]
+serde_json = { version = "1.0", features = ["preserve_order"] }
+
+[build-dependencies]
+napi-build = "2"

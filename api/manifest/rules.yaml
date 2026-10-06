@@ -1,0 +1,145 @@
+# CFG_ERRULE — entity resolution rules. Root module: src/rules.rs (5 pub fns, all here).
+group: rules
+
+functions:
+  - name: add_rule
+    doc: Add an entity resolution rule (CFG_ERRULE row), returning the assigned ERRULE_ID.
+    rust: rules::add_rule
+    c_symbol: SzConfigTool_addRule
+    args:
+      - name: id
+        type: int
+        semantics: >-
+          Requested ERRULE_ID. 0 or any negative value means auto-allocate (max
+          existing + 1, floor 1000, so 1000 on the template). A taken id > 0 is
+          ALREADY_EXISTS. Any ERRULE_ID key inside rule_config is IGNORED.
+      - name: rule_config
+        type: json
+        semantics: >-
+          Object with on-disk keys. ERRULE_CODE (string) is required, else
+          MISSING_FIELD; uppercased for storage and the case-insensitive
+          duplicate check (ALREADY_EXISTS). QUAL_ERFRAG_CODE (the fragment) is
+          required: absent/non-string is MISSING_FIELD, "" or an unknown code is
+          NOT_FOUND (existence is case-insensitive). DISQ_ERFRAG_CODE is optional:
+          "" is accepted and stored as "", an unknown code is NOT_FOUND. TRAP:
+          both fragment codes are stored VERBATIM (not uppercased). RESOLVE /
+          RELATE default "No", must be Yes/No case-insensitively (stored
+          title-case) else INVALID_INPUT, and may not both be Yes (INVALID_INPUT).
+          RESOLVE=Yes requires a non-zero ERRULE_TIER (INVALID_INPUT) and forces
+          RTYPE_ID to 1; RELATE=Yes requires RTYPE_ID in 2,3,4 (INVALID_INPUT).
+          RTYPE_ID defaults to 1; ERRULE_TIER defaults to null. A non-string /
+          non-integer value for any of these keys is treated as absent.
+    returns: config_and_json
+    errors: [JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, NOT_FOUND, INVALID_INPUT, MISSING_SECTION]
+    notes: >-
+      Record is the assigned ERRULE_ID (integer). The written row always carries every
+      CFG_ERRULE key (ERRULE_ID, ERRULE_CODE, RESOLVE, RELATE, RTYPE_ID,
+      QUAL_ERFRAG_CODE, DISQ_ERFRAG_CODE, ERRULE_TIER; optional ones as null).
+      ERRULE_CODE is checked BEFORE the config is parsed, so a missing code is
+      MISSING_FIELD even for invalid config JSON. A config without CFG_ERRULE is
+      MISSING_SECTION (after validation). Validation order: fragment, disqualifier,
+      duplicate code, RESOLVE, RELATE, exclusivity, tier, RTYPE_ID.
+    c_notes: >-
+      C typed export deltas: SzConfigTool_addRule takes one rule JSON and reads the id
+      from its ERRULE_ID key (absent/non-integer = 0 = auto-allocate), DROPS the
+      assigned id, and reports library errors with returnCode -5 and no reason code.
+
+  - name: delete_rule
+    doc: Delete a rule by code.
+    rust: rules::delete_rule
+    c_symbol: SzConfigTool_deleteRule
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased, then matched EXACTLY against ERRULE_CODE (a stored lowercase code cannot be deleted). Not an id.
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      No dependency or system-rule protection; any rule can be deleted. A config
+      without CFG_ERRULE is NOT_FOUND.
+
+  - name: get_rule
+    doc: Get one rule, by code or ERRULE_ID, as a summary record.
+    rust: rules::get_rule
+    c_symbol: SzConfigTool_getRule
+    args:
+      - name: code_or_id
+        type: str
+        semantics: Uppercased, then matched exactly against ERRULE_CODE first, then numerically against ERRULE_ID (e.g. "100").
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Result is {id, rule, resolve, relate, rtype_id, fragment, disqualifier, tier}
+      projected from ERRULE_ID, ERRULE_CODE, RESOLVE, RELATE, RTYPE_ID,
+      QUAL_ERFRAG_CODE, DISQ_ERFRAG_CODE (null-preserving). TRAP: `tier` is the stored
+      ERRULE_TIER only when RESOLVE is exactly "Yes", otherwise null.
+    c_notes: >-
+      C typed export reports library errors with returnCode -5 and no reason code.
+
+  - name: list_rules
+    doc: List all rules as summary records, sorted by ERRULE_ID.
+    rust: rules::list_rules
+    c_symbol: SzConfigTool_listRules
+    args: []
+    returns: json
+    errors: [JSON_PARSE]
+    notes: >-
+      Result is an array of the get_rule record shape, sorted by id ascending
+      (null/absent id sorts as 0). A missing CFG_ERRULE or G2_CONFIG yields [].
+    c_notes: >-
+      C typed export reports library errors with returnCode -5 and no reason code.
+
+  - name: set_rule
+    doc: Update a rule's resolve/relate/relationship type, fragment, disqualifier or tier.
+    rust: rules::set_rule
+    rust_params_struct: rules::SetRuleParams
+    c_symbol: SzConfigTool_setRule
+    args:
+      - name: code
+        type: str
+        semantics: Rule code; uppercased, then matched exactly. Unknown is NOT_FOUND.
+      - name: resolve
+        type: str
+        optional: true
+        semantics: Absent keeps the stored RESOLVE. Must be Yes/No case-insensitively (stored title-case), else INVALID_INPUT.
+      - name: relate
+        type: str
+        optional: true
+        semantics: Absent keeps the stored RELATE. Must be Yes/No case-insensitively, else INVALID_INPUT.
+      - name: rtype_id
+        type: int
+        optional: true
+        semantics: Absent keeps the stored RTYPE_ID. Forced to 1 when the merged RESOLVE is Yes; must be 2, 3 or 4 when RELATE is Yes.
+      - name: fragment
+        type: str
+        tristate: true
+        semantics: >-
+          QUAL_ERFRAG_CODE. Absent = keep (never re-validated); null = clear to
+          null (TRAP: allowed here although add_rule requires a fragment); a
+          string must name an existing fragment (case-insensitive; "" is
+          NOT_FOUND) and is stored UPPERCASED (unlike add_rule).
+      - name: disqualifier
+        type: str
+        tristate: true
+        semantics: >-
+          DISQ_ERFRAG_CODE. Absent = keep; null = clear to null; "" is accepted
+          and stored ""; another string must name an existing fragment
+          (NOT_FOUND) and is stored uppercased.
+      - name: tier
+        type: int
+        tristate: true
+        semantics: >-
+          ERRULE_TIER. Absent = keep; null = clear; value = set. The merged rule
+          with RESOLVE=Yes must have a non-zero tier, else INVALID_INPUT.
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND, INVALID_INPUT]
+    notes: >-
+      Merges the update into the stored row and re-applies add_rule's
+      RESOLVE/RELATE/exclusivity/tier/RTYPE_ID rules to the merged row (no
+      duplicate-code check); the row is rewritten with every CFG_ERRULE key and
+      ERRULE_ID preserved.
+    c_notes: >-
+      C typed export SzConfigTool_setRule takes the code plus an update JSON whose keys
+      are resolve|RESOLVE, relate|RELATE, rtypeId|RTYPE_ID (camelCase),
+      fragment|FRAGMENT, disqualifier|DISQUALIFIER, tier|TIER; there a null value =
+      clear and a value of the wrong JSON type is silently treated as absent.

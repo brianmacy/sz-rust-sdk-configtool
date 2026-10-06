@@ -1,34 +1,82 @@
+---
 name: Security Audit
 
-on:
+# PRs and pushes to main run only `cargo deny check` from a sha256-verified
+# prebuilt binary (seconds, no `cargo install`). cargo-audit and cargo-vet are
+# compiled with `cargo install`, so they run weekly, on release tags and on
+# manual dispatch only.
+"on":
   push:
-    branches: [ main ]
+    branches: [main]
+    tags: ["v*"]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   schedule:
-    # Run daily at 00:00 UTC
-    - cron: '0 0 * * *'
+    # Mondays 06:00 UTC
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
-jobs:
-  security_audit:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+env:
+  CARGO_DENY_VERSION: "0.20.2"
+  # sha256 of cargo-deny-<version>-x86_64-unknown-linux-musl.tar.gz
+  # (the GitHub release asset digest)
+  CARGO_DENY_SHA256: >-
+    9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
+jobs:
+  cargo_deny:
+    name: Cargo Deny
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      # yamllint disable-line rule:line-length
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          toolchain: stable
+          persist-credentials: false
+
+      - name: Install pinned Rust (rust-toolchain.toml)
+        run: rustup toolchain install --no-self-update
+
+      - name: Install cargo-deny (prebuilt, sha256-verified)
+        run: |
+          set -euo pipefail
+          name="cargo-deny-${CARGO_DENY_VERSION}-x86_64-unknown-linux-musl"
+          base="https://github.com/EmbarkStudios/cargo-deny/releases/download"
+          tgz="${RUNNER_TEMP}/${name}.tar.gz"
+          curl -fsSLo "${tgz}" "${base}/${CARGO_DENY_VERSION}/${name}.tar.gz"
+          echo "${CARGO_DENY_SHA256}  ${tgz}" | sha256sum -c -
+          tar -xzf "${tgz}" -C "${RUNNER_TEMP}"
+          echo "${RUNNER_TEMP}/${name}" >>"${GITHUB_PATH}"
+
+      - name: cargo deny check (advisories, bans, licenses, sources)
+        run: cargo-deny --all-features check
+
+  security_audit:
+    name: Security Audit (cargo-audit)
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      # yamllint disable-line rule:line-length
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust (rust-toolchain.toml)
+        run: rustup toolchain install --no-self-update
 
       - name: Cache cargo registry
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          key: >-
+            ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
@@ -36,38 +84,25 @@ jobs:
       - name: Run cargo audit
         run: cargo audit
 
-  cargo_deny:
-    name: Cargo Deny
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
-        with:
-          toolchain: stable
-
-      - name: Install cargo-deny
-        run: cargo install cargo-deny --locked
-
-      - name: Check licenses
-        run: cargo deny check licenses
-
-      - name: Check bans
-        run: cargo deny check bans
-
-      - name: Check advisories
-        run: cargo deny check advisories
-
-      - name: Check sources
-        run: cargo deny check sources
-
   vet:
-    runs-on: ubuntu-latest
+    name: Supply chain (cargo-vet)
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
-    - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
-      with:
-        toolchain: stable
-    - run: cargo install cargo-vet --locked
-    - run: cargo vet --locked
+      # yamllint disable-line rule:line-length
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Rust (rust-toolchain.toml)
+        run: rustup toolchain install --no-self-update
+
+      - name: Install cargo-vet
+        run: cargo install cargo-vet --locked
+
+      - name: Run cargo vet
+        run: cargo vet --locked

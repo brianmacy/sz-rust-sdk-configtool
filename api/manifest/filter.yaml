@@ -1,0 +1,24 @@
+# Display-substrate filter helpers. Root module: src/filter.rs (4 pub fns, all
+# excluded: none takes a config or returns Result).
+group: filter
+
+functions: []
+
+excluded:
+  - rust: filter::to_json_dumps_string
+    reason: >-
+      Non-config utility, not Result-returning (fn(&Value) -> String): renders a
+      record with Python json.dumps spacing as the substring-filter substrate;
+      applied inside get_config_section and other filtered listings.
+  - rust: filter::to_python_repr_string
+    reason: >-
+      Non-config utility, not Result-returning (fn(&Value) -> String): Python
+      repr() rendering used as a CLI display/filter substrate.
+  - rust: filter::to_values_join_string
+    reason: >-
+      Non-config utility, not Result-returning (fn(&Value) -> String):
+      space-joined values rendering used as a CLI display/filter substrate.
+  - rust: filter::matches_filter
+    reason: >-
+      Non-config utility, not Result-returning (fn(&Value, &str, FilterSubstrate)
+      -> bool): client-side record filtering; bindings filter their own results.

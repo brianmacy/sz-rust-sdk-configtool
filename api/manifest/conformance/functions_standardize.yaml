@@ -1,0 +1,223 @@
+# Conformance cases for the `functions_standardize` group (CFG_SFUNC). Every
+# case starts from the REAL template config (project.yaml paths.fixture).
+group: functions_standardize
+
+cases:
+  - name: add_returns_config_and_record
+    steps:
+      - fn: add_standardize_function
+        args: {code: my_std, connect_str: g2MyStd, description: My std, language: C}
+        expect:
+          kind: config_and_json
+          result: {SFUNC_ID: 16, SFUNC_CODE: MY_STD, CONNECT_STR: g2MyStd, SFUNC_DESC: My std, LANGUAGE: C}
+      - fn: get_standardize_function
+        args: {code: MY_STD}
+        expect:
+          kind: json
+          result: {SFUNC_ID: 16, SFUNC_CODE: MY_STD, CONNECT_STR: g2MyStd, SFUNC_DESC: My std, LANGUAGE: C}
+      - fn: list_standardize_functions
+        expect:
+          len: 13
+          contains:
+            - {id: 16, function: MY_STD, connectStr: g2MyStd, language: C}
+
+  - name: add_absent_optionals_store_null
+    fn: add_standardize_function
+    args: {code: BARE_STD}
+    expect:
+      result: {SFUNC_ID: 16, SFUNC_CODE: BARE_STD, CONNECT_STR: null, SFUNC_DESC: null, LANGUAGE: null}
+
+  - name: add_empty_connect_str_is_stored_verbatim
+    fn: add_standardize_function
+    args: {code: EMPTY_STD, connect_str: ""}
+    expect:
+      result: {CONNECT_STR: ""}
+
+  - name: add_duplicate_is_invalid_input
+    fn: add_standardize_function
+    args: {code: parse_name}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_missing_section_is_missing_section
+    fn: add_standardize_function
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {code: X}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_invalid_config_is_json_parse
+    fn: add_standardize_function
+    config_literal: "not json"
+    args: {code: X}
+    expect: {error: JSON_PARSE}
+
+  - name: get_is_case_insensitive
+    fn: get_standardize_function
+    args: {code: parse_name}
+    expect:
+      result: {SFUNC_ID: 1, SFUNC_CODE: PARSE_NAME, SFUNC_DESC: Parse name, CONNECT_STR: g2ParseName, LANGUAGE: null}
+
+  - name: get_missing_is_not_found
+    fn: get_standardize_function
+    args: {code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: get_missing_section_is_not_found
+    fn: get_standardize_function
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {code: PARSE_NAME}
+    expect: {error: NOT_FOUND}
+
+  - name: get_invalid_config_is_json_parse
+    fn: get_standardize_function
+    config_literal: "not json"
+    args: {code: PARSE_NAME}
+    expect: {error: JSON_PARSE}
+
+  - name: list_template
+    fn: list_standardize_functions
+    expect:
+      kind: json
+      len: 12
+      contains:
+        - {id: 1, function: PARSE_NAME, connectStr: g2ParseName, language: null}
+        - {id: 15, function: PARSE_WEBSITE, connectStr: g2ParseWebsite, language: null}
+
+  - name: list_missing_section_is_empty
+    fn: list_standardize_functions
+    config_literal: '{"G2_CONFIG": {}}'
+    expect: {len: 0}
+
+  - name: list_invalid_config_is_json_parse
+    fn: list_standardize_functions
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}
+
+  - name: delete_returns_row_then_get_is_not_found
+    steps:
+      - fn: delete_standardize_function
+        args: {code: parse_id}
+        expect:
+          kind: config_and_json
+          result: {SFUNC_ID: 6, SFUNC_CODE: PARSE_ID}
+      - fn: get_standardize_function
+        args: {code: PARSE_ID}
+        expect: {error: NOT_FOUND}
+      - fn: list_standardize_functions
+        expect:
+          len: 11
+          excludes:
+            - {function: PARSE_ID}
+
+  - name: delete_missing_is_not_found
+    fn: delete_standardize_function
+    args: {code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_invalid_config_is_json_parse
+    fn: delete_standardize_function
+    config_literal: "not json"
+    args: {code: PARSE_ID}
+    expect: {error: JSON_PARSE}
+
+  - name: cascade_returns_row_then_get_is_not_found
+    steps:
+      - fn: delete_standardize_function_cascade
+        args: {code: parse_id}
+        expect:
+          kind: config_and_json
+          result: {SFUNC_ID: 6, SFUNC_CODE: PARSE_ID, CONNECT_STR: g2ParseID}
+      - fn: get_standardize_function
+        args: {code: PARSE_ID}
+        expect: {error: NOT_FOUND}
+      - fn: list_standardize_functions
+        expect:
+          len: 11
+          excludes:
+            - {function: PARSE_ID}
+
+  - name: cascade_removes_dependent_calls
+    steps:
+      - fn: list_standardize_calls
+        expect:
+          len: 24
+          contains: [{id: 6, function: PARSE_ID}]
+      - fn: delete_standardize_function_cascade
+        args: {code: parse_id}
+      - fn: list_standardize_calls
+        expect:
+          len: 14
+          excludes: [{function: PARSE_ID}, {function: unknown}]
+      - fn: get_standardize_call
+        args: {call: 6}
+        expect: {error: NOT_FOUND}
+
+  - name: plain_delete_leaves_dependent_calls
+    steps:
+      - fn: delete_standardize_function
+        args: {code: parse_id}
+      - fn: list_standardize_calls
+        expect:
+          len: 24
+          contains: [{id: 6, function: unknown}]
+      - fn: get_standardize_call
+        args: {call: 6}
+        expect:
+          result: {SFCALL_ID: 6, SFUNC_ID: 6}
+
+  - name: cascade_missing_is_not_found
+    fn: delete_standardize_function_cascade
+    args: {code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: cascade_row_without_id_is_missing_field
+    fn: delete_standardize_function_cascade
+    config_literal: '{"G2_CONFIG": {"CFG_SFUNC": [{"SFUNC_CODE": "NO_ID"}], "CFG_SFCALL": []}}'
+    args: {code: no_id}
+    expect: {error: MISSING_FIELD}
+
+  - name: cascade_invalid_config_is_json_parse
+    fn: delete_standardize_function_cascade
+    config_literal: "not json"
+    args: {code: PARSE_ID}
+    expect: {error: JSON_PARSE}
+
+  - name: set_writes_and_returns_row
+    steps:
+      - fn: set_standardize_function
+        args: {code: parse_name, connect_str: g2New, description: New desc, language: C}
+        expect:
+          kind: config_and_json
+          result: {SFUNC_ID: 1, SFUNC_CODE: PARSE_NAME, CONNECT_STR: g2New, SFUNC_DESC: New desc, LANGUAGE: C}
+      - fn: get_standardize_function
+        args: {code: PARSE_NAME}
+        expect:
+          result: {CONNECT_STR: g2New, SFUNC_DESC: New desc, LANGUAGE: C}
+
+  - name: set_connect_str_null_clears
+    steps:
+      - fn: set_standardize_function
+        args: {code: PARSE_NAME, connect_str: null}
+      - fn: get_standardize_function
+        args: {code: PARSE_NAME}
+        expect:
+          result: {CONNECT_STR: null, SFUNC_DESC: Parse name}
+
+  - name: set_absent_leaves_fields
+    steps:
+      - fn: set_standardize_function
+        args: {code: PARSE_NAME, language: C}
+      - fn: get_standardize_function
+        args: {code: PARSE_NAME}
+        expect:
+          result: {CONNECT_STR: g2ParseName, SFUNC_DESC: Parse name, LANGUAGE: C}
+
+  - name: set_missing_is_not_found
+    fn: set_standardize_function
+    args: {code: NOPE, language: C}
+    expect: {error: NOT_FOUND}
+
+  - name: set_invalid_config_is_json_parse
+    fn: set_standardize_function
+    config_literal: "not json"
+    args: {code: PARSE_NAME}
+    expect: {error: JSON_PARSE}

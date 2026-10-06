@@ -446,7 +446,10 @@ pub fn add_comparison_threshold(
 
 /// Internal: Add comparison threshold by ID (for FFI use)
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn add_comparison_threshold_by_id(
+// Public only so the sibling `sz-configtool-ffi` crate can reach it; not part
+// of the supported Rust API.
+#[doc(hidden)]
+pub fn add_comparison_threshold_by_id(
     config_json: &str,
     cfunc_id: i64,
     ftype_id: Option<i64>,
@@ -507,7 +510,10 @@ pub(crate) fn add_comparison_threshold_by_id(
 }
 
 /// Internal: Set comparison threshold by ID (for FFI use)
-pub(crate) fn set_comparison_threshold_by_id(
+// Public only so the sibling `sz-configtool-ffi` crate can reach it; not part
+// of the supported Rust API.
+#[doc(hidden)]
+pub fn set_comparison_threshold_by_id(
     config_json: &str,
     cfrtn_id: i64,
     same_score: Option<i64>,
@@ -556,10 +562,10 @@ pub(crate) fn set_comparison_threshold_by_id(
 /// # Arguments
 /// * `config_json` - JSON configuration string
 /// * `cfrtn_id` - Comparison threshold ID
-pub(crate) fn delete_comparison_threshold_by_id(
-    config_json: &str,
-    cfrtn_id: i64,
-) -> Result<String> {
+// Public only so the sibling `sz-configtool-ffi` crate can reach it; not part
+// of the supported Rust API.
+#[doc(hidden)]
+pub fn delete_comparison_threshold_by_id(config_json: &str, cfrtn_id: i64) -> Result<String> {
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
@@ -854,6 +860,57 @@ pub enum GenericThresholdCheck {
     Ok,
 }
 
+/// Schema tag of the serialized [`GenericThresholdCheck`].
+pub const GENERIC_THRESHOLD_CHECK_SCHEMA: &str = "sz-configtool.generic-threshold-check/v1";
+
+/// Serializes as the versioned object (schema
+/// [`GENERIC_THRESHOLD_CHECK_SCHEMA`]) shared by the C export
+/// `SzConfigTool_validateGenericThreshold` and every binding:
+///
+/// - `{"schema", "result": "ok"}` / `{"schema", "result": "duplicate"}`
+/// - `{"schema", "result": "notFound", "which": "plan"|"feature", "value"}`
+/// - `{"schema", "result": "invalid", "failures": [{"field", "reasonCode",
+///   "offendingValue"}]}` (`offendingValue` may be `null`)
+///
+/// A new variant must be mapped here and the schema version bumped.
+impl Serialize for GenericThresholdCheck {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        let body = match self {
+            Self::Ok => json!({"result": "ok"}),
+            Self::Duplicate => json!({"result": "duplicate"}),
+            Self::NotFound { which, value } => {
+                let which = match which {
+                    GenericThresholdRef::Plan => "plan",
+                    GenericThresholdRef::Feature => "feature",
+                };
+                json!({"result": "notFound", "which": which, "value": value})
+            }
+            Self::Invalid(failures) => {
+                let failures: Vec<Value> = failures
+                    .iter()
+                    .map(|f| {
+                        json!({
+                            "field": f.field,
+                            "reasonCode": f.reason_code.as_str(),
+                            "offendingValue": f.offending_value,
+                        })
+                    })
+                    .collect();
+                json!({"result": "invalid", "failures": failures})
+            }
+        };
+        let mut obj = serde_json::Map::new();
+        obj.insert("schema".into(), json!(GENERIC_THRESHOLD_CHECK_SCHEMA));
+        if let Value::Object(fields) = body {
+            obj.extend(fields);
+        }
+        obj.serialize(serializer)
+    }
+}
+
 /// Build the aggregated behaviour + `sendToRedo` validation failures for a
 /// generic-threshold ADD, in canonical order `[behavior, sendToRedo]`.
 ///
@@ -1011,30 +1068,25 @@ pub fn add_generic_threshold(
     // (which reports every absent parameter at once rather than one at a time).
     // Field order matches the Python required list: PLAN, BEHAVIOR, SCORINGCAP,
     // CANDIDATECAP, SENDTOREDO.
-    let mut missing: Vec<&str> = Vec::new();
-    if params.plan.is_none() {
-        missing.push("plan");
-    }
-    if params.behavior.is_none() {
-        missing.push("behavior");
-    }
-    if params.scoring_cap.is_none() {
-        missing.push("scoring_cap");
-    }
-    if params.candidate_cap.is_none() {
-        missing.push("candidate_cap");
-    }
-    if params.send_to_redo.is_none() {
-        missing.push("send_to_redo");
-    }
-    if !missing.is_empty() {
+    let (Some(plan), Some(behavior), Some(scoring_cap), Some(candidate_cap), Some(send_to_redo)) = (
+        params.plan,
+        params.behavior,
+        params.scoring_cap,
+        params.candidate_cap,
+        params.send_to_redo,
+    ) else {
+        let missing: Vec<&str> = [
+            ("plan", params.plan.is_none()),
+            ("behavior", params.behavior.is_none()),
+            ("scoring_cap", params.scoring_cap.is_none()),
+            ("candidate_cap", params.candidate_cap.is_none()),
+            ("send_to_redo", params.send_to_redo.is_none()),
+        ]
+        .into_iter()
+        .filter_map(|(name, absent)| absent.then_some(name))
+        .collect();
         return Err(SzConfigError::MissingField(missing.join(", ")));
-    }
-    let plan = params.plan.expect("checked present above");
-    let behavior = params.behavior.expect("checked present above");
-    let scoring_cap = params.scoring_cap.expect("checked present above");
-    let candidate_cap = params.candidate_cap.expect("checked present above");
-    let send_to_redo = params.send_to_redo.expect("checked present above");
+    };
 
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
@@ -1099,8 +1151,9 @@ pub fn add_generic_threshold(
     if !failures.is_empty() {
         return Err(SzConfigError::ValidationErrors(failures));
     }
-    let redo_canonical = send_to_redo_canonical(send_to_redo)
-        .expect("no validity errors implies redo canonicalised");
+    // Cannot fail here (the failures check above already rejected a bad
+    // value), but propagate rather than panic.
+    let redo_canonical = send_to_redo_canonical(send_to_redo)?;
 
     // Build a complete row via GenericThresholdRow so every
     // CFG_GENERIC_THRESHOLD key is present.
@@ -1423,6 +1476,84 @@ pub fn set_threshold(_config_json: &str, _params: SetThresholdParams) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `GenericThresholdCheck` serializes to the versioned
+    /// `sz-configtool.generic-threshold-check/v1` object, byte-for-byte in the
+    /// key order the C export has always emitted.
+    #[test]
+    fn test_generic_threshold_check_serializes_v1() {
+        let render = |c: &GenericThresholdCheck| serde_json::to_string(c).unwrap();
+        let schema = r#""schema":"sz-configtool.generic-threshold-check/v1""#;
+        assert_eq!(
+            render(&GenericThresholdCheck::Ok),
+            format!(r#"{{{schema},"result":"ok"}}"#)
+        );
+        assert_eq!(
+            render(&GenericThresholdCheck::Duplicate),
+            format!(r#"{{{schema},"result":"duplicate"}}"#)
+        );
+        assert_eq!(
+            render(&GenericThresholdCheck::NotFound {
+                which: GenericThresholdRef::Plan,
+                value: "NOPE".into(),
+            }),
+            format!(r#"{{{schema},"result":"notFound","which":"plan","value":"NOPE"}}"#)
+        );
+        assert_eq!(
+            render(&GenericThresholdCheck::NotFound {
+                which: GenericThresholdRef::Feature,
+                value: "X".into(),
+            }),
+            format!(r#"{{{schema},"result":"notFound","which":"feature","value":"X"}}"#)
+        );
+        let invalid = GenericThresholdCheck::Invalid(vec![
+            ValidationFailure::new(
+                "behavior",
+                ValidationReason::UnknownReferenceCode,
+                Some("BOGUS".into()),
+            ),
+            ValidationFailure::new("sendToRedo", ValidationReason::OutOfDomain, None),
+        ]);
+        assert_eq!(
+            render(&invalid),
+            format!(
+                r#"{{{schema},"result":"invalid","failures":[{{"field":"behavior","reasonCode":"UNKNOWN_REFERENCE_CODE","offendingValue":"BOGUS"}},{{"field":"sendToRedo","reasonCode":"OUT_OF_DOMAIN","offendingValue":null}}]}}"#
+            )
+        );
+    }
+
+    /// Every absent required field is reported in one MissingField error, in
+    /// Python order, for any subset of absent fields (the former expect() path).
+    #[test]
+    fn test_add_generic_threshold_reports_all_missing_fields() {
+        let config = r#"{"G2_CONFIG": {"CFG_GPLAN": [], "CFG_GENERIC_THRESHOLD": []}}"#;
+        let none = AddGenericThresholdParams {
+            plan: None,
+            behavior: None,
+            scoring_cap: None,
+            candidate_cap: None,
+            send_to_redo: None,
+            feature: None,
+        };
+        match add_generic_threshold(config, none.clone()) {
+            Err(SzConfigError::MissingField(m)) => assert_eq!(
+                m,
+                "plan, behavior, scoring_cap, candidate_cap, send_to_redo"
+            ),
+            other => panic!("expected MissingField, got {other:?}"),
+        }
+        let only_redo_missing = AddGenericThresholdParams {
+            plan: Some("INGEST"),
+            behavior: Some("F1"),
+            scoring_cap: Some(1),
+            candidate_cap: Some(1),
+            ..none
+        };
+        match add_generic_threshold(config, only_redo_missing) {
+            Err(SzConfigError::MissingField(m)) => assert_eq!(m, "send_to_redo"),
+            other => panic!("expected MissingField, got {other:?}"),
+        }
+    }
 
     const CFRTN_KEYS: [&str; 10] = [
         "CFRTN_ID",

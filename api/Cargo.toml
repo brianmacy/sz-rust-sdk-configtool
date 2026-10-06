@@ -1,0 +1,19 @@
+[package]
+name = "sz-configtool-api"
+description = "Manifest-driven dynamic dispatch (invoke) over sz_configtool_lib for the C ABI and RPC bindings"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "sz_configtool_api"
+crate-type = ["rlib"]
+
+[dependencies]
+sz_configtool_lib = { path = ".." }
+serde = "1.0"
+serde_json = { version = "1.0", features = ["preserve_order"] }

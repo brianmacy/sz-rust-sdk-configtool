@@ -1,0 +1,110 @@
+# CFG_ERFRAG — rule fragments. Root module: src/fragments.rs (5 pub fns, all here).
+group: fragments
+
+functions:
+  - name: add_fragment
+    doc: Add a rule fragment (CFG_ERFRAG row), returning the assigned ERFRAG_ID.
+    rust: fragments::add_fragment
+    c_symbol: SzConfigTool_addFragment
+    args:
+      - name: fragment_config
+        type: json
+        semantics: >-
+          Object with on-disk keys. ERFRAG_CODE (string, required, else
+          MISSING_FIELD) is uppercased for storage and the duplicate check
+          (ALREADY_EXISTS). ERFRAG_SOURCE (string, required, else MISSING_FIELD)
+          is stored verbatim; every name referenced inside a FRAGMENT[...] clause
+          (e.g. "./FRAGMENT[./SAME_NAME>0 and ./SAME_STAB>0]") must be an existing
+          ERFRAG_CODE matched EXACTLY (case-sensitive), else INVALID_INPUT. A
+          source without FRAGMENT[ (including "") is accepted unvalidated.
+          ERFRAG_ID (integer, optional): absent or <= 0 auto-allocates (max + 1,
+          floor 1, so 1000 on the template); a taken id > 0 is ALREADY_EXISTS. Any
+          ERFRAG_DESC key is IGNORED.
+    returns: config_and_json
+    errors: [JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, INVALID_INPUT, INVALID_CONFIG, MISSING_SECTION]
+    notes: >-
+      Record is the assigned ERFRAG_ID (integer). The row always carries every
+      CFG_ERFRAG key: ERFRAG_DESC is set to the uppercased code, ERFRAG_DEPENDS is the
+      referenced fragments' ids sorted as STRINGS, deduplicated and comma-joined
+      ("11,61"), or null when there are none. ERFRAG_CODE and ERFRAG_SOURCE are checked
+      BEFORE the config is parsed (MISSING_FIELD wins). A config without G2_CONFIG is
+      INVALID_CONFIG; with G2_CONFIG but no CFG_ERFRAG it is MISSING_SECTION.
+    c_notes: >-
+      C typed export SzConfigTool_addFragment DROPS the assigned id and reports library
+      errors with returnCode -5 and no reason code.
+
+  - name: delete_fragment
+    doc: Delete a fragment by code.
+    rust: fragments::delete_fragment
+    c_symbol: SzConfigTool_deleteFragment
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased, then matched exactly against ERFRAG_CODE. Not an id.
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      TRAP: no dependency check; a fragment still referenced by a rule
+      (QUAL_ERFRAG_CODE / DISQ_ERFRAG_CODE) or by another fragment's
+      ERFRAG_DEPENDS is deleted anyway, leaving dangling references. A config
+      without CFG_ERFRAG is NOT_FOUND.
+
+  - name: get_fragment
+    doc: Get one fragment, by code or ERFRAG_ID, as a summary record.
+    rust: fragments::get_fragment
+    c_symbol: SzConfigTool_getFragment
+    args:
+      - name: code_or_id
+        type: str
+        semantics: Uppercased, then matched exactly against ERFRAG_CODE first, then numerically against ERFRAG_ID (e.g. "11").
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Result is {id, fragment, source, depends}: id/source/depends are null-preserving
+      projections of ERFRAG_ID/ERFRAG_SOURCE/ERFRAG_DEPENDS; fragment is ERFRAG_CODE or
+      "" when absent. ERFRAG_DESC is not reported.
+    c_notes: >-
+      C typed export reports library errors with returnCode -5 and no reason code.
+
+  - name: list_fragments
+    doc: List all fragments as summary records in config order.
+    rust: fragments::list_fragments
+    c_symbol: SzConfigTool_listFragments
+    args: []
+    returns: json
+    errors: [JSON_PARSE]
+    notes: >-
+      Result is an array of the get_fragment record shape, in config order (NOT sorted).
+      A missing CFG_ERFRAG or G2_CONFIG yields [].
+    c_notes: >-
+      C typed export reports library errors with returnCode -5 and no reason code.
+
+  - name: set_fragment
+    doc: Update a fragment's source and/or description.
+    rust: fragments::set_fragment
+    rust_params_struct: fragments::SetFragmentParams
+    c_symbol: SzConfigTool_setFragmentWithJson
+    args:
+      - name: code
+        type: str
+        positional: true
+        semantics: Fragment code; uppercased, then matched exactly. Unknown is NOT_FOUND.
+      - name: source
+        type: str
+        tristate: true
+        semantics: >-
+          ERFRAG_SOURCE. Absent = keep source AND ERFRAG_DEPENDS; null = clear
+          BOTH source and ERFRAG_DEPENDS to null; a string is validated exactly as
+          in add_fragment (INVALID_INPUT) and ERFRAG_DEPENDS is recomputed.
+      - name: description
+        type: str
+        tristate: true
+        semantics: ERFRAG_DESC. Absent = keep; null = clear to null; a string is stored verbatim.
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND, INVALID_INPUT]
+    notes: >-
+      The row is rewritten with every CFG_ERFRAG key; ERFRAG_ID is preserved.
+    c_notes: >-
+      C export SzConfigTool_setFragmentWithJson (the only C entry point) takes an update
+      JSON with keys ERFRAG_SOURCE|source and ERFRAG_DESC|description (null = clear; a
+      non-string, non-null value is silently treated as absent).

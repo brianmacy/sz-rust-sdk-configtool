@@ -1,0 +1,232 @@
+# Conformance cases for the `config_sections` group. Every case starts from the
+# REAL template config (project.yaml paths.fixture).
+group: config_sections
+
+cases:
+  - name: add_uppercases_and_creates_empty_section
+    steps:
+      - fn: add_config_section
+        args: {section_name: cfg_custom}
+        expect: {kind: config}
+      - fn: list_config_sections
+        expect:
+          len: 31
+          contains: [CFG_CUSTOM]
+      - fn: config_section_is_empty
+        args: {section_name: CFG_CUSTOM}
+        expect: {result: true}
+      - fn: get_config_section
+        args: {section_name: CFG_CUSTOM}
+        expect: {len: 0}
+
+  - name: add_existing_is_already_exists
+    fn: add_config_section
+    args: {section_name: settings}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_without_g2_config_is_not_found
+    fn: add_config_section
+    config_literal: '{}'
+    args: {section_name: CFG_X}
+    expect: {error: NOT_FOUND}
+
+  - name: add_invalid_json_is_json_parse
+    fn: add_config_section
+    config_literal: "not json"
+    args: {section_name: CFG_X}
+    expect: {error: JSON_PARSE}
+
+  - name: remove_uppercases_and_is_unprotected
+    steps:
+      - fn: remove_config_section
+        args: {section_name: cfg_dsrc}
+        expect: {kind: config}
+      - fn: list_config_sections
+        expect:
+          len: 29
+          excludes: [CFG_DSRC]
+      - fn: get_config_section
+        args: {section_name: CFG_DSRC}
+        expect: {error: NOT_FOUND}
+
+  - name: remove_missing_is_not_found
+    fn: remove_config_section
+    args: {section_name: CFG_NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: remove_invalid_json_is_json_parse
+    fn: remove_config_section
+    config_literal: "not json"
+    args: {section_name: CFG_DSRC}
+    expect: {error: JSON_PARSE}
+
+  - name: get_whole_section
+    fn: get_config_section
+    args: {section_name: CFG_GPLAN}
+    expect:
+      kind: json
+      result:
+        - {GPLAN_ID: 1, GPLAN_CODE: INGEST, GPLAN_DESC: Standard Ingestion}
+        - {GPLAN_ID: 2, GPLAN_CODE: SEARCH, GPLAN_DESC: Standard Search}
+
+  - name: get_filter_is_case_insensitive
+    fn: get_config_section
+    args: {section_name: CFG_GPLAN, filter: INGESTION}
+    expect:
+      result:
+        - {GPLAN_CODE: INGEST}
+
+  - name: get_filter_uses_json_dumps_spacing
+    fn: get_config_section
+    args: {section_name: CFG_GPLAN, filter: '"GPLAN_ID": 2'}
+    expect:
+      result:
+        - {GPLAN_CODE: SEARCH}
+
+  - name: get_filter_no_match_is_empty
+    fn: get_config_section
+    args: {section_name: CFG_GPLAN, filter: zzz_no_match}
+    expect: {len: 0}
+
+  - name: get_object_section_is_wrapped
+    fn: get_config_section
+    args: {section_name: SETTINGS}
+    expect:
+      result:
+        - {METAPHONE_VERSION: 3}
+
+  - name: get_section_name_is_case_sensitive
+    fn: get_config_section
+    args: {section_name: cfg_gplan}
+    expect: {error: NOT_FOUND}
+
+  - name: get_invalid_json_is_json_parse
+    fn: get_config_section
+    config_literal: "not json"
+    args: {section_name: CFG_GPLAN}
+    expect: {error: JSON_PARSE}
+
+  - name: is_empty_true_for_empty_section
+    fn: config_section_is_empty
+    args: {section_name: CFG_DSRC_INTEREST}
+    expect: {kind: json, result: true}
+
+  - name: is_empty_false_for_populated_and_object
+    steps:
+      - fn: config_section_is_empty
+        args: {section_name: CFG_DSRC}
+        expect: {result: false}
+      - fn: config_section_is_empty
+        args: {section_name: SETTINGS}
+        expect: {result: false}
+
+  - name: is_empty_null_section_is_true
+    fn: config_section_is_empty
+    config_literal: '{"G2_CONFIG": {"CFG_X": null}}'
+    args: {section_name: CFG_X}
+    expect: {result: true}
+
+  - name: is_empty_is_case_sensitive
+    fn: config_section_is_empty
+    args: {section_name: cfg_dsrc}
+    expect: {error: NOT_FOUND}
+
+  - name: is_empty_invalid_json_is_json_parse
+    fn: config_section_is_empty
+    config_literal: "not json"
+    args: {section_name: CFG_DSRC}
+    expect: {error: JSON_PARSE}
+
+  - name: list_template
+    fn: list_config_sections
+    expect:
+      kind: json
+      len: 30
+      contains: [CFG_ATTR, SETTINGS, SYS_OOM, CONFIG_BASE_VERSION]
+
+  - name: list_without_g2_config_is_empty
+    fn: list_config_sections
+    config_literal: '{}'
+    expect: {len: 0}
+
+  - name: list_invalid_json_is_json_parse
+    fn: list_config_sections
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}
+
+  - name: remove_field_returns_count
+    steps:
+      - fn: remove_config_section_field
+        args: {section_name: cfg_gplan, field_name: gplan_desc}
+        expect: {kind: config_and_json, result: 2}
+      - fn: get_config_section
+        args: {section_name: CFG_GPLAN}
+        expect:
+          len: 2
+          excludes:
+            - {GPLAN_DESC: Standard Ingestion}
+            - {GPLAN_DESC: Standard Search}
+
+  - name: remove_absent_field_counts_zero
+    fn: remove_config_section_field
+    args: {section_name: CFG_GPLAN, field_name: NO_SUCH_FIELD}
+    expect: {result: 0}
+
+  - name: remove_field_non_array_section_is_not_found
+    fn: remove_config_section_field
+    args: {section_name: SETTINGS, field_name: METAPHONE_VERSION}
+    expect: {error: NOT_FOUND}
+
+  - name: remove_field_missing_section_is_not_found
+    fn: remove_config_section_field
+    args: {section_name: CFG_NOPE, field_name: X}
+    expect: {error: NOT_FOUND}
+
+  - name: remove_field_invalid_json_is_json_parse
+    fn: remove_config_section_field
+    config_literal: "not json"
+    args: {section_name: CFG_GPLAN, field_name: X}
+    expect: {error: JSON_PARSE}
+
+  - name: add_field_inserts_and_counts
+    steps:
+      - fn: add_config_section_field
+        args: {section_name: cfg_gplan, field_name: new_flag, field_value: {a: [1, true]}}
+        expect: {kind: config_and_json, result: {existed: 0, updated: 2}}
+      - fn: get_config_section
+        args: {section_name: CFG_GPLAN}
+        expect:
+          len: 2
+          contains:
+            - {GPLAN_CODE: INGEST, NEW_FLAG: {a: [1, true]}}
+            - {GPLAN_CODE: SEARCH, NEW_FLAG: {a: [1, true]}}
+
+  - name: add_field_never_overwrites_existing
+    steps:
+      - fn: add_config_section_field
+        args: {section_name: CFG_GPLAN, field_name: gplan_desc, field_value: replaced}
+        expect: {result: {existed: 2, updated: 0}}
+      - fn: get_config_section
+        args: {section_name: CFG_GPLAN}
+        expect:
+          contains:
+            - {GPLAN_CODE: INGEST, GPLAN_DESC: Standard Ingestion}
+          excludes:
+            - {GPLAN_DESC: replaced}
+
+  - name: add_field_without_g2_config_counts_zero
+    fn: add_config_section_field
+    config_literal: '{}'
+    args: {section_name: CFG_GPLAN, field_name: X, field_value: 1}
+    expect: {result: {existed: 0, updated: 0}}
+
+  - name: add_field_non_array_section_is_not_found
+    fn: add_config_section_field
+    args: {section_name: SETTINGS, field_name: X, field_value: 1}
+    expect: {error: NOT_FOUND}
+
+  - name: add_field_invalid_json_is_json_parse
+    fn: add_config_section_field
+    config_literal: "not json"
+    args: {section_name: CFG_GPLAN, field_name: X, field_value: 1}
+    expect: {error: JSON_PARSE}
