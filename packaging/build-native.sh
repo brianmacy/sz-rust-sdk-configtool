@@ -68,6 +68,16 @@ case "${OS}" in
     linux | macos)
         cp "${OUT_DIR}/$(shared_lib_name "${OS}" SzConfigTool)" "${STAGE}/native/c/lib/"
         cp "${OUT_DIR}/libSzConfigTool.a" "${STAGE}/native/c/lib/"
+        # The archive bundles the toolchain's prebuilt compiler_builtins, whose
+        # DWARF records Rust's own CI paths (/Users/runner/work/rust/rust/...,
+        # /Applications/Xcode_*.app/...; not remappable). Drop debug info only
+        # (symbols stay); our own crates carry none in the release profile.
+        # llvm-strip of the pinned toolchain (rustup llvm-tools, install-tools.sh):
+        # Xcode's `strip -S` corrupts the archive (duplicate symbols at link time).
+        # Linux toolchains record only the remapped /rustc/<hash> paths there.
+        if [[ "${OS}" == macos ]]; then
+            "$(rust_llvm_tool llvm-strip)" --strip-debug "${STAGE}/native/c/lib/libSzConfigTool.a"
+        fi
         ;;
     windows)
         cp "${OUT_DIR}/SzConfigTool.lib" "${STAGE}/native/c/lib/SzConfigTool_static.lib"

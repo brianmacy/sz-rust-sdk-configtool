@@ -268,7 +268,8 @@ matters only to range resolvers (README, "Versioning").
   covered by the attestation. Only a tag **push** publishes; a manual dispatch (even on a tag)
   is a dry run that uploads the assembled assets as the `release-assets` workflow artifact.
 - Windows DLL / `.node` / `.pyd` are linked with the static MSVC runtime: no VC++
-  Redistributable needed (`SzConfigTool_static.lib` stays `/MD`). Binaries are not
+  Redistributable needed (`SzConfigTool_static.lib` stays `/MD`). The macOS
+  `libSzConfigTool.a` ships without debug info (`llvm-strip --strip-debug`; symbols kept). Binaries are not
   code-signed; packaging/README.md documents verification and the macOS quarantine workaround.
 - Version policy enforced by `packaging/gates/check-versions.sh` (self-test
   `test-version-spellings.sh`, run in CI): only `X.Y.Z`, `X.Y.Z-N` (wheel `X.Y.Z.postN`) and

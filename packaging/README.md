@@ -77,8 +77,8 @@ stage per step.
 
 | Stage | Scripts |
 |---|---|
-| tools | `install-tools.sh <target>` — pinned Rust (rustup), zig + JDK + Node (sha256), Maven (sha512), cargo-zigbuild/cargo-cyclonedx (`cargo install --locked`), maturin/pytest (`pip --require-hashes`) into `target/sz-tools` |
-| build | `build-native.sh` — C ABI (cdylib + staticlib), JNI and napi cdylibs, SBOMs; `--remap-path-prefix` for source, cargo home and target dir; strip (Linux: `strip=symbols`; macOS: linker `-x -S`; Windows: PDB with line tables) |
+| tools | `install-tools.sh <target>` — pinned Rust (rustup; + `llvm-tools` on macOS), zig + JDK + Node (sha256), Maven (sha512), cargo-zigbuild/cargo-cyclonedx (`cargo install --locked`), maturin/pytest (`pip --require-hashes`) into `target/sz-tools` |
+| build | `build-native.sh` — C ABI (cdylib + staticlib), JNI and napi cdylibs, SBOMs; `--remap-path-prefix` for source, cargo home, rustup home and target dir; strip (Linux: `strip=symbols`; macOS: linker `-x -S`, static archive `llvm-strip --strip-debug` (rustup `llvm-tools`); Windows: PDB with line tables) |
 | gates | `gates/check-exports.sh` (nm / dumpbin vs `ffi/expected-exports/*.exports`), `gates/check-linkage.sh` (SONAME / install name / deps / minos; Windows: no `vcruntime140*.dll` / `api-ms-win-crt-*` imports), `gates/check-glibc-ceiling.sh` (Linux, `objdump -T` <= 2.34), `gates/check-no-build-paths.sh`, `gates/run-c-tests.sh` (`ffi/tests/c` + `ffi/examples` linked shared and static against the staged files) |
 | package | `package-c.sh`, `package-python.sh`, `package-node.sh`, `package-cpp.sh` (runs the C++ ctest suite, plain optimized build), `package-sboms.sh` (per-artifact SBOM assets) |
 | smoke | `smoke-bindings.sh` — pytest (installed wheel), `npm test`, `mvn test`, `dotnet test`, all against the staged natives |

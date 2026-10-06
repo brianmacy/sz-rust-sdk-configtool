@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Fail if any file under the given paths embeds an absolute build-host path
-# (the source tree, the cargo home, the cargo target dir or $HOME), i.e. if
+# (the source tree, the cargo home, the rustup home, the cargo target dir or
+# $HOME), i.e. if
 # --remap-path-prefix (lib/build-env.sh) missed something. Zip-based outputs
 # (.whl, .jar, .nupkg) are inspected after extraction; gzip tarballs too.
 # Windows .pdb files are exempt: a PDB is a debug artifact that records the
@@ -12,7 +13,7 @@
 source "$(dirname "$0")/../lib/common.sh"
 [[ $# -gt 0 ]] || die "usage: check-no-build-paths.sh <path>..."
 
-needles=("${REPO_ROOT}" "${CARGO_HOME:-${HOME}/.cargo}" "${CARGO_TARGET_DIR}" "${HOME}")
+needles=("${REPO_ROOT}" "${CARGO_HOME:-${HOME}/.cargo}" "${RUSTUP_HOME:-${HOME}/.rustup}" "${CARGO_TARGET_DIR}" "${HOME}")
 if [[ "$(host_os)" == windows ]]; then
     for n in "${needles[@]}"; do
         w="$(cygpath -w "${n}")"

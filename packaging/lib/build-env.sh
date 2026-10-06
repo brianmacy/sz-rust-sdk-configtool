@@ -2,7 +2,8 @@
 # Release build environment for one target. Source after lib/common.sh and
 # lib/tools-env.sh, then call `setup_build_env <target>`. Sets:
 #   OS ARCH BUILDER RUST_TARGET BUILD_TARGET REMAP_PREFIX
-#   CARGO_ENCODED_RUSTFLAGS   --remap-path-prefix for source, cargo home, target dir
+#   CARGO_ENCODED_RUSTFLAGS   --remap-path-prefix for source, cargo home, rustup home
+#                             (std sources, if rust-src is installed), target dir
 #                             (REPLACES any caller RUSTFLAGS/CARGO_ENCODED_RUSTFLAGS;
 #                             RUSTFLAGS is unset)
 #   CARGO_PROFILE_RELEASE_*   strip (ELF/Mach-O) or PDB line tables (MSVC)
@@ -24,7 +25,7 @@ remap_pair() {
 
 # shellcheck disable=SC2034 # OS/ARCH/RUST_TARGET/BUILD_TARGET are read by the sourcing script
 setup_build_env() {
-    local target="$1" sep=$'\x1f' cargo_home
+    local target="$1" sep=$'\x1f' cargo_home rustup_home
     OS="$(tcfg "${target}" os)"
     ARCH="$(tcfg "${target}" arch)"
     BUILDER="$(tcfg "${target}" builder)"
@@ -32,6 +33,7 @@ setup_build_env() {
     BUILD_TARGET="$(tcfg "${target}" build_target)"
     REMAP_PREFIX="$(cfg policy.remap_source_prefix)"
     cargo_home="${CARGO_HOME:-${HOME}/.cargo}"
+    rustup_home="${RUSTUP_HOME:-${HOME}/.rustup}"
 
     # Release builds are plain optimized builds: refuse sanitizer/instrumentation flags.
     case "${RUSTFLAGS:-} ${CARGO_ENCODED_RUSTFLAGS:-}" in
@@ -42,7 +44,7 @@ setup_build_env() {
     # here, so a developer's local flags (target-cpu=native, -D warnings, ...)
     # can never leak into a shipped binary or change reproducibility.
     unset RUSTFLAGS
-    CARGO_ENCODED_RUSTFLAGS="$(remap_pair "${REPO_ROOT}" "${REMAP_PREFIX}")${sep}$(remap_pair "${cargo_home}" /cargo)${sep}$(remap_pair "${CARGO_TARGET_DIR}" /target)"
+    CARGO_ENCODED_RUSTFLAGS="$(remap_pair "${REPO_ROOT}" "${REMAP_PREFIX}")${sep}$(remap_pair "${cargo_home}" /cargo)${sep}$(remap_pair "${rustup_home}" /rustup)${sep}$(remap_pair "${CARGO_TARGET_DIR}" /target)"
     export CARGO_ENCODED_RUSTFLAGS
 
     case "${OS}" in

@@ -164,3 +164,14 @@ if [[ "$(host_os)" == windows ]]; then
     SZ_DIST_DIR="$(cygpath -m "${SZ_DIST_DIR}")"
     export CARGO_TARGET_DIR SZ_DIST_DIR
 fi
+
+# rust_llvm_tool <name>: path of an LLVM tool of the pinned Rust toolchain
+# (rustup component llvm-tools, installed by install-tools.sh).
+rust_llvm_tool() {
+    local sysroot host tool
+    sysroot="$(cd "${REPO_ROOT}" && rustc --print sysroot)"
+    host="$(cd "${REPO_ROOT}" && rustc -vV | sed -n 's/^host: //p')"
+    tool="${sysroot}/lib/rustlib/${host}/bin/$1"
+    [[ -x "${tool}" || -x "${tool}.exe" ]] || die "$1 not found in ${sysroot}; run packaging/install-tools.sh <target> rust (rustup component llvm-tools)"
+    echo "${tool}"
+}

@@ -59,6 +59,10 @@ install_rust() {
     log "Rust toolchain (rust-toolchain.toml) + target ${RUST_TARGET}"
     (cd "${REPO_ROOT}" && rustup toolchain install --no-self-update)
     (cd "${REPO_ROOT}" && rustup target add "${RUST_TARGET}")
+    # macOS: llvm-strip strips the static archive's debug info (build-native.sh).
+    if [[ "$(tcfg "${TARGET}" os)" == macos ]]; then
+        (cd "${REPO_ROOT}" && rustup component add llvm-tools)
+    fi
     (cd "${REPO_ROOT}" && rustc -V)
 }
 
