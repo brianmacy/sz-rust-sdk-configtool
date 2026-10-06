@@ -22,6 +22,16 @@ fn stderr(out: &Output) -> String {
     String::from_utf8_lossy(&out.stderr).into_owned()
 }
 
+/// Whether some line of `text` is `prefix` followed by `path`. Compared as
+/// paths, not text: the binary prints the manifest's spelling
+/// (`<root>/out/dispatch.rs`) while `Path::join` uses the native separator
+/// (`<root>\out/dispatch.rs` on Windows).
+fn lists_path(text: &str, prefix: &str, path: &Path) -> bool {
+    text.lines()
+        .filter_map(|line| line.strip_prefix(prefix))
+        .any(|listed| Path::new(listed) == path)
+}
+
 /// A scratch manifest whose project paths are absolute; returns
 /// (root, absolute project.yaml path).
 fn absolute_workspace(name: &str, group: &str) -> (PathBuf, String) {
@@ -85,10 +95,7 @@ fn test_write_then_check_fresh_then_stale() {
     assert_eq!(out.status.code(), Some(0), "{}", stderr(&out));
     let dispatch = root.join("out/dispatch.rs");
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(
-        stdout.contains(&format!("wrote {}", dispatch.display())),
-        "{stdout}"
-    );
+    assert!(lists_path(&stdout, "wrote ", &dispatch), "{stdout}");
     assert!(
         std::fs::read_to_string(&dispatch)
             .unwrap()
@@ -103,7 +110,7 @@ fn test_write_then_check_fresh_then_stale() {
     assert_eq!(stale_run.status.code(), Some(1));
     let err = stderr(&stale_run);
     assert!(err.contains("stale generated files"), "{err}");
-    assert!(err.contains(&format!("  {}", dispatch.display())), "{err}");
+    assert!(lists_path(&err, "  ", &dispatch), "{err}");
 }
 
 #[test]
@@ -141,11 +148,18 @@ fn test_write_creates_dirs_and_stale_compares_contents() {
 
 #[test]
 fn test_write_errors_on_blocked_dir_and_directory_target() {
+    // Opening a directory for writing: EISDIR on Unix; on Windows CreateFileW
+    // fails with ERROR_ACCESS_DENIED, which std reports as PermissionDenied.
+    let directory_target = if cfg!(windows) {
+        std::io::ErrorKind::PermissionDenied
+    } else {
+        std::io::ErrorKind::IsADirectory
+    };
     let root = scratch_root("cov_lib_write_err");
     std::fs::write(root.join("blocker"), "file").unwrap();
     for (path, kind) in [
         ("blocker/x.rs", std::io::ErrorKind::AlreadyExists),
-        ("m/conformance", std::io::ErrorKind::IsADirectory),
+        ("m/conformance", directory_target),
     ] {
         let err = write(&root, &one(Path::new(path), "x\n")).expect_err(path);
         let io = err.downcast_ref::<std::io::Error>().expect("an io::Error");
