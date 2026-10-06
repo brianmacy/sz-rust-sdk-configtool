@@ -78,7 +78,8 @@ functions:
     errors: [JSON_PARSE, NOT_FOUND, INVALID_INPUT]
     notes: >-
       Result is the stored row with on-disk keys (DFCALL_ID, FTYPE_ID, DFUNC_ID); it
-      does not include the DFBOM elements (use list_distinct_calls).
+      does not include the DFBOM elements (codes: list_distinct_calls; raw rows:
+      get_config_section("CFG_DFBOM")).
     c_notes: >-
       C typed exports are split: SzConfigTool_getDistinctCall takes only an id,
       SzConfigTool_getDistinctCallByFeature only a feature code. LEGACY TRAP: the by-id
@@ -98,7 +99,8 @@ functions:
       EXEC_ORDER, which the v4 schema (and every template / add_distinct_call row)
       lacks, so it is 1. elementList is the call's CFG_DFBOM element codes ordered by
       EXEC_ORDER. Unresolvable ids render as "unknown". Missing sections are treated as
-      empty.
+      empty. LIMITATION: elementList omits the stored CFG_DFBOM columns (FTYPE_ID,
+      EXEC_ORDER); read the raw rows with get_config_section("CFG_DFBOM").
     c_notes: >-
       C typed export reports library errors with returnCode -5 and NO reason code.
 

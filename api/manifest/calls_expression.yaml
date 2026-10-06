@@ -107,7 +107,8 @@ functions:
     errors: [JSON_PARSE, NOT_FOUND, INVALID_INPUT]
     notes: >-
       Result uses on-disk keys (EFCALL_ID, FTYPE_ID, FELEM_ID, EFUNC_ID, EXEC_ORDER,
-      EFEAT_FTYPE_ID, IS_VIRTUAL); BOM rows are not included. Expression calls are
+      EFEAT_FTYPE_ID, IS_VIRTUAL); BOM rows are not included (raw rows:
+      get_config_section("CFG_EFBOM")). Expression calls are
       many-per-feature (template NAME has 7), so by-feature is often ambiguous.
     c_notes: >-
       C export deltas: SzConfigTool_getExpressionCall takes only an id and returns -5
@@ -126,8 +127,10 @@ functions:
       elementList}, stably sorted by (FTYPE_ID, FELEM_ID, EXEC_ORDER). feature "all" /
       element "n/a" / function "unknown" when the id is <= 0 or unresolved;
       expressionFeature "n/a" when EFEAT_FTYPE_ID <= 0. elementList is the BOM element
-      codes ordered by BOM EXEC_ORDER (BOM feature and FELEM_REQ are not shown). Missing
-      sections yield [].
+      codes ordered by BOM EXEC_ORDER. Missing sections yield []. LIMITATION: elementList
+      omits the stored CFG_EFBOM columns FTYPE_ID (0 = parent feature, -1 = any
+      feature), EXEC_ORDER and FELEM_REQ, which the engine uses; read the raw rows with
+      get_config_section("CFG_EFBOM").
     c_notes: >-
       C export returns -5 (no reason code) on library errors.
 

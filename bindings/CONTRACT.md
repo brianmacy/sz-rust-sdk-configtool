@@ -53,6 +53,13 @@ sz_configtool_lib (pure Rust)
   C# `PlanId`). Python uses `NamedTuple`s, Java records, C# records, C++
   structs, TS interfaces. A field's JSON text is exactly the record member's
   JSON (`1001`, `true`, `"4.0.0"` including quotes).
+* JSON results follow the library's response shape convention (repo
+  `CLAUDE.md`; summary in `api/manifest/schema.md`, Wire convention): `get_*`
+  return the stored row (except `get_feature`, `get_element`, `get_fragment`,
+  `get_rule`), `list_*` return code-resolved summaries. Bindings add no
+  `describe_*`/view layer. The three call lists (`list_expression_calls`,
+  `list_comparison_calls`, `list_distinct_calls`) omit the stored BOM columns;
+  raw BOM rows come from `get_config_section` (`CFG_EFBOM`/`CFG_CFBOM`/`CFG_DFBOM`).
 
 ## Typed API rules
 

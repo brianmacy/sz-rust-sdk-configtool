@@ -59,6 +59,26 @@ This library provides the programmatic interface ("how") - proper usage requires
   crates. Example: `delete_comparison_threshold_by_id()`
 - Do not add other `#[doc(hidden)]` items
 
+**Response shape convention** (per-function shapes: each manifest entry's `notes`):
+
+- `get_*` and record-returning `add_*` return the stored row (on-disk keys —
+  what you would `set`). Grandfathered summary gets, pinned by conformance:
+  `get_feature`, `get_element`, `get_fragment`, `get_rule`. `add_fragment` /
+  `add_rule` return the assigned id; `add_config_section_field` returns counts.
+- `list_*` return a code-resolved SUMMARY (ids resolved to codes) in a
+  deterministic order, not the raw rows. Raw rows: `get_config_section("CFG_...")`
+  (section name is case-sensitive), or a raw/resolved pair
+  (`list_behavior_overrides` raw vs `list_behavior_overrides_resolved`).
+  `list_feature_comparisons` and `list_feature_classes` also return raw rows.
+- Known limitation: `list_expression_calls`, `list_comparison_calls` and
+  `list_distinct_calls` give `elementList` as bare element codes (ordered by
+  BOM `EXEC_ORDER`), omitting stored BOM columns (`FTYPE_ID`, `EXEC_ORDER`,
+  and for expression `FELEM_REQ`). The engine reads these columns; use
+  `get_config_section("CFG_EFBOM" | "CFG_CFBOM" | "CFG_DFBOM")` for the raw
+  rows (G2's `sz_configtool` CLI reads the raw rows for its call views).
+- No `describe_*`/view layer in the library or bindings; further presentation
+  belongs to the CLI.
+
 ### Workspace Layout
 
 - `.` — `sz_configtool_lib`, the pure Rust library (crate-type `lib`; default

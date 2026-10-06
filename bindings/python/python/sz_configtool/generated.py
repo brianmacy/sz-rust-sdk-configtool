@@ -520,7 +520,8 @@ def get_comparison_call(
 
     Notes:
         Result is the stored row with on-disk keys (CFCALL_ID, FTYPE_ID, CFUNC_ID); it
-        does not include the CFBOM elements (use list_comparison_calls).
+        does not include the CFBOM elements (codes: list_comparison_calls; raw rows:
+        get_config_section("CFG_CFBOM")).
     """
     return _core.call_json(
         "get_comparison_call",
@@ -551,7 +552,9 @@ def list_comparison_calls(
         Result is an array of {id, feature, function, elementList} sorted by (FTYPE_ID,
         CFCALL_ID) — not config order. elementList is the call's CFG_CFBOM element codes
         ordered by EXEC_ORDER. Unresolvable ids render as the string "unknown". Missing
-        sections are treated as empty (never MISSING_SECTION).
+        sections are treated as empty (never MISSING_SECTION). LIMITATION: elementList
+        omits the stored CFG_CFBOM columns (FTYPE_ID, EXEC_ORDER); read the raw rows
+        with get_config_section("CFG_CFBOM").
     """
     return _core.call_json(
         "list_comparison_calls",
@@ -765,7 +768,8 @@ def get_distinct_call(
 
     Notes:
         Result is the stored row with on-disk keys (DFCALL_ID, FTYPE_ID, DFUNC_ID); it
-        does not include the DFBOM elements (use list_distinct_calls).
+        does not include the DFBOM elements (codes: list_distinct_calls; raw rows:
+        get_config_section("CFG_DFBOM")).
     """
     return _core.call_json(
         "get_distinct_call",
@@ -798,7 +802,8 @@ def list_distinct_calls(
         EXEC_ORDER, which the v4 schema (and every template / add_distinct_call row)
         lacks, so it is 1. elementList is the call's CFG_DFBOM element codes ordered by
         EXEC_ORDER. Unresolvable ids render as "unknown". Missing sections are treated
-        as empty.
+        as empty. LIMITATION: elementList omits the stored CFG_DFBOM columns (FTYPE_ID,
+        EXEC_ORDER); read the raw rows with get_config_section("CFG_DFBOM").
     """
     return _core.call_json(
         "list_distinct_calls",
@@ -1031,8 +1036,9 @@ def get_expression_call(
 
     Notes:
         Result uses on-disk keys (EFCALL_ID, FTYPE_ID, FELEM_ID, EFUNC_ID, EXEC_ORDER,
-        EFEAT_FTYPE_ID, IS_VIRTUAL); BOM rows are not included. Expression calls are
-        many-per-feature (template NAME has 7), so by-feature is often ambiguous.
+        EFEAT_FTYPE_ID, IS_VIRTUAL); BOM rows are not included (raw rows:
+        get_config_section("CFG_EFBOM")). Expression calls are many-per-feature
+        (template NAME has 7), so by-feature is often ambiguous.
     """
     return _core.call_json(
         "get_expression_call",
@@ -1063,8 +1069,10 @@ def list_expression_calls(
         expressionFeature, elementList}, stably sorted by (FTYPE_ID, FELEM_ID,
         EXEC_ORDER). feature "all" / element "n/a" / function "unknown" when the id is
         <= 0 or unresolved; expressionFeature "n/a" when EFEAT_FTYPE_ID <= 0.
-        elementList is the BOM element codes ordered by BOM EXEC_ORDER (BOM feature and
-        FELEM_REQ are not shown). Missing sections yield [].
+        elementList is the BOM element codes ordered by BOM EXEC_ORDER. Missing sections
+        yield []. LIMITATION: elementList omits the stored CFG_EFBOM columns FTYPE_ID (0
+        = parent feature, -1 = any feature), EXEC_ORDER and FELEM_REQ, which the engine
+        uses; read the raw rows with get_config_section("CFG_EFBOM").
     """
     return _core.call_json(
         "list_expression_calls",

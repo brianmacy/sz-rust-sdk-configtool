@@ -134,6 +134,14 @@ supported by the generator: exclude them (or extend the generator first).
   json)`; with `tuple_names` → record `<Fn>Result` (plus `config` for
   `config_and_json`) whose named fields are each JSON text; `int` → integer;
   `unit` → nothing. See `bindings/CONTRACT.md`.
+- `json` results follow the response shape convention (repo `CLAUDE.md`,
+  "Response shape convention"): `get_*` return the stored row (except the
+  summary gets `get_feature`, `get_element`, `get_fragment`, `get_rule`);
+  `list_*` return code-resolved summaries, with raw rows via
+  `get_config_section`. `list_expression_calls` / `list_comparison_calls` /
+  `list_distinct_calls` give `elementList` as bare element codes, omitting the
+  stored BOM columns; read `CFG_EFBOM` / `CFG_CFBOM` / `CFG_DFBOM` with
+  `get_config_section` for them.
 
 ## Errors
 

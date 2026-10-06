@@ -233,7 +233,7 @@ namespace Sz.ConfigTool
         /// <param name="call">Integer form (sent as a JSON integer). A JSON integer selects by CFCALL_ID; a JSON string selects the call bound to that feature code (case-insensitive CFG_FTYPE lookup, then a CFG_CFCALL scan by FTYPE_ID). Unknown id, unknown feature, or a feature with no comparison call is NOT_FOUND; a feature matching 2+ calls (malformed config) is INVALID_INPUT. Any other JSON type (or null) is INVALID_INPUT.</param>
         /// <returns>The result, as JSON text.</returns>
         /// <remarks>
-        /// Result is the stored row with on-disk keys (CFCALL_ID, FTYPE_ID, CFUNC_ID); it does not include the CFBOM elements (use list_comparison_calls).
+        /// Result is the stored row with on-disk keys (CFCALL_ID, FTYPE_ID, CFUNC_ID); it does not include the CFBOM elements (codes: list_comparison_calls; raw rows: get_config_section("CFG_CFBOM")).
         /// Wire name: <c>get_comparison_call</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND, INVALID_INPUT (plus the universal wire errors).</exception>
@@ -249,7 +249,7 @@ namespace Sz.ConfigTool
         /// <param name="call">String form (sent as a JSON string). A JSON integer selects by CFCALL_ID; a JSON string selects the call bound to that feature code (case-insensitive CFG_FTYPE lookup, then a CFG_CFCALL scan by FTYPE_ID). Unknown id, unknown feature, or a feature with no comparison call is NOT_FOUND; a feature matching 2+ calls (malformed config) is INVALID_INPUT. Any other JSON type (or null) is INVALID_INPUT.</param>
         /// <returns>The result, as JSON text.</returns>
         /// <remarks>
-        /// Result is the stored row with on-disk keys (CFCALL_ID, FTYPE_ID, CFUNC_ID); it does not include the CFBOM elements (use list_comparison_calls).
+        /// Result is the stored row with on-disk keys (CFCALL_ID, FTYPE_ID, CFUNC_ID); it does not include the CFBOM elements (codes: list_comparison_calls; raw rows: get_config_section("CFG_CFBOM")).
         /// Wire name: <c>get_comparison_call</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND, INVALID_INPUT (plus the universal wire errors).</exception>
@@ -264,7 +264,7 @@ namespace Sz.ConfigTool
         /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
         /// <returns>The result, as JSON text.</returns>
         /// <remarks>
-        /// Result is an array of {id, feature, function, elementList} sorted by (FTYPE_ID, CFCALL_ID) — not config order. elementList is the call's CFG_CFBOM element codes ordered by EXEC_ORDER. Unresolvable ids render as the string "unknown". Missing sections are treated as empty (never MISSING_SECTION).
+        /// Result is an array of {id, feature, function, elementList} sorted by (FTYPE_ID, CFCALL_ID) — not config order. elementList is the call's CFG_CFBOM element codes ordered by EXEC_ORDER. Unresolvable ids render as the string "unknown". Missing sections are treated as empty (never MISSING_SECTION). LIMITATION: elementList omits the stored CFG_CFBOM columns (FTYPE_ID, EXEC_ORDER); read the raw rows with get_config_section("CFG_CFBOM").
         /// Wire name: <c>list_comparison_calls</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE (plus the universal wire errors).</exception>
@@ -376,7 +376,7 @@ namespace Sz.ConfigTool
         /// <param name="call">Integer form (sent as a JSON integer). A JSON integer selects by DFCALL_ID; a JSON string selects the call bound to that feature code (case-insensitive CFG_FTYPE lookup, then a CFG_DFCALL scan by FTYPE_ID). Unknown id, unknown feature, or a feature with no distinct call is NOT_FOUND; a feature matching 2+ calls (malformed config) is INVALID_INPUT. Any other JSON type (or null) is INVALID_INPUT.</param>
         /// <returns>The result, as JSON text.</returns>
         /// <remarks>
-        /// Result is the stored row with on-disk keys (DFCALL_ID, FTYPE_ID, DFUNC_ID); it does not include the DFBOM elements (use list_distinct_calls).
+        /// Result is the stored row with on-disk keys (DFCALL_ID, FTYPE_ID, DFUNC_ID); it does not include the DFBOM elements (codes: list_distinct_calls; raw rows: get_config_section("CFG_DFBOM")).
         /// Wire name: <c>get_distinct_call</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND, INVALID_INPUT (plus the universal wire errors).</exception>
@@ -392,7 +392,7 @@ namespace Sz.ConfigTool
         /// <param name="call">String form (sent as a JSON string). A JSON integer selects by DFCALL_ID; a JSON string selects the call bound to that feature code (case-insensitive CFG_FTYPE lookup, then a CFG_DFCALL scan by FTYPE_ID). Unknown id, unknown feature, or a feature with no distinct call is NOT_FOUND; a feature matching 2+ calls (malformed config) is INVALID_INPUT. Any other JSON type (or null) is INVALID_INPUT.</param>
         /// <returns>The result, as JSON text.</returns>
         /// <remarks>
-        /// Result is the stored row with on-disk keys (DFCALL_ID, FTYPE_ID, DFUNC_ID); it does not include the DFBOM elements (use list_distinct_calls).
+        /// Result is the stored row with on-disk keys (DFCALL_ID, FTYPE_ID, DFUNC_ID); it does not include the DFBOM elements (codes: list_distinct_calls; raw rows: get_config_section("CFG_DFBOM")).
         /// Wire name: <c>get_distinct_call</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND, INVALID_INPUT (plus the universal wire errors).</exception>
@@ -407,7 +407,7 @@ namespace Sz.ConfigTool
         /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
         /// <returns>The result, as JSON text.</returns>
         /// <remarks>
-        /// Result is an array of {id, feature, function, execOrder, elementList} sorted by (FTYPE_ID, DFCALL_ID) — not config order. execOrder is the CFG_DFCALL row's EXEC_ORDER, which the v4 schema (and every template / add_distinct_call row) lacks, so it is 1. elementList is the call's CFG_DFBOM element codes ordered by EXEC_ORDER. Unresolvable ids render as "unknown". Missing sections are treated as empty.
+        /// Result is an array of {id, feature, function, execOrder, elementList} sorted by (FTYPE_ID, DFCALL_ID) — not config order. execOrder is the CFG_DFCALL row's EXEC_ORDER, which the v4 schema (and every template / add_distinct_call row) lacks, so it is 1. elementList is the call's CFG_DFBOM element codes ordered by EXEC_ORDER. Unresolvable ids render as "unknown". Missing sections are treated as empty. LIMITATION: elementList omits the stored CFG_DFBOM columns (FTYPE_ID, EXEC_ORDER); read the raw rows with get_config_section("CFG_DFBOM").
         /// Wire name: <c>list_distinct_calls</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE (plus the universal wire errors).</exception>
@@ -527,7 +527,7 @@ namespace Sz.ConfigTool
         /// <param name="call">Integer form (sent as a JSON integer). Call selector: an integer = EFCALL_ID (NOT_FOUND if absent); a string = feature code (case-insensitive; unknown feature = NOT_FOUND, no call on the feature = NOT_FOUND, more than one call on the feature = INVALID_INPUT — address such calls by id). Any other JSON type = INVALID_INPUT.</param>
         /// <returns>The result, as JSON text.</returns>
         /// <remarks>
-        /// Result uses on-disk keys (EFCALL_ID, FTYPE_ID, FELEM_ID, EFUNC_ID, EXEC_ORDER, EFEAT_FTYPE_ID, IS_VIRTUAL); BOM rows are not included. Expression calls are many-per-feature (template NAME has 7), so by-feature is often ambiguous.
+        /// Result uses on-disk keys (EFCALL_ID, FTYPE_ID, FELEM_ID, EFUNC_ID, EXEC_ORDER, EFEAT_FTYPE_ID, IS_VIRTUAL); BOM rows are not included (raw rows: get_config_section("CFG_EFBOM")). Expression calls are many-per-feature (template NAME has 7), so by-feature is often ambiguous.
         /// Wire name: <c>get_expression_call</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND, INVALID_INPUT (plus the universal wire errors).</exception>
@@ -543,7 +543,7 @@ namespace Sz.ConfigTool
         /// <param name="call">String form (sent as a JSON string). Call selector: an integer = EFCALL_ID (NOT_FOUND if absent); a string = feature code (case-insensitive; unknown feature = NOT_FOUND, no call on the feature = NOT_FOUND, more than one call on the feature = INVALID_INPUT — address such calls by id). Any other JSON type = INVALID_INPUT.</param>
         /// <returns>The result, as JSON text.</returns>
         /// <remarks>
-        /// Result uses on-disk keys (EFCALL_ID, FTYPE_ID, FELEM_ID, EFUNC_ID, EXEC_ORDER, EFEAT_FTYPE_ID, IS_VIRTUAL); BOM rows are not included. Expression calls are many-per-feature (template NAME has 7), so by-feature is often ambiguous.
+        /// Result uses on-disk keys (EFCALL_ID, FTYPE_ID, FELEM_ID, EFUNC_ID, EXEC_ORDER, EFEAT_FTYPE_ID, IS_VIRTUAL); BOM rows are not included (raw rows: get_config_section("CFG_EFBOM")). Expression calls are many-per-feature (template NAME has 7), so by-feature is often ambiguous.
         /// Wire name: <c>get_expression_call</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND, INVALID_INPUT (plus the universal wire errors).</exception>
@@ -558,7 +558,7 @@ namespace Sz.ConfigTool
         /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
         /// <returns>The result, as JSON text.</returns>
         /// <remarks>
-        /// Array of {id, feature, element, execOrder, function, isVirtual, expressionFeature, elementList}, stably sorted by (FTYPE_ID, FELEM_ID, EXEC_ORDER). feature "all" / element "n/a" / function "unknown" when the id is &lt;= 0 or unresolved; expressionFeature "n/a" when EFEAT_FTYPE_ID &lt;= 0. elementList is the BOM element codes ordered by BOM EXEC_ORDER (BOM feature and FELEM_REQ are not shown). Missing sections yield [].
+        /// Array of {id, feature, element, execOrder, function, isVirtual, expressionFeature, elementList}, stably sorted by (FTYPE_ID, FELEM_ID, EXEC_ORDER). feature "all" / element "n/a" / function "unknown" when the id is &lt;= 0 or unresolved; expressionFeature "n/a" when EFEAT_FTYPE_ID &lt;= 0. elementList is the BOM element codes ordered by BOM EXEC_ORDER. Missing sections yield []. LIMITATION: elementList omits the stored CFG_EFBOM columns FTYPE_ID (0 = parent feature, -1 = any feature), EXEC_ORDER and FELEM_REQ, which the engine uses; read the raw rows with get_config_section("CFG_EFBOM").
         /// Wire name: <c>list_expression_calls</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE (plus the universal wire errors).</exception>

@@ -189,6 +189,15 @@ matters only to range resolvers (README, "Versioning").
 - JNI: the strict modified-UTF-8 decoder accepted overlong encodings other than `C0 80` (the
   modified-UTF-8 NUL), e.g. `C0 81` or `E0 80 80`; they are now rejected.
 
+### Documented
+
+- Response shape convention (CLAUDE.md, `api/manifest/schema.md`, `bindings/CONTRACT.md`; no
+  behaviour change): `get_*` return the stored row (summary gets `get_feature`, `get_element`,
+  `get_fragment`, `get_rule` grandfathered), `list_*` return code-resolved summaries, raw rows via
+  `get_config_section`, no `describe_*` layer. `list_expression_calls` / `list_comparison_calls`
+  / `list_distinct_calls` omit the stored BOM columns from `elementList` (manifest notes give
+  the `get_config_section("CFG_EFBOM" | "CFG_CFBOM" | "CFG_DFBOM")` workaround).
+
 ### Releases and CI
 
 - Releases: GitHub Releases only (no public registries); see packaging/README.md.

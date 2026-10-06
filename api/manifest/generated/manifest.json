@@ -536,7 +536,7 @@
         "NOT_FOUND",
         "INVALID_INPUT"
       ],
-      "notes": "Result is the stored row with on-disk keys (CFCALL_ID, FTYPE_ID, CFUNC_ID); it does not include the CFBOM elements (use list_comparison_calls).",
+      "notes": "Result is the stored row with on-disk keys (CFCALL_ID, FTYPE_ID, CFUNC_ID); it does not include the CFBOM elements (codes: list_comparison_calls; raw rows: get_config_section(\"CFG_CFBOM\")).",
       "c_notes": "C typed exports are split: SzConfigTool_getComparisonCall takes only an id, SzConfigTool_getComparisonCallByFeature only a feature code. LEGACY TRAP: the by-id export reports library errors with returnCode -5 and NO reason code; the by-feature export with -2 and NO reason code (ffi_json_value uses set_error).",
       "status": "implemented"
     },
@@ -551,7 +551,7 @@
       "errors": [
         "JSON_PARSE"
       ],
-      "notes": "Result is an array of {id, feature, function, elementList} sorted by (FTYPE_ID, CFCALL_ID) — not config order. elementList is the call's CFG_CFBOM element codes ordered by EXEC_ORDER. Unresolvable ids render as the string \"unknown\". Missing sections are treated as empty (never MISSING_SECTION).",
+      "notes": "Result is an array of {id, feature, function, elementList} sorted by (FTYPE_ID, CFCALL_ID) — not config order. elementList is the call's CFG_CFBOM element codes ordered by EXEC_ORDER. Unresolvable ids render as the string \"unknown\". Missing sections are treated as empty (never MISSING_SECTION). LIMITATION: elementList omits the stored CFG_CFBOM columns (FTYPE_ID, EXEC_ORDER); read the raw rows with get_config_section(\"CFG_CFBOM\").",
       "c_notes": "C typed export reports library errors with returnCode -5 and NO reason code.",
       "status": "implemented"
     },
@@ -775,7 +775,7 @@
         "NOT_FOUND",
         "INVALID_INPUT"
       ],
-      "notes": "Result is the stored row with on-disk keys (DFCALL_ID, FTYPE_ID, DFUNC_ID); it does not include the DFBOM elements (use list_distinct_calls).",
+      "notes": "Result is the stored row with on-disk keys (DFCALL_ID, FTYPE_ID, DFUNC_ID); it does not include the DFBOM elements (codes: list_distinct_calls; raw rows: get_config_section(\"CFG_DFBOM\")).",
       "c_notes": "C typed exports are split: SzConfigTool_getDistinctCall takes only an id, SzConfigTool_getDistinctCallByFeature only a feature code. LEGACY TRAP: the by-id export reports library errors with returnCode -5 and NO reason code; the by-feature export with -2 and NO reason code.",
       "status": "implemented"
     },
@@ -790,7 +790,7 @@
       "errors": [
         "JSON_PARSE"
       ],
-      "notes": "Result is an array of {id, feature, function, execOrder, elementList} sorted by (FTYPE_ID, DFCALL_ID) — not config order. execOrder is the CFG_DFCALL row's EXEC_ORDER, which the v4 schema (and every template / add_distinct_call row) lacks, so it is 1. elementList is the call's CFG_DFBOM element codes ordered by EXEC_ORDER. Unresolvable ids render as \"unknown\". Missing sections are treated as empty.",
+      "notes": "Result is an array of {id, feature, function, execOrder, elementList} sorted by (FTYPE_ID, DFCALL_ID) — not config order. execOrder is the CFG_DFCALL row's EXEC_ORDER, which the v4 schema (and every template / add_distinct_call row) lacks, so it is 1. elementList is the call's CFG_DFBOM element codes ordered by EXEC_ORDER. Unresolvable ids render as \"unknown\". Missing sections are treated as empty. LIMITATION: elementList omits the stored CFG_DFBOM columns (FTYPE_ID, EXEC_ORDER); read the raw rows with get_config_section(\"CFG_DFBOM\").",
       "c_notes": "C typed export reports library errors with returnCode -5 and NO reason code.",
       "status": "implemented"
     },
@@ -1052,7 +1052,7 @@
         "NOT_FOUND",
         "INVALID_INPUT"
       ],
-      "notes": "Result uses on-disk keys (EFCALL_ID, FTYPE_ID, FELEM_ID, EFUNC_ID, EXEC_ORDER, EFEAT_FTYPE_ID, IS_VIRTUAL); BOM rows are not included. Expression calls are many-per-feature (template NAME has 7), so by-feature is often ambiguous.",
+      "notes": "Result uses on-disk keys (EFCALL_ID, FTYPE_ID, FELEM_ID, EFUNC_ID, EXEC_ORDER, EFEAT_FTYPE_ID, IS_VIRTUAL); BOM rows are not included (raw rows: get_config_section(\"CFG_EFBOM\")). Expression calls are many-per-feature (template NAME has 7), so by-feature is often ambiguous.",
       "c_notes": "C export deltas: SzConfigTool_getExpressionCall takes only an id and returns -5 (no reason code) on library errors; SzConfigTool_getExpressionCallByFeature takes only a feature code and returns -2 with no reason code.",
       "status": "implemented"
     },
@@ -1067,7 +1067,7 @@
       "errors": [
         "JSON_PARSE"
       ],
-      "notes": "Array of {id, feature, element, execOrder, function, isVirtual, expressionFeature, elementList}, stably sorted by (FTYPE_ID, FELEM_ID, EXEC_ORDER). feature \"all\" / element \"n/a\" / function \"unknown\" when the id is <= 0 or unresolved; expressionFeature \"n/a\" when EFEAT_FTYPE_ID <= 0. elementList is the BOM element codes ordered by BOM EXEC_ORDER (BOM feature and FELEM_REQ are not shown). Missing sections yield [].",
+      "notes": "Array of {id, feature, element, execOrder, function, isVirtual, expressionFeature, elementList}, stably sorted by (FTYPE_ID, FELEM_ID, EXEC_ORDER). feature \"all\" / element \"n/a\" / function \"unknown\" when the id is <= 0 or unresolved; expressionFeature \"n/a\" when EFEAT_FTYPE_ID <= 0. elementList is the BOM element codes ordered by BOM EXEC_ORDER. Missing sections yield []. LIMITATION: elementList omits the stored CFG_EFBOM columns FTYPE_ID (0 = parent feature, -1 = any feature), EXEC_ORDER and FELEM_REQ, which the engine uses; read the raw rows with get_config_section(\"CFG_EFBOM\").",
       "c_notes": "C export returns -5 (no reason code) on library errors.",
       "status": "implemented"
     },

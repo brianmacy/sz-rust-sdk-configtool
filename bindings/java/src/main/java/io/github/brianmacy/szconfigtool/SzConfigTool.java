@@ -481,7 +481,8 @@ public final class SzConfigTool {
      *
      * <p>Notes:
      * Result is the stored row with on-disk keys (CFCALL_ID, FTYPE_ID, CFUNC_ID); it does not
-     * include the CFBOM elements (use list_comparison_calls).
+     * include the CFBOM elements (codes: list_comparison_calls; raw rows:
+     * get_config_section("CFG_CFBOM")).
      *
      * <p>Wire name: {@code get_comparison_call}; group: {@code calls_comparison}.
      *
@@ -505,7 +506,8 @@ public final class SzConfigTool {
      *
      * <p>Notes:
      * Result is the stored row with on-disk keys (CFCALL_ID, FTYPE_ID, CFUNC_ID); it does not
-     * include the CFBOM elements (use list_comparison_calls).
+     * include the CFBOM elements (codes: list_comparison_calls; raw rows:
+     * get_config_section("CFG_CFBOM")).
      *
      * <p>Wire name: {@code get_comparison_call}; group: {@code calls_comparison}.
      *
@@ -532,7 +534,9 @@ public final class SzConfigTool {
      * Result is an array of {id, feature, function, elementList} sorted by (FTYPE_ID,
      * CFCALL_ID) — not config order. elementList is the call's CFG_CFBOM element codes
      * ordered by EXEC_ORDER. Unresolvable ids render as the string "unknown". Missing sections
-     * are treated as empty (never MISSING_SECTION).
+     * are treated as empty (never MISSING_SECTION). LIMITATION: elementList omits the stored
+     * CFG_CFBOM columns (FTYPE_ID, EXEC_ORDER); read the raw rows with
+     * get_config_section("CFG_CFBOM").
      *
      * <p>Wire name: {@code list_comparison_calls}; group: {@code calls_comparison}.
      *
@@ -821,7 +825,8 @@ public final class SzConfigTool {
      *
      * <p>Notes:
      * Result is the stored row with on-disk keys (DFCALL_ID, FTYPE_ID, DFUNC_ID); it does not
-     * include the DFBOM elements (use list_distinct_calls).
+     * include the DFBOM elements (codes: list_distinct_calls; raw rows:
+     * get_config_section("CFG_DFBOM")).
      *
      * <p>Wire name: {@code get_distinct_call}; group: {@code calls_distinct}.
      *
@@ -845,7 +850,8 @@ public final class SzConfigTool {
      *
      * <p>Notes:
      * Result is the stored row with on-disk keys (DFCALL_ID, FTYPE_ID, DFUNC_ID); it does not
-     * include the DFBOM elements (use list_distinct_calls).
+     * include the DFBOM elements (codes: list_distinct_calls; raw rows:
+     * get_config_section("CFG_DFBOM")).
      *
      * <p>Wire name: {@code get_distinct_call}; group: {@code calls_distinct}.
      *
@@ -873,7 +879,9 @@ public final class SzConfigTool {
      * (FTYPE_ID, DFCALL_ID) — not config order. execOrder is the CFG_DFCALL row's
      * EXEC_ORDER, which the v4 schema (and every template / add_distinct_call row) lacks, so
      * it is 1. elementList is the call's CFG_DFBOM element codes ordered by EXEC_ORDER.
-     * Unresolvable ids render as "unknown". Missing sections are treated as empty.
+     * Unresolvable ids render as "unknown". Missing sections are treated as empty. LIMITATION:
+     * elementList omits the stored CFG_DFBOM columns (FTYPE_ID, EXEC_ORDER); read the raw rows
+     * with get_config_section("CFG_DFBOM").
      *
      * <p>Wire name: {@code list_distinct_calls}; group: {@code calls_distinct}.
      *
@@ -1252,8 +1260,9 @@ public final class SzConfigTool {
      *
      * <p>Notes:
      * Result uses on-disk keys (EFCALL_ID, FTYPE_ID, FELEM_ID, EFUNC_ID, EXEC_ORDER,
-     * EFEAT_FTYPE_ID, IS_VIRTUAL); BOM rows are not included. Expression calls are
-     * many-per-feature (template NAME has 7), so by-feature is often ambiguous.
+     * EFEAT_FTYPE_ID, IS_VIRTUAL); BOM rows are not included (raw rows:
+     * get_config_section("CFG_EFBOM")). Expression calls are many-per-feature (template NAME
+     * has 7), so by-feature is often ambiguous.
      *
      * <p>Wire name: {@code get_expression_call}; group: {@code calls_expression}.
      *
@@ -1276,8 +1285,9 @@ public final class SzConfigTool {
      *
      * <p>Notes:
      * Result uses on-disk keys (EFCALL_ID, FTYPE_ID, FELEM_ID, EFUNC_ID, EXEC_ORDER,
-     * EFEAT_FTYPE_ID, IS_VIRTUAL); BOM rows are not included. Expression calls are
-     * many-per-feature (template NAME has 7), so by-feature is often ambiguous.
+     * EFEAT_FTYPE_ID, IS_VIRTUAL); BOM rows are not included (raw rows:
+     * get_config_section("CFG_EFBOM")). Expression calls are many-per-feature (template NAME
+     * has 7), so by-feature is often ambiguous.
      *
      * <p>Wire name: {@code get_expression_call}; group: {@code calls_expression}.
      *
@@ -1303,7 +1313,10 @@ public final class SzConfigTool {
      * elementList}, stably sorted by (FTYPE_ID, FELEM_ID, EXEC_ORDER). feature "all" / element
      * "n/a" / function "unknown" when the id is &lt;= 0 or unresolved; expressionFeature "n/a"
      * when EFEAT_FTYPE_ID &lt;= 0. elementList is the BOM element codes ordered by BOM
-     * EXEC_ORDER (BOM feature and FELEM_REQ are not shown). Missing sections yield [].
+     * EXEC_ORDER. Missing sections yield []. LIMITATION: elementList omits the stored
+     * CFG_EFBOM columns FTYPE_ID (0 = parent feature, -1 = any feature), EXEC_ORDER and
+     * FELEM_REQ, which the engine uses; read the raw rows with
+     * get_config_section("CFG_EFBOM").
      *
      * <p>Wire name: {@code list_expression_calls}; group: {@code calls_expression}.
      *
