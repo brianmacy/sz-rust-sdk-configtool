@@ -10,6 +10,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Manual run on any branch (e.g. to get CI results before opening the PR).
+  workflow_dispatch:
 
 permissions:
   contents: read

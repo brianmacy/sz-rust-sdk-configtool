@@ -248,6 +248,11 @@ matters only to range resolvers (README, "Versioning").
 ### Releases and CI
 
 - Releases: GitHub Releases only (no public registries); see packaging/README.md.
+- CI can be started manually on any branch (`workflow_dispatch` on `ci.yml`); Dependabot now also
+  covers npm (`bindings/node`, `bindings/node/trpc`), Maven, pip (`packaging/`) and NuGet with the
+  same 21-day cooldown, weekly, one grouped PR per ecosystem.
+- `ruff` 0.16.7 is hash-pinned in `packaging/requirements-test.txt`, and the generated-Python style
+  tests now fail instead of silently skipping when it is missing.
 - Per-target release pipeline in `packaging/` (C ABI archive, C++ package, Python wheel, Node
   and tRPC tarballs, Java jar, NuGet package, `SHA256SUMS`, build-provenance attestation) for
   `linux-x64`, `linux-arm64`, `macos-arm64` and `windows-x64`, with export, linkage, glibc

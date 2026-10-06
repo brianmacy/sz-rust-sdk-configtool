@@ -6,7 +6,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
 import sz_configtool
 
 PACKAGE = Path(sz_configtool.__file__).parent
@@ -14,7 +13,6 @@ SOURCES = [str(p) for p in sorted(PACKAGE.glob("*.py*")) if p.suffix in {".py", 
 
 
 def ruff(*args: str) -> subprocess.CompletedProcess:
-    pytest.importorskip("ruff")
     return subprocess.run(
         [sys.executable, "-m", "ruff", *args],
         capture_output=True,
