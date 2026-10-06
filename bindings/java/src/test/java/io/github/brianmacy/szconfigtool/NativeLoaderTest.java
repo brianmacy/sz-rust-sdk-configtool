@@ -370,10 +370,18 @@ class NativeLoaderTest {
         cmd.add(cp);
         cmd.add(LoadProbe.class.getName());
         cmd.addAll(List.of(probeArgs));
-        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+        // The probe reports on stdout only. stderr is kept apart (shown on failure):
+        // the JVM writes its own diagnostics there, e.g. HotSpot on x86-64 Linux
+        // warns "might have disabled stack guard" for any library without a
+        // PT_GNU_STACK note, which includes the junk "library" of one test.
+        Path err = Files.createTempFile(Files.createDirectories(TestSupport.prop("scratch")),
+                "probe", ".stderr");
+        Process p = new ProcessBuilder(cmd).redirectError(err.toFile()).start();
         String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         assertTrue(p.waitFor(120, TimeUnit.SECONDS), "probe timed out");
-        assertEquals(0, p.exitValue(), out);
+        String stderr = Files.readString(err);
+        Files.delete(err);
+        assertEquals(0, p.exitValue(), out + "\nstderr:\n" + stderr);
         return out;
     }
 
