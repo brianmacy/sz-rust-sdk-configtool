@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Linkage gate for the staged natives of one target:
-#   Linux  : SONAME libSzConfigTool.so; no RPATH/RUNPATH; NEEDED only glibc/libgcc_s.
+#   Linux  : SONAME libSzConfigTool.so; no RPATH/RUNPATH; NEEDED only glibc/libgcc_s;
+#            a non-executable stack (PT_GNU_STACK present, flags RW: without it
+#            glibc maps an executable stack, which hardened hosts refuse to load).
 #   macOS  : install names @rpath/... (libSzConfigTool: @rpath/libSzConfigTool.dylib);
 #            deps only /usr/lib + /System; no LC_RPATH;
 #            minos <= policy.macos_deployment_target.
@@ -38,6 +40,9 @@ check_elf() {
         grep -q 'Library soname: \[libSzConfigTool.so\]' <<<"${dyn}" || fail "${lib}: SONAME is not libSzConfigTool.so"
     fi
     grep -qE '\((RPATH|RUNPATH)\)' <<<"${dyn}" && fail "${lib}: has RPATH/RUNPATH"
+    local stack
+    stack="$("${READELF}" -lW "${lib}" | awk '$1 == "GNU_STACK" { print $7 }')"
+    [[ "${stack}" == RW ]] || fail "${lib}: stack is not non-executable (GNU_STACK flags '${stack:-missing}')"
     local needed
     needed="$(sed -n 's/.*Shared library: \[\(.*\)\]/\1/p' <<<"${dyn}")"
     while IFS= read -r dep; do
@@ -47,7 +52,7 @@ check_elf() {
             *) fail "${lib}: unexpected NEEDED ${dep}" ;;
         esac
     done <<<"${needed}"
-    echo "ok: $(basename "${lib}") NEEDED: $(echo "${needed}" | tr '\n' ' ')"
+    echo "ok: $(basename "${lib}") GNU_STACK ${stack} NEEDED: $(echo "${needed}" | tr '\n' ' ')"
 }
 
 check_macho() {

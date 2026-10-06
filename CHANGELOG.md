@@ -255,8 +255,8 @@ matters only to range resolvers (README, "Versioning").
   tests now fail instead of silently skipping when it is missing.
 - Per-target release pipeline in `packaging/` (C ABI archive, C++ package, Python wheel, Node
   and tRPC tarballs, Java jar, NuGet package, `SHA256SUMS`, build-provenance attestation) for
-  `linux-x64`, `linux-arm64`, `macos-arm64` and `windows-x64`, with export, linkage, glibc
-  2.34, build-path and C-test gates.
+  `linux-x64`, `linux-arm64`, `macos-arm64` and `windows-x64`, with export, linkage (Linux:
+  also a non-executable `PT_GNU_STACK`), glibc 2.34, build-path and C-test gates.
 - CI (`ci.yml`): one Linux job per PR runs lint, codegen check, Rust tests, MSRV, the
   `linux-x64` release pipeline with every binding's tests, and the C++ ASan + UBSan suite (plus
   a plain `cargo test` on macOS and Windows); the full 4-platform matrix (`release.yml`) runs
