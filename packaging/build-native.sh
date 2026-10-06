@@ -52,14 +52,18 @@ if [[ "${OS}" == windows ]]; then
     cp "${OUT_DIR}/SzConfigTool.dll" "${OUT_DIR}/SzConfigTool.pdb" "${STAGE}/native/c/bin/"
     # rustc: import lib = SzConfigTool.dll.lib, staticlib = SzConfigTool.lib.
     cp "${OUT_DIR}/SzConfigTool.dll.lib" "${STAGE}/native/c/lib/SzConfigTool.lib"
-    CARGO_ENCODED_RUSTFLAGS="${SZ_RUSTFLAGS_DYNAMIC_CRT}" \
+    CARGO_ENCODED_RUSTFLAGS="${SZ_RUSTFLAGS_DYNAMIC_CRT}" CARGO_TERM_COLOR=never \
         cargo_cmd "${ffi_static_build[@]}" --crate-type staticlib -- --print=native-static-libs 2>&1 |
         tee "${log_file}" >&2
 else
-    cargo_cmd "${ffi_static_build[@]}" -- --print=native-static-libs 2>&1 | tee "${log_file}" >&2
+    CARGO_TERM_COLOR=never cargo_cmd "${ffi_static_build[@]}" -- --print=native-static-libs 2>&1 | tee "${log_file}" >&2
 fi
 static_libs="$(sed -n 's/.*native-static-libs: //p' "${log_file}" | tail -1 | tr -d '\r')"
 [[ -n "${static_libs}" ]] || die "rustc did not report native-static-libs"
+# The line is parsed from rustc's diagnostics: uncolored (CARGO_TERM_COLOR=never
+# above; CI sets it to always, and the trailing ESC[0m turned `-lc` into an
+# unknown library), and checked to be plain text.
+[[ "${static_libs}" =~ ^[[:print:]]+$ ]] || die "unprintable characters in native-static-libs: $(printf '%q' "${static_libs}")"
 printf '%s\n' "${static_libs}" >"${STAGE}/native/c/native-static-libs.txt"
 rm -f "${log_file}"
 
