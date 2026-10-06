@@ -17,7 +17,7 @@ case "$(uname -s)" in
         DST="${TARGET_DIR}/libSzConfigTool.dylib"
         if [ -f "$SRC" ]; then
             echo "  $SRC -> $DST"
-            ln -sf "$(basename $SRC)" "$DST"
+            ln -sf "$(basename "$SRC")" "$DST"
         else
             echo "  ✗ Source not found: $SRC"
             exit 1
@@ -29,7 +29,7 @@ case "$(uname -s)" in
         DST="${TARGET_DIR}/libSzConfigTool.so"
         if [ -f "$SRC" ]; then
             echo "  $SRC -> $DST"
-            ln -sf "$(basename $SRC)" "$DST"
+            ln -sf "$(basename "$SRC")" "$DST"
         else
             echo "  ✗ Source not found: $SRC"
             exit 1
