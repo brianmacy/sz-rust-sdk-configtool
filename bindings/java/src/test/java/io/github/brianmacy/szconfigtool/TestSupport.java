@@ -2,6 +2,7 @@ package io.github.brianmacy.szconfigtool;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,6 +22,25 @@ final class TestSupport {
                     + " not set (run through mvn)");
         }
         return Paths.get(v);
+    }
+
+    /**
+     * The classes directory {@code c} was loaded from. Through the URI, not
+     * {@code URL.getPath()}: on Windows that is {@code /D:/...}, not a file path
+     * (and it keeps %-escapes such as {@code %20} everywhere).
+     */
+    static Path codeSourceDir(Class<?> c) {
+        try {
+            return Path.of(c.getProtectionDomain().getCodeSource().getLocation().toURI());
+        } catch (URISyntaxException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** The JNI library bundled in the main classes dir ({@code natives/<platform>/<lib>}). */
+    static Path bundledLib() {
+        return codeSourceDir(NativeLoader.class).resolve("natives")
+                .resolve(prop("platform").toString()).resolve(prop("libFile").toString());
     }
 
     static String read(Path p) {

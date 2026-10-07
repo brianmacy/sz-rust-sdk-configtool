@@ -19,10 +19,7 @@ class ExportsTest {
     void onlyJniSymbolsAreExported() throws Exception {
         String os = System.getProperty("os.name").toLowerCase(Locale.ROOT);
         assumeFalse(os.startsWith("windows"), "uses nm (dumpbin on Windows: not covered here)");
-        Path classes = Path.of(NativeLoader.class.getProtectionDomain().getCodeSource()
-                .getLocation().getPath());
-        Path lib = classes.resolve("natives").resolve(TestSupport.prop("platform").toString())
-                .resolve(TestSupport.prop("libFile").toString());
+        Path lib = TestSupport.bundledLib();
         assertTrue(Files.isRegularFile(lib), lib.toString());
         boolean mac = os.startsWith("mac");
         List<String> cmd = mac ? List.of("nm", "-gU", lib.toString())

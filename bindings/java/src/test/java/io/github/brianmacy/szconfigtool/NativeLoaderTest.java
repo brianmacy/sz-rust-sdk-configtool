@@ -48,13 +48,6 @@ class NativeLoaderTest {
         return Files.createDirectories(dir);
     }
 
-    private static Path bundledLib() {
-        Path classes = Path.of(NativeLoader.class.getProtectionDomain().getCodeSource()
-                .getLocation().getPath());
-        return classes.resolve("natives").resolve(TestSupport.prop("platform").toString())
-                .resolve(TestSupport.prop("libFile").toString());
-    }
-
     @Test
     void platformNames() {
         assertEquals("macos-aarch64", NativeLoader.platform("Mac OS X", "aarch64"));
@@ -79,7 +72,7 @@ class NativeLoaderTest {
         assertTrue(from.startsWith("resource:"), from);
         Path extracted = Path.of(from.substring("resource:".length()));
         assertTrue(extracted.startsWith(Path.of(System.getProperty(NativeLoader.DIR_PROPERTY))));
-        assertArrayEquals(Files.readAllBytes(bundledLib()), Files.readAllBytes(extracted));
+        assertArrayEquals(Files.readAllBytes(TestSupport.bundledLib()), Files.readAllBytes(extracted));
         String dir = extracted.getParent().getFileName().toString();
         assertEquals(NativeLoader.version() + "-"
                 + NativeLoader.sha256(Files.readAllBytes(extracted)).substring(0, 16), dir);
@@ -118,7 +111,7 @@ class NativeLoaderTest {
     @Test
     void concurrentThreadsExtractOnce() throws Exception {
         Path base = scratch("threads");
-        byte[] lib = Files.readAllBytes(bundledLib());
+        byte[] lib = Files.readAllBytes(TestSupport.bundledLib());
         ExecutorService pool = Executors.newFixedThreadPool(CONCURRENCY);
         try {
             List<Future<Path>> futures = new ArrayList<>();
@@ -162,9 +155,9 @@ class NativeLoaderTest {
 
     @Test
     void explicitPathOverrideWins() throws Exception {
-        String out = runProbe(List.of("-D" + NativeLoader.PATH_PROPERTY + "=" + bundledLib()),
-                classpath());
-        assertTrue(out.startsWith("path:" + bundledLib()), out);
+        Path lib = TestSupport.bundledLib();
+        String out = runProbe(List.of("-D" + NativeLoader.PATH_PROPERTY + "=" + lib), classpath());
+        assertTrue(out.startsWith("path:" + lib), out);
     }
 
     @Test
@@ -172,7 +165,8 @@ class NativeLoaderTest {
         // Copy the classes WITHOUT natives/, then load from java.library.path.
         Path classes = copyClasses("no-bundle", rel -> rel.startsWith("natives"));
         String cp = classes + File.pathSeparator + testClasses();
-        String out = runProbe(List.of("-Djava.library.path=" + bundledLib().getParent()), cp);
+        Path libDir = TestSupport.bundledLib().getParent();
+        String out = runProbe(List.of("-Djava.library.path=" + libDir), cp);
         assertTrue(out.startsWith("library:" + NativeLoader.DEFAULT_NAME), out);
     }
 
@@ -216,7 +210,8 @@ class NativeLoaderTest {
     void failedLoadLibraryNamesBothSources() throws Exception {
         Path classes = copyClasses("no-bundle-bad-name", rel -> rel.startsWith("natives"));
         String cp = classes + File.pathSeparator + testClasses();
-        String out = runProbe(List.of("-Djava.library.path=" + bundledLib().getParent(),
+        Path libDir = TestSupport.bundledLib().getParent();
+        String out = runProbe(List.of("-Djava.library.path=" + libDir,
                 "-D" + NativeLoader.NAME_PROPERTY + "=no_such_szconfigtool_lib"), cp, "load");
         assertTrue(out.startsWith("threw java.lang.UnsatisfiedLinkError: no bundled "
                 + NativeLoader.resourcePath(TestSupport.prop("platform").toString(),
@@ -326,8 +321,7 @@ class NativeLoaderTest {
     /** A copy of the main classes dir (with natives/), leaving out paths matching {@code skip}. */
     private static Path copyClasses(String name, Predicate<Path> skip) throws IOException {
         Path classes = scratch(name);
-        Path src = Path.of(NativeLoader.class.getProtectionDomain().getCodeSource()
-                .getLocation().getPath());
+        Path src = TestSupport.codeSourceDir(NativeLoader.class);
         try (Stream<Path> s = Files.walk(src)) {
             for (Path p : s.toList()) {
                 Path rel = src.relativize(p);
@@ -356,8 +350,7 @@ class NativeLoaderTest {
     }
 
     private static String testClasses() {
-        return Path.of(LoadProbe.class.getProtectionDomain().getCodeSource().getLocation()
-                .getPath()).toString();
+        return TestSupport.codeSourceDir(LoadProbe.class).toString();
     }
 
     private static String runProbe(List<String> jvmArgs, String cp, String... probeArgs)
