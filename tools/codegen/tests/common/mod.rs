@@ -2,7 +2,10 @@
 //! test writes a small, real manifest tree into a scratch workspace under
 //! `CARGO_TARGET_TMPDIR` and runs the real generator (or binary) on it.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, PoisonError};
+use std::thread::ThreadId;
 
 use sz_configtool_codegen::generate;
 
@@ -59,8 +62,21 @@ pub fn project(prefix: &str) -> String {
     PROJECT_TEMPLATE.replace('@', prefix)
 }
 
-/// An empty scratch directory named `name`.
+/// Scratch names handed out in this test process, with the test thread
+/// that owns each.
+static OWNERS: Mutex<BTreeMap<String, ThreadId>> = Mutex::new(BTreeMap::new());
+
+/// An empty scratch directory named `name`. Tests run concurrently on their
+/// own threads, so a name belongs to the first test that uses it: another
+/// test reusing it would delete and rewrite that tree while it is read.
 pub fn scratch_root(name: &str) -> PathBuf {
+    let me = std::thread::current().id();
+    let owner = *OWNERS
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .entry(name.to_owned())
+        .or_insert(me);
+    assert_eq!(owner, me, "scratch dir name '{name}' is used by two tests");
     let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(name);
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(root.join("m/conformance")).unwrap();

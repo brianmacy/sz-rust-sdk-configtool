@@ -32,7 +32,10 @@ the typed bindings** (config-changing return shapes, Node option validation, Pyt
   `clone_generic_plan`; `set_generic_plan`. `ConfigAndJson` is removed and the named-fields record
   types are renamed `<Fn>Record` (e.g. `SetGenericPlanRecord`; no `config` field). Node and
   Python now fail early with `INVALID_INPUT` ("config must be a string ...") when a non-string
-  config is passed. The manifest, the `invoke` wire format and the C ABI are unchanged.
+  config is passed. A `<name>Result` companion re-runs the operation, so call it with the SAME
+  input config you gave the primary (on the already-modified config an add fails with
+  `ALREADY_EXISTS`, a delete with `NOT_FOUND`, and `set_generic_plan`'s result reports
+  `was_created: false`). The manifest, the `invoke` wire format and the C ABI are unchanged.
 - **BREAKING (Node binding, #76):** options are validated before the native call. Unknown option
   keys fail with `INVALID_INPUT` and a closest-name hint (`unknown option 'candidate' for
   addSearchProfile; did you mean 'candidates'?`); a string, array or other non-object where
@@ -41,7 +44,10 @@ the typed bindings** (config-changing return shapes, Node option validation, Pyt
   (generic_plan)`). Structured options are now exactly typed (`addSearchProfile.elements`,
   `addFeature`/`addExpressionCall` `elementList`, `addFragment.fragmentConfig`,
   `addRule.ruleConfig`) with runtime shape checks naming the path, and the tRPC router's Zod
-  objects are strict. Node is stricter than the library here: it accepts only `Yes`/`No`/`Y`/`N`
+  objects are strict. Optional nested keys the library itself reads as optional accept `null`
+  (stored `CFG_ERRULE`/`CFG_ERFRAG` rows round-trip through `addRule`/`addFragment`), keys set to
+  `undefined` count as absent, and wire-name translation never rewrites quoted values. Node is
+  stricter than the library here: it accepts only `Yes`/`No`/`Y`/`N`
   for search-profile element flags and rejects keys the library would ignore; `invoke` is
   unchanged. Python, Java, C# and C++ already reject unknown or misspelled options at call or
   compile time.
@@ -54,7 +60,7 @@ the typed bindings** (config-changing return shapes, Node option validation, Pyt
 
 ### Added
 
-- Optional `json_type` descriptor for `json` manifest arguments (`api/manifest/schema.md`):
+- Optional `json_type` descriptor (with a `nullable` form) for `json` manifest arguments (`api/manifest/schema.md`):
   drives the exact TypeScript types, runtime shape checks and strict tRPC schemas; other bindings
   get a `Shape:` doc line.
 - Release notes are the CHANGELOG section for the tag (`packaging/release-notes.sh`, self-tested

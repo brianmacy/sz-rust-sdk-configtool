@@ -212,7 +212,12 @@ function(szconfigtool_harden target)
         target_link_options(${target} PRIVATE -fsanitize=address,undefined)
     endif()
     if(SZCONFIGTOOL_ENABLE_COVERAGE)
-        target_compile_options(${target} PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+        # Atomic counters: tests call the header functions from several
+        # threads at once (test_threads.cpp), and plain increments then lose
+        # updates; branch counts derived by subtraction (e.g. a loop's exit)
+        # can drop to 0 and report covered code as uncovered at random.
+        target_compile_options(${target} PRIVATE
+            -fprofile-instr-generate -fcoverage-mapping -fprofile-update=atomic)
         target_link_options(${target} PRIVATE -fprofile-instr-generate)
     endif()
 endfunction()
