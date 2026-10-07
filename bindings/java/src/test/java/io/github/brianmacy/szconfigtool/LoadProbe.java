@@ -8,6 +8,9 @@ import java.util.concurrent.Callable;
  * {@code ok <result>} or {@code threw <class>: <message>} (plus
  * {@code cause <class>} when there is one); the exit code is 0 either way.
  *
+ * <p>Lines end in {@code \n} on every OS (not {@code line.separator}, which
+ * is {@code \r\n} on Windows): the tests match the report exactly.
+ *
  * <p>Only {@link Throwable} is caught, so this class never links
  * {@link SzConfigToolException} (one test runs without that class).
  */
@@ -17,11 +20,16 @@ public final class LoadProbe {
     private LoadProbe() {
     }
 
+    private static void report(String line) {
+        System.out.print(line + "\n");
+        System.out.flush();
+    }
+
     public static void main(String[] args) throws Exception {
         if (args.length == 0) {
             String[] out = NativeBridge.invoke("list_data_sources", CFG, "{}");
-            System.out.println(NativeLoader.loadedFrom());
-            System.out.println(out[0] + " " + out[2]);
+            report(NativeLoader.loadedFrom());
+            report(out[0] + " " + out[2]);
             return;
         }
         Callable<Object> step = switch (args[0]) {
@@ -35,11 +43,11 @@ public final class LoadProbe {
             default -> throw new IllegalArgumentException("unknown mode " + args[0]);
         };
         try {
-            System.out.println("ok " + step.call());
+            report("ok " + step.call());
         } catch (Throwable t) {
-            System.out.println("threw " + t.getClass().getName() + ": " + t.getMessage());
+            report("threw " + t.getClass().getName() + ": " + t.getMessage());
             if (t.getCause() != null) {
-                System.out.println("cause " + t.getCause().getClass().getName());
+                report("cause " + t.getCause().getClass().getName());
             }
         }
     }

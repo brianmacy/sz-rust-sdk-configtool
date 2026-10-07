@@ -276,6 +276,13 @@ class NativeLoaderTest {
     }
 
     @Test
+    void probeReportIsLfDelimitedOnEveryOs() throws Exception {
+        // The assertions above match "\n"; on Windows println would write "\r\n".
+        String out = runProbe(List.of("-Dline.separator=\r\n"), classpath(), "sha256");
+        assertEquals("ok " + NativeLoader.sha256(new byte[0]) + "\n", out);
+    }
+
+    @Test
     void extractRefusesADifferentUndeletableLibrary() throws Exception {
         // macOS: an ACL denying delete makes rename-over fail with EACCES
         // (AccessDeniedException). Linux has no unprivileged equivalent.
