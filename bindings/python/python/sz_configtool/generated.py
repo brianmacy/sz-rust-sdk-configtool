@@ -1209,7 +1209,8 @@ def add_expression_call(
             (case-insensitive) stores BOM FTYPE_ID 0 (G2 PARENT_FEATURE_LINKED_FTYPE:
             the feature that triggered the call); otherwise a feature code
             (case-insensitive) or NOT_FOUND. The element is NOT checked for membership
-            in that feature. [] is allowed.
+            in that feature. [] is allowed. Shape: ``[{element: string, required:
+            string, feature?: string}]``.
         ftype_code: Feature code (case-insensitive) or NOT_FOUND; "ALL"
             (case-insensitive) = absent; absent stores FTYPE_ID -1. ``None`` omits it.
         felem_code: Element code (case-insensitive) or NOT_FOUND; "N/A"
@@ -1286,7 +1287,8 @@ def add_expression_call_result(
             (case-insensitive) stores BOM FTYPE_ID 0 (G2 PARENT_FEATURE_LINKED_FTYPE:
             the feature that triggered the call); otherwise a feature code
             (case-insensitive) or NOT_FOUND. The element is NOT checked for membership
-            in that feature. [] is allowed.
+            in that feature. [] is allowed. Shape: ``[{element: string, required:
+            string, feature?: string}]``.
         ftype_code: Feature code (case-insensitive) or NOT_FOUND; "ALL"
             (case-insensitive) = absent; absent stores FTYPE_ID -1. ``None`` omits it.
         felem_code: Element code (case-insensitive) or NOT_FOUND; "N/A"
@@ -2783,7 +2785,12 @@ def add_feature(
             No). Any other item type is INVALID_INPUT. Element codes are uppercased; a
             code not in CFG_FELEM is AUTO-CREATED (FELEM_ID max+1 floor 1000, DATA_TYPE
             string, FELEM_DESC = code). The FBOM EXEC_ORDER is the item's 1-based
-            position (per feature, not whole-table).
+            position (per feature, not whole-table). Shape: ``[string | {element?:
+            string, ELEMENT?: string, expressed?: string, EXPRESSED?: string, compared?:
+            string, COMPARED?: string, display?: string, DISPLAY?: string,
+            displaylevel?: int, DISPLAYLEVEL?: int, display_level?: int, displaydelim?:
+            string, DISPLAYDELIM?: string, display_delim?: string, derived?: string,
+            DERIVED?: string}]``.
         class_: CFG_FCLASS code, case-insensitive; unknown is NOT_FOUND. Wire name
             ``class``. ``None`` omits it. Library default when omitted: ``"OTHER"``.
         behavior: Behavior code (A1, F1, FF, FM, FVM, NONE, NAME; E/S suffixes set
@@ -3301,7 +3308,8 @@ def add_fragment(
             without FRAGMENT[ (including "") is accepted unvalidated. ERFRAG_ID
             (integer, optional): absent or <= 0 auto-allocates (max + 1, floor 1, so
             1000 on the template); a taken id > 0 is ALREADY_EXISTS. Any ERFRAG_DESC key
-            is IGNORED.
+            is IGNORED. Shape: ``{ERFRAG_CODE: string, ERFRAG_SOURCE: string,
+            ERFRAG_ID?: int, ERFRAG_DESC?: any, ERFRAG_DEPENDS?: any}``.
 
     Returns:
         The modified configuration JSON string. ``add_fragment_result`` (same arguments)
@@ -3349,7 +3357,8 @@ def add_fragment_result(
             without FRAGMENT[ (including "") is accepted unvalidated. ERFRAG_ID
             (integer, optional): absent or <= 0 auto-allocates (max + 1, floor 1, so
             1000 on the template); a taken id > 0 is ALREADY_EXISTS. Any ERFRAG_DESC key
-            is IGNORED.
+            is IGNORED. Shape: ``{ERFRAG_CODE: string, ERFRAG_SOURCE: string,
+            ERFRAG_ID?: int, ERFRAG_DESC?: any, ERFRAG_DEPENDS?: any}``.
 
     Returns:
         The record (e.g. the created row or ids) as a JSON string.
@@ -5260,7 +5269,9 @@ def add_rule(
             ERRULE_TIER (INVALID_INPUT) and forces RTYPE_ID to 1; RELATE=Yes requires
             RTYPE_ID in 2,3,4 (INVALID_INPUT). RTYPE_ID defaults to 1; ERRULE_TIER
             defaults to null. A non-string / non-integer value for any of these keys is
-            treated as absent.
+            treated as absent. Shape: ``{ERRULE_CODE: string, QUAL_ERFRAG_CODE: string,
+            DISQ_ERFRAG_CODE?: string, RESOLVE?: string, RELATE?: string, RTYPE_ID?:
+            int, ERRULE_TIER?: int, ERRULE_ID?: int}``.
 
     Returns:
         The modified configuration JSON string. ``add_rule_result`` (same arguments)
@@ -5316,7 +5327,9 @@ def add_rule_result(
             ERRULE_TIER (INVALID_INPUT) and forces RTYPE_ID to 1; RELATE=Yes requires
             RTYPE_ID in 2,3,4 (INVALID_INPUT). RTYPE_ID defaults to 1; ERRULE_TIER
             defaults to null. A non-string / non-integer value for any of these keys is
-            treated as absent.
+            treated as absent. Shape: ``{ERRULE_CODE: string, QUAL_ERFRAG_CODE: string,
+            DISQ_ERFRAG_CODE?: string, RESOLVE?: string, RELATE?: string, RTYPE_ID?:
+            int, ERRULE_TIER?: int, ERRULE_ID?: int}``.
 
     Returns:
         The record (e.g. the created row or ids) as a JSON string.
@@ -5529,7 +5542,8 @@ def add_search_profile(
             listed twice is VALIDATION_ERRORS (field "overrides", DUPLICATE); a flag
             other than Yes/Y/No/N (trimmed, case-insensitive) is VALIDATION_ERRORS
             (field "overrides", OUT_OF_DOMAIN). Stored in FTYPE_OVERRIDES as
-            "[{<ftypeId>,<Y|N>},...]" sorted by FTYPE_ID, or "[]". ``None`` omits it.
+            "[{<ftypeId>,<Y|N>},...]" sorted by FTYPE_ID, or "[]". Shape: ``[{feature:
+            string, flag: "Yes"|"No"|"Y"|"N"}]``. ``None`` omits it.
 
     Returns:
         The modified configuration JSON string.

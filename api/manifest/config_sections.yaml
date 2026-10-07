@@ -128,6 +128,7 @@ functions:
         semantics: Uppercased before insertion.
       - name: field_value
         type: json
+        json_type: any
         semantics: Any JSON value, stored verbatim (cloned) into each item that lacks the field.
     returns: config_and_json
     errors: [JSON_PARSE, NOT_FOUND]

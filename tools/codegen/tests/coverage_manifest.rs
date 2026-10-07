@@ -411,8 +411,9 @@ fn test_every_binding_renders_the_extra_shapes() {
         (
             "node/f.ts",
             &[
-                "return rt.callInt(\"set_flag\"",
-                "rt.callUnit(\"drop_flag\"",
+                "return rt.callInt(setFlagSpec, config, options);",
+                "  wire: \"set_flag\",",
+                "rt.callUnit(dropFlagSpec, config);",
                 "* Set a \"flag\" under C:\\flags.",
             ],
         ),

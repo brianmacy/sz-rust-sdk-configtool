@@ -15,6 +15,12 @@ functions:
         semantics: Expression function code (CFG_EFUNC, case-insensitive) or NOT_FOUND.
       - name: element_list
         type: json
+        json_type:
+          array:
+            object:
+              element: string
+              required: string
+              feature?: string
         rust_convert: expression_element_list
         semantics: >-
           JSON array of {"element": str, "required": str, "feature"?: str} objects

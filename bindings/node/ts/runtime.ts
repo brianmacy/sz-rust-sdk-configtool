@@ -5,8 +5,10 @@
  */
 import { SzConfigToolError, toSzConfigToolError } from "./errors.js";
 import { loadNative } from "./native.js";
+import { translateError, wireArgs, type FnSpec } from "./options.js";
 
 export type { JsonValue } from "./json.js";
+export { closest, translateError, wireArgs, type ArgSpec, type FnSpec, type Shape } from "./options.js";
 
 /** A manifest `returns` value. */
 export type ReturnKind = "config" | "json" | "config_and_json" | "int" | "unit";
@@ -150,22 +152,36 @@ function field(env: InvokeEnvelope, key: "config" | "result", name: string): str
   return value;
 }
 
+/**
+ * A typed call: check `options` against `spec` and map them to wire args
+ * (INVALID_INPUT / MISSING_FIELD before the native call), invoke, and name
+ * JS options (not wire fields) in the resulting errors.
+ */
+function call(spec: FnSpec, config: string, options: unknown): InvokeEnvelope {
+  const args = wireArgs(spec, options);
+  try {
+    return invoke(spec.wire, config, args);
+  } catch (err) {
+    throw translateError(spec, err);
+  }
+}
+
 /** `returns: config`, or the primary of a `config_and_json` function: the config. */
-export function callConfig(name: string, config: string, args: WireArgs): string {
-  return field(invoke(name, config, args), "config", name);
+export function callConfig(spec: FnSpec, config: string, options?: unknown): string {
+  return field(call(spec, config, options), "config", spec.wire);
 }
 
 /** `returns: json`, or a `config_and_json` companion: the result JSON text. */
-export function callJson(name: string, config: string, args: WireArgs): string {
-  return field(invoke(name, config, args), "result", name);
+export function callJson(spec: FnSpec, config: string, options?: unknown): string {
+  return field(call(spec, config, options), "result", spec.wire);
 }
 
-export function callInt(name: string, config: string, args: WireArgs): number {
-  return JSON.parse(field(invoke(name, config, args), "result", name)) as number;
+export function callInt(spec: FnSpec, config: string, options?: unknown): number {
+  return JSON.parse(field(call(spec, config, options), "result", spec.wire)) as number;
 }
 
-export function callUnit(name: string, config: string, args: WireArgs): void {
-  invoke(name, config, args);
+export function callUnit(spec: FnSpec, config: string, options?: unknown): void {
+  call(spec, config, options);
 }
 
 function skipWs(text: string, i: number): number {
@@ -238,12 +254,12 @@ export function memberTexts(text: string): Map<string, string> {
  * the JSON text `null`.
  */
 export function callNamed<T>(
-  name: string,
+  spec: FnSpec,
   config: string,
-  args: WireArgs,
+  options: unknown,
   fields: ReadonlyArray<readonly [string, string]>,
 ): T {
-  const members = memberTexts(field(invoke(name, config, args), "result", name));
+  const members = memberTexts(field(call(spec, config, options), "result", spec.wire));
   const out: Record<string, string> = {};
   for (const [wire, camel] of fields) out[camel] = members.get(wire) ?? "null";
   return out as T;

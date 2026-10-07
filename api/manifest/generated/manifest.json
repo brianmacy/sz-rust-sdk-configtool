@@ -932,7 +932,16 @@
           "semantics": "JSON array of {\"element\": str, \"required\": str, \"feature\"?: str} objects (unknown keys, non-objects, non-string values = INVALID_INPUT; missing element/required = MISSING_FIELD). One CFG_EFBOM row per item, EXEC_ORDER = 1-based list position. element: global CFG_FELEM lookup (case-insensitive) or NOT_FOUND. required: stored verbatim in FELEM_REQ (not validated or normalized). feature: absent stores BOM FTYPE_ID -1 (G2 WILDCARDED_FTYPE: any feature in the record carrying the element); \"PARENT\" (case-insensitive) stores BOM FTYPE_ID 0 (G2 PARENT_FEATURE_LINKED_FTYPE: the feature that triggered the call); otherwise a feature code (case-insensitive) or NOT_FOUND. The element is NOT checked for membership in that feature. [] is allowed.",
           "positional": false,
           "owned": false,
-          "rust_convert": "expression_element_list"
+          "rust_convert": "expression_element_list",
+          "json_type": {
+            "array": {
+              "object": {
+                "element": "string",
+                "required": "string",
+                "feature?": "string"
+              }
+            }
+          }
         },
         {
           "name": "ftype_code",
@@ -1642,7 +1651,8 @@
           "required": false,
           "semantics": "Any JSON value, stored verbatim (cloned) into each item that lacks the field.",
           "positional": false,
-          "owned": false
+          "owned": false,
+          "json_type": "any"
         }
       ],
       "returns": "config_and_json",
@@ -2240,7 +2250,34 @@
           "required": false,
           "semantics": "Must be a non-empty JSON array, else INVALID_INPUT. Each item is either an element-code string, or an object with `element` (or `ELEMENT`, required, else INVALID_INPUT) and optional `expressed`/`EXPRESSED`, `compared`/`COMPARED` (\"yes\" case-insensitive = true), `display`/`DISPLAY` (\"yes\" = DISPLAY_LEVEL 1, anything else 0) or `displaylevel`/`DISPLAYLEVEL`/`display_level` (int, default 1, negative = INVALID_INPUT), `displaydelim`/`DISPLAYDELIM`/`display_delim`, `derived`/`DERIVED` (Yes/No case-insensitive, else INVALID_INPUT; default No). Any other item type is INVALID_INPUT. Element codes are uppercased; a code not in CFG_FELEM is AUTO-CREATED (FELEM_ID max+1 floor 1000, DATA_TYPE string, FELEM_DESC = code). The FBOM EXEC_ORDER is the item's 1-based position (per feature, not whole-table).",
           "positional": false,
-          "owned": false
+          "owned": false,
+          "json_type": {
+            "array": {
+              "one_of": [
+                "string",
+                {
+                  "object": {
+                    "element?": "string",
+                    "ELEMENT?": "string",
+                    "expressed?": "string",
+                    "EXPRESSED?": "string",
+                    "compared?": "string",
+                    "COMPARED?": "string",
+                    "display?": "string",
+                    "DISPLAY?": "string",
+                    "displaylevel?": "int",
+                    "DISPLAYLEVEL?": "int",
+                    "display_level?": "int",
+                    "displaydelim?": "string",
+                    "DISPLAYDELIM?": "string",
+                    "display_delim?": "string",
+                    "derived?": "string",
+                    "DERIVED?": "string"
+                  }
+                }
+              ]
+            }
+          }
         },
         {
           "name": "class",
@@ -2904,7 +2941,16 @@
           "required": false,
           "semantics": "Object with on-disk keys. ERFRAG_CODE (string, required, else MISSING_FIELD) is uppercased for storage and the duplicate check (ALREADY_EXISTS). ERFRAG_SOURCE (string, required, else MISSING_FIELD) is stored verbatim; every name referenced inside a FRAGMENT[...] clause (e.g. \"./FRAGMENT[./SAME_NAME>0 and ./SAME_STAB>0]\") must be an existing ERFRAG_CODE matched EXACTLY (case-sensitive), else INVALID_INPUT. A source without FRAGMENT[ (including \"\") is accepted unvalidated. ERFRAG_ID (integer, optional): absent or <= 0 auto-allocates (max + 1, floor 1, so 1000 on the template); a taken id > 0 is ALREADY_EXISTS. Any ERFRAG_DESC key is IGNORED.",
           "positional": false,
-          "owned": false
+          "owned": false,
+          "json_type": {
+            "object": {
+              "ERFRAG_CODE": "string",
+              "ERFRAG_SOURCE": "string",
+              "ERFRAG_ID?": "int",
+              "ERFRAG_DESC?": "any",
+              "ERFRAG_DEPENDS?": "any"
+            }
+          }
         }
       ],
       "returns": "config_and_json",
@@ -4089,7 +4135,19 @@
           "required": false,
           "semantics": "Object with on-disk keys. ERRULE_CODE (string) is required, else MISSING_FIELD; uppercased for storage and the case-insensitive duplicate check (ALREADY_EXISTS). QUAL_ERFRAG_CODE (the fragment) is required: absent/non-string is MISSING_FIELD, \"\" or an unknown code is NOT_FOUND (existence is case-insensitive). DISQ_ERFRAG_CODE is optional: \"\" is accepted and stored as \"\", an unknown code is NOT_FOUND. TRAP: both fragment codes are stored VERBATIM (not uppercased). RESOLVE / RELATE default \"No\", must be Yes/No case-insensitively (stored title-case) else INVALID_INPUT, and may not both be Yes (INVALID_INPUT). RESOLVE=Yes requires a non-zero ERRULE_TIER (INVALID_INPUT) and forces RTYPE_ID to 1; RELATE=Yes requires RTYPE_ID in 2,3,4 (INVALID_INPUT). RTYPE_ID defaults to 1; ERRULE_TIER defaults to null. A non-string / non-integer value for any of these keys is treated as absent.",
           "positional": false,
-          "owned": false
+          "owned": false,
+          "json_type": {
+            "object": {
+              "ERRULE_CODE": "string",
+              "QUAL_ERFRAG_CODE": "string",
+              "DISQ_ERFRAG_CODE?": "string",
+              "RESOLVE?": "string",
+              "RELATE?": "string",
+              "RTYPE_ID?": "int",
+              "ERRULE_TIER?": "int",
+              "ERRULE_ID?": "int"
+            }
+          }
         }
       ],
       "returns": "config_and_json",
@@ -4321,7 +4379,22 @@
           "semantics": "Feature candidate overrides: an array of {\"feature\": FTYPE_CODE, \"flag\": Yes|No|Y|N} objects (only those two keys, both strings, else INVALID_INPUT; a missing key = MISSING_FIELD); absent = none. Each feature is resolved case-insensitively against CFG_FTYPE (NOT_FOUND); a feature listed twice is VALIDATION_ERRORS (field \"overrides\", DUPLICATE); a flag other than Yes/Y/No/N (trimmed, case-insensitive) is VALIDATION_ERRORS (field \"overrides\", OUT_OF_DOMAIN). Stored in FTYPE_OVERRIDES as \"[{<ftypeId>,<Y|N>},...]\" sorted by FTYPE_ID, or \"[]\".",
           "positional": false,
           "owned": false,
-          "rust_convert": "search_profile_elements"
+          "rust_convert": "search_profile_elements",
+          "json_type": {
+            "array": {
+              "object": {
+                "feature": "string",
+                "flag": {
+                  "enum": [
+                    "Yes",
+                    "No",
+                    "Y",
+                    "N"
+                  ]
+                }
+              }
+            }
+          }
         }
       ],
       "returns": "config",
@@ -4444,7 +4517,8 @@
           "required": false,
           "semantics": "Stored VERBATIM as its typed JSON value (an integer stays an integer, a string a string); no validation.",
           "positional": false,
-          "owned": true
+          "owned": true,
+          "json_type": "any"
         }
       ],
       "returns": "config",
@@ -4496,7 +4570,8 @@
           "required": false,
           "semantics": "Written VERBATIM (any JSON value, no validation) to BREAK_RES of the first CFG_RTYPE row with RCLASS_ID 2. Only an integer value is visible to list_system_parameters afterwards.",
           "positional": false,
-          "owned": false
+          "owned": false,
+          "json_type": "any"
         }
       ],
       "returns": "config",

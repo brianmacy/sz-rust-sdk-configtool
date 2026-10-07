@@ -277,6 +277,9 @@ fn arg_doc(a: &Arg) -> String {
         text.push(' ');
         text.push_str(s);
     }
+    if let Some(shape) = a.shape() {
+        let _ = write!(text, " Shape: `{shape}`.");
+    }
     if let Some(d) = &a.default {
         let _ = write!(text, " Library default when omitted: {d}.");
     }
@@ -873,6 +876,7 @@ mod tests {
             positional: false,
             owned: false,
             rust_convert: None,
+            json_type: None,
         }
     }
 

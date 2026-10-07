@@ -91,7 +91,20 @@ sz_configtool_lib (pure Rust)
   leave/clear/set (Python `UNSET`/None; Java/C#/C++ `FieldUpdate<T>`; TS
   undefined/null/value).
 * Each function's doc/semantics/notes/errors from the manifest become doc
-  comments (Python docstring + .pyi, Javadoc, XML doc, Doxygen, TSDoc).
+  comments (Python docstring + .pyi, Javadoc, XML doc, Doxygen, TSDoc). A
+  structured `json_type` adds a `Shape: ...` line to the arg's doc.
+* Unknown or misspelled argument names never pass silently. Python
+  (keyword-only parameters: `TypeError`), Java (typed `Options` builders), C#
+  (named parameters / options objects) and C++ (options structs) reject them
+  at call/compile time. TS options are plain objects, so the TS wrappers check
+  them at run time: a non-object `options`, an unknown key (top level or inside
+  a structured `json` option) or a value outside the arg's `json_type` is
+  `INVALID_INPUT` before the native call (a missing required key inside one:
+  `MISSING_FIELD`), and native errors that name wire fields are translated to
+  the camelCase option name with the wire name in parentheses once
+  (`genericPlan (generic_plan)`). TS types and the tRPC Zod schemas
+  (strict objects) are generated from `json_type`; elsewhere `json` args stay
+  JSON values / JSON text (unknown keys inside them are judged by the library).
 * Names: Python snake_case; Java camelCase; TS camelCase; C# PascalCase
   methods/camelCase args; C++ PascalCase methods/snake_case args. Split the
   snake name on `_`, no acronym special-casing.

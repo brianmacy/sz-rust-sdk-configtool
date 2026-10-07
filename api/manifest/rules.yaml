@@ -15,6 +15,16 @@ functions:
           ALREADY_EXISTS. Any ERRULE_ID key inside rule_config is IGNORED.
       - name: rule_config
         type: json
+        json_type:
+          object:
+            ERRULE_CODE: string
+            QUAL_ERFRAG_CODE: string
+            DISQ_ERFRAG_CODE?: string
+            RESOLVE?: string
+            RELATE?: string
+            RTYPE_ID?: int
+            ERRULE_TIER?: int
+            ERRULE_ID?: int
         semantics: >-
           Object with on-disk keys. ERRULE_CODE (string) is required, else
           MISSING_FIELD; uppercased for storage and the case-insensitive

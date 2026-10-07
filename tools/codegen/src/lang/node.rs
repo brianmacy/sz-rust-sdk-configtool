@@ -7,7 +7,10 @@
 //!   implemented manifest function (`status: not_implemented` is skipped), an
 //!   options-object interface per function, TSDoc from `doc`/`semantics`/
 //!   `notes`/`errors`. Every function calls the native `invoke` seam through
-//!   `ts/runtime.ts`.
+//!   `ts/runtime.ts` with a generated `rt.FnSpec` (JS/wire names, required
+//!   flags, `json_type` shapes) that `ts/options.ts` checks the options
+//!   against (strict: unknown keys / non-object options / wrong shapes are
+//!   INVALID_INPUT) and uses to name JS options in native errors.
 //! * `ts/generated/reason-codes.ts` — the wire error taxonomy.
 //! * `trpc/src/generated/schemas.ts` — one Zod input schema per function.
 //! * `trpc/src/generated/router.ts` — one tRPC procedure per function.
@@ -16,7 +19,9 @@
 //!
 //! Typed TS mapping: `str`→`string`, `int`→`number | bigint` (a `bigint`
 //! carries the full i64 range exactly), `bool`→`boolean`,
-//! `json`→`JsonValue`, `str_list`→`readonly string[]`, `int_or_str`→
+//! `json`→ its `json_type` (`any`→`JsonValue`; arrays → `ReadonlyArray<T>`,
+//! objects → `{ readonly k: T; readonly opt?: T }`, enums → string-literal
+//! unions), `str_list`→`readonly string[]`, `int_or_str`→
 //! `number | bigint | string` (a call id or a feature code); optional→`name?: T`;
 //! tri-state→`name?: T | null` (undefined = leave, null = clear, value = set);
 //! `required: true`→ a required property even though Rust takes `Option`.
@@ -33,7 +38,7 @@ use std::path::{Component, Path, PathBuf};
 use crate::Generated;
 use crate::emit::GENERATED_BANNER;
 use crate::load::Inputs;
-use crate::model::{Arg, ArgType, Function, Returns, Status};
+use crate::model::{Arg, ArgType, Function, JsonType, Returns, Status};
 
 /// Generated node files (workspace-relative paths), deterministic.
 pub fn generate(inputs: &Inputs) -> Vec<Generated> {
@@ -126,6 +131,9 @@ fn arg_doc(a: &Arg) -> Vec<String> {
         paras.push(format!(
             "Library default when omitted: `{d}` (applied by the library, not this binding)."
         ));
+    }
+    if let Some(shape) = a.shape() {
+        paras.push(format!("Shape: `{shape}`."));
     }
     paras.push(format!("Wire name: `{}`.", a.name));
     paras
@@ -250,14 +258,89 @@ fn result_name(f: &Function) -> String {
     format!("{}Record", pascal(&f.name))
 }
 
-fn ts_type(ty: ArgType) -> &'static str {
-    match ty {
-        ArgType::Str => "string",
-        ArgType::Int => "number | bigint",
-        ArgType::Bool => "boolean",
-        ArgType::Json => "rt.JsonValue",
-        ArgType::IntOrStr => "number | bigint | string",
-        ArgType::StrList => "readonly string[]",
+fn ts_type(a: &Arg) -> String {
+    match (a.ty, &a.json_type) {
+        (ArgType::Str, _) => "string".into(),
+        (ArgType::Int, _) => "number | bigint".into(),
+        (ArgType::Bool, _) => "boolean".into(),
+        (ArgType::Json, Some(t)) => ts_json_type(t),
+        (ArgType::Json, None) => "rt.JsonValue".into(),
+        (ArgType::IntOrStr, _) => "number | bigint | string".into(),
+        (ArgType::StrList, _) => "readonly string[]".into(),
+    }
+}
+
+/// A TS property key: bare when a plain identifier, else a quoted string.
+fn ts_key(name: &str) -> String {
+    let ident = name
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_' || c == '$')
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$');
+    if ident {
+        name.to_string()
+    } else {
+        serde_json::Value::from(name).to_string()
+    }
+}
+
+/// The precise TS type of a `json_type`.
+pub fn ts_json_type(t: &JsonType) -> String {
+    match t {
+        JsonType::Any => "rt.JsonValue".into(),
+        JsonType::String => "string".into(),
+        JsonType::Int => "number | bigint".into(),
+        JsonType::Bool => "boolean".into(),
+        JsonType::Enum(values) => values
+            .iter()
+            .map(|v| serde_json::Value::from(v.as_str()).to_string())
+            .collect::<Vec<_>>()
+            .join(" | "),
+        JsonType::Array(item) => format!("ReadonlyArray<{}>", ts_json_type(item)),
+        JsonType::OneOf(alts) => alts
+            .iter()
+            .map(ts_json_type)
+            .collect::<Vec<_>>()
+            .join(" | "),
+        JsonType::Object(fields) => {
+            let fields: Vec<String> = fields
+                .iter()
+                .map(|f| {
+                    let opt = if f.optional { "?" } else { "" };
+                    format!("readonly {}{opt}: {}", ts_key(&f.name), ts_json_type(&f.ty))
+                })
+                .collect();
+            format!("{{ {} }}", fields.join("; "))
+        }
+    }
+}
+
+/// The runtime shape literal (`rt.Shape`) of a `json_type`.
+pub fn runtime_shape(t: &JsonType) -> String {
+    let quote = |s: &str| serde_json::Value::from(s).to_string();
+    match t {
+        JsonType::Any => quote("any"),
+        JsonType::String => quote("string"),
+        JsonType::Int => quote("int"),
+        JsonType::Bool => quote("bool"),
+        JsonType::Enum(values) => {
+            let values: Vec<String> = values.iter().map(|v| quote(v)).collect();
+            format!("{{ enum: [{}] }}", values.join(", "))
+        }
+        JsonType::Array(item) => format!("{{ array: {} }}", runtime_shape(item)),
+        JsonType::OneOf(alts) => {
+            let alts: Vec<String> = alts.iter().map(runtime_shape).collect();
+            format!("{{ oneOf: [{}] }}", alts.join(", "))
+        }
+        JsonType::Object(fields) => {
+            let fields: Vec<String> = fields
+                .iter()
+                .map(|f| format!("{}: {}", quote(&f.key()), runtime_shape(&f.ty)))
+                .collect();
+            format!("{{ object: {{ {} }} }}", fields.join(", "))
+        }
     }
 }
 
@@ -268,7 +351,7 @@ fn ts_property(a: &Arg) -> String {
     format!(
         "  readonly {}{opt}: {}{null};\n",
         camel(&a.name),
-        ts_type(a.ty)
+        ts_type(a)
     )
 }
 
@@ -319,18 +402,52 @@ fn return_shape(f: &Function, role: Role) -> (String, String) {
     (ty.to_string(), format!("rt.{helper}"))
 }
 
-/// The wire args object literal (`{ snake: options.camel, ... }`).
-fn wire_args(f: &Function, indent: &str) -> String {
-    if f.args.is_empty() {
-        return "{}".to_string();
+/// The name of `f`'s runtime spec constant in `role`.
+fn spec_name(f: &Function, role: Role) -> String {
+    format!("{}Spec", typed_name(f, role))
+}
+
+/// One `rt.ArgSpec`: `[js, wire, required, shape?]` (no shape for `any`).
+fn arg_spec(a: &Arg) -> String {
+    let shape = a
+        .json_type
+        .as_ref()
+        .filter(|t| **t != JsonType::Any)
+        .map(|t| format!(", {}", runtime_shape(t)))
+        .unwrap_or_default();
+    format!(
+        "[\"{}\", \"{}\", {}{shape}]",
+        camel(&a.name),
+        a.name,
+        is_required(a)
+    )
+}
+
+/// The runtime spec constant of `f`'s typed function in `role` (a companion
+/// reuses the primary's arguments under its own name).
+fn spec_const(f: &Function, role: Role) -> String {
+    let name = typed_name(f, role);
+    let head = format!("const {}: rt.FnSpec = ", spec_name(f, role));
+    if role == Role::Companion {
+        return format!(
+            "{head}{{ ...{}, name: \"{name}\" }};\n",
+            spec_name(f, Role::Primary)
+        );
     }
-    let mut out = "{\n".to_string();
-    for a in &f.args {
-        let _ = writeln!(out, "{indent}  {}: options.{},", a.name, camel(&a.name));
-    }
-    out.push_str(indent);
-    out.push('}');
-    out
+    let args = if f.args.is_empty() {
+        "[]".to_string()
+    } else {
+        let lines: Vec<String> = f
+            .args
+            .iter()
+            .map(|a| format!("    {},", arg_spec(a)))
+            .collect();
+        format!("[\n{}\n  ]", lines.join("\n"))
+    };
+    format!(
+        "{head}{{\n  name: \"{name}\",\n  wire: \"{}\",\n  args: {args},\n}};\n",
+        f.name
+    )
 }
 
 fn tuple_pairs(f: &Function) -> String {
@@ -377,14 +494,20 @@ fn typed_fn(f: &Function, role: Role) -> String {
     } else {
         "return "
     };
-    let mut out = function_doc(f, role);
+    let options = match (f.args.is_empty(), tail.is_empty()) {
+        (false, _) => ", options",
+        (true, false) => ", undefined",
+        (true, true) => "",
+    };
+    let mut out = spec_const(f, role);
+    out.push('\n');
+    out.push_str(&function_doc(f, role));
     let _ = write!(
         out,
-        "export function {name}(config: string{opts}): {ret} {{\n  {keyword}{call}(\"{wire}\", config, {args}{tail});\n}}\n\n",
+        "export function {name}(config: string{opts}): {ret} {{\n  {keyword}{call}({spec}, config{options}{tail});\n}}\n\n",
         name = typed_name(f, role),
         opts = options_param(f),
-        wire = f.name,
-        args = wire_args(f, "  "),
+        spec = spec_name(f, role),
     );
     out
 }
@@ -424,14 +547,53 @@ fn reason_codes_ts(codes: &[String]) -> String {
 
 // ---------------------------------------------------------------- tRPC
 
+/// The Zod schema of a `json_type`: strict objects (unknown keys rejected).
+pub fn zod_json_type(t: &JsonType) -> String {
+    match t {
+        JsonType::Any => "z.json()".into(),
+        JsonType::String => "z.string()".into(),
+        JsonType::Int => ZOD_INT.into(),
+        JsonType::Bool => "z.boolean()".into(),
+        JsonType::Enum(values) => {
+            let values: Vec<String> = values
+                .iter()
+                .map(|v| serde_json::Value::from(v.as_str()).to_string())
+                .collect();
+            format!("z.enum([{}])", values.join(", "))
+        }
+        JsonType::Array(item) => format!("z.array({})", zod_json_type(item)),
+        JsonType::OneOf(alts) => {
+            let alts: Vec<String> = alts.iter().map(zod_json_type).collect();
+            format!("z.union([{}])", alts.join(", "))
+        }
+        JsonType::Object(fields) => {
+            let fields: Vec<String> = fields
+                .iter()
+                .map(|f| {
+                    let opt = if f.optional { ".optional()" } else { "" };
+                    format!(
+                        "{}: {}{opt}",
+                        serde_json::Value::from(f.name.as_str()),
+                        zod_json_type(&f.ty)
+                    )
+                })
+                .collect();
+            format!("z.strictObject({{ {} }})", fields.join(", "))
+        }
+    }
+}
+
+const ZOD_INT: &str = "z.union([z.int(), z.bigint()])";
+
 fn zod_type(a: &Arg) -> String {
-    let base = match a.ty {
-        ArgType::Str => "z.string()",
-        ArgType::Int => "z.union([z.int(), z.bigint()])",
-        ArgType::Bool => "z.boolean()",
-        ArgType::Json => "z.json()",
-        ArgType::IntOrStr => "z.union([z.int(), z.bigint(), z.string()])",
-        ArgType::StrList => "z.array(z.string())",
+    let base = match (a.ty, &a.json_type) {
+        (ArgType::Str, _) => "z.string()".to_string(),
+        (ArgType::Int, _) => ZOD_INT.to_string(),
+        (ArgType::Bool, _) => "z.boolean()".to_string(),
+        (ArgType::Json, Some(t)) => zod_json_type(t),
+        (ArgType::Json, None) => "z.json()".to_string(),
+        (ArgType::IntOrStr, _) => "z.union([z.int(), z.bigint(), z.string()])".to_string(),
+        (ArgType::StrList, _) => "z.array(z.string())".to_string(),
     };
     let modifier = match (a.tristate, is_required(a)) {
         (true, _) => ".nullable().optional()",
@@ -560,6 +722,7 @@ mod tests {
             positional: false,
             owned: false,
             rust_convert: None,
+            json_type: None,
         }
     }
 
@@ -653,6 +816,31 @@ mod tests {
     }
 
     #[test]
+    fn test_json_type_keys_quote_non_identifiers() {
+        let t = JsonType::Object(vec![
+            crate::model::JsonField {
+                name: "a-b".into(),
+                optional: false,
+                ty: JsonType::String,
+            },
+            crate::model::JsonField {
+                name: "1x".into(),
+                optional: true,
+                ty: JsonType::Bool,
+            },
+            crate::model::JsonField {
+                name: "$ok_1".into(),
+                optional: false,
+                ty: JsonType::Int,
+            },
+        ]);
+        assert_eq!(
+            ts_json_type(&t),
+            "{ readonly \"a-b\": string; readonly \"1x\"?: boolean; readonly $ok_1: number | bigint }"
+        );
+    }
+
+    #[test]
     fn test_zod_modes() {
         let mut tri = arg("source", ArgType::Str);
         tri.tristate = true;
@@ -690,10 +878,13 @@ mod tests {
             "{ts}"
         );
         assert!(
-            ts.contains("return rt.callConfig(\"add_data_source\", config, {"),
+            ts.contains("  return rt.callConfig(addDataSourceSpec, config, options);\n"),
             "{ts}"
         );
-        assert!(ts.contains("    dsrc_id: options.dsrcId,\n"), "{ts}");
+        assert!(
+            ts.contains("const addDataSourceSpec: rt.FnSpec = {\n  name: \"addDataSource\",\n  wire: \"add_data_source\",\n  args: [\n    [\"code\", \"code\", true],\n    [\"dsrcId\", \"dsrc_id\", false],\n  ],\n};\n"),
+            "{ts}"
+        );
         assert!(
             ts.contains("@throws {@link SzConfigToolError} `code` one of: NOT_FOUND;"),
             "{ts}"
@@ -712,10 +903,8 @@ mod tests {
             ts.contains("export function listAll(config: string): string {"),
             "{ts}"
         );
-        assert!(
-            ts.contains("rt.callJson(\"list_all\", config, {});"),
-            "{ts}"
-        );
+        assert!(ts.contains("rt.callJson(listAllSpec, config);"), "{ts}");
+        assert!(ts.contains("  args: [],\n"), "{ts}");
     }
 
     #[test]
@@ -734,12 +923,12 @@ mod tests {
         let pair = typed_function(&func("add_it", vec![], Returns::ConfigAndJson));
         assert!(
             pair.contains(
-                "export function addIt(config: string): string {\n  return rt.callConfig(\"add_it\""
+                "export function addIt(config: string): string {\n  return rt.callConfig(addItSpec, config);"
             ),
             "{pair}"
         );
         assert!(
-            pair.contains("export function addItResult(config: string): string {\n  return rt.callJson(\"add_it\""),
+            pair.contains("export function addItResult(config: string): string {\n  return rt.callJson(addItResultSpec, config);"),
             "{pair}"
         );
         assert!(
@@ -753,10 +942,7 @@ mod tests {
         assert_eq!(shape(Returns::Int).0, "number");
         assert_eq!(shape(Returns::Unit).0, "void");
         let unit = typed_function(&func("check", vec![], Returns::Unit));
-        assert!(
-            unit.contains("  rt.callUnit(\"check\", config, {});"),
-            "{unit}"
-        );
+        assert!(unit.contains("  rt.callUnit(checkSpec, config);"), "{unit}");
     }
 
     #[test]
@@ -773,11 +959,15 @@ mod tests {
         assert!(ts.contains("readonly wasCreated: string;"), "{ts}");
         assert!(ts.contains("each value is JSON text"), "{ts}");
         assert!(
-            ts.contains("export function setPlan(config: string): string {\n  return rt.callConfig(\"set_plan\", config, {});"),
+            ts.contains("export function setPlan(config: string): string {\n  return rt.callConfig(setPlanSpec, config);"),
             "{ts}"
         );
         assert!(
-            ts.contains("export function setPlanResult(config: string): SetPlanRecord {\n  return rt.callNamed<SetPlanRecord>(\"set_plan\", config, {}, [[\"plan_id\", \"planId\"], [\"was_created\", \"wasCreated\"]]);"),
+            ts.contains("export function setPlanResult(config: string): SetPlanRecord {\n  return rt.callNamed<SetPlanRecord>(setPlanResultSpec, config, undefined, [[\"plan_id\", \"planId\"], [\"was_created\", \"wasCreated\"]]);"),
+            "{ts}"
+        );
+        assert!(
+            ts.contains("const setPlanResultSpec: rt.FnSpec = { ...setPlanSpec, name: \"setPlanResult\" };\n"),
             "{ts}"
         );
         let mut j = func("verify", vec![], Returns::Json);

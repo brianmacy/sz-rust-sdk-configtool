@@ -12,6 +12,7 @@ functions:
         semantics: Uppercased; an existing setting of that name is overwritten silently.
       - name: value
         type: json
+        json_type: any
         owned: true
         semantics: Stored VERBATIM as its typed JSON value (an integer stays an integer, a string a string); no validation.
     returns: config

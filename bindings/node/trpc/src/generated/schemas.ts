@@ -165,7 +165,7 @@ export const deleteDistinctCallElementInput = z.strictObject({
 export const addExpressionCallInput = z.strictObject({
   config: z.string(),
   efuncCode: z.string(),
-  elementList: z.json(),
+  elementList: z.array(z.strictObject({ "element": z.string(), "required": z.string(), "feature": z.string().optional() })),
   ftypeCode: z.string().optional(),
   felemCode: z.string().optional(),
   execOrder: z.union([z.int(), z.bigint()]).optional(),
@@ -400,7 +400,7 @@ export const renderConfigInput = z.strictObject({
 export const addFeatureInput = z.strictObject({
   config: z.string(),
   feature: z.string(),
-  elementList: z.json(),
+  elementList: z.array(z.union([z.string(), z.strictObject({ "element": z.string().optional(), "ELEMENT": z.string().optional(), "expressed": z.string().optional(), "EXPRESSED": z.string().optional(), "compared": z.string().optional(), "COMPARED": z.string().optional(), "display": z.string().optional(), "DISPLAY": z.string().optional(), "displaylevel": z.union([z.int(), z.bigint()]).optional(), "DISPLAYLEVEL": z.union([z.int(), z.bigint()]).optional(), "display_level": z.union([z.int(), z.bigint()]).optional(), "displaydelim": z.string().optional(), "DISPLAYDELIM": z.string().optional(), "display_delim": z.string().optional(), "derived": z.string().optional(), "DERIVED": z.string().optional() })])),
   class: z.string().optional(),
   behavior: z.string().optional(),
   candidates: z.string().optional(),
@@ -507,7 +507,7 @@ export const updateFeatureVersionInput = z.strictObject({
 /** Input of `addFragment`. */
 export const addFragmentInput = z.strictObject({
   config: z.string(),
-  fragmentConfig: z.json(),
+  fragmentConfig: z.strictObject({ "ERFRAG_CODE": z.string(), "ERFRAG_SOURCE": z.string(), "ERFRAG_ID": z.union([z.int(), z.bigint()]).optional(), "ERFRAG_DESC": z.json().optional(), "ERFRAG_DEPENDS": z.json().optional() }),
 });
 
 /** Input of `deleteFragment`. */
@@ -728,7 +728,7 @@ export const setGenericPlanInput = z.strictObject({
 export const addRuleInput = z.strictObject({
   config: z.string(),
   id: z.union([z.int(), z.bigint()]),
-  ruleConfig: z.json(),
+  ruleConfig: z.strictObject({ "ERRULE_CODE": z.string(), "QUAL_ERFRAG_CODE": z.string(), "DISQ_ERFRAG_CODE": z.string().optional(), "RESOLVE": z.string().optional(), "RELATE": z.string().optional(), "RTYPE_ID": z.union([z.int(), z.bigint()]).optional(), "ERRULE_TIER": z.union([z.int(), z.bigint()]).optional(), "ERRULE_ID": z.union([z.int(), z.bigint()]).optional() }),
 });
 
 /** Input of `deleteRule`. */
@@ -767,7 +767,7 @@ export const addSearchProfileInput = z.strictObject({
   genericPlan: z.string(),
   candidates: z.string().optional(),
   description: z.string().optional(),
-  elements: z.json().optional(),
+  elements: z.array(z.strictObject({ "feature": z.string(), "flag": z.enum(["Yes", "No", "Y", "N"]) })).optional(),
 });
 
 /** Input of `getSearchProfile`. */

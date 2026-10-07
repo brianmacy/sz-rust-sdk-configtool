@@ -1478,7 +1478,8 @@ public final class SzConfigTool {
      * element); "PARENT" (case-insensitive) stores BOM FTYPE_ID 0 (G2
      * PARENT_FEATURE_LINKED_FTYPE: the feature that triggered the call); otherwise a feature
      * code (case-insensitive) or NOT_FOUND. The element is NOT checked for membership in that
-     * feature. [] is allowed.
+     * feature. [] is allowed. Shape: <code>[{element: string, required: string, feature?:
+     * string}]</code>.
      * @param isVirtual <code>is_virtual</code> (str) Stored verbatim in IS_VIRTUAL (not validated or
      * normalized; the Rust <code>new()</code> default is "No").
      * @param options optional arguments ({@code null} = none); see {@link AddExpressionCallOptions}
@@ -1522,7 +1523,8 @@ public final class SzConfigTool {
      * element); "PARENT" (case-insensitive) stores BOM FTYPE_ID 0 (G2
      * PARENT_FEATURE_LINKED_FTYPE: the feature that triggered the call); otherwise a feature
      * code (case-insensitive) or NOT_FOUND. The element is NOT checked for membership in that
-     * feature. [] is allowed.
+     * feature. [] is allowed. Shape: <code>[{element: string, required: string, feature?:
+     * string}]</code>.
      * @param isVirtual <code>is_virtual</code> (str) Stored verbatim in IS_VIRTUAL (not validated or
      * normalized; the Rust <code>new()</code> default is "No").
      * @param options optional arguments ({@code null} = none); see {@link AddExpressionCallOptions}
@@ -3334,7 +3336,11 @@ public final class SzConfigTool {
      * default No). Any other item type is INVALID_INPUT. Element codes are uppercased; a code
      * not in CFG_FELEM is AUTO-CREATED (FELEM_ID max+1 floor 1000, DATA_TYPE string,
      * FELEM_DESC = code). The FBOM EXEC_ORDER is the item's 1-based position (per feature, not
-     * whole-table).
+     * whole-table). Shape: <code>[string | {element?: string, ELEMENT?: string, expressed?:
+     * string, EXPRESSED?: string, compared?: string, COMPARED?: string, display?: string,
+     * DISPLAY?: string, displaylevel?: int, DISPLAYLEVEL?: int, display_level?: int,
+     * displaydelim?: string, DISPLAYDELIM?: string, display_delim?: string, derived?: string,
+     * DERIVED?: string}]</code>.
      * @return the modified configuration JSON document (opaque)
      * @throws SzConfigToolException library reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, INVALID_INPUT, NOT_FOUND, INVALID_STRUCTURE; plus the universal INVALID_INPUT / MISSING_FIELD / INTERNAL wire errors
      */
@@ -3370,7 +3376,11 @@ public final class SzConfigTool {
      * default No). Any other item type is INVALID_INPUT. Element codes are uppercased; a code
      * not in CFG_FELEM is AUTO-CREATED (FELEM_ID max+1 floor 1000, DATA_TYPE string,
      * FELEM_DESC = code). The FBOM EXEC_ORDER is the item's 1-based position (per feature, not
-     * whole-table).
+     * whole-table). Shape: <code>[string | {element?: string, ELEMENT?: string, expressed?:
+     * string, EXPRESSED?: string, compared?: string, COMPARED?: string, display?: string,
+     * DISPLAY?: string, displaylevel?: int, DISPLAYLEVEL?: int, display_level?: int,
+     * displaydelim?: string, DISPLAYDELIM?: string, display_delim?: string, derived?: string,
+     * DERIVED?: string}]</code>.
      * @param options optional arguments ({@code null} = none); see {@link AddFeatureOptions}
      * @return the modified configuration JSON document (opaque)
      * @throws SzConfigToolException library reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, INVALID_INPUT, NOT_FOUND, INVALID_STRUCTURE; plus the universal INVALID_INPUT / MISSING_FIELD / INTERNAL wire errors
@@ -3888,7 +3898,8 @@ public final class SzConfigTool {
      * matched EXACTLY (case-sensitive), else INVALID_INPUT. A source without FRAGMENT[
      * (including "") is accepted unvalidated. ERFRAG_ID (integer, optional): absent or &lt;= 0
      * auto-allocates (max + 1, floor 1, so 1000 on the template); a taken id &gt; 0 is
-     * ALREADY_EXISTS. Any ERFRAG_DESC key is IGNORED.
+     * ALREADY_EXISTS. Any ERFRAG_DESC key is IGNORED. Shape: <code>{ERFRAG_CODE: string,
+     * ERFRAG_SOURCE: string, ERFRAG_ID?: int, ERFRAG_DESC?: any, ERFRAG_DEPENDS?: any}</code>.
      * @return the modified configuration JSON document (opaque); {@link #addFragmentResult} (same arguments) returns the record this operation produces
      * @throws SzConfigToolException library reason codes: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, INVALID_INPUT, INVALID_CONFIG, MISSING_SECTION; plus the universal INVALID_INPUT / MISSING_FIELD / INTERNAL wire errors
      */
@@ -3922,7 +3933,8 @@ public final class SzConfigTool {
      * matched EXACTLY (case-sensitive), else INVALID_INPUT. A source without FRAGMENT[
      * (including "") is accepted unvalidated. ERFRAG_ID (integer, optional): absent or &lt;= 0
      * auto-allocates (max + 1, floor 1, so 1000 on the template); a taken id &gt; 0 is
-     * ALREADY_EXISTS. Any ERFRAG_DESC key is IGNORED.
+     * ALREADY_EXISTS. Any ERFRAG_DESC key is IGNORED. Shape: <code>{ERFRAG_CODE: string,
+     * ERFRAG_SOURCE: string, ERFRAG_ID?: int, ERFRAG_DESC?: any, ERFRAG_DEPENDS?: any}</code>.
      * @return the record (e.g. the created row or ids) as JSON text
      * @throws SzConfigToolException library reason codes: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, INVALID_INPUT, INVALID_CONFIG, MISSING_SECTION; plus the universal INVALID_INPUT / MISSING_FIELD / INTERNAL wire errors
      */
@@ -5932,7 +5944,10 @@ public final class SzConfigTool {
      * INVALID_INPUT, and may not both be Yes (INVALID_INPUT). RESOLVE=Yes requires a non-zero
      * ERRULE_TIER (INVALID_INPUT) and forces RTYPE_ID to 1; RELATE=Yes requires RTYPE_ID in
      * 2,3,4 (INVALID_INPUT). RTYPE_ID defaults to 1; ERRULE_TIER defaults to null. A
-     * non-string / non-integer value for any of these keys is treated as absent.
+     * non-string / non-integer value for any of these keys is treated as absent. Shape:
+     * <code>{ERRULE_CODE: string, QUAL_ERFRAG_CODE: string, DISQ_ERFRAG_CODE?: string,
+     * RESOLVE?: string, RELATE?: string, RTYPE_ID?: int, ERRULE_TIER?: int, ERRULE_ID?:
+     * int}</code>.
      * @return the modified configuration JSON document (opaque); {@link #addRuleResult} (same arguments) returns the record this operation produces
      * @throws SzConfigToolException library reason codes: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, NOT_FOUND, INVALID_INPUT, MISSING_SECTION; plus the universal INVALID_INPUT / MISSING_FIELD / INTERNAL wire errors
      */
@@ -5972,7 +5987,10 @@ public final class SzConfigTool {
      * INVALID_INPUT, and may not both be Yes (INVALID_INPUT). RESOLVE=Yes requires a non-zero
      * ERRULE_TIER (INVALID_INPUT) and forces RTYPE_ID to 1; RELATE=Yes requires RTYPE_ID in
      * 2,3,4 (INVALID_INPUT). RTYPE_ID defaults to 1; ERRULE_TIER defaults to null. A
-     * non-string / non-integer value for any of these keys is treated as absent.
+     * non-string / non-integer value for any of these keys is treated as absent. Shape:
+     * <code>{ERRULE_CODE: string, QUAL_ERFRAG_CODE: string, DISQ_ERFRAG_CODE?: string,
+     * RESOLVE?: string, RELATE?: string, RTYPE_ID?: int, ERRULE_TIER?: int, ERRULE_ID?:
+     * int}</code>.
      * @return the record (e.g. the created row or ids) as JSON text
      * @throws SzConfigToolException library reason codes: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, NOT_FOUND, INVALID_INPUT, MISSING_SECTION; plus the universal INVALID_INPUT / MISSING_FIELD / INTERNAL wire errors
      */
@@ -6207,6 +6225,7 @@ public final class SzConfigTool {
          * VALIDATION_ERRORS (field "overrides", DUPLICATE); a flag other than Yes/Y/No/N (trimmed,
          * case-insensitive) is VALIDATION_ERRORS (field "overrides", OUT_OF_DOMAIN). Stored in
          * FTYPE_OVERRIDES as "[{&lt;ftypeId&gt;,&lt;Y|N&gt;},...]" sorted by FTYPE_ID, or "[]".
+         * Shape: <code>[{feature: string, flag: "Yes"|"No"|"Y"|"N"}]</code>.
          *
          * @param elements the value
          * @return this builder

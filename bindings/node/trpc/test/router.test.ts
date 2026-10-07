@@ -126,6 +126,48 @@ describe("procedures", () => {
   });
 });
 
+describe("strict structured inputs (issue #76)", () => {
+  const profile = { config: fixture, code: "P2", genericPlan: "SEARCH" };
+
+  test("nested unknown keys are rejected by Zod (strict element objects)", async () => {
+    const inputs: Array<Record<string, unknown>> = [
+      { config: fixture, feature: "F1", elementList: [{ element: "E1", bogus: 1 }] },
+      { config: fixture, id: 0, ruleConfig: { ERRULE_CODE: "R", QUAL_ERFRAG_CODE: "SAME_NAME", TIER: 1 } },
+      { ...profile, elements: [{ feature: "NAME", flag: "Yes", extra: true }] },
+    ];
+    const procs = ["addFeature", "addRule", "addSearchProfile"];
+    for (const [i, input] of inputs.entries()) {
+      const err = await rejects(caller[procs[i]!]!(input as Record<string, Json>));
+      assert.equal(err.code, "BAD_REQUEST", procs[i]);
+      assert.equal(errorData(err), null, `${procs[i]}: rejected by Zod, not the library`);
+    }
+  });
+
+  test("typed structures: enum, array and element shapes are checked by Zod", async () => {
+    for (const elements of [[{ feature: "NAME", flag: "Maybe" }], '[{"feature":"NAME","flag":"Y"}]', [{ feature: "NAME" }]]) {
+      const err = await rejects(caller["addSearchProfile"]!({ ...profile, elements } as Record<string, Json>));
+      assert.equal(err.code, "BAD_REQUEST", JSON.stringify(elements));
+      assert.equal(errorData(err), null, "rejected by Zod, not the library");
+    }
+    const ok = await caller["addSearchProfile"]!({ ...profile, elements: [{ feature: "NAME", flag: "N" }] });
+    assert.equal(ok, sz.addSearchProfile(fixture, { code: "P2", genericPlan: "SEARCH", elements: [{ feature: "NAME", flag: "N" }] }));
+  });
+
+  test("binding errors reach the client with JS option names", async () => {
+    const err = await rejects(
+      caller["addExpressionCall"]!({
+        config: fixture,
+        efuncCode: "PARSE_NAME",
+        elementList: [{ element: "E\uD800", required: "Yes" }],
+        isVirtual: "No",
+      }),
+    );
+    assert.equal(err.code, "BAD_REQUEST");
+    assert.equal(errorData(err)?.reasonCode, "INVALID_INPUT");
+    assert.match(err.message, /^args\.elementList\[0\]\.element \(element_list\[0\]\.element\) contains/);
+  });
+});
+
 describe("error mapping", () => {
   // Steps whose function has no procedure (wire-only) are skipped.
   // The caller is a Proxy (any key is callable), so filter on the router.

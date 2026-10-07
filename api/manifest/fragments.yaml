@@ -9,6 +9,15 @@ functions:
     args:
       - name: fragment_config
         type: json
+        # ERFRAG_DESC / ERFRAG_DEPENDS are accepted (and ignored) so a stored
+        # CFG_ERFRAG row can be passed back.
+        json_type:
+          object:
+            ERFRAG_CODE: string
+            ERFRAG_SOURCE: string
+            ERFRAG_ID?: int
+            ERFRAG_DESC?: any
+            ERFRAG_DEPENDS?: any
         semantics: >-
           Object with on-disk keys. ERFRAG_CODE (string, required, else
           MISSING_FIELD) is uppercased for storage and the duplicate check

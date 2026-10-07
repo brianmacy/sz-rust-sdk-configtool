@@ -320,6 +320,9 @@ fn arg_doc(a: &Arg) -> String {
     if let Some(s) = &a.semantics {
         parts.push(s.trim().to_string());
     }
+    if let Some(shape) = a.shape() {
+        parts.push(format!("Shape: `{shape}`."));
+    }
     if let Some(d) = &a.default {
         parts.push(format!("Library default when absent: {d}."));
     }
@@ -857,6 +860,7 @@ mod tests {
             positional: false,
             owned: false,
             rust_convert: None,
+            json_type: None,
         }
     }
 

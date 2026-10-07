@@ -388,6 +388,9 @@ fn arg_doc(a: &Arg) -> String {
             }
         )
     })];
+    if let Some(shape) = a.shape() {
+        parts.push(format!("Shape: ``{shape}``."));
+    }
     if py_name(&a.name) != a.name {
         parts.push(format!("Wire name ``{}``.", a.name));
     }
@@ -634,6 +637,7 @@ mod tests {
             positional: false,
             owned: false,
             rust_convert: None,
+            json_type: None,
         }
     }
 

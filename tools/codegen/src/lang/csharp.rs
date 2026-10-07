@@ -394,6 +394,9 @@ fn param_doc(a: &Arg, ty: ArgType) -> String {
         text.push(' ');
         text.push_str(s.trim());
     }
+    if let Some(shape) = a.shape() {
+        let _ = write!(text, " Shape: `{shape}`.");
+    }
     text.trim().to_string()
 }
 
@@ -642,6 +645,7 @@ mod tests {
             positional: false,
             owned: false,
             rust_convert: None,
+            json_type: None,
         }
     }
 
