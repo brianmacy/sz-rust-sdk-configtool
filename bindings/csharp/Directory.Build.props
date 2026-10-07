@@ -7,7 +7,7 @@
     <!-- Package/assembly version. Must equal the native library version
          (SzConfigTool_getLibraryVersion); a test enforces this. Release
          builds may override with -p:Version=<x.y.z>. -->
-    <Version>4.4.0-1</Version>
+    <Version>4.4.0-2</Version>
     <Authors>Brian Macy</Authors>
     <RepositoryUrl>https://github.com/brianmacy/sz-rust-sdk-configtool</RepositoryUrl>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>

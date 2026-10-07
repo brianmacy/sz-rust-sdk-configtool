@@ -29,8 +29,8 @@ features = ["pyo3/extension-module"]
 include = [{ path = "python/sz_configtool/py.typed", format = ["sdist", "wheel"] }]
 
 # No maturin-generated SBOM in the wheel (maturin >= 1.10 embeds one whose
-# bom-refs carry absolute `path+file://<workspace>` URLs). The crate's CycloneDX
-# SBOM is generated separately by packaging/build-native.sh.
+# bom-refs carry absolute `path+file://<workspace>` URLs). Releases carry no
+# standalone SBOMs; the dependency list is Cargo.lock at the release tag.
 [tool.maturin.sbom]
 rust = false
 

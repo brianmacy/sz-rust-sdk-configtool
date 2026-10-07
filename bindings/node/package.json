@@ -1,6 +1,6 @@
 {
   "name": "sz-configtool",
-  "version": "4.4.0-1",
+  "version": "4.4.0-2",
   "description": "Typed Node.js/TypeScript binding (napi-rs) for manipulating Senzing configuration JSON (unofficial)",
   "license": "Apache-2.0",
   "private": true,

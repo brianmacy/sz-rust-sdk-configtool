@@ -7,7 +7,7 @@
   <groupId>io.github.brianmacy</groupId>
   <artifactId>sz-configtool</artifactId>
   <!-- Keep equal to [workspace.package] version in the root Cargo.toml (a test checks). -->
-  <version>4.4.0-1</version>
+  <version>4.4.0-2</version>
   <packaging>jar</packaging>
   <name>sz-configtool (Java)</name>
   <description>Unofficial Java binding (JNI) of the Senzing configuration library sz_configtool_lib</description>
