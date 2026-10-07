@@ -221,6 +221,11 @@ if(SZCONFIGTOOL_BUILD_EXAMPLES)
     add_executable(szconfigtool_quickstart examples/quickstart/quickstart.cpp)
     szconfigtool_harden(szconfigtool_quickstart)
     target_link_libraries(szconfigtool_quickstart PRIVATE SzConfigTool::szconfigtool)
+    if(WIN32 AND SZCONFIGTOOL_SHARED_LIBRARY AND NOT SZCONFIGTOOL_LINK_STATIC)
+        add_custom_command(TARGET szconfigtool_quickstart POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${SZCONFIGTOOL_SHARED_LIBRARY}" "$<TARGET_FILE_DIR:szconfigtool_quickstart>")
+    endif()
 endif()
 
 if(SZCONFIGTOOL_BUILD_TESTS)

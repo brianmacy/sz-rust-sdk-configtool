@@ -29,6 +29,14 @@ set(SZCONFIGTOOL_TEST_ENV
 function(szconfigtool_test_exe name iface)
     add_executable(${name} ${SZCONFIGTOOL_TEST_SOURCES})
     szconfigtool_harden(${name})
+    # Windows has no rpath: a test linked to the DLL must find it next to the exe.
+    # This post-build step is registered BEFORE gtest_discover_tests, which runs
+    # the executable at build time (exit 0xc0000135 = DLL not found otherwise).
+    if(WIN32 AND ARGC GREATER 2 AND ARGV2 STREQUAL "SHARED")
+        add_custom_command(TARGET ${name} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${SZCONFIGTOOL_SHARED_LIBRARY}" "$<TARGET_FILE_DIR:${name}>")
+    endif()
     target_include_directories(${name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_compile_definitions(${name} PRIVATE
         SZCONFIGTOOL_TEST_WORKSPACE_ROOT="${SZCONFIGTOOL_REPO_ROOT}"
@@ -40,7 +48,7 @@ endfunction()
 
 if(SZCONFIGTOOL_SHARED_LIBRARY)
     szconfigtool_interface(szconfigtool_shared_for_tests szconfigtool_native_shared)
-    szconfigtool_test_exe(szconfigtool_tests szconfigtool_shared_for_tests)
+    szconfigtool_test_exe(szconfigtool_tests szconfigtool_shared_for_tests SHARED)
 endif()
 if(SZCONFIGTOOL_STATIC_LIBRARY)
     szconfigtool_interface(szconfigtool_static_for_tests szconfigtool_native_static)

@@ -40,7 +40,8 @@ if [[ ${TRPC} -eq 1 ]]; then
     (cd "${NODE_DIR}/trpc" && npm ci --no-audit --no-fund && npm run build &&
         SZ_CONFIGTOOL_NATIVE_PATH="$(native_path "${node_file}")" npm test)
     tgz="$(cd "${NODE_DIR}/trpc" && npm pack --silent --pack-destination "$(native_path "${out}")" | tail -1)"
-    mv "${out}/${tgz}" "${out}/sz-configtool-trpc-${VERSION}.tgz"
+    # npm already names the tarball <name>-<version>.tgz; GNU mv fails on same-file moves.
+    [[ "${tgz}" == "sz-configtool-trpc-${VERSION}.tgz" ]] || mv "${out}/${tgz}" "${out}/sz-configtool-trpc-${VERSION}.tgz"
     log "wrote ${out}/sz-configtool-trpc-${VERSION}.tgz"
     exit 0
 fi
@@ -54,5 +55,5 @@ cp "${node_file}" "${pkg}/"
 cp "${node_file}" "${out}/"
 tgz="$(cd "${pkg}" && npm pack --silent --pack-destination "$(native_path "${out}")" | tail -1)"
 final="sz-configtool-node-${VERSION}-$(tcfg "${TARGET}" os)-$(tcfg "${TARGET}" arch).tgz"
-mv "${out}/${tgz}" "${out}/${final}"
+[[ "${tgz}" == "${final}" ]] || mv "${out}/${tgz}" "${out}/${final}"
 log "wrote ${out}/${final}"
