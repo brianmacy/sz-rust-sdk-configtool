@@ -5,9 +5,9 @@
 # wheel: Senzing's Python SDK is Linux only, so macOS / Windows are refused.
 # Output: ${SZ_DIST_DIR}/<target>/out/sz_configtool-<pep440-version>-cp310-abi3-<platform>.whl
 # (<pep440-version>: lib/common.sh pep440_version, e.g. 4.4.0.post1 for 4.4.0-1, 4.5.0rc1 for 4.5.0-rc.1)
-# No SBOM is embedded (bindings/python/pyproject.toml `[tool.maturin.sbom] rust = false`);
-# the crate's CycloneDX SBOM ships separately (build-native.sh). check-no-build-paths.sh
-# scans the wheel.
+# No SBOM is embedded (bindings/python/pyproject.toml `[tool.maturin.sbom] rust = false`)
+# and none is a release asset (Cargo.lock at the tag lists the dependencies).
+# check-no-build-paths.sh scans the wheel.
 # The extension inside the wheel is also extracted to native/python/ so the
 # export / glibc / build-path gates can inspect it.
 #

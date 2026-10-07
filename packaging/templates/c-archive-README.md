@@ -50,6 +50,7 @@ Redistributable (it imports only Windows system DLLs). `SzConfigTool_static.lib`
 is built for the dynamic CRT (`/MD`), like most C/C++ projects.
 
 Verify this archive against the release's `SHA256SUMS` and build provenance:
+`sha256sum -c --ignore-missing SHA256SUMS` and
 `gh attestation verify <archive> --repo brianmacy/sz-rust-sdk-configtool`.
 
 The binaries are not code-signed (no Authenticode, no macOS codesign or

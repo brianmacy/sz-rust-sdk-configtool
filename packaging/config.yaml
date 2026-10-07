@@ -66,8 +66,8 @@ policy:
 # (cargo-zigbuild accepts the .<glibc> suffix); `rust_target` is the bare
 # triple (target/<triple>/ output directory, rustup target).
 # `python_wheel`: "true" only on the Linux legs. Senzing's Python SDK is Linux
-# only (https://www.senzing.com/docs/release/4/4_0_hw_sw), so the Python wheel,
-# its SBOM and the Python smoke tests exist for Linux targets only;
+# only (https://www.senzing.com/docs/release/4/4_0_hw_sw), so the Python wheel
+# and the Python smoke tests exist for Linux targets only;
 # `python_compat` is the manylinux tag of those wheels.
 targets:
   linux-x64:

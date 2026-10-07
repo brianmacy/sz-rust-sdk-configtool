@@ -141,7 +141,7 @@ shared_lib_name() {
 #   native/c/{lib,bin,include}   C ABI (shared + static + header)
 #   native/jni/                  JNI library
 #   native/node/                 sz-configtool.<napi_tag>.node
-#   sbom/                        CycloneDX SBOMs
+#   sbom/                        CycloneDX SBOM of the C ABI (C archive only)
 #   out/                         release assets for this target
 target_stage() { echo "${SZ_DIST_DIR}/$1"; }
 target_out() { echo "${SZ_DIST_DIR}/$1/out"; }

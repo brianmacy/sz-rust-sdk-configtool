@@ -34,8 +34,9 @@ pip install ./sz_configtool-<version>-cp310-abi3-manylinux_2_34_x86_64.whl    # 
 
 `<version>` is the PEP 440 form of the release version (`4.4.0.post1` for
 `v4.4.0-1`, `4.5.0rc1` for `v4.5.0-rc.1`). Verify the wheel with the release's `SHA256SUMS`
-and attestation (root README, "Pre-built packages"); its CycloneDX SBOM is the
-release asset `sz-configtool-python-<release-version>-linux-<x64|arm64>.cdx.json`.
+and attestation (root README, "Pre-built packages"): `sha256sum -c --ignore-missing SHA256SUMS`
+and `gh attestation verify <wheel> --repo brianmacy/sz-rust-sdk-configtool`. Its dependency
+list is `Cargo.lock` at the release tag (no SBOM asset is published).
 
 ## Build from source
 

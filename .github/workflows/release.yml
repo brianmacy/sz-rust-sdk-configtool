@@ -81,7 +81,7 @@ jobs:
         run: packaging/release-target.sh "${{ matrix.target }}" build
       - name: Gates (exports, linkage, glibc, build paths, C tests)
         run: packaging/release-target.sh "${{ matrix.target }}" gates
-      - name: Package (C archive, Linux wheel, npm tarball, C++ package + ctest, SBOMs)
+      - name: Package (C archive + embedded SBOM, Linux wheel, npm tarball, C++ package + ctest)
         run: packaging/release-target.sh "${{ matrix.target }}" package
       - name: Gates on packaged artifacts
         run: packaging/release-target.sh "${{ matrix.target }}" gates
@@ -93,7 +93,6 @@ jobs:
           path: |
             target/dist/${{ matrix.target }}/out
             target/dist/${{ matrix.target }}/native
-            target/dist/${{ matrix.target }}/sbom
           if-no-files-found: error
           retention-days: 14
 
@@ -153,11 +152,12 @@ jobs:
       # Version for the asset-set gate and the release notes (cargo metadata).
       - name: Install pinned Rust (rust-toolchain.toml)
         run: rustup toolchain install --no-self-update
-      # out/ of every target already holds its per-artifact SBOMs
-      # (packaging/package-sboms.sh), so they are release assets, in
-      # SHA256SUMS and covered by the attestation. Python wheels (and their
-      # SBOMs) come from the Linux legs only (config.yaml python_wheel);
-      # check-release-assets.sh fails on any missing or extra asset.
+      # No standalone SBOM (the C archive embeds its own under sbom/) and no
+      # attestation bundle is ever a release asset. Python wheels come from
+      # the Linux legs only (config.yaml python_wheel).
+      # check-release-assets.sh fails on any missing or extra asset, and
+      # explicitly on any *.cdx.json / *.intoto.jsonl
+      # (self-test: gates/test-release-assets.sh, run in ci.yml).
       - name: Collect release assets + SHA256SUMS
         run: |
           mkdir -p release
@@ -220,11 +220,28 @@ jobs:
         with:
           name: release-notes
           path: notes
-      - name: Verify SHA256SUMS
+      # No checkout here, so not check-release-assets.sh (assemble ran it):
+      # re-check that release/ is exactly SHA256SUMS + the files it lists,
+      # with no SBOM or attestation bundle among them.
+      - name: Verify SHA256SUMS and the asset set
         working-directory: release
-        run: sha256sum -c --strict SHA256SUMS
+        run: |
+          sha256sum -c --strict SHA256SUMS
+          listed="$(sed 's/^[0-9a-f]\{64\} [ *]//' SHA256SUMS | LC_ALL=C sort)"
+          present="$(find . -mindepth 1 ! -name SHA256SUMS -printf '%P\n' | LC_ALL=C sort)"
+          if [[ "${listed}" != "${present}" ]]; then
+            echo "::error::release/ is not exactly the files in SHA256SUMS"
+            diff <(echo "${listed}") <(echo "${present}") || true
+            exit 1
+          fi
+          if grep -E '\.(cdx\.json|intoto\.jsonl)$' <<<"${present}"; then
+            echo "::error::SBOM / attestation bundle files must never be release assets"
+            exit 1
+          fi
+      # The attestation is stored in GitHub's attestation store (verify:
+      # `gh attestation verify <file> --repo <owner>/<repo>`); its local
+      # bundle file (outputs.bundle-path) is deliberately NOT published.
       - name: Build provenance attestation (every asset in SHA256SUMS)
-        id: attest
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-checksums: release/SHA256SUMS
@@ -236,9 +253,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
         run: |
-          cp "${BUNDLE}" "release/sz-configtool-${TAG#v}.intoto.jsonl"
           # vX.Y.Z-N (release counter) is a full release; only -rc.N /
           # -alpha.N / -beta.N are GitHub prereleases (check-versions.sh
           # already rejected every other form).

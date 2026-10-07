@@ -109,18 +109,24 @@ system, or depend on `sz_configtool_lib` directly).
 | Java | `sz-configtool-<v>.jar` (natives for all platforms inside) |
 | .NET | `Sz.ConfigTool.<v>.nupkg` (natives for all platforms inside) |
 | Node.js | `sz-configtool-node-<v>-<os>-<arch>.tgz` (`npm install` it); tRPC router `sz-configtool-trpc-<v>.tgz` |
-| SBOMs (CycloneDX) | `sz-configtool[-jni\|-node]-<v>-<os>-<arch>.cdx.json`; `sz-configtool-python-<v>-linux-<arch>.cdx.json` (Linux only) |
+| Checksums | `SHA256SUMS` (every asset above) |
+
+No SBOM is published as a separate asset: the C archive embeds the CycloneDX
+SBOM of the C ABI (`sbom/sz-configtool-c.cdx.json`), and the full dependency
+list of every artifact is `Cargo.lock` at the release tag.
 
 Verify a download against the release's `SHA256SUMS` and its GitHub build
 provenance attestation:
 
 ```bash
-sha256sum -c --ignore-missing SHA256SUMS            # macOS: shasum -a 256 -c --ignore-missing SHA256SUMS
+sha256sum -c SHA256SUMS                  # every asset downloaded
+sha256sum -c --ignore-missing SHA256SUMS # only some assets downloaded (macOS: shasum -a 256 -c --ignore-missing SHA256SUMS)
 gh attestation verify sz-configtool-<v>-linux-x64.tar.gz --repo brianmacy/sz-rust-sdk-configtool
-# offline, with the bundle attached to the release:
-gh attestation verify sz-configtool-<v>-linux-x64.tar.gz --repo brianmacy/sz-rust-sdk-configtool \
-  --bundle sz-configtool-<v>.intoto.jsonl
 ```
+
+`gh attestation verify` checks the GitHub build-provenance attestation online
+(GitHub's attestation store; no bundle file is published). Every file listed
+in `SHA256SUMS` is an attested subject.
 
 The binaries are **not code-signed** (no Authenticode on Windows, no macOS
 codesign/notarization); verify them as above. On macOS, a file downloaded with
