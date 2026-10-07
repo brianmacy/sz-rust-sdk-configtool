@@ -218,6 +218,8 @@ pub enum JsonType {
     Object(Vec<JsonField>),
     /// One of the alternatives (each a different JSON kind).
     OneOf(Vec<JsonType>),
+    /// `T` or JSON `null` (the library reads null as absent).
+    Nullable(Box<JsonType>),
 }
 
 /// One field of a [`JsonType::Object`] (YAML key `name`, or `name?` when optional).
@@ -278,6 +280,7 @@ impl JsonType {
                 .collect::<Result<_, _>>()
                 .map(Self::Enum),
             "array" => Ok(Self::Array(Box::new(Self::from_value(body)?))),
+            "nullable" => Ok(Self::Nullable(Box::new(Self::from_value(body)?))),
             "one_of" => list("one_of")?
                 .iter()
                 .map(Self::from_value)
@@ -301,7 +304,7 @@ impl JsonType {
                 .collect::<Result<_, String>>()
                 .map(Self::Object),
             other => Err(format!(
-                "json_type: unknown tag '{other}' (enum, array, object, one_of)"
+                "json_type: unknown tag '{other}' (enum, array, object, one_of, nullable)"
             )),
         }
     }
@@ -315,6 +318,7 @@ impl JsonType {
             Self::Bool => Value::from("bool"),
             Self::Enum(values) => serde_json::json!({ "enum": values }),
             Self::Array(item) => serde_json::json!({ "array": item.to_value() }),
+            Self::Nullable(inner) => serde_json::json!({ "nullable": inner.to_value() }),
             Self::OneOf(alts) => {
                 let alts: Vec<Value> = alts.iter().map(Self::to_value).collect();
                 serde_json::json!({ "one_of": alts })
@@ -335,7 +339,7 @@ impl JsonType {
             Self::Bool => Some(JsonKind::Bool),
             Self::Array(_) => Some(JsonKind::Array),
             Self::Object(_) => Some(JsonKind::Object),
-            Self::Any | Self::OneOf(_) => None,
+            Self::Any | Self::OneOf(_) | Self::Nullable(_) => None,
         }
     }
 
@@ -351,6 +355,7 @@ impl JsonType {
                 .as_array()
                 .is_some_and(|items| items.iter().all(|i| item.matches(i))),
             Self::OneOf(alts) => alts.iter().any(|a| a.matches(v)),
+            Self::Nullable(inner) => v.is_null() || inner.matches(v),
             Self::Object(fields) => v.as_object().is_some_and(|obj| {
                 obj.keys().all(|k| fields.iter().any(|f| &f.name == k))
                     && fields.iter().all(|f| match obj.get(&f.name) {
@@ -375,6 +380,7 @@ impl JsonType {
                 .collect::<Vec<_>>()
                 .join("|"),
             Self::Array(item) => format!("[{}]", item.describe()),
+            Self::Nullable(inner) => format!("{}|null", inner.describe()),
             Self::OneOf(alts) => alts
                 .iter()
                 .map(Self::describe)
@@ -693,6 +699,17 @@ mod json_type_tests {
     }
 
     #[test]
+    fn test_nullable_round_trips_matches_and_describes() {
+        let v = json!({"nullable": {"enum": ["A"]}});
+        let t = parse(v.clone());
+        assert_eq!(t.to_value(), v);
+        assert_eq!(t.kind(), None);
+        assert_eq!(t.describe(), "\"A\"|null");
+        assert!(t.matches(&json!(null)) && t.matches(&json!("A")));
+        assert!(!t.matches(&json!("B")));
+    }
+
+    #[test]
     fn test_syntax_errors_name_json_type() {
         for (bad, want) in [
             (json!(1), "expected a type name or a one-key map"),
@@ -706,6 +723,7 @@ mod json_type_tests {
             (json!({"array": "float"}), "unknown type 'float'"),
             (json!({"object": {"a": "float"}}), "unknown type 'float'"),
             (json!({"one_of": ["float"]}), "unknown type 'float'"),
+            (json!({"nullable": "float"}), "unknown type 'float'"),
         ] {
             let err = JsonType::from_value(&bad).expect_err("rejected");
             assert!(err.starts_with("json_type: "), "{err}");

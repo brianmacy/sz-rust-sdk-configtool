@@ -299,6 +299,7 @@ pub fn ts_json_type(t: &JsonType) -> String {
             .collect::<Vec<_>>()
             .join(" | "),
         JsonType::Array(item) => format!("ReadonlyArray<{}>", ts_json_type(item)),
+        JsonType::Nullable(inner) => format!("{} | null", ts_json_type(inner)),
         JsonType::OneOf(alts) => alts
             .iter()
             .map(ts_json_type)
@@ -330,6 +331,7 @@ pub fn runtime_shape(t: &JsonType) -> String {
             format!("{{ enum: [{}] }}", values.join(", "))
         }
         JsonType::Array(item) => format!("{{ array: {} }}", runtime_shape(item)),
+        JsonType::Nullable(inner) => format!("{{ nullable: {} }}", runtime_shape(inner)),
         JsonType::OneOf(alts) => {
             let alts: Vec<String> = alts.iter().map(runtime_shape).collect();
             format!("{{ oneOf: [{}] }}", alts.join(", "))
@@ -562,6 +564,7 @@ pub fn zod_json_type(t: &JsonType) -> String {
             format!("z.enum([{}])", values.join(", "))
         }
         JsonType::Array(item) => format!("z.array({})", zod_json_type(item)),
+        JsonType::Nullable(inner) => format!("{}.nullable()", zod_json_type(inner)),
         JsonType::OneOf(alts) => {
             let alts: Vec<String> = alts.iter().map(zod_json_type).collect();
             format!("z.union([{}])", alts.join(", "))

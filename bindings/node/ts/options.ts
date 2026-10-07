@@ -21,7 +21,8 @@ export type Shape =
   | { readonly enum: readonly string[] }
   | { readonly array: Shape }
   | { readonly object: Readonly<Record<string, Shape>> }
-  | { readonly oneOf: readonly Shape[] };
+  | { readonly oneOf: readonly Shape[] }
+  | { readonly nullable: Shape };
 
 /** One option: `[jsName, wireName, required, shape?]`. */
 export type ArgSpec = readonly [js: string, wire: string, required: boolean, shape?: Shape];
@@ -97,7 +98,10 @@ export function closest(key: string, valid: readonly string[]): string | undefin
 
 /** Reject keys of `obj` not in `valid` (`noun` = option | key; `where` = context). */
 function checkKeys(obj: object, valid: readonly string[], noun: string, where: string): void {
-  const unknown = Object.keys(obj).filter((k) => !valid.includes(k));
+  // An undefined-valued key is absent (dropped on the wire), never unknown.
+  const unknown = Object.entries(obj)
+    .filter(([k, v]) => v !== undefined && !valid.includes(k))
+    .map(([k]) => k);
   if (unknown.length === 0) return;
   const hints = unknown.map((k) => [k, closest(k, valid)] as const);
   const list = `valid ${noun}s: ${valid.join(", ")}`;
@@ -164,6 +168,10 @@ function checkShape(fn: string, path: string, v: unknown, shape: Shape): void {
     checkObject(fn, path, v as Record<string, unknown>, shape.object);
     return;
   }
+  if ("nullable" in shape) {
+    if (v !== null) checkShape(fn, path, v, shape.nullable);
+    return;
+  }
   const alt = shape.oneOf.find((s) => shapeKind(s) === valueKind(v));
   if (alt === undefined) {
     const words = shape.oneOf.map((s) => KIND_WORDS[shapeKind(s)]);
@@ -225,27 +233,35 @@ export function wireArgs(spec: FnSpec, options: unknown): Record<string, unknown
   return out;
 }
 
-/** Codes whose message may name an argument (translated to JS names). */
-const NAMING_CODES: ReadonlySet<string> = new Set(["MISSING_FIELD", "INVALID_INPUT"]);
+/** The one message form whose identifiers are argument names. */
+const MISSING_PREFIX = "Missing required field: ";
+
+/** A wire argument name with an optional index/field path: `[name, path]`. */
+const WIRE_ITEM = /^([a-z0-9_]+)((?:\[\d+\]|\.[A-Za-z_][A-Za-z0-9_]*)*)$/;
 
 /**
- * Rewrite whole-token wire names (optionally quoted, with an index/field
- * path) to the JS name; the first occurrence of each also keeps the wire
+ * Rewrite the comma-separated names of a `Missing required field: a, b`
+ * message to the JS names; the first occurrence of each also keeps the wire
  * spelling in parentheses: `generic_plan` -> `genericPlan (generic_plan)`.
+ * Nothing else is touched (in particular never a quoted user value).
  */
 function translateMessage(names: ReadonlyMap<string, string>, message: string): string {
-  const alts = [...names.keys()].sort((a, b) => b.length - a.length).join("|");
-  const pattern = new RegExp(
-    `(^|[^A-Za-z0-9_'"])(['"]?)(${alts})((?:\\[\\d+\\]|\\.[A-Za-z_][A-Za-z0-9_]*)*)\\2(?![A-Za-z0-9_])`,
-    "g",
-  );
+  if (!message.startsWith(MISSING_PREFIX)) return message;
   const seen = new Set<string>();
-  return message.replace(pattern, (_m, pre: string, q: string, wire: string, path: string) => {
-    const first = !seen.has(wire);
-    seen.add(wire);
-    const note = first ? ` (${wire}${path})` : "";
-    return `${pre}${q}${names.get(wire)!}${path}${q}${note}`;
-  });
+  const items = message
+    .slice(MISSING_PREFIX.length)
+    .split(", ")
+    .map((item) => {
+      const m = WIRE_ITEM.exec(item);
+      const js = m === null ? undefined : names.get(m[1]!);
+      if (js === undefined) return item;
+      const wire = m![1]!;
+      const path = m![2]!;
+      const first = !seen.has(wire);
+      seen.add(wire);
+      return `${js}${path}${first ? ` (${item})` : ""}`;
+    });
+  return MISSING_PREFIX + items.join(", ");
 }
 
 /** Translate `failures[].field` values naming a wire arg (or a path under one). */
@@ -273,14 +289,15 @@ function translateDetails(names: ReadonlyMap<string, string>, details: string): 
 
 /**
  * `err` with wire argument names translated to `spec`'s JS option names
- * (MISSING_FIELD / INVALID_INPUT messages and validation `details`), the
+ * (the names of a `Missing required field:` message and validation
+ * `details` fields), the
  * original kept as `cause`; anything else is returned unchanged.
  */
 export function translateError<T>(spec: FnSpec, err: T): T | SzConfigToolError {
   if (!(err instanceof SzConfigToolError)) return err;
   const names = new Map(spec.args.filter(([js, wire]) => js !== wire).map(([js, wire]) => [wire, js]));
   if (names.size === 0) return err;
-  const message = NAMING_CODES.has(err.code) ? translateMessage(names, err.message) : err.message;
+  const message = translateMessage(names, err.message);
   const details = err.details === undefined ? undefined : translateDetails(names, err.details);
   if (message === err.message && details === err.details) return err;
   return new SzConfigToolError(err.code, message, details, { cause: err });

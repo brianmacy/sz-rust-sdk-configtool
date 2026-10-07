@@ -68,6 +68,12 @@ sz_configtool_lib (pure Rust)
   function named like another's companion. The tRPC router has a procedure
   per typed function: config-returning ones are mutations, companions are
   queries.
+  **Warning:** the companion RE-RUNS the operation (a second run, same
+  cost), so call it with the SAME input config you gave the primary, never
+  the config the primary returned. On the modified config an `add*`
+  companion fails with `ALREADY_EXISTS` (e.g. `addAttributeResult`), a
+  `delete*` companion with `NOT_FOUND` (e.g. `deleteStandardizeFunctionResult`),
+  and `setGenericPlanResult` silently reports `wasCreated` = `false`.
 * JSON results follow the library's response shape convention (repo
   `CLAUDE.md`; summary in `api/manifest/schema.md`, Wire convention): `get_*`
   return the stored row (except `get_feature`, `get_element`, `get_fragment`,
@@ -100,9 +106,10 @@ sz_configtool_lib (pure Rust)
   them at run time: a non-object `options`, an unknown key (top level or inside
   a structured `json` option) or a value outside the arg's `json_type` is
   `INVALID_INPUT` before the native call (a missing required key inside one:
-  `MISSING_FIELD`), and native errors that name wire fields are translated to
-  the camelCase option name with the wire name in parentheses once
-  (`genericPlan (generic_plan)`). TS types and the tRPC Zod schemas
+  `MISSING_FIELD`; an `undefined` value is absent, never unknown), and the
+  names of a native `Missing required field:` message (and validation
+  `details` fields) are translated to the camelCase option name with the
+  wire name in parentheses once (`genericPlan (generic_plan)`). TS types and the tRPC Zod schemas
   (strict objects) are generated from `json_type`; elsewhere `json` args stay
   JSON values / JSON text (unknown keys inside them are judged by the library).
 * Names: Python snake_case; Java camelCase; TS camelCase; C# PascalCase

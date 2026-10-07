@@ -3336,11 +3336,12 @@ public final class SzConfigTool {
      * default No). Any other item type is INVALID_INPUT. Element codes are uppercased; a code
      * not in CFG_FELEM is AUTO-CREATED (FELEM_ID max+1 floor 1000, DATA_TYPE string,
      * FELEM_DESC = code). The FBOM EXEC_ORDER is the item's 1-based position (per feature, not
-     * whole-table). Shape: <code>[string | {element?: string, ELEMENT?: string, expressed?:
-     * string, EXPRESSED?: string, compared?: string, COMPARED?: string, display?: string,
-     * DISPLAY?: string, displaylevel?: int, DISPLAYLEVEL?: int, display_level?: int,
-     * displaydelim?: string, DISPLAYDELIM?: string, display_delim?: string, derived?: string,
-     * DERIVED?: string}]</code>.
+     * whole-table). Shape: <code>[string | {element?: string|null, ELEMENT?: string|null,
+     * expressed?: string|null, EXPRESSED?: string|null, compared?: string|null, COMPARED?:
+     * string|null, display?: string|null, DISPLAY?: string|null, displaylevel?: int|null,
+     * DISPLAYLEVEL?: int|null, display_level?: int|null, displaydelim?: string|null,
+     * DISPLAYDELIM?: string|null, display_delim?: string|null, derived?: string|null,
+     * DERIVED?: string|null}]</code>.
      * @return the modified configuration JSON document (opaque)
      * @throws SzConfigToolException library reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, INVALID_INPUT, NOT_FOUND, INVALID_STRUCTURE; plus the universal INVALID_INPUT / MISSING_FIELD / INTERNAL wire errors
      */
@@ -3376,11 +3377,12 @@ public final class SzConfigTool {
      * default No). Any other item type is INVALID_INPUT. Element codes are uppercased; a code
      * not in CFG_FELEM is AUTO-CREATED (FELEM_ID max+1 floor 1000, DATA_TYPE string,
      * FELEM_DESC = code). The FBOM EXEC_ORDER is the item's 1-based position (per feature, not
-     * whole-table). Shape: <code>[string | {element?: string, ELEMENT?: string, expressed?:
-     * string, EXPRESSED?: string, compared?: string, COMPARED?: string, display?: string,
-     * DISPLAY?: string, displaylevel?: int, DISPLAYLEVEL?: int, display_level?: int,
-     * displaydelim?: string, DISPLAYDELIM?: string, display_delim?: string, derived?: string,
-     * DERIVED?: string}]</code>.
+     * whole-table). Shape: <code>[string | {element?: string|null, ELEMENT?: string|null,
+     * expressed?: string|null, EXPRESSED?: string|null, compared?: string|null, COMPARED?:
+     * string|null, display?: string|null, DISPLAY?: string|null, displaylevel?: int|null,
+     * DISPLAYLEVEL?: int|null, display_level?: int|null, displaydelim?: string|null,
+     * DISPLAYDELIM?: string|null, display_delim?: string|null, derived?: string|null,
+     * DERIVED?: string|null}]</code>.
      * @param options optional arguments ({@code null} = none); see {@link AddFeatureOptions}
      * @return the modified configuration JSON document (opaque)
      * @throws SzConfigToolException library reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, INVALID_INPUT, NOT_FOUND, INVALID_STRUCTURE; plus the universal INVALID_INPUT / MISSING_FIELD / INTERNAL wire errors
@@ -3899,7 +3901,8 @@ public final class SzConfigTool {
      * (including "") is accepted unvalidated. ERFRAG_ID (integer, optional): absent or &lt;= 0
      * auto-allocates (max + 1, floor 1, so 1000 on the template); a taken id &gt; 0 is
      * ALREADY_EXISTS. Any ERFRAG_DESC key is IGNORED. Shape: <code>{ERFRAG_CODE: string,
-     * ERFRAG_SOURCE: string, ERFRAG_ID?: int, ERFRAG_DESC?: any, ERFRAG_DEPENDS?: any}</code>.
+     * ERFRAG_SOURCE: string, ERFRAG_ID?: int|null, ERFRAG_DESC?: any, ERFRAG_DEPENDS?:
+     * any}</code>.
      * @return the modified configuration JSON document (opaque); {@link #addFragmentResult} (same arguments) returns the record this operation produces
      * @throws SzConfigToolException library reason codes: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, INVALID_INPUT, INVALID_CONFIG, MISSING_SECTION; plus the universal INVALID_INPUT / MISSING_FIELD / INTERNAL wire errors
      */
@@ -3934,7 +3937,8 @@ public final class SzConfigTool {
      * (including "") is accepted unvalidated. ERFRAG_ID (integer, optional): absent or &lt;= 0
      * auto-allocates (max + 1, floor 1, so 1000 on the template); a taken id &gt; 0 is
      * ALREADY_EXISTS. Any ERFRAG_DESC key is IGNORED. Shape: <code>{ERFRAG_CODE: string,
-     * ERFRAG_SOURCE: string, ERFRAG_ID?: int, ERFRAG_DESC?: any, ERFRAG_DEPENDS?: any}</code>.
+     * ERFRAG_SOURCE: string, ERFRAG_ID?: int|null, ERFRAG_DESC?: any, ERFRAG_DEPENDS?:
+     * any}</code>.
      * @return the record (e.g. the created row or ids) as JSON text
      * @throws SzConfigToolException library reason codes: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, INVALID_INPUT, INVALID_CONFIG, MISSING_SECTION; plus the universal INVALID_INPUT / MISSING_FIELD / INTERNAL wire errors
      */
@@ -5945,9 +5949,9 @@ public final class SzConfigTool {
      * ERRULE_TIER (INVALID_INPUT) and forces RTYPE_ID to 1; RELATE=Yes requires RTYPE_ID in
      * 2,3,4 (INVALID_INPUT). RTYPE_ID defaults to 1; ERRULE_TIER defaults to null. A
      * non-string / non-integer value for any of these keys is treated as absent. Shape:
-     * <code>{ERRULE_CODE: string, QUAL_ERFRAG_CODE: string, DISQ_ERFRAG_CODE?: string,
-     * RESOLVE?: string, RELATE?: string, RTYPE_ID?: int, ERRULE_TIER?: int, ERRULE_ID?:
-     * int}</code>.
+     * <code>{ERRULE_CODE: string, QUAL_ERFRAG_CODE: string, DISQ_ERFRAG_CODE?: string|null,
+     * RESOLVE?: string|null, RELATE?: string|null, RTYPE_ID?: int|null, ERRULE_TIER?:
+     * int|null, ERRULE_ID?: int|null}</code>.
      * @return the modified configuration JSON document (opaque); {@link #addRuleResult} (same arguments) returns the record this operation produces
      * @throws SzConfigToolException library reason codes: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, NOT_FOUND, INVALID_INPUT, MISSING_SECTION; plus the universal INVALID_INPUT / MISSING_FIELD / INTERNAL wire errors
      */
@@ -5988,9 +5992,9 @@ public final class SzConfigTool {
      * ERRULE_TIER (INVALID_INPUT) and forces RTYPE_ID to 1; RELATE=Yes requires RTYPE_ID in
      * 2,3,4 (INVALID_INPUT). RTYPE_ID defaults to 1; ERRULE_TIER defaults to null. A
      * non-string / non-integer value for any of these keys is treated as absent. Shape:
-     * <code>{ERRULE_CODE: string, QUAL_ERFRAG_CODE: string, DISQ_ERFRAG_CODE?: string,
-     * RESOLVE?: string, RELATE?: string, RTYPE_ID?: int, ERRULE_TIER?: int, ERRULE_ID?:
-     * int}</code>.
+     * <code>{ERRULE_CODE: string, QUAL_ERFRAG_CODE: string, DISQ_ERFRAG_CODE?: string|null,
+     * RESOLVE?: string|null, RELATE?: string|null, RTYPE_ID?: int|null, ERRULE_TIER?:
+     * int|null, ERRULE_ID?: int|null}</code>.
      * @return the record (e.g. the created row or ids) as JSON text
      * @throws SzConfigToolException library reason codes: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, NOT_FOUND, INVALID_INPUT, MISSING_SECTION; plus the universal INVALID_INPUT / MISSING_FIELD / INTERNAL wire errors
      */

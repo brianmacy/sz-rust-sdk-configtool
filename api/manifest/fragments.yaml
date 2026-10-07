@@ -10,12 +10,12 @@ functions:
       - name: fragment_config
         type: json
         # ERFRAG_DESC / ERFRAG_DEPENDS are accepted (and ignored) so a stored
-        # CFG_ERFRAG row can be passed back.
+        # CFG_ERFRAG row can be passed back; a null ERFRAG_ID is absent.
         json_type:
           object:
             ERFRAG_CODE: string
             ERFRAG_SOURCE: string
-            ERFRAG_ID?: int
+            ERFRAG_ID?: {nullable: int}
             ERFRAG_DESC?: any
             ERFRAG_DEPENDS?: any
         semantics: >-

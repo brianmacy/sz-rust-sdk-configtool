@@ -15,16 +15,18 @@ functions:
           ALREADY_EXISTS. Any ERRULE_ID key inside rule_config is IGNORED.
       - name: rule_config
         type: json
+        # Optional keys are nullable: the library reads null as absent (stored
+        # rows carry null DISQ_ERFRAG_CODE / ERRULE_TIER, so a row round-trips).
         json_type:
           object:
             ERRULE_CODE: string
             QUAL_ERFRAG_CODE: string
-            DISQ_ERFRAG_CODE?: string
-            RESOLVE?: string
-            RELATE?: string
-            RTYPE_ID?: int
-            ERRULE_TIER?: int
-            ERRULE_ID?: int
+            DISQ_ERFRAG_CODE?: {nullable: string}
+            RESOLVE?: {nullable: string}
+            RELATE?: {nullable: string}
+            RTYPE_ID?: {nullable: int}
+            ERRULE_TIER?: {nullable: int}
+            ERRULE_ID?: {nullable: int}
         semantics: >-
           Object with on-disk keys. ERRULE_CODE (string) is required, else
           MISSING_FIELD; uppercased for storage and the case-insensitive

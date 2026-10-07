@@ -114,8 +114,8 @@ file directly needs Node 22.18+ (type stripping on by default; 22.6-22.17:
 |---|---|
 | Names | manifest snake_case split on `_` → camelCase (`get_ftype_id` → `getFtypeId`); options properties likewise. |
 | Shape | `fn(config, options)` — `options` omitted when there are no args, defaults to `{}` when all are optional. |
-| Strict options | `options` must be a plain object (a string, number, boolean, array or `null` is `INVALID_INPUT` naming the function and the received type; a string gets a hint: `getSearchProfile(cfg, "SEARCH")` → `... got string; pass { code: "SEARCH" }`). Omitting it is allowed only when every option is optional. An unknown key is `INVALID_INPUT` before the native call, naming the key and the closest option (`unknown option 'candidate' for addSearchProfile; did you mean 'candidates'?`) or listing the valid ones; an option set to `undefined` is absent, not unknown. |
-| Structured (`json`) options | Typed from the manifest `json_type` (`AddSearchProfileOptions.elements: ReadonlyArray<{ feature: string; flag: "Yes" \| "No" \| "Y" \| "N" }>`; `addFeature`'s `elementList`, `addExpressionCall`'s `elementList`, `addFragment`'s `fragmentConfig`, `addRule`'s `ruleConfig`), so a wrong shape fails `tsc`; at run time the same shape is checked before the native call: unknown keys inside an entry, wrong types and enum values are `INVALID_INPUT` naming the path (`addSearchProfile: elements[1].flag must be one of Yes, No, Y, N (got "Maybe")`), a missing required key is `MISSING_FIELD`. Free-form values (`setSetting` `value`, `setSystemParameter` `parameterValue`, `addConfigSectionField` `fieldValue`) stay `JsonValue`. The runtime check follows the declared type exactly: e.g. `flag` must be one of the four spellings (the library also accepts other casings via `invoke`). |
+| Strict options | `options` must be a plain object (a string, number, boolean, array or `null` is `INVALID_INPUT` naming the function and the received type; a string gets a hint: `getSearchProfile(cfg, "SEARCH")` → `... got string; pass { code: "SEARCH" }`). Omitting it is allowed only when every option is optional. An unknown key is `INVALID_INPUT` before the native call, naming the key and the closest option (`unknown option 'candidate' for addSearchProfile; did you mean 'candidates'?`) or listing the valid ones; a key set to `undefined` (top level or nested, e.g. from `{ ...opts, extra: undefined }`) is absent, not unknown. |
+| Structured (`json`) options | Typed from the manifest `json_type` (`AddSearchProfileOptions.elements: ReadonlyArray<{ feature: string; flag: "Yes" \| "No" \| "Y" \| "N" }>`; `addFeature`'s `elementList`, `addExpressionCall`'s `elementList`, `addFragment`'s `fragmentConfig`, `addRule`'s `ruleConfig`), so a wrong shape fails `tsc`; at run time the same shape is checked before the native call: unknown keys inside an entry, wrong types and enum values are `INVALID_INPUT` naming the path (`addSearchProfile: elements[1].flag must be one of Yes, No, Y, N (got "Maybe")`), a missing required key is `MISSING_FIELD`. Optional keys the library reads `null` as absent for (`ruleConfig`, `fragmentConfig` `ERFRAG_ID`, `addFeature` element keys) also take `null`, so a stored `CFG_ERRULE` / `CFG_ERFRAG` row can be passed back. Free-form values (`setSetting` `value`, `setSystemParameter` `parameterValue`, `addConfigSectionField` `fieldValue`) stay `JsonValue`. The runtime check follows the declared type exactly: e.g. `flag` must be one of the four spellings (the library also accepts other casings via `invoke`). |
 | `config` | Opaque string, passed and returned byte-exact (never parsed). A non-string `config` (e.g. a companion's record passed back) is `INVALID_INPUT` before the native call. |
 | Optional | `name?: T`; `undefined` = absent (the library applies its documented default). |
 | Tri-state | `name?: T \| null`: `undefined` = leave, `null` = clear, value = set. |
@@ -123,6 +123,7 @@ file directly needs Node 22.18+ (type stripping on by default; 22.6-22.17:
 | `int_or_str` | `number \| bigint \| string` — a call selector: an integer call id or a feature code (`getComparisonCall(cfg, { call: 1 })` / `{ call: "NAME" }`). A non-integer number is `INVALID_INPUT`. |
 | `required: true` | A required property even though Rust takes `Option` (absent → `MISSING_FIELD` via `invoke`). |
 | Returns | Every config-changing function (`config`, `config_and_json`) → the new config `string`, so calls chain. A `config_and_json` function also has a companion `<fn>Result` (same options, same operation) → the record as JSON **text** (e.g. `addAttributeResult` → the new `CFG_ATTR` row); with `tuple_names` → `<Fn>Record` whose camelCase fields are each member's JSON **text** (e.g. `setGenericPlanResult` → `SetGenericPlanRecord { planId: "3", wasCreated: "true" }`; strings keep their quotes: `currentVersion: "\"11\""`). `json` → JSON **text** (`JSON.parse` it); `int` → `number`; `unit` → `void`. |
+| Companions | `<fn>Result` RE-RUNS the operation (a second run): call it with the SAME input config you gave `<fn>`, never the config `<fn>` returned. On that config `addAttributeResult` throws `ALREADY_EXISTS`, `delete*Result` throws `NOT_FOUND`, and `setGenericPlanResult` reports `wasCreated: "false"`. |
 | Skipped | `status: not_implemented` placeholders; still callable via `invoke(name, config, args)`. |
 | Docs | TSDoc on every function/option from the manifest `doc`, `semantics`, `notes`, `errors`. |
 
@@ -139,10 +140,11 @@ Every failure is `SzConfigToolError extends Error`:
 | `details` | For `VALIDATION_ERRORS`: JSON **text** (like every binding) with schema `sz-configtool.validation-errors/v1`; `err.validationDetails()` returns it parsed as `ValidationDetails { schema, failures: [{ field, reasonCode, offendingValue }] }`. `undefined` otherwise. |
 | `cause` | The native error. |
 
-Errors name the **JS option**, not the wire field: a native `MISSING_FIELD` /
-`INVALID_INPUT` message (and `VALIDATION_ERRORS` `details` fields) naming a
-wire argument is translated, with the wire name in parentheses once for
-traceability (`Missing required field: genericPlan (generic_plan)`;
+Errors name the **JS option**, not the wire field: the names listed by a
+native `Missing required field: ...` message (and `VALIDATION_ERRORS`
+`details` fields) are translated, with the wire name in parentheses once for
+traceability; no other text is rewritten (a quoted value such as
+`'rtype_id'` stays as given) (`Missing required field: genericPlan (generic_plan)`;
 `scoringCap (scoring_cap), candidateCap (candidate_cap), sendToRedo
 (send_to_redo)`); the untranslated error is the `cause`. `invoke` is the raw
 seam and keeps wire names.

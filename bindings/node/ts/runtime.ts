@@ -159,6 +159,8 @@ function field(env: InvokeEnvelope, key: "config" | "result", name: string): str
  */
 function call(spec: FnSpec, config: string, options: unknown): InvokeEnvelope {
   const args = wireArgs(spec, options);
+  // Same checks as `invoke`, but naming the JS option path.
+  for (const [js, wire] of spec.args) checkWire(js, args[wire]);
   try {
     return invoke(spec.wire, config, args);
   } catch (err) {

@@ -2616,11 +2616,11 @@ export interface AddFeatureOptions {
   /**
    * Must be a non-empty JSON array, else INVALID_INPUT. Each item is either an element-code string, or an object with `element` (or `ELEMENT`, required, else INVALID_INPUT) and optional `expressed`/`EXPRESSED`, `compared`/`COMPARED` ("yes" case-insensitive = true), `display`/`DISPLAY` ("yes" = DISPLAY_LEVEL 1, anything else 0) or `displaylevel`/`DISPLAYLEVEL`/`display_level` (int, default 1, negative = INVALID_INPUT), `displaydelim`/`DISPLAYDELIM`/`display_delim`, `derived`/`DERIVED` (Yes/No case-insensitive, else INVALID_INPUT; default No). Any other item type is INVALID_INPUT. Element codes are uppercased; a code not in CFG_FELEM is AUTO-CREATED (FELEM_ID max+1 floor 1000, DATA_TYPE string, FELEM_DESC = code). The FBOM EXEC_ORDER is the item's 1-based position (per feature, not whole-table).
    *
-   * Shape: `[string | {element?: string, ELEMENT?: string, expressed?: string, EXPRESSED?: string, compared?: string, COMPARED?: string, display?: string, DISPLAY?: string, displaylevel?: int, DISPLAYLEVEL?: int, display_level?: int, displaydelim?: string, DISPLAYDELIM?: string, display_delim?: string, derived?: string, DERIVED?: string}]`.
+   * Shape: `[string | {element?: string|null, ELEMENT?: string|null, expressed?: string|null, EXPRESSED?: string|null, compared?: string|null, COMPARED?: string|null, display?: string|null, DISPLAY?: string|null, displaylevel?: int|null, DISPLAYLEVEL?: int|null, display_level?: int|null, displaydelim?: string|null, DISPLAYDELIM?: string|null, display_delim?: string|null, derived?: string|null, DERIVED?: string|null}]`.
    *
    * Wire name: `element_list`.
    */
-  readonly elementList: ReadonlyArray<string | { readonly element?: string; readonly ELEMENT?: string; readonly expressed?: string; readonly EXPRESSED?: string; readonly compared?: string; readonly COMPARED?: string; readonly display?: string; readonly DISPLAY?: string; readonly displaylevel?: number | bigint; readonly DISPLAYLEVEL?: number | bigint; readonly display_level?: number | bigint; readonly displaydelim?: string; readonly DISPLAYDELIM?: string; readonly display_delim?: string; readonly derived?: string; readonly DERIVED?: string }>;
+  readonly elementList: ReadonlyArray<string | { readonly element?: string | null; readonly ELEMENT?: string | null; readonly expressed?: string | null; readonly EXPRESSED?: string | null; readonly compared?: string | null; readonly COMPARED?: string | null; readonly display?: string | null; readonly DISPLAY?: string | null; readonly displaylevel?: number | bigint | null; readonly DISPLAYLEVEL?: number | bigint | null; readonly display_level?: number | bigint | null; readonly displaydelim?: string | null; readonly DISPLAYDELIM?: string | null; readonly display_delim?: string | null; readonly derived?: string | null; readonly DERIVED?: string | null }>;
   /**
    * CFG_FCLASS code, case-insensitive; unknown is NOT_FOUND.
    *
@@ -2722,7 +2722,7 @@ const addFeatureSpec: rt.FnSpec = {
   wire: "add_feature",
   args: [
     ["feature", "feature", true],
-    ["elementList", "element_list", true, { array: { oneOf: ["string", { object: { "element?": "string", "ELEMENT?": "string", "expressed?": "string", "EXPRESSED?": "string", "compared?": "string", "COMPARED?": "string", "display?": "string", "DISPLAY?": "string", "displaylevel?": "int", "DISPLAYLEVEL?": "int", "display_level?": "int", "displaydelim?": "string", "DISPLAYDELIM?": "string", "display_delim?": "string", "derived?": "string", "DERIVED?": "string" } }] } }],
+    ["elementList", "element_list", true, { array: { oneOf: ["string", { object: { "element?": { nullable: "string" }, "ELEMENT?": { nullable: "string" }, "expressed?": { nullable: "string" }, "EXPRESSED?": { nullable: "string" }, "compared?": { nullable: "string" }, "COMPARED?": { nullable: "string" }, "display?": { nullable: "string" }, "DISPLAY?": { nullable: "string" }, "displaylevel?": { nullable: "int" }, "DISPLAYLEVEL?": { nullable: "int" }, "display_level?": { nullable: "int" }, "displaydelim?": { nullable: "string" }, "DISPLAYDELIM?": { nullable: "string" }, "display_delim?": { nullable: "string" }, "derived?": { nullable: "string" }, "DERIVED?": { nullable: "string" } } }] } }],
     ["class", "class", false],
     ["behavior", "behavior", false],
     ["candidates", "candidates", false],
@@ -3286,18 +3286,18 @@ export interface AddFragmentOptions {
   /**
    * Object with on-disk keys. ERFRAG_CODE (string, required, else MISSING_FIELD) is uppercased for storage and the duplicate check (ALREADY_EXISTS). ERFRAG_SOURCE (string, required, else MISSING_FIELD) is stored verbatim; every name referenced inside a FRAGMENT[...] clause (e.g. "./FRAGMENT[./SAME_NAME>0 and ./SAME_STAB>0]") must be an existing ERFRAG_CODE matched EXACTLY (case-sensitive), else INVALID_INPUT. A source without FRAGMENT[ (including "") is accepted unvalidated. ERFRAG_ID (integer, optional): absent or <= 0 auto-allocates (max + 1, floor 1, so 1000 on the template); a taken id > 0 is ALREADY_EXISTS. Any ERFRAG_DESC key is IGNORED.
    *
-   * Shape: `{ERFRAG_CODE: string, ERFRAG_SOURCE: string, ERFRAG_ID?: int, ERFRAG_DESC?: any, ERFRAG_DEPENDS?: any}`.
+   * Shape: `{ERFRAG_CODE: string, ERFRAG_SOURCE: string, ERFRAG_ID?: int|null, ERFRAG_DESC?: any, ERFRAG_DEPENDS?: any}`.
    *
    * Wire name: `fragment_config`.
    */
-  readonly fragmentConfig: { readonly ERFRAG_CODE: string; readonly ERFRAG_SOURCE: string; readonly ERFRAG_ID?: number | bigint; readonly ERFRAG_DESC?: rt.JsonValue; readonly ERFRAG_DEPENDS?: rt.JsonValue };
+  readonly fragmentConfig: { readonly ERFRAG_CODE: string; readonly ERFRAG_SOURCE: string; readonly ERFRAG_ID?: number | bigint | null; readonly ERFRAG_DESC?: rt.JsonValue; readonly ERFRAG_DEPENDS?: rt.JsonValue };
 }
 
 const addFragmentSpec: rt.FnSpec = {
   name: "addFragment",
   wire: "add_fragment",
   args: [
-    ["fragmentConfig", "fragment_config", true, { object: { "ERFRAG_CODE": "string", "ERFRAG_SOURCE": "string", "ERFRAG_ID?": "int", "ERFRAG_DESC?": "any", "ERFRAG_DEPENDS?": "any" } }],
+    ["fragmentConfig", "fragment_config", true, { object: { "ERFRAG_CODE": "string", "ERFRAG_SOURCE": "string", "ERFRAG_ID?": { nullable: "int" }, "ERFRAG_DESC?": "any", "ERFRAG_DEPENDS?": "any" } }],
   ],
 };
 
@@ -5002,11 +5002,11 @@ export interface AddRuleOptions {
   /**
    * Object with on-disk keys. ERRULE_CODE (string) is required, else MISSING_FIELD; uppercased for storage and the case-insensitive duplicate check (ALREADY_EXISTS). QUAL_ERFRAG_CODE (the fragment) is required: absent/non-string is MISSING_FIELD, "" or an unknown code is NOT_FOUND (existence is case-insensitive). DISQ_ERFRAG_CODE is optional: "" is accepted and stored as "", an unknown code is NOT_FOUND. TRAP: both fragment codes are stored VERBATIM (not uppercased). RESOLVE / RELATE default "No", must be Yes/No case-insensitively (stored title-case) else INVALID_INPUT, and may not both be Yes (INVALID_INPUT). RESOLVE=Yes requires a non-zero ERRULE_TIER (INVALID_INPUT) and forces RTYPE_ID to 1; RELATE=Yes requires RTYPE_ID in 2,3,4 (INVALID_INPUT). RTYPE_ID defaults to 1; ERRULE_TIER defaults to null. A non-string / non-integer value for any of these keys is treated as absent.
    *
-   * Shape: `{ERRULE_CODE: string, QUAL_ERFRAG_CODE: string, DISQ_ERFRAG_CODE?: string, RESOLVE?: string, RELATE?: string, RTYPE_ID?: int, ERRULE_TIER?: int, ERRULE_ID?: int}`.
+   * Shape: `{ERRULE_CODE: string, QUAL_ERFRAG_CODE: string, DISQ_ERFRAG_CODE?: string|null, RESOLVE?: string|null, RELATE?: string|null, RTYPE_ID?: int|null, ERRULE_TIER?: int|null, ERRULE_ID?: int|null}`.
    *
    * Wire name: `rule_config`.
    */
-  readonly ruleConfig: { readonly ERRULE_CODE: string; readonly QUAL_ERFRAG_CODE: string; readonly DISQ_ERFRAG_CODE?: string; readonly RESOLVE?: string; readonly RELATE?: string; readonly RTYPE_ID?: number | bigint; readonly ERRULE_TIER?: number | bigint; readonly ERRULE_ID?: number | bigint };
+  readonly ruleConfig: { readonly ERRULE_CODE: string; readonly QUAL_ERFRAG_CODE: string; readonly DISQ_ERFRAG_CODE?: string | null; readonly RESOLVE?: string | null; readonly RELATE?: string | null; readonly RTYPE_ID?: number | bigint | null; readonly ERRULE_TIER?: number | bigint | null; readonly ERRULE_ID?: number | bigint | null };
 }
 
 const addRuleSpec: rt.FnSpec = {
@@ -5014,7 +5014,7 @@ const addRuleSpec: rt.FnSpec = {
   wire: "add_rule",
   args: [
     ["id", "id", true],
-    ["ruleConfig", "rule_config", true, { object: { "ERRULE_CODE": "string", "QUAL_ERFRAG_CODE": "string", "DISQ_ERFRAG_CODE?": "string", "RESOLVE?": "string", "RELATE?": "string", "RTYPE_ID?": "int", "ERRULE_TIER?": "int", "ERRULE_ID?": "int" } }],
+    ["ruleConfig", "rule_config", true, { object: { "ERRULE_CODE": "string", "QUAL_ERFRAG_CODE": "string", "DISQ_ERFRAG_CODE?": { nullable: "string" }, "RESOLVE?": { nullable: "string" }, "RELATE?": { nullable: "string" }, "RTYPE_ID?": { nullable: "int" }, "ERRULE_TIER?": { nullable: "int" }, "ERRULE_ID?": { nullable: "int" } } }],
   ],
 };
 

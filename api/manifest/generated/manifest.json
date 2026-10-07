@@ -2257,22 +2257,54 @@
                 "string",
                 {
                   "object": {
-                    "element?": "string",
-                    "ELEMENT?": "string",
-                    "expressed?": "string",
-                    "EXPRESSED?": "string",
-                    "compared?": "string",
-                    "COMPARED?": "string",
-                    "display?": "string",
-                    "DISPLAY?": "string",
-                    "displaylevel?": "int",
-                    "DISPLAYLEVEL?": "int",
-                    "display_level?": "int",
-                    "displaydelim?": "string",
-                    "DISPLAYDELIM?": "string",
-                    "display_delim?": "string",
-                    "derived?": "string",
-                    "DERIVED?": "string"
+                    "element?": {
+                      "nullable": "string"
+                    },
+                    "ELEMENT?": {
+                      "nullable": "string"
+                    },
+                    "expressed?": {
+                      "nullable": "string"
+                    },
+                    "EXPRESSED?": {
+                      "nullable": "string"
+                    },
+                    "compared?": {
+                      "nullable": "string"
+                    },
+                    "COMPARED?": {
+                      "nullable": "string"
+                    },
+                    "display?": {
+                      "nullable": "string"
+                    },
+                    "DISPLAY?": {
+                      "nullable": "string"
+                    },
+                    "displaylevel?": {
+                      "nullable": "int"
+                    },
+                    "DISPLAYLEVEL?": {
+                      "nullable": "int"
+                    },
+                    "display_level?": {
+                      "nullable": "int"
+                    },
+                    "displaydelim?": {
+                      "nullable": "string"
+                    },
+                    "DISPLAYDELIM?": {
+                      "nullable": "string"
+                    },
+                    "display_delim?": {
+                      "nullable": "string"
+                    },
+                    "derived?": {
+                      "nullable": "string"
+                    },
+                    "DERIVED?": {
+                      "nullable": "string"
+                    }
                   }
                 }
               ]
@@ -2946,7 +2978,9 @@
             "object": {
               "ERFRAG_CODE": "string",
               "ERFRAG_SOURCE": "string",
-              "ERFRAG_ID?": "int",
+              "ERFRAG_ID?": {
+                "nullable": "int"
+              },
               "ERFRAG_DESC?": "any",
               "ERFRAG_DEPENDS?": "any"
             }
@@ -4140,12 +4174,24 @@
             "object": {
               "ERRULE_CODE": "string",
               "QUAL_ERFRAG_CODE": "string",
-              "DISQ_ERFRAG_CODE?": "string",
-              "RESOLVE?": "string",
-              "RELATE?": "string",
-              "RTYPE_ID?": "int",
-              "ERRULE_TIER?": "int",
-              "ERRULE_ID?": "int"
+              "DISQ_ERFRAG_CODE?": {
+                "nullable": "string"
+              },
+              "RESOLVE?": {
+                "nullable": "string"
+              },
+              "RELATE?": {
+                "nullable": "string"
+              },
+              "RTYPE_ID?": {
+                "nullable": "int"
+              },
+              "ERRULE_TIER?": {
+                "nullable": "int"
+              },
+              "ERRULE_ID?": {
+                "nullable": "int"
+              }
             }
           }
         }

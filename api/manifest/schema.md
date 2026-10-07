@@ -99,7 +99,8 @@ A small structural language for the value of a `json` arg:
 | `{enum: ["Yes", "No"]}` | A string, exactly one of the values (case-sensitive; quote them). |
 | `{array: T}` | An array whose every item is `T`. |
 | `{object: {name: T, "opt?": T}}` | An object with exactly these keys (unknown keys do not fit); a key ending in `?` is optional. Field order is kept (it is the documented order). |
-| `{one_of: [T, ...]}` | One of the alternatives; at least two, each of a different JSON kind (string/enum, int, bool, array, object), never `any` or a nested `one_of`. |
+| `{one_of: [T, ...]}` | One of the alternatives; at least two, each of a different JSON kind (string/enum, int, bool, array, object), never `any`, `nullable` or a nested `one_of`. |
+| `{nullable: T}` | `T` or JSON `null`. Use it where the library reads `null` as absent (e.g. the optional keys of a stored row, so the row round-trips); never around `any` or another `nullable`. |
 
 ```yaml
 - name: elements

@@ -108,6 +108,12 @@ fn check_json_type(at: &str, path: &str, ty: &JsonType, errs: &mut Vec<String>) 
             }
         }
         JsonType::Array(item) => check_json_type(at, &format!("{path}[]"), item, errs),
+        JsonType::Nullable(inner) => {
+            if matches!(**inner, JsonType::Any | JsonType::Nullable(_)) {
+                err("nullable cannot wrap any or nullable".into());
+            }
+            check_json_type(at, &format!("{path}?"), inner, errs);
+        }
         JsonType::Object(fields) => {
             if fields.is_empty() {
                 err("object needs at least one field".into());
@@ -130,7 +136,7 @@ fn check_json_type(at: &str, path: &str, ty: &JsonType, errs: &mut Vec<String>) 
             }
             let kinds: Vec<_> = alts.iter().map(JsonType::kind).collect();
             if kinds.contains(&None) {
-                err("one_of cannot contain any or a nested one_of".into());
+                err("one_of cannot contain any, nullable or a nested one_of".into());
             }
             let distinct: BTreeSet<_> = kinds.iter().flatten().collect();
             if distinct.len() != kinds.iter().flatten().count() {

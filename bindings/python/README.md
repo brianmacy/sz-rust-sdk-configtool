@@ -72,6 +72,10 @@ print(json.loads(sct.get_data_source(config, "CRM"))["DSRC_CODE"])  # CRM
 # Every config-changing function returns the new config, so calls chain.
 # When the operation also produces a record (e.g. the new row), the companion
 # <name>_result takes the same arguments and returns that record instead.
+# It RE-RUNS the operation (a second run): pass the SAME input config as the
+# primary, never the config the primary returned (on that config
+# add_attribute_result fails with ALREADY_EXISTS, delete_*_result with
+# NOT_FOUND, and set_generic_plan_result reports was_created "false").
 row = sct.add_attribute_result(config, "MY_NAME", "NAME", "FULL_NAME", "NAME")
 print(json.loads(row)["ATTR_CODE"])  # MY_NAME
 config = sct.add_attribute(config, "MY_NAME", "NAME", "FULL_NAME", "NAME")

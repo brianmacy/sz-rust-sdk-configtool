@@ -22,7 +22,12 @@ string sources = SzConfigTool.ListDataSources(config);   // JSON text
   with any JSON library). A `config_and_json` function also has a companion
   `<Name>Result` (same arguments and overloads) that returns the record the
   operation produces, as JSON text: `AddAttributeResult(...)` → the new
-  `CFG_ATTR` row. Configs are opaque and byte-exact.
+  `CFG_ATTR` row. The companion RE-RUNS the operation (a second run): call
+  it with the SAME input config you gave the primary, never the config the
+  primary returned (on that config `AddAttributeResult` fails with
+  `ALREADY_EXISTS`, `Delete*Result` with `NOT_FOUND`, and
+  `SetGenericPlanResult` reports `WasCreated` = `"false"`). Configs are
+  opaque and byte-exact.
 * Named results are a `<Name>Record` record whose fields are each member's
   JSON text: `SetGenericPlanResult(...)` → `SetGenericPlanRecord(PlanId,
   WasCreated)` (e.g. `"3"`, `"true"`), `VerifyCompatibilityVersion(...)` →

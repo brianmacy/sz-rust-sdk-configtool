@@ -327,7 +327,7 @@ describe("option containers", () => {
 });
 
 describe("wire -> JS name translation", () => {
-  test("a nested wire path is translated with the wire path once", () => {
+  test("binding-side value checks name the JS option path", () => {
     invalid(
       () =>
         sz.addExpressionCall(fixture, {
@@ -335,7 +335,7 @@ describe("wire -> JS name translation", () => {
           elementList: [{ element: "E\uD800", required: "Yes" }],
           isVirtual: "No",
         }),
-      "args.elementList[0].element (element_list[0].element) contains a lone UTF-16 surrogate (not valid Unicode)",
+      "elementList[0].element contains a lone UTF-16 surrogate (not valid Unicode)",
     );
   });
 
@@ -365,14 +365,11 @@ describe("wire -> JS name translation", () => {
     assert.equal(rt.translateError(spec, same), same, "nothing to translate: same error");
     const nf = new sz.SzConfigToolError("NOT_FOUND", "Plan not found: generic_plan");
     assert.equal(rt.translateError(spec, nf), nf, "only MISSING_FIELD / INVALID_INPUT messages");
-    const quoted = rt.translateError(
+    const repeated = rt.translateError(
       spec,
-      new sz.SzConfigToolError("INVALID_INPUT", "argument 'generic_plan' must be a string; generic_plan again; generic_plans x"),
+      new sz.SzConfigToolError("MISSING_FIELD", "Missing required field: generic_plan, generic_plan, generic_plans"),
     );
-    assert.equal(
-      quoted.message,
-      "argument 'genericPlan' (generic_plan) must be a string; genericPlan again; generic_plans x",
-    );
+    assert.equal(repeated.message, "Missing required field: genericPlan (generic_plan), genericPlan, generic_plans");
     for (const odd of ["not json", "{}", "null", '{"failures":[{"field":1}]}']) {
       const e = new sz.SzConfigToolError("VALIDATION_ERRORS", "bad", odd);
       assert.equal(rt.translateError(spec, e), e, `details ${odd} left as is`);
@@ -391,5 +388,97 @@ test("manifest json_type is emitted for every json arg", () => {
   }
   assert.deepEqual(byName.get("add_search_profile")?.args.find((a) => a.name === "elements")?.json_type, {
     array: { object: { feature: "string", flag: { enum: ["Yes", "No", "Y", "N"] } } },
+  });
+});
+
+describe("review fixes (PR #77)", () => {
+  type Row = Record<string, Json>;
+  const section = (name: string): Row[] => JSON.parse(sz.getConfigSection(fixture, { sectionName: name })) as Row[];
+
+  test("every template CFG_ERRULE row round-trips through addRule (optional keys may be null)", () => {
+    const rows = section("CFG_ERRULE");
+    assert.equal(rows.length, 38);
+    assert.ok(rows.some((r) => r["DISQ_ERFRAG_CODE"] === null) && rows.some((r) => r["ERRULE_TIER"] === null));
+    for (const row of rows) {
+      const ruleConfig = { ...row, ERRULE_CODE: `${String(row["ERRULE_CODE"])}_RT` };
+      const cfg = sz.addRule(fixture, { id: 0, ruleConfig: ruleConfig as unknown as sz.AddRuleOptions["ruleConfig"] });
+      assert.equal(typeof cfg, "string", String(row["ERRULE_CODE"]));
+    }
+  });
+
+  test("every template CFG_ERFRAG row round-trips through addFragment", () => {
+    const rows = section("CFG_ERFRAG");
+    assert.equal(rows.length, 96);
+    assert.ok(rows.some((r) => r["ERFRAG_DEPENDS"] === null));
+    for (const row of rows) {
+      const fragmentConfig = { ...row, ERFRAG_CODE: `${String(row["ERFRAG_CODE"])}_RT`, ERFRAG_ID: null };
+      const cfg = sz.addFragment(fixture, {
+        fragmentConfig: fragmentConfig as unknown as sz.AddFragmentOptions["fragmentConfig"],
+      });
+      assert.equal(typeof cfg, "string", String(row["ERFRAG_CODE"]));
+    }
+  });
+
+  test("null is absent for optional element keys the library reads with as_str / as_i64", () => {
+    const cfg = sz.addFeature(fixture, {
+      feature: "F_NULLS",
+      elementList: [{ element: "E1", derived: null, displaylevel: null, displaydelim: null }],
+    });
+    assert.equal(typeof cfg, "string");
+  });
+
+  test("required keys and non-nullable optional keys still reject null", () => {
+    invalid(
+      () => typed["addRule"]!(fixture, { id: 0, ruleConfig: { ERRULE_CODE: null, QUAL_ERFRAG_CODE: "SAME_NAME" } }),
+      "addRule: ruleConfig.ERRULE_CODE must be a string, got null",
+    );
+    // The library rejects a null expression-call `feature` (not a string), so the type does too.
+    invalid(
+      () =>
+        typed["addExpressionCall"]!(fixture, {
+          efuncCode: "PARSE_NAME",
+          elementList: [{ element: "PHONE_NUM", required: "Yes", feature: null }],
+          isVirtual: "No",
+        }),
+      "addExpressionCall: elementList[0].feature must be a string, got null",
+    );
+  });
+
+  test("a quoted user value equal to a wire name is never rewritten", () => {
+    const err = caught(() => sz.addFeature(fixture, { feature: "FQ", elementList: ["E"], matchkey: "rtype_id" }));
+    assert.equal(err.code, "INVALID_INPUT");
+    assert.match(err.message, /'rtype_id'/);
+    assert.doesNotMatch(err.message, /rtypeId/);
+    const spec: rt.FnSpec = { name: "f", wire: "f", args: [["genericPlan", "generic_plan", true]] };
+    for (const message of [
+      "Invalid value 'generic_plan' for plan",
+      'Invalid value "generic_plan" for plan',
+      "argument 'generic_plan' must be a string",
+      "Missing required field: x 'generic_plan'",
+    ]) {
+      const e = new sz.SzConfigToolError("INVALID_INPUT", message);
+      assert.equal(rt.translateError(spec, e), e, message);
+    }
+    const m = rt.translateError(spec, new sz.SzConfigToolError("MISSING_FIELD", "Missing required field: generic_plan[0].x, other"));
+    assert.equal(m.message, "Missing required field: genericPlan[0].x (generic_plan[0].x), other");
+  });
+
+  test("undefined-valued keys are absent, not unknown (top level and nested)", () => {
+    assert.equal(typeof typed["addDataSource"]!(fixture, { code: "E2", bogus: undefined }), "string");
+    const extra = { more: undefined };
+    assert.equal(
+      typeof typed["addSearchProfile"]!(fixture, {
+        code: "P_UNDEF",
+        genericPlan: "SEARCH",
+        ...extra,
+        elements: [{ feature: "NAME", flag: "Y", note: undefined }],
+      }),
+      "string",
+    );
+    invalid(() => typed["addDataSource"]!(fixture, { code: "E2", bogus: 1 }), /^unknown option 'bogus'/);
+    invalid(
+      () => typed["addSearchProfile"]!(fixture, { code: "P", genericPlan: "SEARCH", elements: [{ feature: "NAME", flag: "Y", note: 1 }] }),
+      /^unknown key 'note'/,
+    );
   });
 });

@@ -38,6 +38,7 @@ come from the manifest). Contract: [`bindings/CONTRACT.md`](../CONTRACT.md).
 | returns `config_and_json` | `<Name>(...)` → `std::string` (the modified config, so calls chain); companion `<Name>Result(...)` (same arguments and overloads) → the record JSON text, e.g. `AddAttributeResult(...)` → the new `CFG_ATTR` row |
 | `tuple_names` (`json` or `config_and_json`) | `struct <Name>Record` with one `std::string` per name holding that member's JSON text (`3`, `true`, `"11"` with quotes), returned by the `json` function or by the `config_and_json` companion: `auto [plan_id, was_created] = SetGenericPlanResult(...)` |
 | returns `int` / `unit` | `std::int64_t` / `void` |
+| companion input | `<Name>Result(...)` RE-RUNS the operation (a second run): pass the SAME input config you gave `<Name>(...)`, never the config it returned. On that config `AddAttributeResult` throws `ALREADY_EXISTS`, `Delete*Result` throws `NOT_FOUND`, and `SetGenericPlanResult` reports `was_created` = `false` |
 | `status: not_implemented` | not generated; reachable via `szconfigtool::Invoke(name, config, args_json)` |
 
 Errors throw `SzConfigToolException : std::runtime_error`. The error kind IS

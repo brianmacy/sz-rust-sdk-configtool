@@ -275,9 +275,9 @@ fn test_real_manifest_types_every_json_arg() {
     let want = [
         "add_expression_call.element_list = [{element: string, required: string, feature?: string}]",
         "add_config_section_field.field_value = any",
-        "add_fragment.fragment_config = {ERFRAG_CODE: string, ERFRAG_SOURCE: string, ERFRAG_ID?: int, ERFRAG_DESC?: any, ERFRAG_DEPENDS?: any}",
+        "add_fragment.fragment_config = {ERFRAG_CODE: string, ERFRAG_SOURCE: string, ERFRAG_ID?: int|null, ERFRAG_DESC?: any, ERFRAG_DEPENDS?: any}",
         "add_search_profile.elements = [{feature: string, flag: \"Yes\"|\"No\"|\"Y\"|\"N\"}]",
-        "add_rule.rule_config = {ERRULE_CODE: string, QUAL_ERFRAG_CODE: string, DISQ_ERFRAG_CODE?: string, RESOLVE?: string, RELATE?: string, RTYPE_ID?: int, ERRULE_TIER?: int, ERRULE_ID?: int}",
+        "add_rule.rule_config = {ERRULE_CODE: string, QUAL_ERFRAG_CODE: string, DISQ_ERFRAG_CODE?: string|null, RESOLVE?: string|null, RELATE?: string|null, RTYPE_ID?: int|null, ERRULE_TIER?: int|null, ERRULE_ID?: int|null}",
         "set_setting.value = any",
         "set_system_parameter.parameter_value = any",
     ];
@@ -286,9 +286,67 @@ fn test_real_manifest_types_every_json_arg() {
     }
     assert!(
         seen.iter().any(|s| s.starts_with(
-            "add_feature.element_list = [string | {element?: string, ELEMENT?: string,"
+            "add_feature.element_list = [string | {element?: string|null, ELEMENT?: string|null,"
         )),
         "{seen:#?}"
     );
     assert_eq!(seen.len(), 8, "{seen:#?}");
+}
+
+#[test]
+fn test_nullable_renders_and_fits_null() {
+    let ty = "{array: {object: {element: string, \"tier?\": {nullable: int}}}}";
+    let out = generated("jt_nullable", ty, "[{element: E, tier: null}]", "NOT_FOUND");
+    let conf: serde_json::Value = serde_json::from_str(file(&out, "conformance.json")).unwrap();
+    assert!(
+        conf["cases"][0]["steps"][0].get("wire_only").is_none(),
+        "null fits nullable"
+    );
+    let ts = file(&out, "node/f.ts");
+    assert!(
+        ts.contains(
+            "ReadonlyArray<{ readonly element: string; readonly tier?: number | bigint | null }>"
+        ),
+        "{ts}"
+    );
+    assert!(ts.contains("\"tier?\": { nullable: \"int\" }"), "{ts}");
+    assert!(
+        ts.contains("Shape: `[{element: string, tier?: int|null}]`."),
+        "{ts}"
+    );
+    assert!(
+        file(&out, "node/s.ts")
+            .contains("\"tier\": z.union([z.int(), z.bigint()]).nullable().optional()"),
+        "{}",
+        file(&out, "node/s.ts")
+    );
+    let manifest: serde_json::Value = serde_json::from_str(file(&out, "manifest.json")).unwrap();
+    assert_eq!(
+        manifest["functions"][0]["args"][1]["json_type"]["array"]["object"]["tier?"],
+        serde_json::json!({"nullable": "int"})
+    );
+    // A required (non-nullable) key does not fit null.
+    let out = generated("jt_nullable_req", ty, "[{element: null}]", "INVALID_INPUT");
+    let conf: serde_json::Value = serde_json::from_str(file(&out, "conformance.json")).unwrap();
+    assert_eq!(conf["cases"][0]["steps"][0]["wire_only"], true);
+    for (name, bad, want) in [
+        (
+            "jt_nullable_any",
+            "{nullable: any}",
+            "nullable cannot wrap any or nullable",
+        ),
+        (
+            "jt_nullable_twice",
+            "{nullable: {nullable: int}}",
+            "nullable cannot wrap any or nullable",
+        ),
+        (
+            "jt_nullable_in_one_of",
+            "{one_of: [string, {nullable: int}]}",
+            "one_of cannot contain any, nullable or a nested one_of",
+        ),
+    ] {
+        let err = rejected(name, bad);
+        assert!(err.contains(want), "{name}: {err}");
+    }
 }

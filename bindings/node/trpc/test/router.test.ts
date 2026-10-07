@@ -138,7 +138,7 @@ describe("strict structured inputs (issue #76)", () => {
     const procs = ["addFeature", "addRule", "addSearchProfile"];
     for (const [i, input] of inputs.entries()) {
       const err = await rejects(caller[procs[i]!]!(input as Record<string, Json>));
-      assert.equal(err.code, "BAD_REQUEST", procs[i]);
+      assert.equal(err.code, "BAD_REQUEST", procs[i]!);
       assert.equal(errorData(err), null, `${procs[i]}: rejected by Zod, not the library`);
     }
   });
@@ -153,6 +153,16 @@ describe("strict structured inputs (issue #76)", () => {
     assert.equal(ok, sz.addSearchProfile(fixture, { code: "P2", genericPlan: "SEARCH", elements: [{ feature: "NAME", flag: "N" }] }));
   });
 
+  test("a stored CFG_ERRULE row with null optional keys passes Zod (nullable)", async () => {
+    const rows = JSON.parse(sz.getConfigSection(fixture, { sectionName: "CFG_ERRULE" })) as Array<Record<string, Json>>;
+    const row = rows.find((r) => r["DISQ_ERFRAG_CODE"] === null && r["ERRULE_TIER"] === null)!;
+    const ruleConfig = { ...row, ERRULE_CODE: "RT_NULLS" };
+    const cfg = await caller["addRule"]!({ config: fixture, id: 0, ruleConfig });
+    assert.equal(typeof cfg, "string");
+    const err = await rejects(caller["addRule"]!({ config: fixture, id: 0, ruleConfig: { ...ruleConfig, ERRULE_CODE: null } }));
+    assert.equal(errorData(err), null, "a required key stays non-null in Zod");
+  });
+
   test("binding errors reach the client with JS option names", async () => {
     const err = await rejects(
       caller["addExpressionCall"]!({
@@ -164,7 +174,7 @@ describe("strict structured inputs (issue #76)", () => {
     );
     assert.equal(err.code, "BAD_REQUEST");
     assert.equal(errorData(err)?.reasonCode, "INVALID_INPUT");
-    assert.match(err.message, /^args\.elementList\[0\]\.element \(element_list\[0\]\.element\) contains/);
+    assert.match(err.message, /^elementList\[0\]\.element contains/);
   });
 });
 

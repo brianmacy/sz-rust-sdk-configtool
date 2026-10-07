@@ -96,6 +96,11 @@ API rules (see `bindings/CONTRACT.md`; generated from `api/manifest`):
   the modified config `String`, so calls chain. A `config_and_json` function
   also has a companion `<name>Result` (same arguments and overloads) → the
   record as JSON text (e.g. `addAttributeResult` → the new `CFG_ATTR` row).
+  The companion RE-RUNS the operation (a second run): call it with the SAME
+  input config you gave the primary, never the config the primary returned
+  (on that config `addAttributeResult` fails with `ALREADY_EXISTS`,
+  `delete*Result` with `NOT_FOUND`, and `setGenericPlanResult` reports
+  `wasCreated` = `"false"`).
   `json` → JSON text `String`; `tuple_names` → a `*Record` record with one
   JSON-text component per name (e.g. `setGenericPlanResult` →
   `SetGenericPlanRecord(planId, wasCreated)` = `("3", "true")`;
