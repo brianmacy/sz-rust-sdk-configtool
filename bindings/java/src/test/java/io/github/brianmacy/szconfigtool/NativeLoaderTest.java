@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AccessDeniedException;
@@ -20,6 +21,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -374,15 +376,23 @@ class NativeLoaderTest {
         // the JVM writes its own diagnostics there, e.g. HotSpot on x86-64 Linux
         // warns "might have disabled stack guard" for any library without a
         // PT_GNU_STACK note, which includes the junk "library" of one test.
-        Path err = Files.createTempFile(Files.createDirectories(TestSupport.prop("scratch")),
-                "probe", ".stderr");
-        Process p = new ProcessBuilder(cmd).redirectError(err.toFile()).start();
+        // stderr is a pipe drained on its own thread, not a temp file: on Windows
+        // a probe started concurrently can inherit another probe's redirect file
+        // handle, so that file cannot be deleted when its own probe has exited.
+        Process p = new ProcessBuilder(cmd).start();
+        CompletableFuture<String> stderr = CompletableFuture.supplyAsync(() -> drain(p));
         String out = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         assertTrue(p.waitFor(120, TimeUnit.SECONDS), "probe timed out");
-        String stderr = Files.readString(err);
-        Files.delete(err);
-        assertEquals(0, p.exitValue(), out + "\nstderr:\n" + stderr);
+        assertEquals(0, p.exitValue(), out + "\nstderr:\n" + stderr.get(120, TimeUnit.SECONDS));
         return out;
+    }
+
+    private static String drain(Process p) {
+        try {
+            return new String(p.getErrorStream().readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     private static void assertNoTempFiles(Path base) throws IOException {
