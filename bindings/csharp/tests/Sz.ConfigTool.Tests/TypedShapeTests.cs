@@ -9,14 +9,14 @@ namespace Sz.ConfigTool.Tests
     public class TypedShapeTests
     {
         [Fact]
-        public void Set_generic_plan_returns_config_plan_id_and_was_created_as_json_text()
+        public void Set_generic_plan_returns_config_and_its_result_plan_id_and_was_created_as_json_text()
         {
-            SetGenericPlanResult created = SzConfigTool.SetGenericPlan(Repo.Fixture, "new_plan", "New Plan");
+            SetGenericPlanRecord created = SzConfigTool.SetGenericPlanResult(Repo.Fixture, "new_plan", "New Plan");
             Assert.Equal("3", created.PlanId);
             Assert.Equal("true", created.WasCreated);
-            Assert.Contains("NEW_PLAN", created.Config);
+            Assert.Contains("NEW_PLAN", SzConfigTool.SetGenericPlan(Repo.Fixture, "new_plan", "New Plan"));
 
-            SetGenericPlanResult updated = SzConfigTool.SetGenericPlan(Repo.Fixture, "search", "Updated");
+            SetGenericPlanRecord updated = SzConfigTool.SetGenericPlanResult(Repo.Fixture, "search", "Updated");
             Assert.Equal("2", updated.PlanId);
             Assert.Equal("false", updated.WasCreated);
         }
@@ -24,11 +24,11 @@ namespace Sz.ConfigTool.Tests
         [Fact]
         public void Verify_compatibility_version_returns_named_json_text_fields()
         {
-            VerifyCompatibilityVersionResult match = SzConfigTool.VerifyCompatibilityVersion(Repo.Fixture, "11");
+            VerifyCompatibilityVersionRecord match = SzConfigTool.VerifyCompatibilityVersion(Repo.Fixture, "11");
             Assert.Equal("\"11\"", match.CurrentVersion);
             Assert.Equal("true", match.Matches);
 
-            VerifyCompatibilityVersionResult mismatch = SzConfigTool.VerifyCompatibilityVersion(Repo.Fixture, "11.0");
+            VerifyCompatibilityVersionRecord mismatch = SzConfigTool.VerifyCompatibilityVersion(Repo.Fixture, "11.0");
             Assert.Equal("\"11\"", mismatch.CurrentVersion);
             Assert.Equal("false", mismatch.Matches);
         }
@@ -55,7 +55,7 @@ namespace Sz.ConfigTool.Tests
         public void Delete_call_element_by_feature_code_and_by_id()
         {
             // Comparison call 4 (GENDER) gets a second element, FULL_NAME.
-            string config = SzConfigTool.AddComparisonCallElement(Repo.Fixture, 4, 4, 2).Config;
+            string config = SzConfigTool.AddComparisonCallElement(Repo.Fixture, 4, 4, 2);
             string byCode = SzConfigTool.DeleteComparisonCallElement(config, "gender", "full_name");
             Assert.Equal(new[] { "GENDER" }, Elements(byCode, 4));
             string byId = SzConfigTool.DeleteComparisonCallElement(byCode, 4L, "GENDER");

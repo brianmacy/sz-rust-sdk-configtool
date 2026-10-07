@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::Value;
 
 use crate::load::Inputs;
-use crate::model::{Arg, ArgType, Case, Excluded, Function, Returns, Status, Step};
+use crate::model::{Arg, ArgType, Case, Excluded, Function, JsonType, Returns, Status, Step};
 
 const MISSING_FIELD: &str = "MISSING_FIELD";
 const NOT_IMPLEMENTED: &str = "NOT_IMPLEMENTED";
@@ -79,6 +79,73 @@ fn check_arg(f: &Function, a: &Arg, errs: &mut Vec<String>) {
         && !is_snake(field)
     {
         errs.push(format!("{at}: field must be snake_case"));
+    }
+    match (&a.json_type, a.ty) {
+        (None, ArgType::Json) => errs.push(format!(
+            "{at}: json args need json_type (use `any` for free-form JSON)"
+        )),
+        (Some(_), ty) if ty != ArgType::Json => {
+            errs.push(format!("{at}: json_type is only valid for type json"))
+        }
+        (Some(ty), _) => check_json_type(&at, &a.name, ty, errs),
+        (None, _) => {}
+    }
+}
+
+/// Structural rules of a `json_type` descriptor; `path` names the position
+/// (`arg[]` = array item, `arg.field`, `arg<i>` = one_of alternative).
+fn check_json_type(at: &str, path: &str, ty: &JsonType, errs: &mut Vec<String>) {
+    let mut err = |msg: String| errs.push(format!("{at}: json_type {path}: {msg}"));
+    match ty {
+        JsonType::Any | JsonType::String | JsonType::Int | JsonType::Bool => {}
+        JsonType::Enum(values) => {
+            if values.is_empty() {
+                err("enum needs at least one value".into());
+            }
+            let mut seen = BTreeSet::new();
+            for v in values.iter().filter(|v| !seen.insert(v.as_str())) {
+                err(format!("enum value '{v}' is repeated"));
+            }
+        }
+        JsonType::Array(item) => check_json_type(at, &format!("{path}[]"), item, errs),
+        JsonType::Nullable(inner) => {
+            if matches!(**inner, JsonType::Any | JsonType::Nullable(_)) {
+                err("nullable cannot wrap any or nullable".into());
+            }
+            check_json_type(at, &format!("{path}?"), inner, errs);
+        }
+        JsonType::Object(fields) => {
+            if fields.is_empty() {
+                err("object needs at least one field".into());
+            }
+            let mut seen = BTreeSet::new();
+            for f in fields {
+                if f.name.is_empty() {
+                    err("empty field name".into());
+                } else if !seen.insert(f.name.as_str()) {
+                    err(format!("field '{}' is repeated", f.name));
+                }
+            }
+            for f in fields {
+                check_json_type(at, &format!("{path}.{}", f.name), &f.ty, errs);
+            }
+        }
+        JsonType::OneOf(alts) => {
+            if alts.len() < 2 {
+                err("one_of needs at least two alternatives".into());
+            }
+            let kinds: Vec<_> = alts.iter().map(JsonType::kind).collect();
+            if kinds.contains(&None) {
+                err("one_of cannot contain any, nullable or a nested one_of".into());
+            }
+            let distinct: BTreeSet<_> = kinds.iter().flatten().collect();
+            if distinct.len() != kinds.iter().flatten().count() {
+                err("one_of alternatives must differ in JSON kind".into());
+            }
+            for (i, alt) in alts.iter().enumerate() {
+                check_json_type(at, &format!("{path}<{i}>"), alt, errs);
+            }
+        }
     }
 }
 
@@ -196,6 +263,14 @@ fn check_functions(inputs: &Inputs, errs: &mut Vec<String>) {
             }
         }
     }
+    for f in &inputs.functions {
+        if let Some(c) = f.companion().filter(|c| names.contains(c.as_str())) {
+            errs.push(format!(
+                "{c}: collides with the typed companion of {}",
+                f.name
+            ));
+        }
+    }
 }
 
 fn check_excluded(ex: &Excluded, errs: &mut Vec<String>) {
@@ -254,6 +329,15 @@ fn check_step_args(at: &str, f: &Function, step: &Step, errs: &mut Vec<String>) 
             ));
         }
     }
+}
+
+/// Does the step pass a `json` arg value outside the arg's `json_type`?
+fn untypeable_json(f: &Function, step: &Step) -> bool {
+    step.args.iter().any(|(key, v)| {
+        f.arg(key)
+            .and_then(|a| a.json_type.as_ref())
+            .is_some_and(|ty| !ty.matches(v))
+    })
 }
 
 /// `required: true` args a step leaves out.
@@ -334,8 +418,10 @@ fn check_cases(cases: &[Case], by_name: &BTreeMap<&str, &Function>, errs: &mut V
     }
 }
 
-/// Mark every conformance step that omits a `required: true` arg as
-/// `wire_only` (see `model::Step::wire_only`). Run after [`validate`].
+/// Mark every conformance step that omits a `required: true` arg, or passes
+/// a `json` arg value that does not fit its `json_type`, as `wire_only` (see
+/// `model::Step::wire_only`): a typed binding cannot express it. Run after
+/// [`validate`].
 pub fn mark_wire_only(inputs: &mut Inputs) {
     let by_name: BTreeMap<String, Function> = inputs
         .functions
@@ -345,7 +431,7 @@ pub fn mark_wire_only(inputs: &mut Inputs) {
     for step in inputs.cases.iter_mut().flat_map(|c| c.steps.iter_mut()) {
         if let Some(f) = by_name.get(&step.func) {
             let omits = omitted_required(f, step).next().is_some();
-            step.wire_only = omits;
+            step.wire_only = omits || untypeable_json(f, step);
         }
     }
 }

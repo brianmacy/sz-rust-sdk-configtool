@@ -7,9 +7,12 @@
 //! * `api.hpp` — one inline PascalCase function per IMPLEMENTED manifest
 //!   function (`status: not_implemented` is skipped; it stays reachable via
 //!   `Invoke`), its `<Name>Options` struct when it has optional / tri-state
-//!   args, and a `<Name>Result` struct (the config for `config_and_json`, then
-//!   one JSON-text field per name) for `tuple_names`. A required `int_or_str`
-//!   arg yields two overloads (`std::int64_t` / `std::string_view`).
+//!   args, and a `<Name>Record` struct (one JSON-text field per name) for
+//!   `tuple_names`. Every config-changing function returns the config text; a
+//!   `config_and_json` function also gets a companion `<Name>Result` (same
+//!   parameters and overloads) returning the record JSON text (or the
+//!   `<Name>Record`). A required `int_or_str` arg yields two overloads
+//!   (`std::int64_t` / `std::string_view`).
 //! * `typed_dispatch.hpp` (tests only) — maps each wire name to a lambda that
 //!   decodes conformance `args` and calls the TYPED function, plus the
 //!   workspace-relative input paths from `project.yaml` (never hardcoded in
@@ -215,7 +218,38 @@ fn options_name(f: &Function) -> String {
 }
 
 fn tuple_struct_name(f: &Function) -> Option<String> {
-    (!f.tuple_names.is_empty()).then(|| format!("{}Result", pascal(&f.name)))
+    (!f.tuple_names.is_empty()).then(|| format!("{}Record", pascal(&f.name)))
+}
+
+/// Which typed function of a manifest function is rendered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Role {
+    /// `<Name>`: the config for config-changing functions, else the result.
+    Primary,
+    /// `<Name>Result` of a `config_and_json` function: the record only.
+    Companion,
+}
+
+/// The typed functions of `f`: the primary, plus the companion when it has one.
+fn roles(f: &Function) -> &'static [Role] {
+    if f.companion().is_some() {
+        &[Role::Primary, Role::Companion]
+    } else {
+        &[Role::Primary]
+    }
+}
+
+/// The PascalCase C++ name of `f`'s typed function in `role`.
+fn fn_name(f: &Function, role: Role) -> String {
+    match role {
+        Role::Primary => pascal(&f.name),
+        Role::Companion => pascal(&f.companion().unwrap_or_default()),
+    }
+}
+
+/// The record struct the typed function in `role` returns, if any.
+fn returned_struct(f: &Function, role: Role) -> Option<String> {
+    tuple_struct_name(f).filter(|_| f.returns == Returns::Json || role == Role::Companion)
 }
 
 /// C++ type of an `int_or_str` value that is not overloaded (an option field).
@@ -256,11 +290,12 @@ fn writer_method(ty: ArgType) -> &'static str {
     }
 }
 
-fn return_type(f: &Function) -> String {
+fn return_type(f: &Function, role: Role) -> String {
+    if let Some(name) = returned_struct(f, role) {
+        return name;
+    }
     match f.returns {
-        _ if !f.tuple_names.is_empty() => tuple_struct_name(f).unwrap_or_default(),
-        Returns::Config | Returns::Json => "std::string".into(),
-        Returns::ConfigAndJson => "ConfigAndJson".into(),
+        Returns::Config | Returns::Json | Returns::ConfigAndJson => "std::string".into(),
         Returns::Int => "std::int64_t".into(),
         Returns::Unit => "void".into(),
     }
@@ -284,6 +319,9 @@ fn arg_doc(a: &Arg) -> String {
     }
     if let Some(s) = &a.semantics {
         parts.push(s.trim().to_string());
+    }
+    if let Some(shape) = a.shape() {
+        parts.push(format!("Shape: `{shape}`."));
     }
     if let Some(d) = &a.default {
         parts.push(format!("Library default when absent: {d}."));
@@ -318,11 +356,8 @@ fn tuple_struct(f: &Function) -> String {
     let mut out = format!(
         "/// Result of {}(): each named record field as JSON text (exactly the\n\
          /// record member's JSON, e.g. `1001`, `true`, `\"4.0.0\"`).\nstruct {name} {{\n",
-        pascal(&f.name)
+        fn_name(f, *roles(f).last().unwrap_or(&Role::Primary))
     );
-    if f.returns == Returns::ConfigAndJson {
-        out.push_str("    /// The modified configuration JSON.\n    std::string config{};\n");
-    }
     for t in &f.tuple_names {
         let _ = writeln!(
             out,
@@ -334,8 +369,21 @@ fn tuple_struct(f: &Function) -> String {
     out
 }
 
-fn function_doc(f: &Function) -> String {
-    let mut out = doc_cmd("", "@brief ", f.doc.trim());
+/// The summary of `f`'s typed function in `role`.
+fn summary(f: &Function, role: Role) -> String {
+    match role {
+        Role::Primary => f.doc.trim().to_string(),
+        Role::Companion => format!(
+            "The record (row / ids) of {}(): same arguments and operation, but returns the \
+             record instead of the configuration. Operation: {}",
+            pascal(&f.name),
+            f.doc.trim()
+        ),
+    }
+}
+
+fn function_doc(f: &Function, role: Role) -> String {
+    let mut out = doc_cmd("", "@brief ", &summary(f, role));
     if let Some(n) = &f.notes {
         out.push_str("///\n");
         out.push_str(&doc_lines("", n));
@@ -353,17 +401,24 @@ fn function_doc(f: &Function) -> String {
             options_name(f)
         );
     }
-    let ret = match f.returns {
-        _ if !f.tuple_names.is_empty() => format!(
+    let ret = match (f.returns, role) {
+        _ if returned_struct(f, role).is_some() => format!(
             "{} (fields: {}).",
             tuple_struct_name(f).unwrap_or_default(),
             f.tuple_names.join(", ")
         ),
-        Returns::Config => "The modified configuration JSON.".to_string(),
-        Returns::Json => "The result as JSON text.".to_string(),
-        Returns::ConfigAndJson => "The modified configuration and the record JSON text.".into(),
-        Returns::Int => "The integer result.".into(),
-        Returns::Unit => String::new(),
+        (Returns::Config, _) => "The modified configuration JSON.".to_string(),
+        (Returns::Json, _) => "The result as JSON text.".to_string(),
+        (Returns::ConfigAndJson, Role::Primary) => format!(
+            "The modified configuration JSON. {}() (same arguments) returns the record this \
+             operation produces.",
+            fn_name(f, Role::Companion)
+        ),
+        (Returns::ConfigAndJson, Role::Companion) => {
+            "The record (e.g. the created row or ids) as JSON text.".into()
+        }
+        (Returns::Int, _) => "The integer result.".into(),
+        (Returns::Unit, _) => String::new(),
     };
     if !ret.is_empty() {
         let _ = writeln!(out, "/// @return {ret}");
@@ -381,7 +436,7 @@ fn function_doc(f: &Function) -> String {
     out
 }
 
-fn signature(f: &Function) -> String {
+fn signature(f: &Function, role: Role) -> String {
     let mut params = vec!["const std::string& config_json".to_string()];
     for a in f.args.iter().filter(|a| !is_option(a)) {
         params.push(format!("{} {}", param_type(a.ty), ident(&a.name)));
@@ -396,8 +451,8 @@ fn signature(f: &Function) -> String {
     };
     format!(
         "{nodiscard}inline {} {}({})",
-        return_type(f),
-        pascal(&f.name),
+        return_type(f, role),
+        fn_name(f, role),
         params.join(", ")
     )
 }
@@ -419,31 +474,30 @@ fn write_arg(a: &Arg) -> String {
 }
 
 fn tuple_return_body(f: &Function, name: &str) -> String {
-    let mut fields = Vec::new();
-    if f.returns == Returns::ConfigAndJson {
-        fields.push(".config = std::move(sz_env.config)".to_string());
-    }
-    for t in &f.tuple_names {
-        fields.push(format!(".{} = sz_rec.Member({})", ident(t), lit(t)));
-    }
+    let fields: Vec<String> = f
+        .tuple_names
+        .iter()
+        .map(|t| format!(".{} = sz_rec.Member({})", ident(t), lit(t)))
+        .collect();
     format!(
         "    const detail::Record sz_rec(std::move(sz_env.result));\n    return {name}{{{}}};\n",
         fields.join(", ")
     )
 }
 
-fn return_body(f: &Function) -> String {
-    if let Some(name) = tuple_struct_name(f) {
+fn return_body(f: &Function, role: Role) -> String {
+    if let Some(name) = returned_struct(f, role) {
         return tuple_return_body(f, &name);
     }
-    match f.returns {
-        Returns::Config => "    return std::move(sz_env.config);\n".into(),
-        Returns::Json => "    return std::move(sz_env.result);\n".into(),
-        Returns::Int => "    return detail::ParseInt(sz_env.result);\n".into(),
-        Returns::Unit => String::new(),
-        Returns::ConfigAndJson => {
-            "    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};\n".into()
+    match (f.returns, role) {
+        (Returns::Config, _) | (Returns::ConfigAndJson, Role::Primary) => {
+            "    return std::move(sz_env.config);\n".into()
         }
+        (Returns::Json, _) | (Returns::ConfigAndJson, Role::Companion) => {
+            "    return std::move(sz_env.result);\n".into()
+        }
+        (Returns::Int, _) => "    return detail::ParseInt(sz_env.result);\n".into(),
+        (Returns::Unit, _) => String::new(),
     }
 }
 
@@ -477,17 +531,19 @@ fn function(f: &Function) -> String {
         out.push_str(&options_struct(f));
     }
     out.push_str(&tuple_struct(f));
-    for g in overloads(f) {
-        out.push_str(&function_body(f, &g));
+    for role in roles(f) {
+        for g in overloads(f) {
+            out.push_str(&function_body(f, &g, *role));
+        }
     }
     out
 }
 
 /// One overload: docs from the manifest function `f`, signature and body
-/// from its concrete overload `g`.
-fn function_body(f: &Function, g: &Function) -> String {
-    let mut out = function_doc(f);
-    out.push_str(&signature(g));
+/// from its concrete overload `g`, for `f`'s typed function in `role`.
+fn function_body(f: &Function, g: &Function, role: Role) -> String {
+    let mut out = function_doc(f, role);
+    out.push_str(&signature(g, role));
     out.push_str(" {\n    detail::ArgsWriter sz_args;\n");
     for a in &g.args {
         out.push_str(&write_arg(a));
@@ -503,7 +559,7 @@ fn function_body(f: &Function, g: &Function) -> String {
         lit(&f.name),
         returns_enum(f.returns)
     );
-    out.push_str(&return_body(f));
+    out.push_str(&return_body(f, role));
     out.push_str("}\n\n");
     out
 }
@@ -609,23 +665,39 @@ fn visit_param(a: &Arg) -> String {
     format!("sz_v_{}", a.name)
 }
 
-/// Statement(s) turning the typed `call` into an `Outcome`.
+/// Statement(s) turning the typed `call` into an `Outcome`. A
+/// `config_and_json` step calls the primary AND its companion (same args;
+/// `Outcome::FromConfigAndJson` requires both to agree on failure).
 fn dispatch_return(f: &Function, call: &str, indent: &str) -> String {
-    if !f.tuple_names.is_empty() {
-        let config = if f.returns == Returns::ConfigAndJson {
-            "std::optional<std::string>(sz_r.config)"
+    let fields: Vec<String> = f
+        .tuple_names
+        .iter()
+        .map(|t| format!("{{{}, sz_r.{}}}", lit(t), ident(t)))
+        .collect();
+    let fields = fields.join(", ");
+    if f.returns == Returns::ConfigAndJson {
+        let companion = call.replacen(
+            &format!("szconfigtool::{}(", pascal(&f.name)),
+            &format!("szconfigtool::{}(", fn_name(f, Role::Companion)),
+            1,
+        );
+        let record = if f.tuple_names.is_empty() {
+            format!("[&] {{ return {companion}; }}")
         } else {
-            "std::nullopt"
+            format!(
+                "[&] {{\n{indent}        const auto sz_r = {companion};\n\
+                 {indent}        return Outcome::RecordJson({{{fields}}});\n{indent}    }}"
+            )
         };
-        let fields: Vec<String> = f
-            .tuple_names
-            .iter()
-            .map(|t| format!("{{{}, sz_r.{}}}", lit(t), ident(t)))
-            .collect();
         return format!(
-            "{indent}const auto sz_r = {call};\n{indent}return Outcome::FromRecord({}, {config}, {{{}}});\n",
+            "{indent}return Outcome::FromConfigAndJson(\n{indent}    [&] {{ return {call}; }},\n\
+             {indent}    {record});\n"
+        );
+    }
+    if !f.tuple_names.is_empty() {
+        return format!(
+            "{indent}const auto sz_r = {call};\n{indent}return Outcome::FromRecord({}, {{{fields}}});\n",
             lit(f.returns.as_str()),
-            fields.join(", ")
         );
     }
     match f.returns {
@@ -695,6 +767,7 @@ pub fn dispatch_hpp(inputs: &Inputs) -> String {
         &[
             "<map>",
             "<optional>",
+            "<set>",
             "<string>",
             "<variant>",
             "\"conformance_support.hpp\"",
@@ -707,11 +780,20 @@ pub fn dispatch_hpp(inputs: &Inputs) -> String {
          /// Workspace-relative inputs (from project.yaml `paths`).\n\
          inline constexpr const char* kManifestJson = {};\n\
          inline constexpr const char* kConformanceJson = {};\n\n\
+         /// Wire names whose typed call runs the primary AND its `<Name>Result`\n\
+         /// companion (every implemented `config_and_json` function).\n\
+         inline const std::set<std::string>& TypedCompanions() {{\n    \
+         static const std::set<std::string> names = {{{}}};\n    return names;\n}}\n\n\
          /// Wire name -> typed call, for every IMPLEMENTED manifest function.\n\
          inline const std::map<std::string, TypedCall>& TypedFunctions() {{\n    \
          static const std::map<std::string, TypedCall> table = {{\n",
         lit(&p.manifest_json_out),
-        lit(&p.conformance_json_out)
+        lit(&p.conformance_json_out),
+        implemented(inputs)
+            .filter(|f| f.companion().is_some())
+            .map(|f| lit(&f.name))
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     for f in implemented(inputs) {
         out.push_str(&dispatch_entry(f));
@@ -778,6 +860,7 @@ mod tests {
             positional: false,
             owned: false,
             rust_convert: None,
+            json_type: None,
         }
     }
 
@@ -832,7 +915,7 @@ mod tests {
         let mut opt = arg("feature", ArgType::Str);
         opt.optional = true;
         let f = func("add_x", vec![req, opt], Returns::Config);
-        let sig = signature(&f);
+        let sig = signature(&f, Role::Primary);
         assert_eq!(
             sig,
             "[[nodiscard]] inline std::string AddX(const std::string& config_json, \
@@ -871,26 +954,54 @@ mod tests {
         let mut t = func("set_plan", vec![], Returns::ConfigAndJson);
         t.tuple_names = vec!["plan_id".into(), "was_created".into()];
         let g = function(&t);
-        assert!(g.contains("struct SetPlanResult {\n"), "{g}");
-        assert!(!g.contains(": ConfigAndJson"), "{g}");
+        assert!(g.contains("/// Result of SetPlanResult(): each"), "{g}");
+        assert!(g.contains("struct SetPlanRecord {\n"), "{g}");
         assert!(!g.contains("std::string json"), "{g}");
-        assert!(g.contains("    std::string config{};"), "{g}");
+        assert!(!g.contains("    std::string config{};"), "{g}");
         assert!(g.contains("    std::string plan_id{};"), "{g}");
-        assert!(g.contains("inline SetPlanResult SetPlan("), "{g}");
+        assert!(g.contains("inline std::string SetPlan("), "{g}");
+        assert!(g.contains("    return std::move(sz_env.config);\n"), "{g}");
+        assert!(
+            g.contains("SetPlanResult() (same arguments) returns the record"),
+            "{g}"
+        );
+        assert!(g.contains("inline SetPlanRecord SetPlanResult("), "{g}");
+        assert!(
+            g.contains("/// @brief The record (row / ids) of SetPlan():"),
+            "{g}"
+        );
         assert!(
             g.contains(
-                "return SetPlanResult{.config = std::move(sz_env.config), \
-                 .plan_id = sz_rec.Member(\"plan_id\"), .was_created = sz_rec.Member(\"was_created\")};"
+                "return SetPlanRecord{.plan_id = sz_rec.Member(\"plan_id\"), \
+                 .was_created = sz_rec.Member(\"was_created\")};"
             ),
             "{g}"
         );
         let d = dispatch_entry(&t);
         assert!(
             d.contains(
-                "Outcome::FromRecord(\"config_and_json\", std::optional<std::string>(sz_r.config), \
-                 {{\"plan_id\", sz_r.plan_id}, {\"was_created\", sz_r.was_created}})"
+                "        return Outcome::FromConfigAndJson(\n            \
+                 [&] { return szconfigtool::SetPlan(config); },\n            [&] {\n                \
+                 const auto sz_r = szconfigtool::SetPlanResult(config);\n                \
+                 return Outcome::RecordJson({{\"plan_id\", sz_r.plan_id}, {\"was_created\", sz_r.was_created}});\n            \
+                 });\n"
             ),
             "{d}"
+        );
+        let plain = function(&func("add_it", vec![], Returns::ConfigAndJson));
+        assert!(plain.contains("inline std::string AddIt("), "{plain}");
+        assert!(plain.contains("inline std::string AddItResult("), "{plain}");
+        assert!(
+            plain.contains("    return std::move(sz_env.result);\n"),
+            "{plain}"
+        );
+        assert!(
+            plain.contains("/// @return The record (e.g. the created row or ids) as JSON text."),
+            "{plain}"
+        );
+        assert!(
+            dispatch_entry(&func("add_it", vec![], Returns::ConfigAndJson))
+                .contains("            [&] { return szconfigtool::AddItResult(config); });\n")
         );
     }
 
@@ -903,20 +1014,21 @@ mod tests {
         );
         t.tuple_names = vec!["current_version".into(), "matches".into()];
         let g = function(&t);
-        assert!(g.contains("struct VerifyVResult {\n"), "{g}");
+        assert!(g.contains("struct VerifyVRecord {\n"), "{g}");
+        assert!(g.contains("/// Result of VerifyV(): each"), "{g}");
         assert!(!g.contains("config{}"), "{g}");
-        assert!(g.contains("inline VerifyVResult VerifyV("), "{g}");
+        assert!(g.contains("inline VerifyVRecord VerifyV("), "{g}");
         assert!(g.contains("ResultKind::Json);"), "{g}");
         assert!(
             g.contains(
-                "return VerifyVResult{.current_version = sz_rec.Member(\"current_version\"), \
+                "return VerifyVRecord{.current_version = sz_rec.Member(\"current_version\"), \
                  .matches = sz_rec.Member(\"matches\")};"
             ),
             "{g}"
         );
         let d = dispatch_entry(&t);
         assert!(
-            d.contains("Outcome::FromRecord(\"json\", std::nullopt, {{\"current_version\""),
+            d.contains("Outcome::FromRecord(\"json\", {{\"current_version\""),
             "{d}"
         );
     }

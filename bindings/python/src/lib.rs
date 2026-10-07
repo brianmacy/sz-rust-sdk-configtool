@@ -49,10 +49,23 @@ fn text_arg<'a>(obj: &'a Bound<'_, PyAny>, param: &str) -> PyResult<std::borrow:
     };
     let s = obj
         .cast::<PyString>()
-        .map_err(|_| invalid(&format!("must be a str, not {}", type_name(obj))))?;
+        .map_err(|_| invalid(&not_a_str(param, &type_name(obj))))?;
     s.to_str()
         .map(std::borrow::Cow::Borrowed)
         .map_err(|_| invalid("is not valid Unicode (lone surrogate); it has no UTF-8 form"))
+}
+
+/// The "not a `str`" message; for `config` it also names the usual cause (a
+/// previous call's non-config value passed back as the config).
+fn not_a_str(param: &str, type_name: &str) -> String {
+    if param != "config" {
+        return format!("must be a str, not {type_name}");
+    }
+    format!(
+        "must be a str (the configuration JSON text), not {type_name}; if this came from a \
+         previous call, use the value that call returned (config-changing functions return \
+         the config text; use <name>_result for the created row)"
+    )
 }
 
 fn type_name(obj: &Bound<'_, PyAny>) -> String {

@@ -9,7 +9,7 @@
 #   native/c/native-static-libs.txt   system libs the static archive needs
 #   native/jni/     JNI library (Java binding)
 #   native/node/    sz-configtool.<napi_tag>.node
-#   sbom/           CycloneDX SBOMs (one per shipped crate)
+#   sbom/           CycloneDX SBOM of the C ABI (embedded in the C archive)
 #
 # Linux: cargo-zigbuild against glibc 2.34 (generic x86-64 / aarch64; no
 # target-cpu). macOS: plain cargo, MACOSX_DEPLOYMENT_TARGET from config.yaml.
@@ -98,22 +98,20 @@ cp "${OUT_DIR}/$(shared_lib_name "${OS}" szconfigtool_jni)" "${STAGE}/native/jni
 cp "${OUT_DIR}/$(shared_lib_name "${OS}" szconfigtool_node)" \
     "${STAGE}/native/node/sz-configtool.$(tcfg "${TARGET}" napi_tag).node"
 
-# 3. SBOMs (CycloneDX 1.5, dependencies resolved for this target). The tool
-#    writes next to every workspace Cargo.toml; collect and remove them, and
-#    replace the absolute workspace path (every host spelling) with the remap prefix.
-log "generating CycloneDX SBOMs"
+# 3. SBOM (CycloneDX 1.5, dependencies resolved for this target) of the C ABI
+#    crate, embedded in the C archive (package-c.sh); no SBOM is a release
+#    asset. The tool writes next to every workspace Cargo.toml; keep ffi's,
+#    remove them all, and replace the absolute workspace path (every host
+#    spelling) with the remap prefix.
+log "generating the CycloneDX SBOM of the C ABI"
 sbom_name="sbom-${TARGET}-$$"
 cargo cyclonedx --manifest-path "${REPO_ROOT}/Cargo.toml" -f json --spec-version 1.5 \
     --target "${RUST_TARGET}" --no-build-deps --override-filename "${sbom_name}" -q
-for crate_dir in ffi bindings/jni bindings/node bindings/python; do
-    crate="$(basename "${crate_dir}")"
-    [[ "${crate_dir}" == ffi ]] && crate=c
-    # Both spellings of the root: Git Bash's /d/... and the native D:/... (the
-    # script also covers D:\... and its JSON-escaped form; lib/sbom_paths.py).
-    "$(python_bin)" "${PACKAGING_DIR}/lib/sbom_paths.py" \
-        "${REPO_ROOT}/${crate_dir}/${sbom_name}.json" "${STAGE}/sbom/sz-configtool-${crate}.cdx.json" \
-        "${REMAP_PREFIX}" "${REPO_ROOT}" "$(native_path "${REPO_ROOT}")"
-done
+# Both spellings of the root: Git Bash's /d/... and the native D:/... (the
+# script also covers D:\... and its JSON-escaped form; lib/sbom_paths.py).
+"$(python_bin)" "${PACKAGING_DIR}/lib/sbom_paths.py" \
+    "${REPO_ROOT}/ffi/${sbom_name}.json" "${STAGE}/sbom/sz-configtool-c.cdx.json" \
+    "${REMAP_PREFIX}" "${REPO_ROOT}" "$(native_path "${REPO_ROOT}")"
 find "${REPO_ROOT}" -name "${sbom_name}.json" -not -path "${CARGO_TARGET_DIR}/*" -delete
 
 log "staged natives for ${TARGET} in ${STAGE}/native"

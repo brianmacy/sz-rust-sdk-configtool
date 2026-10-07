@@ -3,12 +3,14 @@
 # target (on that target's runner). Nothing here rebuilds a native library.
 #
 #   python  fresh venv, `pip install` the built wheel, pytest bindings/python/tests
+#           (only targets that ship a wheel: config.yaml python_wheel, Linux)
 #   node    npm test with SZ_CONFIGTOOL_NATIVE_PATH = staged .node
 #   java    mvn test with the staged JNI library (-Dnative.lib.dir)
 #   dotnet  dotnet test with SZCONFIGTOOL_NATIVE_DIR = staged C ABI
 # (C++ is tested by package-cpp.sh, the C ABI by gates/run-c-tests.sh.)
 #
-# Usage: packaging/smoke-bindings.sh <target> [python|node|java|dotnet ...]   (default: all)
+# Usage: packaging/smoke-bindings.sh <target> [python|node|java|dotnet ...]
+#        (default: all that the target ships)
 # shellcheck source=lib/common.sh
 source "$(dirname "$0")/lib/common.sh"
 # shellcheck source=lib/tools-env.sh
@@ -22,6 +24,7 @@ STAGE="$(target_stage "${TARGET}")"
 OUT="$(target_out "${TARGET}")"
 
 smoke_python() {
+    target_has_python "${TARGET}" || die "no Python wheel for ${TARGET} (Linux targets only; config.yaml python_wheel)"
     local venv="${STAGE}/smoke-venv" py wheel
     shopt -s nullglob
     local wheels=("${OUT}"/sz_configtool-*.whl)
@@ -59,7 +62,10 @@ smoke_dotnet() {
 }
 
 SUITES=("$@")
-[[ ${#SUITES[@]} -gt 0 ]] || SUITES=(python node java dotnet)
+if [[ ${#SUITES[@]} -eq 0 ]]; then
+    SUITES=(node java dotnet)
+    if target_has_python "${TARGET}"; then SUITES=(python "${SUITES[@]}"); fi
+fi
 for suite in "${SUITES[@]}"; do
     log "smoke: ${suite} (${TARGET})"
     case "${suite}" in

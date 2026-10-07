@@ -2,12 +2,14 @@
 # The per-target release pipeline, in one place. CI calls one stage per step;
 # locally run `all`.
 #
-#   build    build-native.sh                                   (natives + SBOMs)
+#   build    build-native.sh                       (natives + the C ABI SBOM)
 #   gates    exports, linkage, glibc ceiling (Linux), no build paths, C tests
 #            — over everything staged so far (run after build AND after package)
-#   package  C archive, Python wheel, Node tarball, C++ package (runs its ctest),
-#            per-artifact SBOMs
-#   smoke    each binding's test suite against the staged natives
+#   package  C archive (embeds the C ABI SBOM), Python wheel (Linux targets
+#            only: config.yaml python_wheel), Node tarball, C++ package
+#            (runs its ctest)
+#   smoke    each binding's test suite against the staged natives (Python on
+#            Linux targets only)
 #   all      build gates package gates smoke
 #
 # Usage: packaging/release-target.sh <target> <stage>...
@@ -36,10 +38,13 @@ stage_gates() {
 
 stage_package() {
     "${P}/package-c.sh" "${TARGET}"
-    "${P}/package-python.sh" "${TARGET}"
+    if target_has_python "${TARGET}"; then
+        "${P}/package-python.sh" "${TARGET}"
+    else
+        log "no Python wheel for ${TARGET} (Senzing's Python SDK is Linux only)"
+    fi
     "${P}/package-node.sh" "${TARGET}"
     "${P}/package-cpp.sh" "${TARGET}"
-    "${P}/package-sboms.sh" "${TARGET}"
 }
 
 stage_smoke() { "${P}/smoke-bindings.sh" "${TARGET}"; }

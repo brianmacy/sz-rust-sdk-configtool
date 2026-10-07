@@ -325,7 +325,7 @@ int main(void) {
 For questions or issues related to the C FFI implementation:
 
 - **Repository:** https://github.com/brianmacy/sz-rust-sdk-configtool
-- **Author:** Brian Macy <bmacy@senzing.com>
+- **Author:** Brian Macy
 
 ---
 

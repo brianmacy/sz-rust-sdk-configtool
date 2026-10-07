@@ -87,7 +87,8 @@ namespace Sz.ConfigTool.Tests
         {
             // A real `json` function read through each other typed seam.
             { "config", config => NativeCall.Config("list_data_sources", config, "{}") },
-            { "config_and_json", config => NativeCall.ConfigAndJson("list_data_sources", config, "{}") },
+            { "config_and_json", config => NativeCall.ConfigAndJsonConfig("list_data_sources", config, "{}") },
+            { "config_and_json", config => NativeCall.ConfigAndJsonResult("list_data_sources", config, "{}") },
             { "unit", config => NativeCall.Unit("list_data_sources", config, "{}") },
         };
 

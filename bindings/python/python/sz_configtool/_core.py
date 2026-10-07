@@ -55,15 +55,6 @@ class Invocation(NamedTuple):
     result: str | None
 
 
-class ConfigAndJson(NamedTuple):
-    """Result of a function returning both a modified config and a record."""
-
-    config: str
-    """The modified configuration JSON (opaque string)."""
-    json: str
-    """The record, as a JSON string."""
-
-
 def opt(value: Any) -> Any:
     """Optional arg: ``None`` means absent (the key is omitted)."""
     return UNSET if value is None else value
@@ -114,21 +105,13 @@ def invoke(
 
 
 def call_config(name: str, config_json: str, args: Mapping[str, Any]) -> str:
-    """``returns: config`` -> the modified config string."""
+    """``returns: config`` / ``config_and_json`` -> the modified config string."""
     return str(invoke(name, config_json, args).config)
 
 
 def call_json(name: str, config_json: str, args: Mapping[str, Any]) -> str:
-    """``returns: json`` -> the result as a JSON string."""
+    """``returns: json`` (or a ``config_and_json`` record) -> the JSON string."""
     return str(invoke(name, config_json, args).result)
-
-
-def call_config_and_json(
-    name: str, config_json: str, args: Mapping[str, Any]
-) -> ConfigAndJson:
-    """``returns: config_and_json`` -> ``(config, json)`` (record JSON string)."""
-    out = invoke(name, config_json, args)
-    return ConfigAndJson(str(out.config), str(out.result))
 
 
 def _member_json(result: str, names: tuple[str, ...]) -> list[str]:
@@ -146,21 +129,13 @@ def call_json_record(
     record: Callable[..., _R],
     names: tuple[str, ...],
 ) -> _R:
-    """``returns: json`` + ``tuple_names`` -> ``record(*member JSON texts)``."""
+    """A ``tuple_names`` result -> ``record(*member JSON texts)``.
+
+    For ``returns: config_and_json`` this is the companion's record; the
+    config is the primary's return value.
+    """
     out = invoke(name, config_json, args)
     return record(*_member_json(str(out.result), names))
-
-
-def call_config_and_record(
-    name: str,
-    config_json: str,
-    args: Mapping[str, Any],
-    record: Callable[..., _R],
-    names: tuple[str, ...],
-) -> _R:
-    """``returns: config_and_json`` + ``tuple_names`` -> ``record(config, *members)``."""
-    out = invoke(name, config_json, args)
-    return record(str(out.config), *_member_json(str(out.result), names))
 
 
 def call_int(name: str, config_json: str, args: Mapping[str, Any]) -> int:

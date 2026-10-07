@@ -67,10 +67,52 @@ TEST(Naming, PascalCaseFunctionsSnakeCaseArgs) {
     // Compile-time evidence: PascalCase names, snake_case option fields, and
     // the C++-keyword arg `class` exposed as `class_`.
     const sz::AddAttributeOptions opts{.default_value = "d", .internal = "No", .id = 0};
-    const sz::ConfigAndJson r = sz::AddAttribute(Fixture(), "MY_ATTR", "NAME", "FULL_NAME",
-                                                 /*class_=*/"OTHER", opts);
-    EXPECT_EQ(ParseText(r.json).Find("ATTR_CODE")->text, "MY_ATTR");
-    EXPECT_EQ(ParseText(r.json).Find("DEFAULT_VALUE")->text, "d");
+    const std::string row = sz::AddAttributeResult(Fixture(), "MY_ATTR", "NAME", "FULL_NAME",
+                                                   /*class_=*/"OTHER", opts);
+    EXPECT_EQ(ParseText(row).Find("ATTR_CODE")->text, "MY_ATTR");
+    EXPECT_EQ(ParseText(row).Find("DEFAULT_VALUE")->text, "d");
+}
+
+// ---- every config-changing function returns the config text (issue #75) ----
+
+TEST(Chaining, ConfigAndJsonFunctionsHaveCompanionsInTheDispatch) {
+    // The generated dispatch routes a config_and_json step through the primary
+    // (statically required to return std::string) AND its <Name>Result
+    // companion; TypedCompanions() lists the wire names it does that for.
+    std::set<std::string> paired;
+    for (const auto& f : Manifest().Find("functions")->items) {
+        if (f.Find("status")->text == "implemented" && f.Find("returns")->text == "config_and_json") {
+            paired.insert(f.Find("name")->text);
+        }
+    }
+    EXPECT_FALSE(paired.empty());
+    EXPECT_EQ(TypedCompanions(), paired);
+}
+
+TEST(Chaining, SevenDifferentConfigChangingFunctionsChain) {
+    static_assert(std::is_same_v<decltype(sz::AddAttribute(std::string{}, "", "", "", "")), std::string>);
+    static_assert(std::is_same_v<decltype(sz::AddAttributeResult(std::string{}, "", "", "", "")), std::string>);
+    std::string cfg = Fixture();
+    cfg = sz::AddElement(cfg, "DEMO_EL", {.data_type = "string"});
+    cfg = sz::AddFeature(cfg, "DEMO_FEAT", R"(["DEMO_EL"])");
+    cfg = sz::AddAttribute(cfg, "DEMO_ATTR", "DEMO_FEAT", "DEMO_EL", "OTHER");
+    cfg = sz::AddFragment(cfg, R"({"ERFRAG_CODE":"DEMO_FRAG","ERFRAG_SOURCE":"./FRAGMENT[./SAME_NAME>0]"})");
+    cfg = sz::AddComparisonCall(cfg, "DEMO_FEAT", "EXACT_COMP", {"DEMO_EL"});
+    cfg = sz::AddComparisonFunction(cfg, "DEMO_COMP");
+    cfg = sz::AddDataSource(cfg, "DEMO_DS");
+    EXPECT_EQ(ParseText(sz::GetAttribute(cfg, "DEMO_ATTR")).Find("ATTR_CODE")->text, "DEMO_ATTR");
+    EXPECT_NE(sz::GetFragment(cfg, "DEMO_FRAG").find("DEMO_FRAG"), std::string::npos);
+    EXPECT_NE(sz::GetComparisonFunction(cfg, "DEMO_COMP").find("DEMO_COMP"), std::string::npos);
+    EXPECT_NE(sz::ListDataSources(cfg).find("DEMO_DS"), std::string::npos);
+}
+
+TEST(Chaining, CompanionReturnsTheRowOfTheSameOperation) {
+    const std::string row = sz::AddAttributeResult(Fixture(), "X_ATTR", "NAME", "FULL_NAME", "OTHER");
+    const sz::InvokeResult wire = sz::Invoke("add_attribute", Fixture(),
+        R"({"attribute":"X_ATTR","feature":"NAME","element":"FULL_NAME","class":"OTHER"})");
+    EXPECT_EQ(wire.result, std::optional<std::string>(row));
+    EXPECT_EQ(wire.config, std::optional<std::string>(
+        sz::AddAttribute(Fixture(), "X_ATTR", "NAME", "FULL_NAME", "OTHER")));
 }
 
 // ---- optional / required / tri-state ----
@@ -121,20 +163,21 @@ TEST(Args, FieldUpdateLeaveClearSet) {
 
 // ---- returns ----
 
-TEST(Returns, ConfigAndJsonTupleNamesBecomeFields) {
-    // Named fields, no inherited ConfigAndJson / `json` member.
-    static_assert(!std::is_base_of_v<sz::ConfigAndJson, sz::SetGenericPlanResult>);
-    const auto [config, plan_id, was_created] = sz::SetGenericPlan(Fixture(), "new_plan", "New Plan");
+TEST(Returns, ConfigAndJsonTupleNamesBecomeCompanionFields) {
+    // The primary returns the config; the companion the named fields only.
+    static_assert(std::is_same_v<decltype(sz::SetGenericPlan(std::string{}, "", "")), std::string>);
+    const auto [plan_id, was_created] = sz::SetGenericPlanResult(Fixture(), "new_plan", "New Plan");
     EXPECT_EQ(plan_id, "3");  // JSON text of each record member
     EXPECT_EQ(was_created, "true");
+    const std::string config = sz::SetGenericPlan(Fixture(), "new_plan", "New Plan");
     EXPECT_NE(sz::ListGenericPlans(config).find("NEW_PLAN"), std::string::npos);
-    const sz::SetGenericPlanResult upd = sz::SetGenericPlan(Fixture(), "search", "Updated");
+    const sz::SetGenericPlanRecord upd = sz::SetGenericPlanResult(Fixture(), "search", "Updated");
     EXPECT_EQ(upd.plan_id, "2");
     EXPECT_EQ(upd.was_created, "false");
 }
 
 TEST(Returns, JsonTupleNamesBecomeFields) {
-    const sz::VerifyCompatibilityVersionResult match = sz::VerifyCompatibilityVersion(Fixture(), "11");
+    const sz::VerifyCompatibilityVersionRecord match = sz::VerifyCompatibilityVersion(Fixture(), "11");
     EXPECT_EQ(match.current_version, R"("11")");  // a JSON string keeps its quotes
     EXPECT_EQ(match.matches, "true");
     const auto [current, matches] = sz::VerifyCompatibilityVersion(Fixture(), "11.0");

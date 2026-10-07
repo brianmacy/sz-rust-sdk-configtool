@@ -17,19 +17,32 @@ function internal(fn: () => unknown, message: RegExp): void {
 // real `config_and_json` function whose result is integer JSON (rows changed).
 const INT_FN = "remove_config_section_field";
 const INT_ARGS = { section_name: "cfg_gplan", field_name: "gplan_desc" };
+const INT_SPEC: rt.FnSpec = {
+  name: "removeConfigSectionField",
+  wire: INT_FN,
+  args: [
+    ["sectionName", "section_name", true],
+    ["fieldName", "field_name", true],
+  ],
+};
+
+/** A spec passing wire-named options through unchanged. */
+function wireSpec(wire: string, ...names: string[]): rt.FnSpec {
+  return { name: wire, wire, args: names.map((n) => [n, n, false] as const) };
+}
 
 describe("callInt", () => {
   test("parses a real native integer result", () => {
     const wire = sz.invoke(INT_FN, fixture, INT_ARGS);
     assert.equal(wire.kind, "config_and_json");
     assert.equal(wire.result, "2");
-    assert.equal(rt.callInt(INT_FN, fixture, INT_ARGS), 2);
-    assert.equal(rt.callInt(INT_FN, fixture, { section_name: "CFG_GPLAN", field_name: "NO_SUCH_FIELD" }), 0);
+    assert.equal(rt.callInt(INT_SPEC, fixture, { sectionName: "cfg_gplan", fieldName: "gplan_desc" }), 2);
+    assert.equal(rt.callInt(INT_SPEC, fixture, { sectionName: "CFG_GPLAN", fieldName: "NO_SUCH_FIELD" }), 0);
   });
 
   test("a native error propagates as its reason code", () => {
     assert.throws(
-      () => rt.callInt(INT_FN, fixture, { section_name: "CFG_NOPE", field_name: "X" }),
+      () => rt.callInt(INT_SPEC, fixture, { sectionName: "CFG_NOPE", fieldName: "X" }),
       (e: unknown) => e instanceof sz.SzConfigToolError && e.code === "NOT_FOUND",
     );
   });
@@ -37,17 +50,17 @@ describe("callInt", () => {
 
 describe("an envelope without the member a helper needs is INTERNAL", () => {
   test("callConfig on a json-only function (no config)", () => {
-    internal(() => rt.callConfig("list_data_sources", fixture, {}), /^list_data_sources: native envelope has no config$/);
+    internal(() => rt.callConfig(wireSpec("list_data_sources"), fixture), /^list_data_sources: native envelope has no config$/);
   });
   test("callJson on a config-only function (no result)", () => {
-    internal(() => rt.callJson("add_data_source", fixture, { code: "x" }), /^add_data_source: native envelope has no result$/);
+    internal(() => rt.callJson(wireSpec("add_data_source", "code"), fixture, { code: "x" }), /^add_data_source: native envelope has no result$/);
   });
 });
 
 describe("callNamed", () => {
   test("a member the result lacks is the JSON text null", () => {
     const out = rt.callNamed<Record<string, string>>(
-      "verify_compatibility_version",
+      wireSpec("verify_compatibility_version", "expected_version"),
       fixture,
       { expected_version: "11" },
       [

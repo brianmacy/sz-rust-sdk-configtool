@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
+using Xunit;
 
 namespace Sz.ConfigTool.Tests.Support
 {
@@ -75,12 +76,27 @@ namespace Sz.ConfigTool.Tests.Support
             }
             catch (TargetInvocationException e) when (e.InnerException is SzConfigToolException sz)
             {
+                if (f.Returns == "config_and_json")
+                {
+                    // The companion must fail the same way.
+                    var other = Assert.Throws<TargetInvocationException>(() => Companion(f, m).Invoke(null, values));
+                    Assert.Equal(sz.ReasonCode, Assert.IsType<SzConfigToolException>(other.InnerException).ReasonCode);
+                }
+
                 return new StepOutcome(null, null, null, sz);
+            }
+
+            if (f.Returns == "config_and_json")
+            {
+                // Primary = the config text; companion (same args) = the record.
+                string config2 = Assert.IsType<string>(ret);
+                object rec = Companion(f, m).Invoke(null, values)!;
+                string result = f.TupleNames.Count > 0 ? NamedRecord(f, rec).Result! : Assert.IsType<string>(rec);
+                return new StepOutcome(f.Returns, config2, result, null);
             }
 
             return ret switch
             {
-                ConfigAndJson cj => new StepOutcome(f.Returns, cj.Config, cj.Json, null),
                 _ when f.TupleNames.Count > 0 => NamedRecord(f, ret!),
                 string s when f.Returns == "config" => new StepOutcome(f.Returns, s, null, null),
                 string s => new StepOutcome(f.Returns, null, s, null),
@@ -89,15 +105,20 @@ namespace Sz.ConfigTool.Tests.Support
             };
         }
 
-        // A <Fn>Result record: rebuild {"name": <field JSON text>, ...} from its
+        /// <summary>The <c>&lt;Name&gt;Result</c> companion overload matching primary <paramref name="m"/>.</summary>
+        public static MethodInfo Companion(ManifestFunction f, MethodInfo m) =>
+            typeof(SzConfigTool).GetMethod(Repo.Pascal(f.Name) + "Result", m.GetParameters().Select(p => p.ParameterType).ToArray())
+            ?? throw new InvalidOperationException($"no companion {Repo.Pascal(f.Name)}Result for {f.Name}");
+
+        // A <Fn>Record: rebuild {"name": <field JSON text>, ...} from its
         // PascalCase properties, so the conformance expectation applies as-is.
         private static StepOutcome NamedRecord(ManifestFunction f, object rec)
         {
             Type t = rec.GetType();
+            Assert.Equal(f.TupleNames.Count, t.GetProperties().Count(p => p.Name != "EqualityContract"));
             string json = "{" + string.Join(",", f.TupleNames.Select(n =>
                 $"\"{n}\":{(string)t.GetProperty(Repo.Pascal(n))!.GetValue(rec)!}")) + "}";
-            string? config = f.Returns == "config_and_json" ? (string)t.GetProperty("Config")!.GetValue(rec)! : null;
-            return new StepOutcome(f.Returns, config, json, null);
+            return new StepOutcome(f.Returns, null, json, null);
         }
 
         private static object? ParamValue(ParameterInfo p, ManifestArg a, JsonElement args, HashSet<string> known)

@@ -348,8 +348,10 @@ const EXTRA: &str = r#"  - name: set_flag
     errors: [NOT_FOUND]
 "#;
 
-fn outputs() -> Vec<Generated> {
-    let root = workspace("cov_outputs", &format!("{GROUP}{EXTRA}"), CASES);
+/// Generated outputs of GROUP + EXTRA in the scratch workspace `name` (one
+/// per test: tests run concurrently).
+fn outputs(name: &str) -> Vec<Generated> {
+    let root = workspace(name, &format!("{GROUP}{EXTRA}"), CASES);
     generate(&root, Path::new("m/project.yaml")).expect("valid")
 }
 
@@ -362,7 +364,7 @@ fn file<'a>(out: &'a [Generated], suffix: &str) -> &'a str {
 
 #[test]
 fn test_dispatcher_renders_int_unit_bool_and_list_args() {
-    let out = outputs();
+    let out = outputs("cov_outputs_dispatcher");
     let rs = file(&out, "dispatch.rs");
     for want in [
         "args.req_bool(\"on\")?",
@@ -379,7 +381,7 @@ fn test_dispatcher_renders_int_unit_bool_and_list_args() {
 
 #[test]
 fn test_every_binding_renders_the_extra_shapes() {
-    let out = outputs();
+    let out = outputs("cov_outputs_bindings");
     // Each binding: its int / unit call, and its doc escaping of the quotes
     // and backslash in `set_flag`'s doc.
     let table: [(&str, &[&str]); 5] = [
@@ -411,8 +413,9 @@ fn test_every_binding_renders_the_extra_shapes() {
         (
             "node/f.ts",
             &[
-                "return rt.callInt(\"set_flag\"",
-                "rt.callUnit(\"drop_flag\"",
+                "return rt.callInt(setFlagSpec, config, options);",
+                "  wire: \"set_flag\",",
+                "rt.callUnit(dropFlagSpec, config);",
                 "* Set a \"flag\" under C:\\flags.",
             ],
         ),

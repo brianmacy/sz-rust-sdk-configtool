@@ -150,7 +150,8 @@ final class TypedDispatch {
     private static String[] addAttribute(String config, Map<String, Object> in)
             throws SzConfigToolException {
         if (!in.containsKey("default_value") && !in.containsKey("internal") && !in.containsKey("required") && !in.containsKey("id")) {
-            return Conv.configAndJson(SzConfigTool.addAttribute(config, Conv.str(in.get("attribute")), Conv.str(in.get("feature")), Conv.str(in.get("element")), Conv.str(in.get("class"))));
+            return Conv.configAndJson(() -> SzConfigTool.addAttribute(config, Conv.str(in.get("attribute")), Conv.str(in.get("feature")), Conv.str(in.get("element")), Conv.str(in.get("class"))),
+                () -> SzConfigTool.addAttributeResult(config, Conv.str(in.get("attribute")), Conv.str(in.get("feature")), Conv.str(in.get("element")), Conv.str(in.get("class"))));
         }
         SzConfigTool.AddAttributeOptions o = new SzConfigTool.AddAttributeOptions();
         if (in.containsKey("default_value")) {
@@ -165,7 +166,8 @@ final class TypedDispatch {
         if (in.containsKey("id")) {
             o.id(Conv.lng(in.get("id")));
         }
-        return Conv.configAndJson(SzConfigTool.addAttribute(config, Conv.str(in.get("attribute")), Conv.str(in.get("feature")), Conv.str(in.get("element")), Conv.str(in.get("class")), o));
+        return Conv.configAndJson(() -> SzConfigTool.addAttribute(config, Conv.str(in.get("attribute")), Conv.str(in.get("feature")), Conv.str(in.get("element")), Conv.str(in.get("class")), o),
+            () -> SzConfigTool.addAttributeResult(config, Conv.str(in.get("attribute")), Conv.str(in.get("feature")), Conv.str(in.get("element")), Conv.str(in.get("class")), o));
     }
 
     private static String[] deleteAttribute(String config, Map<String, Object> in)
@@ -229,13 +231,15 @@ final class TypedDispatch {
     private static String[] addComparisonCall(String config, Map<String, Object> in)
             throws SzConfigToolException {
         if (!in.containsKey("id")) {
-            return Conv.configAndJson(SzConfigTool.addComparisonCall(config, Conv.str(in.get("ftype_code")), Conv.str(in.get("cfunc_code")), Conv.strList(in.get("element_list"))));
+            return Conv.configAndJson(() -> SzConfigTool.addComparisonCall(config, Conv.str(in.get("ftype_code")), Conv.str(in.get("cfunc_code")), Conv.strList(in.get("element_list"))),
+                () -> SzConfigTool.addComparisonCallResult(config, Conv.str(in.get("ftype_code")), Conv.str(in.get("cfunc_code")), Conv.strList(in.get("element_list"))));
         }
         SzConfigTool.AddComparisonCallOptions o = new SzConfigTool.AddComparisonCallOptions();
         if (in.containsKey("id")) {
             o.id(Conv.lng(in.get("id")));
         }
-        return Conv.configAndJson(SzConfigTool.addComparisonCall(config, Conv.str(in.get("ftype_code")), Conv.str(in.get("cfunc_code")), Conv.strList(in.get("element_list")), o));
+        return Conv.configAndJson(() -> SzConfigTool.addComparisonCall(config, Conv.str(in.get("ftype_code")), Conv.str(in.get("cfunc_code")), Conv.strList(in.get("element_list")), o),
+            () -> SzConfigTool.addComparisonCallResult(config, Conv.str(in.get("ftype_code")), Conv.str(in.get("cfunc_code")), Conv.strList(in.get("element_list")), o));
     }
 
     private static String[] deleteComparisonCall(String config, Map<String, Object> in)
@@ -259,13 +263,15 @@ final class TypedDispatch {
     private static String[] addComparisonCallElement(String config, Map<String, Object> in)
             throws SzConfigToolException {
         if (!in.containsKey("exec_order")) {
-            return Conv.configAndJson(SzConfigTool.addComparisonCallElement(config, Conv.lng(in.get("cfcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id"))));
+            return Conv.configAndJson(() -> SzConfigTool.addComparisonCallElement(config, Conv.lng(in.get("cfcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id"))),
+                () -> SzConfigTool.addComparisonCallElementResult(config, Conv.lng(in.get("cfcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id"))));
         }
         SzConfigTool.AddComparisonCallElementOptions o = new SzConfigTool.AddComparisonCallElementOptions();
         if (in.containsKey("exec_order")) {
             o.execOrder(Conv.lng(in.get("exec_order")));
         }
-        return Conv.configAndJson(SzConfigTool.addComparisonCallElement(config, Conv.lng(in.get("cfcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id")), o));
+        return Conv.configAndJson(() -> SzConfigTool.addComparisonCallElement(config, Conv.lng(in.get("cfcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id")), o),
+            () -> SzConfigTool.addComparisonCallElementResult(config, Conv.lng(in.get("cfcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id")), o));
     }
 
     private static String[] deleteComparisonCallElement(String config, Map<String, Object> in)
@@ -288,7 +294,8 @@ final class TypedDispatch {
 
     private static String[] addDistinctCall(String config, Map<String, Object> in)
             throws SzConfigToolException {
-        return Conv.configAndJson(SzConfigTool.addDistinctCall(config, Conv.str(in.get("ftype_code")), Conv.str(in.get("dfunc_code")), Conv.strList(in.get("element_list"))));
+        return Conv.configAndJson(() -> SzConfigTool.addDistinctCall(config, Conv.str(in.get("ftype_code")), Conv.str(in.get("dfunc_code")), Conv.strList(in.get("element_list"))),
+            () -> SzConfigTool.addDistinctCallResult(config, Conv.str(in.get("ftype_code")), Conv.str(in.get("dfunc_code")), Conv.strList(in.get("element_list"))));
     }
 
     private static String[] deleteDistinctCall(String config, Map<String, Object> in)
@@ -312,13 +319,15 @@ final class TypedDispatch {
     private static String[] addDistinctCallElement(String config, Map<String, Object> in)
             throws SzConfigToolException {
         if (!in.containsKey("exec_order")) {
-            return Conv.configAndJson(SzConfigTool.addDistinctCallElement(config, Conv.lng(in.get("dfcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id"))));
+            return Conv.configAndJson(() -> SzConfigTool.addDistinctCallElement(config, Conv.lng(in.get("dfcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id"))),
+                () -> SzConfigTool.addDistinctCallElementResult(config, Conv.lng(in.get("dfcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id"))));
         }
         SzConfigTool.AddDistinctCallElementOptions o = new SzConfigTool.AddDistinctCallElementOptions();
         if (in.containsKey("exec_order")) {
             o.execOrder(Conv.lng(in.get("exec_order")));
         }
-        return Conv.configAndJson(SzConfigTool.addDistinctCallElement(config, Conv.lng(in.get("dfcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id")), o));
+        return Conv.configAndJson(() -> SzConfigTool.addDistinctCallElement(config, Conv.lng(in.get("dfcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id")), o),
+            () -> SzConfigTool.addDistinctCallElementResult(config, Conv.lng(in.get("dfcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id")), o));
     }
 
     private static String[] deleteDistinctCallElement(String config, Map<String, Object> in)
@@ -354,7 +363,8 @@ final class TypedDispatch {
         if (in.containsKey("expression_feature")) {
             o.expressionFeature(Conv.str(in.get("expression_feature")));
         }
-        return Conv.configAndJson(SzConfigTool.addExpressionCall(config, Conv.str(in.get("efunc_code")), Conv.json(in.get("element_list")), Conv.str(in.get("is_virtual")), o));
+        return Conv.configAndJson(() -> SzConfigTool.addExpressionCall(config, Conv.str(in.get("efunc_code")), Conv.json(in.get("element_list")), Conv.str(in.get("is_virtual")), o),
+            () -> SzConfigTool.addExpressionCallResult(config, Conv.str(in.get("efunc_code")), Conv.json(in.get("element_list")), Conv.str(in.get("is_virtual")), o));
     }
 
     private static String[] deleteExpressionCall(String config, Map<String, Object> in)
@@ -378,13 +388,15 @@ final class TypedDispatch {
     private static String[] addExpressionCallElement(String config, Map<String, Object> in)
             throws SzConfigToolException {
         if (!in.containsKey("exec_order")) {
-            return Conv.configAndJson(SzConfigTool.addExpressionCallElement(config, Conv.lng(in.get("efcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id")), Conv.str(in.get("felem_req"))));
+            return Conv.configAndJson(() -> SzConfigTool.addExpressionCallElement(config, Conv.lng(in.get("efcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id")), Conv.str(in.get("felem_req"))),
+                () -> SzConfigTool.addExpressionCallElementResult(config, Conv.lng(in.get("efcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id")), Conv.str(in.get("felem_req"))));
         }
         SzConfigTool.AddExpressionCallElementOptions o = new SzConfigTool.AddExpressionCallElementOptions();
         if (in.containsKey("exec_order")) {
             o.execOrder(Conv.lng(in.get("exec_order")));
         }
-        return Conv.configAndJson(SzConfigTool.addExpressionCallElement(config, Conv.lng(in.get("efcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id")), Conv.str(in.get("felem_req")), o));
+        return Conv.configAndJson(() -> SzConfigTool.addExpressionCallElement(config, Conv.lng(in.get("efcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id")), Conv.str(in.get("felem_req")), o),
+            () -> SzConfigTool.addExpressionCallElementResult(config, Conv.lng(in.get("efcall_id")), Conv.lng(in.get("ftype_id")), Conv.lng(in.get("felem_id")), Conv.str(in.get("felem_req")), o));
     }
 
     private static String[] deleteExpressionCallElement(String config, Map<String, Object> in)
@@ -417,7 +429,8 @@ final class TypedDispatch {
         if (in.containsKey("exec_order")) {
             o.execOrder(Conv.lng(in.get("exec_order")));
         }
-        return Conv.configAndJson(SzConfigTool.addStandardizeCall(config, Conv.str(in.get("sfunc_code")), o));
+        return Conv.configAndJson(() -> SzConfigTool.addStandardizeCall(config, Conv.str(in.get("sfunc_code")), o),
+            () -> SzConfigTool.addStandardizeCallResult(config, Conv.str(in.get("sfunc_code")), o));
     }
 
     private static String[] deleteStandardizeCall(String config, Map<String, Object> in)
@@ -441,7 +454,8 @@ final class TypedDispatch {
     private static String[] addStandardizeCallElement(String config, Map<String, Object> in)
             throws SzConfigToolException {
         if (!in.containsKey("felem_id") && !in.containsKey("exec_order")) {
-            return Conv.configAndJson(SzConfigTool.addStandardizeCallElement(config, Conv.lng(in.get("ftype_id")), Conv.lng(in.get("sfunc_id"))));
+            return Conv.configAndJson(() -> SzConfigTool.addStandardizeCallElement(config, Conv.lng(in.get("ftype_id")), Conv.lng(in.get("sfunc_id"))),
+                () -> SzConfigTool.addStandardizeCallElementResult(config, Conv.lng(in.get("ftype_id")), Conv.lng(in.get("sfunc_id"))));
         }
         SzConfigTool.AddStandardizeCallElementOptions o = new SzConfigTool.AddStandardizeCallElementOptions();
         if (in.containsKey("felem_id")) {
@@ -450,7 +464,8 @@ final class TypedDispatch {
         if (in.containsKey("exec_order")) {
             o.execOrder(Conv.lng(in.get("exec_order")));
         }
-        return Conv.configAndJson(SzConfigTool.addStandardizeCallElement(config, Conv.lng(in.get("ftype_id")), Conv.lng(in.get("sfunc_id")), o));
+        return Conv.configAndJson(() -> SzConfigTool.addStandardizeCallElement(config, Conv.lng(in.get("ftype_id")), Conv.lng(in.get("sfunc_id")), o),
+            () -> SzConfigTool.addStandardizeCallElementResult(config, Conv.lng(in.get("ftype_id")), Conv.lng(in.get("sfunc_id")), o));
     }
 
     private static String[] deleteStandardizeCallElement(String config, Map<String, Object> in)
@@ -499,12 +514,14 @@ final class TypedDispatch {
 
     private static String[] removeConfigSectionField(String config, Map<String, Object> in)
             throws SzConfigToolException {
-        return Conv.configAndJson(SzConfigTool.removeConfigSectionField(config, Conv.str(in.get("section_name")), Conv.str(in.get("field_name"))));
+        return Conv.configAndJson(() -> SzConfigTool.removeConfigSectionField(config, Conv.str(in.get("section_name")), Conv.str(in.get("field_name"))),
+            () -> SzConfigTool.removeConfigSectionFieldResult(config, Conv.str(in.get("section_name")), Conv.str(in.get("field_name"))));
     }
 
     private static String[] addConfigSectionField(String config, Map<String, Object> in)
             throws SzConfigToolException {
-        return Conv.configAndJson(SzConfigTool.addConfigSectionField(config, Conv.str(in.get("section_name")), Conv.str(in.get("field_name")), Conv.json(in.get("field_value"))));
+        return Conv.configAndJson(() -> SzConfigTool.addConfigSectionField(config, Conv.str(in.get("section_name")), Conv.str(in.get("field_name")), Conv.json(in.get("field_value"))),
+            () -> SzConfigTool.addConfigSectionFieldResult(config, Conv.str(in.get("section_name")), Conv.str(in.get("field_name")), Conv.json(in.get("field_value"))));
     }
 
     private static String[] addDataSource(String config, Map<String, Object> in)
@@ -810,7 +827,8 @@ final class TypedDispatch {
 
     private static String[] addFragment(String config, Map<String, Object> in)
             throws SzConfigToolException {
-        return Conv.configAndJson(SzConfigTool.addFragment(config, Conv.json(in.get("fragment_config"))));
+        return Conv.configAndJson(() -> SzConfigTool.addFragment(config, Conv.json(in.get("fragment_config"))),
+            () -> SzConfigTool.addFragmentResult(config, Conv.json(in.get("fragment_config"))));
     }
 
     private static String[] deleteFragment(String config, Map<String, Object> in)
@@ -846,7 +864,8 @@ final class TypedDispatch {
     private static String[] addComparisonFunction(String config, Map<String, Object> in)
             throws SzConfigToolException {
         if (!in.containsKey("connect_str") && !in.containsKey("description") && !in.containsKey("language") && !in.containsKey("anon_support")) {
-            return Conv.configAndJson(SzConfigTool.addComparisonFunction(config, Conv.str(in.get("code"))));
+            return Conv.configAndJson(() -> SzConfigTool.addComparisonFunction(config, Conv.str(in.get("code"))),
+                () -> SzConfigTool.addComparisonFunctionResult(config, Conv.str(in.get("code"))));
         }
         SzConfigTool.AddComparisonFunctionOptions o = new SzConfigTool.AddComparisonFunctionOptions();
         if (in.containsKey("connect_str")) {
@@ -861,17 +880,20 @@ final class TypedDispatch {
         if (in.containsKey("anon_support")) {
             o.anonSupport(Conv.str(in.get("anon_support")));
         }
-        return Conv.configAndJson(SzConfigTool.addComparisonFunction(config, Conv.str(in.get("code")), o));
+        return Conv.configAndJson(() -> SzConfigTool.addComparisonFunction(config, Conv.str(in.get("code")), o),
+            () -> SzConfigTool.addComparisonFunctionResult(config, Conv.str(in.get("code")), o));
     }
 
     private static String[] deleteComparisonFunction(String config, Map<String, Object> in)
             throws SzConfigToolException {
-        return Conv.configAndJson(SzConfigTool.deleteComparisonFunction(config, Conv.str(in.get("code"))));
+        return Conv.configAndJson(() -> SzConfigTool.deleteComparisonFunction(config, Conv.str(in.get("code"))),
+            () -> SzConfigTool.deleteComparisonFunctionResult(config, Conv.str(in.get("code"))));
     }
 
     private static String[] deleteComparisonFunctionCascade(String config, Map<String, Object> in)
             throws SzConfigToolException {
-        return Conv.configAndJson(SzConfigTool.deleteComparisonFunctionCascade(config, Conv.str(in.get("code"))));
+        return Conv.configAndJson(() -> SzConfigTool.deleteComparisonFunctionCascade(config, Conv.str(in.get("code"))),
+            () -> SzConfigTool.deleteComparisonFunctionCascadeResult(config, Conv.str(in.get("code"))));
     }
 
     private static String[] getComparisonFunction(String config, Map<String, Object> in)
@@ -887,7 +909,8 @@ final class TypedDispatch {
     private static String[] setComparisonFunction(String config, Map<String, Object> in)
             throws SzConfigToolException {
         if (!in.containsKey("connect_str") && !in.containsKey("description") && !in.containsKey("language") && !in.containsKey("anon_support")) {
-            return Conv.configAndJson(SzConfigTool.setComparisonFunction(config, Conv.str(in.get("code"))));
+            return Conv.configAndJson(() -> SzConfigTool.setComparisonFunction(config, Conv.str(in.get("code"))),
+                () -> SzConfigTool.setComparisonFunctionResult(config, Conv.str(in.get("code"))));
         }
         SzConfigTool.SetComparisonFunctionOptions o = new SzConfigTool.SetComparisonFunctionOptions();
         if (in.containsKey("connect_str")) {
@@ -902,13 +925,15 @@ final class TypedDispatch {
         if (in.containsKey("anon_support")) {
             o.anonSupport(Conv.str(in.get("anon_support")));
         }
-        return Conv.configAndJson(SzConfigTool.setComparisonFunction(config, Conv.str(in.get("code")), o));
+        return Conv.configAndJson(() -> SzConfigTool.setComparisonFunction(config, Conv.str(in.get("code")), o),
+            () -> SzConfigTool.setComparisonFunctionResult(config, Conv.str(in.get("code")), o));
     }
 
     private static String[] addDistinctFunction(String config, Map<String, Object> in)
             throws SzConfigToolException {
         if (!in.containsKey("connect_str") && !in.containsKey("description") && !in.containsKey("language") && !in.containsKey("anon_support")) {
-            return Conv.configAndJson(SzConfigTool.addDistinctFunction(config, Conv.str(in.get("code"))));
+            return Conv.configAndJson(() -> SzConfigTool.addDistinctFunction(config, Conv.str(in.get("code"))),
+                () -> SzConfigTool.addDistinctFunctionResult(config, Conv.str(in.get("code"))));
         }
         SzConfigTool.AddDistinctFunctionOptions o = new SzConfigTool.AddDistinctFunctionOptions();
         if (in.containsKey("connect_str")) {
@@ -923,12 +948,14 @@ final class TypedDispatch {
         if (in.containsKey("anon_support")) {
             o.anonSupport(Conv.str(in.get("anon_support")));
         }
-        return Conv.configAndJson(SzConfigTool.addDistinctFunction(config, Conv.str(in.get("code")), o));
+        return Conv.configAndJson(() -> SzConfigTool.addDistinctFunction(config, Conv.str(in.get("code")), o),
+            () -> SzConfigTool.addDistinctFunctionResult(config, Conv.str(in.get("code")), o));
     }
 
     private static String[] deleteDistinctFunction(String config, Map<String, Object> in)
             throws SzConfigToolException {
-        return Conv.configAndJson(SzConfigTool.deleteDistinctFunction(config, Conv.str(in.get("code"))));
+        return Conv.configAndJson(() -> SzConfigTool.deleteDistinctFunction(config, Conv.str(in.get("code"))),
+            () -> SzConfigTool.deleteDistinctFunctionResult(config, Conv.str(in.get("code"))));
     }
 
     private static String[] getDistinctFunction(String config, Map<String, Object> in)
@@ -944,7 +971,8 @@ final class TypedDispatch {
     private static String[] setDistinctFunction(String config, Map<String, Object> in)
             throws SzConfigToolException {
         if (!in.containsKey("connect_str") && !in.containsKey("description") && !in.containsKey("language") && !in.containsKey("anon_support")) {
-            return Conv.configAndJson(SzConfigTool.setDistinctFunction(config, Conv.str(in.get("code"))));
+            return Conv.configAndJson(() -> SzConfigTool.setDistinctFunction(config, Conv.str(in.get("code"))),
+                () -> SzConfigTool.setDistinctFunctionResult(config, Conv.str(in.get("code"))));
         }
         SzConfigTool.SetDistinctFunctionOptions o = new SzConfigTool.SetDistinctFunctionOptions();
         if (in.containsKey("connect_str")) {
@@ -959,13 +987,15 @@ final class TypedDispatch {
         if (in.containsKey("anon_support")) {
             o.anonSupport(Conv.str(in.get("anon_support")));
         }
-        return Conv.configAndJson(SzConfigTool.setDistinctFunction(config, Conv.str(in.get("code")), o));
+        return Conv.configAndJson(() -> SzConfigTool.setDistinctFunction(config, Conv.str(in.get("code")), o),
+            () -> SzConfigTool.setDistinctFunctionResult(config, Conv.str(in.get("code")), o));
     }
 
     private static String[] addExpressionFunction(String config, Map<String, Object> in)
             throws SzConfigToolException {
         if (!in.containsKey("connect_str") && !in.containsKey("description") && !in.containsKey("language")) {
-            return Conv.configAndJson(SzConfigTool.addExpressionFunction(config, Conv.str(in.get("code"))));
+            return Conv.configAndJson(() -> SzConfigTool.addExpressionFunction(config, Conv.str(in.get("code"))),
+                () -> SzConfigTool.addExpressionFunctionResult(config, Conv.str(in.get("code"))));
         }
         SzConfigTool.AddExpressionFunctionOptions o = new SzConfigTool.AddExpressionFunctionOptions();
         if (in.containsKey("connect_str")) {
@@ -977,17 +1007,20 @@ final class TypedDispatch {
         if (in.containsKey("language")) {
             o.language(Conv.str(in.get("language")));
         }
-        return Conv.configAndJson(SzConfigTool.addExpressionFunction(config, Conv.str(in.get("code")), o));
+        return Conv.configAndJson(() -> SzConfigTool.addExpressionFunction(config, Conv.str(in.get("code")), o),
+            () -> SzConfigTool.addExpressionFunctionResult(config, Conv.str(in.get("code")), o));
     }
 
     private static String[] deleteExpressionFunction(String config, Map<String, Object> in)
             throws SzConfigToolException {
-        return Conv.configAndJson(SzConfigTool.deleteExpressionFunction(config, Conv.str(in.get("code"))));
+        return Conv.configAndJson(() -> SzConfigTool.deleteExpressionFunction(config, Conv.str(in.get("code"))),
+            () -> SzConfigTool.deleteExpressionFunctionResult(config, Conv.str(in.get("code"))));
     }
 
     private static String[] deleteExpressionFunctionCascade(String config, Map<String, Object> in)
             throws SzConfigToolException {
-        return Conv.configAndJson(SzConfigTool.deleteExpressionFunctionCascade(config, Conv.str(in.get("code"))));
+        return Conv.configAndJson(() -> SzConfigTool.deleteExpressionFunctionCascade(config, Conv.str(in.get("code"))),
+            () -> SzConfigTool.deleteExpressionFunctionCascadeResult(config, Conv.str(in.get("code"))));
     }
 
     private static String[] getExpressionFunction(String config, Map<String, Object> in)
@@ -1003,7 +1036,8 @@ final class TypedDispatch {
     private static String[] setExpressionFunction(String config, Map<String, Object> in)
             throws SzConfigToolException {
         if (!in.containsKey("connect_str") && !in.containsKey("description") && !in.containsKey("language")) {
-            return Conv.configAndJson(SzConfigTool.setExpressionFunction(config, Conv.str(in.get("code"))));
+            return Conv.configAndJson(() -> SzConfigTool.setExpressionFunction(config, Conv.str(in.get("code"))),
+                () -> SzConfigTool.setExpressionFunctionResult(config, Conv.str(in.get("code"))));
         }
         SzConfigTool.SetExpressionFunctionOptions o = new SzConfigTool.SetExpressionFunctionOptions();
         if (in.containsKey("connect_str")) {
@@ -1015,13 +1049,15 @@ final class TypedDispatch {
         if (in.containsKey("language")) {
             o.language(Conv.str(in.get("language")));
         }
-        return Conv.configAndJson(SzConfigTool.setExpressionFunction(config, Conv.str(in.get("code")), o));
+        return Conv.configAndJson(() -> SzConfigTool.setExpressionFunction(config, Conv.str(in.get("code")), o),
+            () -> SzConfigTool.setExpressionFunctionResult(config, Conv.str(in.get("code")), o));
     }
 
     private static String[] addStandardizeFunction(String config, Map<String, Object> in)
             throws SzConfigToolException {
         if (!in.containsKey("connect_str") && !in.containsKey("description") && !in.containsKey("language")) {
-            return Conv.configAndJson(SzConfigTool.addStandardizeFunction(config, Conv.str(in.get("code"))));
+            return Conv.configAndJson(() -> SzConfigTool.addStandardizeFunction(config, Conv.str(in.get("code"))),
+                () -> SzConfigTool.addStandardizeFunctionResult(config, Conv.str(in.get("code"))));
         }
         SzConfigTool.AddStandardizeFunctionOptions o = new SzConfigTool.AddStandardizeFunctionOptions();
         if (in.containsKey("connect_str")) {
@@ -1033,17 +1069,20 @@ final class TypedDispatch {
         if (in.containsKey("language")) {
             o.language(Conv.str(in.get("language")));
         }
-        return Conv.configAndJson(SzConfigTool.addStandardizeFunction(config, Conv.str(in.get("code")), o));
+        return Conv.configAndJson(() -> SzConfigTool.addStandardizeFunction(config, Conv.str(in.get("code")), o),
+            () -> SzConfigTool.addStandardizeFunctionResult(config, Conv.str(in.get("code")), o));
     }
 
     private static String[] deleteStandardizeFunction(String config, Map<String, Object> in)
             throws SzConfigToolException {
-        return Conv.configAndJson(SzConfigTool.deleteStandardizeFunction(config, Conv.str(in.get("code"))));
+        return Conv.configAndJson(() -> SzConfigTool.deleteStandardizeFunction(config, Conv.str(in.get("code"))),
+            () -> SzConfigTool.deleteStandardizeFunctionResult(config, Conv.str(in.get("code"))));
     }
 
     private static String[] deleteStandardizeFunctionCascade(String config, Map<String, Object> in)
             throws SzConfigToolException {
-        return Conv.configAndJson(SzConfigTool.deleteStandardizeFunctionCascade(config, Conv.str(in.get("code"))));
+        return Conv.configAndJson(() -> SzConfigTool.deleteStandardizeFunctionCascade(config, Conv.str(in.get("code"))),
+            () -> SzConfigTool.deleteStandardizeFunctionCascadeResult(config, Conv.str(in.get("code"))));
     }
 
     private static String[] getStandardizeFunction(String config, Map<String, Object> in)
@@ -1059,7 +1098,8 @@ final class TypedDispatch {
     private static String[] setStandardizeFunction(String config, Map<String, Object> in)
             throws SzConfigToolException {
         if (!in.containsKey("connect_str") && !in.containsKey("description") && !in.containsKey("language")) {
-            return Conv.configAndJson(SzConfigTool.setStandardizeFunction(config, Conv.str(in.get("code"))));
+            return Conv.configAndJson(() -> SzConfigTool.setStandardizeFunction(config, Conv.str(in.get("code"))),
+                () -> SzConfigTool.setStandardizeFunctionResult(config, Conv.str(in.get("code"))));
         }
         SzConfigTool.SetStandardizeFunctionOptions o = new SzConfigTool.SetStandardizeFunctionOptions();
         if (in.containsKey("connect_str")) {
@@ -1071,19 +1111,22 @@ final class TypedDispatch {
         if (in.containsKey("language")) {
             o.language(Conv.str(in.get("language")));
         }
-        return Conv.configAndJson(SzConfigTool.setStandardizeFunction(config, Conv.str(in.get("code")), o));
+        return Conv.configAndJson(() -> SzConfigTool.setStandardizeFunction(config, Conv.str(in.get("code")), o),
+            () -> SzConfigTool.setStandardizeFunctionResult(config, Conv.str(in.get("code")), o));
     }
 
     private static String[] cloneGenericPlan(String config, Map<String, Object> in)
             throws SzConfigToolException {
         if (!in.containsKey("new_gplan_desc")) {
-            return Conv.configAndJson(SzConfigTool.cloneGenericPlan(config, Conv.str(in.get("source_gplan_code")), Conv.str(in.get("new_gplan_code"))));
+            return Conv.configAndJson(() -> SzConfigTool.cloneGenericPlan(config, Conv.str(in.get("source_gplan_code")), Conv.str(in.get("new_gplan_code"))),
+                () -> SzConfigTool.cloneGenericPlanResult(config, Conv.str(in.get("source_gplan_code")), Conv.str(in.get("new_gplan_code"))));
         }
         SzConfigTool.CloneGenericPlanOptions o = new SzConfigTool.CloneGenericPlanOptions();
         if (in.containsKey("new_gplan_desc")) {
             o.newGplanDesc(Conv.str(in.get("new_gplan_desc")));
         }
-        return Conv.configAndJson(SzConfigTool.cloneGenericPlan(config, Conv.str(in.get("source_gplan_code")), Conv.str(in.get("new_gplan_code")), o));
+        return Conv.configAndJson(() -> SzConfigTool.cloneGenericPlan(config, Conv.str(in.get("source_gplan_code")), Conv.str(in.get("new_gplan_code")), o),
+            () -> SzConfigTool.cloneGenericPlanResult(config, Conv.str(in.get("source_gplan_code")), Conv.str(in.get("new_gplan_code")), o));
     }
 
     private static String[] deleteGenericPlan(String config, Map<String, Object> in)
@@ -1105,13 +1148,17 @@ final class TypedDispatch {
 
     private static String[] setGenericPlan(String config, Map<String, Object> in)
             throws SzConfigToolException {
-        var r = SzConfigTool.setGenericPlan(config, Conv.str(in.get("gplan_code")), Conv.str(in.get("gplan_desc")));
-        return Conv.configAndJson(new ConfigAndJson(r.config(), Conv.record(new String[] {"plan_id", "was_created"}, r.planId(), r.wasCreated())));
+        return Conv.configAndJson(() -> SzConfigTool.setGenericPlan(config, Conv.str(in.get("gplan_code")), Conv.str(in.get("gplan_desc"))),
+            () -> {
+                var r = SzConfigTool.setGenericPlanResult(config, Conv.str(in.get("gplan_code")), Conv.str(in.get("gplan_desc")));
+                return Conv.record(new String[] {"plan_id", "was_created"}, r.planId(), r.wasCreated());
+            });
     }
 
     private static String[] addRule(String config, Map<String, Object> in)
             throws SzConfigToolException {
-        return Conv.configAndJson(SzConfigTool.addRule(config, Conv.lng(in.get("id")), Conv.json(in.get("rule_config"))));
+        return Conv.configAndJson(() -> SzConfigTool.addRule(config, Conv.lng(in.get("id")), Conv.json(in.get("rule_config"))),
+            () -> SzConfigTool.addRuleResult(config, Conv.lng(in.get("id")), Conv.json(in.get("rule_config"))));
     }
 
     private static String[] deleteRule(String config, Map<String, Object> in)

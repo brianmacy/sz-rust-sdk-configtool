@@ -31,6 +31,11 @@ functions:
         semantics: SPROFILE_DESC, stored verbatim; absent = "".
       - name: elements
         type: json
+        json_type:
+          array:
+            object:
+              feature: string
+              flag: {enum: ["Yes", "No", "Y", "N"]}
         optional: true
         rust_convert: search_profile_elements
         semantics: >-

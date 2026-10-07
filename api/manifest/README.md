@@ -41,7 +41,9 @@ must add a converter, append a clearly-named fn with its own unit test.
      `Option<T>` → `optional: true` (add `required: true` when the library
      rejects absent with MISSING_FIELD); non-wire Rust types (`usize`,
      slices) → `rust_convert`; a `CallSelector` (id OR feature code) →
-     `type: int_or_str` + `rust_convert: call_selector`.
+     `type: int_or_str` + `rust_convert: call_selector`; every `type: json`
+     arg needs a `json_type` (its structure from the Rust code, or `any`; see
+     schema.md).
    - `returns`: `(String, T)` → `config_and_json` (never drop T); 3+-tuples
      add `tuple_names`; a non-config `String` (e.g. a version) is `json`; a
      non-config tuple is `json` + `tuple_names` (never a bare array).

@@ -14,6 +14,29 @@ functions:
         semantics: Uppercased; stored as FTYPE_CODE and FTYPE_DESC. Duplicate (exact match on the uppercased code) is ALREADY_EXISTS.
       - name: element_list
         type: json
+        # Every key spelling the library reads (it ignores any other key); each
+        # is nullable (the library reads null as absent).
+        json_type:
+          array:
+            one_of:
+              - string
+              - object:
+                  element?: {nullable: string}
+                  ELEMENT?: {nullable: string}
+                  expressed?: {nullable: string}
+                  EXPRESSED?: {nullable: string}
+                  compared?: {nullable: string}
+                  COMPARED?: {nullable: string}
+                  display?: {nullable: string}
+                  DISPLAY?: {nullable: string}
+                  displaylevel?: {nullable: int}
+                  DISPLAYLEVEL?: {nullable: int}
+                  display_level?: {nullable: int}
+                  displaydelim?: {nullable: string}
+                  DISPLAYDELIM?: {nullable: string}
+                  display_delim?: {nullable: string}
+                  derived?: {nullable: string}
+                  DERIVED?: {nullable: string}
         semantics: >-
           Must be a non-empty JSON array, else INVALID_INPUT. Each item is either an
           element-code string, or an object with `element` (or `ELEMENT`, required,

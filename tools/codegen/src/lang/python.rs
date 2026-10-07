@@ -11,9 +11,12 @@
 //! reachable through `invoke`); required parameters (incl. `required: true`
 //! optional args) come first in manifest order, then keyword-only optional
 //! (`None` = absent) and tri-state (`UNSET` = leave, `None` = clear) args.
-//! `int_or_str` selectors are `int | str`. A function with `tuple_names`
-//! returns a generated `NamedTuple` `<PascalFn>Result` whose named fields are
-//! each the record member's JSON text (`config` first for `config_and_json`).
+//! `int_or_str` selectors are `int | str`. Every config-changing function
+//! returns the config text: a `config_and_json` function is split into the
+//! primary `<fn>` (the config) and its companion `<fn>_result` (same
+//! arguments; the record JSON text). A function with `tuple_names` returns
+//! (from the companion, for `config_and_json`) a generated `NamedTuple`
+//! `<PascalFn>Record` whose named fields are each the record member's JSON text.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -69,7 +72,6 @@ const RUNTIME_EXPORTS: &[(&str, &[&str])] = &[
         "._core",
         &[
             "UNSET",
-            "ConfigAndJson",
             "Invocation",
             "UnsetType",
             "__version__",
@@ -129,10 +131,14 @@ fn init_module(funcs: &[&Function], module_stem: &str) -> String {
         .filter(|f| has_record(f))
         .map(|f| record_name(f))
         .collect();
+    let typed: Vec<String> = funcs
+        .iter()
+        .flat_map(|f| roles(f).iter().map(|r| typed_name(f, *r)))
+        .collect();
     let generated = isorted(
         std::iter::once("REASON_CODES")
             .chain(records.iter().map(String::as_str))
-            .chain(funcs.iter().map(|f| f.name.as_str()))
+            .chain(typed.iter().map(String::as_str))
             .collect(),
     );
     let _ = writeln!(out, "from .{module_stem} import (");
@@ -141,7 +147,7 @@ fn init_module(funcs: &[&Function], module_stem: &str) -> String {
     }
     out.push_str(")\n\n__all__ = [\n");
     all.extend(records.iter().map(String::as_str));
-    all.extend(funcs.iter().map(|f| f.name.as_str()));
+    all.extend(typed.iter().map(String::as_str));
     for n in isorted(all) {
         let _ = writeln!(out, "    \"{n}\",");
     }
@@ -152,8 +158,11 @@ fn init_module(funcs: &[&Function], module_stem: &str) -> String {
 /// The package docstring (in `__init__.py`).
 const INIT_DOC: &str = "\"\"\"Typed, stateless functions for editing Senzing configuration JSON.
 
-Every function takes the configuration JSON string first and returns the
-modified configuration (or a JSON string / a named-tuple record). This is
+Every function takes the configuration JSON string first. A function that
+changes the configuration returns the new configuration text; when it also
+produces a record (e.g. the new row), ``<name>_result`` (same arguments)
+returns that record instead. Others return a JSON string, an int or a
+named-tuple record. This is
 an UNOFFICIAL library; it is not the engine-bound Senzing ``SzConfig`` API.
 \"\"\"
 ";
@@ -237,12 +246,43 @@ fn wire_value(a: &Arg) -> String {
     }
 }
 
-/// Whether `f` returns a generated named record (`tuple_names` set).
+/// Whether `f` has a generated named record (`tuple_names` set).
 fn has_record(f: &Function) -> bool {
     !f.tuple_names.is_empty() && matches!(f.returns, Returns::Json | Returns::ConfigAndJson)
 }
 
-/// `<PascalFn>Result`: split the snake name on `_`, no acronym special-casing.
+/// Which typed function of a manifest function is rendered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Role {
+    /// `<fn>`: the config for config-changing functions, else the result.
+    Primary,
+    /// `<fn>_result` of a `config_and_json` function: the record only.
+    Companion,
+}
+
+/// The typed functions of `f`: the primary, plus the companion when it has one.
+fn roles(f: &Function) -> &'static [Role] {
+    if f.companion().is_some() {
+        &[Role::Primary, Role::Companion]
+    } else {
+        &[Role::Primary]
+    }
+}
+
+/// The Python name of `f`'s typed function in `role`.
+fn typed_name(f: &Function, role: Role) -> String {
+    match role {
+        Role::Primary => f.name.clone(),
+        Role::Companion => f.companion().unwrap_or_default(),
+    }
+}
+
+/// Whether the typed function in `role` returns the named record.
+fn returns_record(f: &Function, role: Role) -> bool {
+    has_record(f) && (f.returns == Returns::Json || role == Role::Companion)
+}
+
+/// `<PascalFn>Record`: split the snake name on `_`, no acronym special-casing.
 fn record_name(f: &Function) -> String {
     let mut out: String = f
         .name
@@ -254,18 +294,22 @@ fn record_name(f: &Function) -> String {
                 .unwrap_or_default()
         })
         .collect();
-    out.push_str("Result");
+    out.push_str("Record");
     out
 }
 
-/// (return annotation, `_core` helper) per manifest `returns`.
-fn returns(f: &Function) -> (String, &'static str) {
-    match (f.returns, has_record(f)) {
-        (Returns::Json, true) => (record_name(f), "call_json_record"),
-        (Returns::ConfigAndJson, true) => (record_name(f), "call_config_and_record"),
-        (Returns::Config, _) => ("str".into(), "call_config"),
-        (Returns::Json, _) => ("str".into(), "call_json"),
-        (Returns::ConfigAndJson, _) => ("ConfigAndJson".into(), "call_config_and_json"),
+/// (return annotation, `_core` helper) per manifest `returns` and role.
+fn returns(f: &Function, role: Role) -> (String, &'static str) {
+    if returns_record(f, role) {
+        return (record_name(f), "call_json_record");
+    }
+    match (f.returns, role) {
+        (Returns::Config, _) | (Returns::ConfigAndJson, Role::Primary) => {
+            ("str".into(), "call_config")
+        }
+        (Returns::Json, _) | (Returns::ConfigAndJson, Role::Companion) => {
+            ("str".into(), "call_json")
+        }
         (Returns::Int, _) => ("int".into(), "call_int"),
         (Returns::Unit, _) => ("None".into(), "call_unit"),
     }
@@ -277,12 +321,8 @@ fn record_class(f: &Function) -> String {
     let _ = writeln!(
         out,
         "    \"\"\"Result of ``{}``; every named field is JSON text.\"\"\"\n",
-        f.name
+        f.companion().unwrap_or_else(|| f.name.clone())
     );
-    if f.returns == Returns::ConfigAndJson {
-        out.push_str("    config: str\n");
-        out.push_str("    \"\"\"The modified configuration JSON (opaque string).\"\"\"\n");
-    }
     for n in &f.tuple_names {
         let _ = writeln!(out, "    {n}: str");
         let _ = writeln!(out, "    \"\"\"``{n}`` as JSON text.\"\"\"");
@@ -348,6 +388,9 @@ fn arg_doc(a: &Arg) -> String {
             }
         )
     })];
+    if let Some(shape) = a.shape() {
+        parts.push(format!("Shape: ``{shape}``."));
+    }
     if py_name(&a.name) != a.name {
         parts.push(format!("Wire name ``{}``.", a.name));
     }
@@ -362,43 +405,46 @@ fn arg_doc(a: &Arg) -> String {
     parts.join(" ")
 }
 
-fn returns_doc(f: &Function) -> Option<String> {
-    if has_record(f) {
-        let lead = (f.returns == Returns::ConfigAndJson).then_some("config");
-        let fields: Vec<&str> = lead
-            .into_iter()
-            .chain(f.tuple_names.iter().map(String::as_str))
-            .collect();
-        let named = if lead.is_some() {
-            " (``config`` is the modified configuration)"
-        } else {
-            ""
-        };
+fn returns_doc(f: &Function, role: Role) -> Option<String> {
+    if returns_record(f, role) {
         return Some(format!(
-            "``{}({})``{named}; each named field is that record member's JSON text.",
+            "``{}({})``; each named field is that record member's JSON text.",
             record_name(f),
-            fields.join(", ")
+            f.tuple_names.join(", ")
         ));
     }
-    Some(
-        match f.returns {
-            Returns::Config => "The modified configuration JSON string.",
-            Returns::Json => "The result as a JSON string.",
-            Returns::ConfigAndJson => {
-                "``ConfigAndJson(config, json)``: the modified configuration and the record as \
-                 a JSON string."
-            }
-            Returns::Int => "The integer result.",
-            Returns::Unit => return None,
+    Some(match (f.returns, role) {
+        (Returns::Config, _) => "The modified configuration JSON string.".to_string(),
+        (Returns::ConfigAndJson, Role::Primary) => format!(
+            "The modified configuration JSON string. ``{}`` (same arguments) returns the \
+             record this operation produces.",
+            typed_name(f, Role::Companion)
+        ),
+        (Returns::ConfigAndJson, Role::Companion) => {
+            "The record (e.g. the created row or ids) as a JSON string.".to_string()
         }
-        .to_string(),
-    )
+        (Returns::Json, _) => "The result as a JSON string.".to_string(),
+        (Returns::Int, _) => "The integer result.".to_string(),
+        (Returns::Unit, _) => return None,
+    })
 }
 
-/// The indented docstring (including quotes) for one function.
-fn docstring(f: &Function) -> String {
+/// The summary paragraph(s) of `f`'s typed function in `role`.
+fn summary(f: &Function, role: Role) -> String {
+    match role {
+        Role::Primary => f.doc.clone(),
+        Role::Companion => format!(
+            "The record (row / ids) of ``{}``: same arguments and operation, but returns the \
+             record instead of the configuration. Operation: {}",
+            f.name, f.doc
+        ),
+    }
+}
+
+/// The indented docstring (including quotes) for one typed function.
+fn docstring(f: &Function, role: Role) -> String {
     let mut out = String::new();
-    let summary = wrap(&escape_doc(&f.doc), LINE_WIDTH - 7);
+    let summary = wrap(&escape_doc(&summary(f, role)), LINE_WIDTH - 7);
     let _ = writeln!(out, "    \"\"\"{}", summary.join("\n    "));
     out.push_str("\n    Args:\n");
     push_wrapped(
@@ -413,7 +459,7 @@ fn docstring(f: &Function) -> String {
             &format!("{}: {}", py_name(&a.name), arg_doc(a)),
         );
     }
-    if let Some(r) = returns_doc(f) {
+    if let Some(r) = returns_doc(f, role) {
         out.push_str("\n    Returns:\n");
         push_prose(&mut out, 8, &r);
     }
@@ -440,14 +486,14 @@ fn docstring(f: &Function) -> String {
 }
 
 /// One `def` (signature + docstring, and a body unless it is a stub).
-fn function(f: &Function, flavor: Flavor) -> String {
-    let (ret_ty, helper) = returns(f);
-    let mut out = format!("def {}(\n", f.name);
+fn function(f: &Function, role: Role, flavor: Flavor) -> String {
+    let (ret_ty, helper) = returns(f, role);
+    let mut out = format!("def {}(\n", typed_name(f, role));
     for p in params(f, flavor) {
         let _ = writeln!(out, "    {p},");
     }
     let _ = writeln!(out, ") -> {ret_ty}:");
-    out.push_str(&docstring(f));
+    out.push_str(&docstring(f, role));
     if flavor == Flavor::Stub {
         return out;
     }
@@ -465,7 +511,7 @@ fn function(f: &Function, flavor: Flavor) -> String {
         }
         out.push_str("        },\n");
     }
-    if has_record(f) {
+    if returns_record(f, role) {
         let _ = writeln!(out, "        {},\n        (", record_name(f));
         for n in &f.tuple_names {
             let _ = writeln!(out, "            \"{n}\",");
@@ -479,15 +525,9 @@ fn function(f: &Function, flavor: Flavor) -> String {
 /// `from ._core import ...` names actually used (so ruff F401 stays clean).
 fn core_imports(funcs: &[&Function], flavor: Flavor) -> Vec<&'static str> {
     let any_tri = funcs.iter().flat_map(|f| &f.args).any(|a| a.tristate);
-    let any_pair = funcs
-        .iter()
-        .any(|f| f.returns == Returns::ConfigAndJson && !has_record(f));
     let mut names = Vec::new();
     if any_tri && flavor == Flavor::Module {
         names.push("UNSET");
-    }
-    if any_pair {
-        names.push("ConfigAndJson");
     }
     if any_tri {
         names.push("UnsetType");
@@ -554,8 +594,10 @@ fn module(funcs: &[&Function], codes: &[String], flavor: Flavor) -> String {
         out.push_str(&record_class(f));
     }
     for f in funcs {
-        out.push_str(sep);
-        out.push_str(&function(f, flavor));
+        for role in roles(f) {
+            out.push_str(sep);
+            out.push_str(&function(f, *role, flavor));
+        }
     }
     out
 }
@@ -595,6 +637,7 @@ mod tests {
             positional: false,
             owned: false,
             rust_convert: None,
+            json_type: None,
         }
     }
 
@@ -676,7 +719,7 @@ mod tests {
             params(&f, Flavor::Stub)[5],
             "tier: int | None | UnsetType = ..."
         );
-        let body = function(&f, Flavor::Module);
+        let body = function(&f, Role::Primary, Flavor::Module);
         assert!(body.contains("\"class\": class_,"), "{body}");
         assert!(body.contains("\"desc\": _core.opt(desc),"), "{body}");
         assert!(body.contains("\"tier\": tier,"), "{body}");
@@ -698,29 +741,50 @@ mod tests {
             params(&f, Flavor::Module)[1..],
             ["a: bool", "b: Any", "c: list[str]", "d: int | str"]
         );
-        let body = function(&f, Flavor::Module);
+        let body = function(&f, Role::Primary, Flavor::Module);
         assert!(body.contains("\"d\": d,"), "{body}");
-        assert!(docstring(&f).contains("d: ``int | str``."), "{body}");
+        assert!(
+            docstring(&f, Role::Primary).contains("d: ``int | str``."),
+            "{body}"
+        );
     }
 
     #[test]
     fn test_returns_mapping_and_no_args_body() {
-        for (r, ty, helper) in [
-            (Returns::Config, "-> str:", "_core.call_config("),
-            (Returns::Json, "-> str:", "_core.call_json("),
+        for (r, role, ty, helper) in [
+            (
+                Returns::Config,
+                Role::Primary,
+                "-> str:",
+                "_core.call_config(",
+            ),
+            (Returns::Json, Role::Primary, "-> str:", "_core.call_json("),
             (
                 Returns::ConfigAndJson,
-                "-> ConfigAndJson:",
-                "_core.call_config_and_json(",
+                Role::Primary,
+                "-> str:",
+                "_core.call_config(",
             ),
-            (Returns::Int, "-> int:", "_core.call_int("),
-            (Returns::Unit, "-> None:", "_core.call_unit("),
+            (
+                Returns::ConfigAndJson,
+                Role::Companion,
+                "-> str:",
+                "_core.call_json(",
+            ),
+            (Returns::Int, Role::Primary, "-> int:", "_core.call_int("),
+            (Returns::Unit, Role::Primary, "-> None:", "_core.call_unit("),
         ] {
-            let body = function(&func(vec![], r), Flavor::Module);
+            let body = function(&func(vec![], r), role, Flavor::Module);
             assert!(body.contains(ty) && body.contains(helper), "{body}");
             assert!(body.contains("        {},\n"), "{body}");
-            assert!(!function(&func(vec![], r), Flavor::Stub).contains("return"));
+            assert!(!function(&func(vec![], r), role, Flavor::Stub).contains("return _core"));
         }
+        let pair = func(vec![], Returns::ConfigAndJson);
+        assert_eq!(roles(&pair), [Role::Primary, Role::Companion]);
+        assert_eq!(roles(&func(vec![], Returns::Config)), [Role::Primary]);
+        let companion = function(&pair, Role::Companion, Flavor::Module);
+        assert!(companion.starts_with("def do_it_result(\n"), "{companion}");
+        assert!(companion.contains("\"do_it\",\n"), "wire name: {companion}");
     }
 
     #[test]
@@ -737,22 +801,31 @@ mod tests {
         );
         f.tuple_names = vec!["plan_id".into(), "was_created".into()];
         f.notes = Some("A \"\"\" trap \\ here.".into());
-        let pair = docstring(&func(vec![], Returns::ConfigAndJson));
-        assert!(pair.contains("``ConfigAndJson(config, json)``"), "{pair}");
-        let d = docstring(&f);
-        assert!(d.starts_with("    \"\"\"Do it.\n\n    Args:\n"), "{d}");
+        let pair = docstring(&func(vec![], Returns::ConfigAndJson), Role::Primary);
+        assert!(pair.contains("``do_it_result`` (same arguments)"), "{pair}");
+        let companion = docstring(&func(vec![], Returns::ConfigAndJson), Role::Companion);
+        assert!(
+            companion.starts_with("    \"\"\"The record (row / ids) of ``do_it``"),
+            "{companion}"
+        );
+        assert!(
+            companion.contains("record (e.g. the created row"),
+            "{companion}"
+        );
+        let d = docstring(&f, Role::Companion);
+        assert!(
+            docstring(&f, Role::Primary).starts_with("    \"\"\"Do it.\n\n    Args:\n"),
+            "{d}"
+        );
         assert!(d.contains("source: Keep or clear. ``UNSET`` leaves it, ``None`` clears it."));
         assert!(d.contains("``None`` omits it. Library default when omitted: ``\"No\"``."));
         assert!(d.contains("class_: ``str``. Wire name ``class``."), "{d}");
-        assert!(
-            d.contains("``DoItResult(config, plan_id, was_created)``"),
-            "{d}"
-        );
-        assert!(d.contains("record member's JSON text"), "{d}");
+        assert!(d.contains("``DoItRecord(plan_id, was_created)``"), "{d}");
+        assert!(d.contains("record member's\n        JSON text"), "{d}");
         assert!(d.contains("NOT_FOUND"), "{d}");
         assert!(d.contains("A \\\"\\\"\\\" trap \\\\ here."), "{d}");
         assert!(d.ends_with("    \"\"\"\n"));
-        let unit = docstring(&func(vec![], Returns::Unit));
+        let unit = docstring(&func(vec![], Returns::Unit), Role::Primary);
         assert!(!unit.contains("Returns:"), "{unit}");
     }
 
@@ -761,10 +834,12 @@ mod tests {
         let mut f = func(vec![arg("code", ArgType::Str)], Returns::ConfigAndJson);
         f.name = "set_generic_plan".into();
         f.tuple_names = vec!["plan_id".into(), "was_created".into()];
-        assert_eq!(record_name(&f), "SetGenericPlanResult");
+        assert_eq!(record_name(&f), "SetGenericPlanRecord");
         let class = record_class(&f);
         assert!(
-            class.starts_with("class SetGenericPlanResult(NamedTuple):\n"),
+            class.starts_with(
+                "class SetGenericPlanRecord(NamedTuple):\n    \"\"\"Result of ``set_generic_plan_result``"
+            ),
             "{class}"
         );
         let fields: Vec<&str> = class
@@ -772,30 +847,34 @@ mod tests {
             .filter(|l| l.ends_with(": str"))
             .map(str::trim)
             .collect();
-        assert_eq!(fields, ["config: str", "plan_id: str", "was_created: str"]);
-        let body = function(&f, Flavor::Module);
-        assert!(body.contains(") -> SetGenericPlanResult:"), "{body}");
+        assert_eq!(fields, ["plan_id: str", "was_created: str"]);
+        let primary = function(&f, Role::Primary, Flavor::Module);
+        assert!(primary.contains(") -> str:"), "{primary}");
+        assert!(
+            primary.contains("_core.call_config(\n        \"set_generic_plan\",\n"),
+            "{primary}"
+        );
+        assert!(!primary.contains("SetGenericPlanRecord,"), "{primary}");
+        let body = function(&f, Role::Companion, Flavor::Module);
+        assert!(body.contains(") -> SetGenericPlanRecord:"), "{body}");
         assert!(
             body.contains(
-                "_core.call_config_and_record(\n        \"set_generic_plan\",\n        config_json,\n        {\n            \"code\": code,\n        },\n        SetGenericPlanResult,\n        (\n            \"plan_id\",\n            \"was_created\",\n        ),\n    )\n"
+                "_core.call_json_record(\n        \"set_generic_plan\",\n        config_json,\n        {\n            \"code\": code,\n        },\n        SetGenericPlanRecord,\n        (\n            \"plan_id\",\n            \"was_created\",\n        ),\n    )\n"
             ),
             "{body}"
         );
         f.returns = Returns::Json;
         f.name = "verify_x".into();
-        assert!(!record_class(&f).contains("config: str"));
-        assert!(function(&f, Flavor::Module).contains("_core.call_json_record("));
-        assert!(function(&f, Flavor::Stub).contains(") -> VerifyXResult:"));
+        assert!(record_class(&f).contains("Result of ``verify_x``"));
+        assert!(function(&f, Role::Primary, Flavor::Module).contains("_core.call_json_record("));
+        assert!(function(&f, Role::Primary, Flavor::Stub).contains(") -> VerifyXRecord:"));
         // Without tuple_names: the plain mapping, and no record type.
         f.tuple_names.clear();
         assert!(!has_record(&f));
-        assert_eq!(returns(&f), ("str".to_string(), "call_json"));
+        assert_eq!(returns(&f, Role::Primary), ("str".to_string(), "call_json"));
         let header_only = header(&[&func(vec![], Returns::ConfigAndJson)], Flavor::Module);
         assert!(!header_only.contains("typing"), "{header_only}");
-        assert!(
-            header_only.contains("import ConfigAndJson"),
-            "{header_only}"
-        );
+        assert!(!header_only.contains("_core import"), "{header_only}");
     }
 
     #[test]
@@ -829,6 +908,10 @@ mod tests {
             let expected = f.status == Status::Implemented;
             assert_eq!(py.contains(&def), expected, "{}", f.name);
             assert_eq!(pyi.contains(&def), expected, "{}", f.name);
+            let companion = format!("\ndef {}_result(\n", f.name);
+            let paired = expected && f.returns == Returns::ConfigAndJson;
+            assert_eq!(py.contains(&companion), paired, "{}", f.name);
+            assert_eq!(pyi.contains(&companion), paired, "{}", f.name);
         }
         // Files not ending in exactly one newline, and over-long or
         // trailing-space lines (collected, so a failure lists them all).
@@ -859,28 +942,35 @@ mod tests {
         rec.tuple_names = vec!["x".into(), "y".into()];
         let with_record = init_module(&[&f, &rec], "generated");
         assert!(
-            with_record.contains("    REASON_CODES,\n    ARecResult,\n    a_rec,\n    do_it,\n"),
+            with_record.contains("    REASON_CODES,\n    ARecRecord,\n    a_rec,\n    do_it,\n"),
             "{with_record}"
         );
         assert!(
-            with_record.contains("    \"ARecResult\",\n"),
+            with_record.contains("    \"ARecRecord\",\n"),
             "{with_record}"
         );
         let init = init_module(&[&f], "generated");
         assert!(
             init.contains(
-                "from ._core import (\n    UNSET,\n    ConfigAndJson,\n    Invocation,\n    UnsetType,\n    __version__,\n    abi_version,\n    invoke,\n    library_version,\n)\n"
+                "from ._core import (\n    UNSET,\n    Invocation,\n    UnsetType,\n    __version__,\n    abi_version,\n    invoke,\n    library_version,\n)\n"
             )
         );
         assert!(init.contains("from .generated import (\n    REASON_CODES,\n    do_it,\n)\n"));
         let all = init.split("__all__ = [").nth(1).unwrap();
         assert!(
             all.starts_with(
-                "\n    \"REASON_CODES\",\n    \"UNSET\",\n    \"ConfigAndJson\",\n    \"Invocation\",\n    \"SzConfigToolError\",\n    \"UnsetType\",\n    \"__version__\",\n    \"abi_version\",\n    \"do_it\",\n    \"invoke\",\n    \"library_version\",\n]"
+                "\n    \"REASON_CODES\",\n    \"UNSET\",\n    \"Invocation\",\n    \"SzConfigToolError\",\n    \"UnsetType\",\n    \"__version__\",\n    \"abi_version\",\n    \"do_it\",\n    \"invoke\",\n    \"library_version\",\n]"
             ),
             "{all}"
         );
         assert_eq!(isort_key("A"), (1, "A".into()));
+        let pair = func(vec![], Returns::ConfigAndJson);
+        let paired = init_module(&[&pair], "generated");
+        assert!(
+            paired.contains("    do_it,\n    do_it_result,\n)"),
+            "{paired}"
+        );
+        assert!(paired.contains("    \"do_it_result\",\n"), "{paired}");
     }
 
     #[test]

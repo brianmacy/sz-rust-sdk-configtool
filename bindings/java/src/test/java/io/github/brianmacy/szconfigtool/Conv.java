@@ -1,5 +1,8 @@
 package io.github.brianmacy.szconfigtool;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -55,8 +58,28 @@ final class Conv {
         return json(result);
     }
 
-    static String[] configAndJson(ConfigAndJson r) {
-        return new String[] {"config_and_json", r.config(), r.json()};
+    /** A typed call that may throw the binding's checked exception. */
+    @FunctionalInterface
+    interface Call {
+        String get() throws SzConfigToolException;
+    }
+
+    /**
+     * A {@code config_and_json} step through BOTH typed methods: the primary
+     * (the config) and the companion {@code <name>Result} (the record JSON).
+     * When either fails, the other must fail with the same reason code.
+     */
+    static String[] configAndJson(Call primary, Call companion) throws SzConfigToolException {
+        String config;
+        try {
+            config = primary.get();
+        } catch (SzConfigToolException e) {
+            SzConfigToolException other = assertThrows(SzConfigToolException.class, companion::get,
+                    "companion must fail like the primary");
+            assertEquals(e.getReasonCode(), other.getReasonCode());
+            throw e;
+        }
+        return new String[] {"config_and_json", config, companion.get()};
     }
 
     static String[] integer(long v) {

@@ -3,22 +3,20 @@
 
 from typing import Any, NamedTuple
 
-from ._core import ConfigAndJson, UnsetType
+from ._core import UnsetType
 
 REASON_CODES: tuple[str, ...]
 """Every ``SzConfigToolError.reason_code`` value."""
 
-class SetGenericPlanResult(NamedTuple):
-    """Result of ``set_generic_plan``; every named field is JSON text."""
+class SetGenericPlanRecord(NamedTuple):
+    """Result of ``set_generic_plan_result``; every named field is JSON text."""
 
-    config: str
-    """The modified configuration JSON (opaque string)."""
     plan_id: str
     """``plan_id`` as JSON text."""
     was_created: str
     """``was_created`` as JSON text."""
 
-class VerifyCompatibilityVersionResult(NamedTuple):
+class VerifyCompatibilityVersionRecord(NamedTuple):
     """Result of ``verify_compatibility_version``; every named field is JSON text."""
 
     current_version: str
@@ -37,7 +35,7 @@ def add_attribute(
     internal: str | None = None,
     required: str | None = None,
     id: int | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Add an attribute (CFG_ATTR row) mapping an input attribute to a feature element.
 
     Args:
@@ -61,8 +59,58 @@ def add_attribute(
             floor 1000). A taken id > 0 is ALREADY_EXISTS. ``None`` omits it.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``add_attribute_result`` (same
+        arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS,
+            INVALID_INPUT, NOT_FOUND; any call may also raise INVALID_INPUT (bad
+            arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the new CFG_ATTR row). Validation order: class,
+        duplicate attribute, feature, element, required, internal, id. Does not create a
+        CFG_FBOM row.
+    """
+
+def add_attribute_result(
+    config_json: str,
+    attribute: str,
+    feature: str,
+    element: str,
+    class_: str,
+    *,
+    default_value: str | None = None,
+    internal: str | None = None,
+    required: str | None = None,
+    id: int | None = None,
+) -> str:
+    """The record (row / ids) of ``add_attribute``: same arguments and operation, but
+    returns the record instead of the configuration. Operation: Add an attribute
+    (CFG_ATTR row) mapping an input attribute to a feature element.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        attribute: Uppercased before storage and duplicate check.
+        feature: Must name an existing CFG_FTYPE (case-insensitive) or NOT_FOUND; stored
+            uppercased in FTYPE_CODE.
+        element: Must name an existing CFG_FELEM (case-insensitive) or NOT_FOUND; stored
+            uppercased in FELEM_CODE.
+        class_: CASE-SENSITIVE (not uppercased): must be exactly one of NAME, ATTRIBUTE,
+            IDENTIFIER, ADDRESS, PHONE, RELATIONSHIP, OTHER, else INVALID_INPUT. Wire
+            name ``class``.
+        default_value: Absent stores DEFAULT_VALUE null; any string (including "") is
+            stored verbatim. ``None`` omits it.
+        internal: Case-insensitive; normalized to Yes or No, else INVALID_INPUT.
+            ``None`` omits it. Library default when omitted: ``"No"``.
+        required: Case-insensitive; normalized to Yes, No, Any or Desired (stored in
+            FELEM_REQ), else INVALID_INPUT. ``None`` omits it. Library default when
+            omitted: ``"No"``.
+        id: Requested ATTR_ID. Absent OR <= 0 means auto-allocate (max existing + 1,
+            floor 1000). A taken id > 0 is ALREADY_EXISTS. ``None`` omits it.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS,
@@ -305,7 +353,7 @@ def add_comparison_call(
     element_list: list[str],
     *,
     id: int | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Add a comparison call (CFG_CFCALL row) binding a comparison function to a
     feature, with its element list (CFG_CFBOM rows).
 
@@ -327,8 +375,55 @@ def add_comparison_call(
             ``None`` omits it.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``add_comparison_call_result`` (same
+        arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS,
+            NOT_FOUND, ALREADY_PRESENT, INVALID_INPUT; any call may also raise
+            INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the new CFG_CFCALL row {CFCALL_ID, FTYPE_ID,
+        CFUNC_ID}). Validation order: id (MISSING_SECTION if CFG_CFCALL is absent or not
+        an array; ALREADY_EXISTS if taken), feature, one-call-per-feature
+        (ALREADY_PRESENT), function, empty list, then per item blank check and element
+        lookup; MISSING_SECTION if CFG_CFBOM is absent. The function's applicability to
+        the feature is not checked.
+    """
+
+def add_comparison_call_result(
+    config_json: str,
+    ftype_code: str,
+    cfunc_code: str,
+    element_list: list[str],
+    *,
+    id: int | None = None,
+) -> str:
+    """The record (row / ids) of ``add_comparison_call``: same arguments and operation,
+    but returns the record instead of the configuration. Operation: Add a comparison
+    call (CFG_CFCALL row) binding a comparison function to a feature, with its
+    element list (CFG_CFBOM rows).
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        ftype_code: Feature code; case-insensitive lookup in CFG_FTYPE, else NOT_FOUND.
+            Only one comparison call per feature: if any CFG_CFCALL row already has this
+            FTYPE_ID the call fails with ALREADY_PRESENT.
+        cfunc_code: Comparison function code; case-insensitive lookup in CFG_CFUNC, else
+            NOT_FOUND.
+        element_list: Element codes, each a case-insensitive GLOBAL CFG_FELEM lookup
+            (the element need NOT be in the feature's CFG_FBOM), else NOT_FOUND. Empty
+            list or a blank/whitespace-only item is INVALID_INPUT. One CFG_CFBOM row is
+            written per item with FTYPE_ID = the call's feature and EXEC_ORDER = 1-based
+            list position (outside the exec-order allocation policy). Duplicate items
+            are not rejected.
+        id: Requested CFCALL_ID. Absent OR <= 0 means auto-allocate (max existing + 1,
+            floor 1000). A taken id > 0 is ALREADY_EXISTS (checked before any lookup).
+            ``None`` omits it.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS,
@@ -428,7 +523,7 @@ def add_comparison_call_element(
     felem_id: int,
     *,
     exec_order: int | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Add one element (CFG_CFBOM row) to a comparison call, addressed by raw ids.
 
     Args:
@@ -443,8 +538,48 @@ def add_comparison_call_element(
             order > 0 on the same call is ALREADY_EXISTS. ``None`` omits it.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``add_comparison_call_element_result``
+        (same arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT,
+            ALREADY_EXISTS, MISSING_SECTION; any call may also raise INVALID_INPUT (bad
+            arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the new CFG_CFBOM row {CFCALL_ID, FTYPE_ID, FELEM_ID,
+        EXEC_ORDER}). Duplicate identity is (CFCALL_ID, FTYPE_ID, FELEM_ID) regardless
+        of EXEC_ORDER -> ALREADY_PRESENT. Order of checks: ftype_id < 0, duplicate,
+        exec_order, then MISSING_SECTION if CFG_CFBOM is absent. The same FELEM_ID may
+        be added under a different ftype_id, which makes a later feature-less
+        delete_comparison_call_element ambiguous.
+    """
+
+def add_comparison_call_element_result(
+    config_json: str,
+    cfcall_id: int,
+    ftype_id: int,
+    felem_id: int,
+    *,
+    exec_order: int | None = None,
+) -> str:
+    """The record (row / ids) of ``add_comparison_call_element``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Add
+    one element (CFG_CFBOM row) to a comparison call, addressed by raw ids.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        cfcall_id: CFCALL_ID written verbatim. NOT validated — the call need not exist.
+        ftype_id: The ELEMENT's feature id written to the BOM row's FTYPE_ID. Negative
+            is INVALID_INPUT; otherwise NOT validated against CFG_FTYPE.
+        felem_id: FELEM_ID written verbatim. NOT validated against CFG_FELEM or
+            CFG_FBOM.
+        exec_order: Allocated per CFCALL_ID. Absent OR <= 0 means auto-allocate (max
+            EXEC_ORDER on this call + 1, seed 0 so an empty call starts at 1). A taken
+            order > 0 on the same call is ALREADY_EXISTS. ``None`` omits it.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT,
@@ -504,7 +639,7 @@ def add_distinct_call(
     ftype_code: str,
     dfunc_code: str,
     element_list: list[str],
-) -> ConfigAndJson:
+) -> str:
     """Add a distinct call (CFG_DFCALL row) binding a distinct function to a feature,
     with its element list (CFG_DFBOM rows).
 
@@ -523,8 +658,50 @@ def add_distinct_call(
             not rejected.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``add_distinct_call_result`` (same
+        arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, INVALID_INPUT, MISSING_SECTION,
+            NOT_FOUND, ALREADY_PRESENT; any call may also raise INVALID_INPUT (bad
+            arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the new CFG_DFCALL row {DFCALL_ID, FTYPE_ID, DFUNC_ID}
+        — no EXEC_ORDER). DFCALL_ID is ALWAYS auto-allocated (max existing + 1, floor
+        1000): unlike add_comparison_call there is no `id` parameter. Validation order:
+        empty list / blank item, id (MISSING_SECTION if G2_CONFIG.CFG_DFCALL is absent),
+        feature, one-call-per-feature (ALREADY_PRESENT), function, element lookups;
+        MISSING_SECTION if CFG_DFCALL is not an array or CFG_DFBOM is absent.
+    """
+
+def add_distinct_call_result(
+    config_json: str,
+    ftype_code: str,
+    dfunc_code: str,
+    element_list: list[str],
+) -> str:
+    """The record (row / ids) of ``add_distinct_call``: same arguments and operation,
+    but returns the record instead of the configuration. Operation: Add a distinct
+    call (CFG_DFCALL row) binding a distinct function to a feature, with its element
+    list (CFG_DFBOM rows).
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        ftype_code: Feature code; case-insensitive lookup in CFG_FTYPE, else NOT_FOUND.
+            Only one distinct call per feature: if any CFG_DFCALL row already has this
+            FTYPE_ID the call fails with ALREADY_PRESENT.
+        dfunc_code: Distinct function code; case-insensitive lookup in CFG_DFUNC, else
+            NOT_FOUND.
+        element_list: Element codes, each a case-insensitive GLOBAL CFG_FELEM lookup
+            (the element need NOT be in the feature's CFG_FBOM), else NOT_FOUND. Empty
+            list or a blank/whitespace-only item is INVALID_INPUT (checked before
+            anything else). One CFG_DFBOM row is written per item with FTYPE_ID = the
+            call's feature and EXEC_ORDER = 1-based list position. Duplicate items are
+            not rejected.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, INVALID_INPUT, MISSING_SECTION,
@@ -624,7 +801,7 @@ def add_distinct_call_element(
     felem_id: int,
     *,
     exec_order: int | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Add one element (CFG_DFBOM row) to a distinct call, addressed by raw ids.
 
     Args:
@@ -640,8 +817,47 @@ def add_distinct_call_element(
             ALREADY_EXISTS. ``None`` omits it.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``add_distinct_call_element_result``
+        (same arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, ALREADY_PRESENT, ALREADY_EXISTS,
+            MISSING_SECTION; any call may also raise INVALID_INPUT (bad arguments) or
+            INTERNAL.
+
+    Notes:
+        Returns (modified config, the new CFG_DFBOM row {DFCALL_ID, FTYPE_ID, FELEM_ID,
+        EXEC_ORDER}). Duplicate identity is (DFCALL_ID, FTYPE_ID, FELEM_ID) regardless
+        of EXEC_ORDER -> ALREADY_PRESENT. Order of checks: duplicate, exec_order, then
+        MISSING_SECTION if CFG_DFBOM is absent.
+    """
+
+def add_distinct_call_element_result(
+    config_json: str,
+    dfcall_id: int,
+    ftype_id: int,
+    felem_id: int,
+    *,
+    exec_order: int | None = None,
+) -> str:
+    """The record (row / ids) of ``add_distinct_call_element``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Add
+    one element (CFG_DFBOM row) to a distinct call, addressed by raw ids.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        dfcall_id: DFCALL_ID written verbatim. NOT validated — the call need not exist.
+        ftype_id: The ELEMENT's feature id written to the BOM row's FTYPE_ID. NOT
+            validated at all — unlike add_comparison_call_element, a negative id is
+            accepted and stored.
+        felem_id: FELEM_ID written verbatim. NOT validated against CFG_FELEM or
+            CFG_FBOM.
+        exec_order: Allocated per DFCALL_ID. Absent OR <= 0 means auto-allocate (max
+            EXEC_ORDER on this call + 1, seed 0). A taken order > 0 on the same call is
+            ALREADY_EXISTS. ``None`` omits it.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, ALREADY_PRESENT, ALREADY_EXISTS,
@@ -703,7 +919,7 @@ def add_expression_call(
     felem_code: str | None = None,
     exec_order: int | None = None,
     expression_feature: str | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Add an expression call (CFG_EFCALL row) plus its element list (CFG_EFBOM rows).
 
     Args:
@@ -719,7 +935,8 @@ def add_expression_call(
             (case-insensitive) stores BOM FTYPE_ID 0 (G2 PARENT_FEATURE_LINKED_FTYPE:
             the feature that triggered the call); otherwise a feature code
             (case-insensitive) or NOT_FOUND. The element is NOT checked for membership
-            in that feature. [] is allowed.
+            in that feature. [] is allowed. Shape: ``[{element: string, required:
+            string, feature?: string}]``.
         ftype_code: Feature code (case-insensitive) or NOT_FOUND; "ALL"
             (case-insensitive) = absent; absent stores FTYPE_ID -1. ``None`` omits it.
         felem_code: Element code (case-insensitive) or NOT_FOUND; "N/A"
@@ -734,8 +951,71 @@ def add_expression_call(
             `new()` default is "No").
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``add_expression_call_result`` (same
+        arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, NOT_FOUND,
+            INVALID_INPUT, ALREADY_EXISTS, MISSING_FIELD; any call may also raise
+            INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the new CFG_EFCALL row {EFCALL_ID, FTYPE_ID, FELEM_ID,
+        EFUNC_ID, EXEC_ORDER, EFEAT_FTYPE_ID, IS_VIRTUAL}); the created CFG_EFBOM rows
+        are NOT in the record (see list_expression_calls). EFCALL_ID is auto-allocated
+        (max + 1, floor 1000). Check order: EFCALL_ID allocation (MISSING_SECTION if
+        CFG_EFCALL absent), efunc, feature, element, exactly-one rule, exec order,
+        expression_feature, element list, then MISSING_SECTION if CFG_EFBOM absent. BOM
+        FTYPE_ID sentinels (G2 EFBomConfig.cpp): 0 = parent feature link, -1 = any
+        feature. The BOM-feature column is not rendered by get/list_expression_calls;
+        read raw rows with get_config_section("CFG_EFBOM").
+    """
+
+def add_expression_call_result(
+    config_json: str,
+    efunc_code: str,
+    element_list: Any,
+    is_virtual: str,
+    *,
+    ftype_code: str | None = None,
+    felem_code: str | None = None,
+    exec_order: int | None = None,
+    expression_feature: str | None = None,
+) -> str:
+    """The record (row / ids) of ``add_expression_call``: same arguments and operation,
+    but returns the record instead of the configuration. Operation: Add an expression
+    call (CFG_EFCALL row) plus its element list (CFG_EFBOM rows).
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        efunc_code: Expression function code (CFG_EFUNC, case-insensitive) or NOT_FOUND.
+        element_list: JSON array of {"element": str, "required": str, "feature"?: str}
+            objects (unknown keys, non-objects, non-string values = INVALID_INPUT;
+            missing element/required = MISSING_FIELD). One CFG_EFBOM row per item,
+            EXEC_ORDER = 1-based list position. element: global CFG_FELEM lookup
+            (case-insensitive) or NOT_FOUND. required: stored verbatim in FELEM_REQ (not
+            validated or normalized). feature: absent stores BOM FTYPE_ID -1 (G2
+            WILDCARDED_FTYPE: any feature in the record carrying the element); "PARENT"
+            (case-insensitive) stores BOM FTYPE_ID 0 (G2 PARENT_FEATURE_LINKED_FTYPE:
+            the feature that triggered the call); otherwise a feature code
+            (case-insensitive) or NOT_FOUND. The element is NOT checked for membership
+            in that feature. [] is allowed. Shape: ``[{element: string, required:
+            string, feature?: string}]``.
+        ftype_code: Feature code (case-insensitive) or NOT_FOUND; "ALL"
+            (case-insensitive) = absent; absent stores FTYPE_ID -1. ``None`` omits it.
+        felem_code: Element code (case-insensitive) or NOT_FOUND; "N/A"
+            (case-insensitive) = absent; absent stores FELEM_ID -1. Exactly one of
+            ftype_code / felem_code must resolve, else INVALID_INPUT. ``None`` omits it.
+        exec_order: CFG_EFCALL EXEC_ORDER scoped per (FTYPE_ID, FELEM_ID). Absent or <=
+            0 = auto-allocate (max in scope + 1); > 0 and free = verbatim; > 0 and taken
+            = ALREADY_EXISTS. ``None`` omits it.
+        expression_feature: Feature code stored as EFEAT_FTYPE_ID (case-insensitive) or
+            NOT_FOUND; absent or "N/A" (case-insensitive) stores -1. ``None`` omits it.
+        is_virtual: Stored verbatim in IS_VIRTUAL (not validated or normalized; the Rust
+            `new()` default is "No").
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, NOT_FOUND,
@@ -837,7 +1117,7 @@ def add_expression_call_element(
     felem_req: str,
     *,
     exec_order: int | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Add one CFG_EFBOM row to an expression call, addressed by raw ids.
 
     Args:
@@ -854,8 +1134,49 @@ def add_expression_call_element(
         felem_req: Stored verbatim in FELEM_REQ (not validated or normalized).
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``add_expression_call_element_result``
+        (same arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT,
+            ALREADY_EXISTS, MISSING_SECTION; any call may also raise INVALID_INPUT (bad
+            arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the new CFG_EFBOM row {EFCALL_ID, FTYPE_ID, FELEM_ID,
+        EXEC_ORDER, FELEM_REQ}). Check order: ftype_id < 0, ALREADY_PRESENT when
+        (EFCALL_ID, FTYPE_ID, FELEM_ID) already exists (EXEC_ORDER ignored), exec order,
+        then MISSING_SECTION if CFG_EFBOM is absent.
+    """
+
+def add_expression_call_element_result(
+    config_json: str,
+    efcall_id: int,
+    ftype_id: int,
+    felem_id: int,
+    felem_req: str,
+    *,
+    exec_order: int | None = None,
+) -> str:
+    """The record (row / ids) of ``add_expression_call_element``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Add
+    one CFG_EFBOM row to an expression call, addressed by raw ids.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        efcall_id: Stored as EFCALL_ID. NOT validated — the call need not exist.
+        ftype_id: The ELEMENT's feature id, stored verbatim as BOM FTYPE_ID. < 0 =
+            INVALID_INPUT; 0 is accepted and is the G2 parent feature link (same as
+            add_expression_call's feature "PARENT"); -1 (any feature) is not addable
+            here; NOT validated against CFG_FTYPE.
+        felem_id: Stored verbatim as FELEM_ID. NOT validated against CFG_FELEM.
+        exec_order: BOM EXEC_ORDER scoped per EFCALL_ID. Absent or <= 0 = auto-allocate
+            (max on the call + 1); > 0 and free = verbatim; > 0 and taken =
+            ALREADY_EXISTS. ``None`` omits it.
+        felem_req: Stored verbatim in FELEM_REQ (not validated or normalized).
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT,
@@ -914,7 +1235,7 @@ def add_standardize_call(
     ftype_code: str | None = None,
     felem_code: str | None = None,
     exec_order: int | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Add a standardize call (CFG_SFCALL row) binding a standardize function to a
     feature or an element.
 
@@ -935,8 +1256,53 @@ def add_standardize_call(
             ALREADY_EXISTS. ``None`` omits it.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``add_standardize_call_result`` (same
+        arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, NOT_FOUND,
+            INVALID_INPUT, ALREADY_EXISTS; any call may also raise INVALID_INPUT (bad
+            arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the new CFG_SFCALL row {SFCALL_ID, FTYPE_ID, FELEM_ID,
+        SFUNC_ID, EXEC_ORDER}). SFCALL_ID is always auto-allocated (max + 1, floor
+        1000). MISSING_SECTION when CFG_SFCALL is absent. Check order: SFCALL_ID
+        allocation, sfunc, feature, element, exactly-one rule, exec order. TRAP: the
+        exec-order scope does not include SFUNC_ID, so a second call on the same feature
+        continues that feature's order sequence.
+    """
+
+def add_standardize_call_result(
+    config_json: str,
+    sfunc_code: str,
+    *,
+    ftype_code: str | None = None,
+    felem_code: str | None = None,
+    exec_order: int | None = None,
+) -> str:
+    """The record (row / ids) of ``add_standardize_call``: same arguments and operation,
+    but returns the record instead of the configuration. Operation: Add a standardize
+    call (CFG_SFCALL row) binding a standardize function to a feature or an element.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        sfunc_code: Standardize function code (CFG_SFUNC, case-insensitive) or
+            NOT_FOUND. Looked up before the feature/element.
+        ftype_code: Feature code (case-insensitive) or NOT_FOUND. "ALL"
+            (case-insensitive) is treated as absent. Stored as FTYPE_ID; absent stores
+            FTYPE_ID -1. ``None`` omits it.
+        felem_code: Element code (case-insensitive) or NOT_FOUND. "N/A"
+            (case-insensitive) is treated as absent. Stored as FELEM_ID; absent stores
+            FELEM_ID -1. Exactly one of ftype_code / felem_code must resolve, else
+            INVALID_INPUT. ``None`` omits it.
+        exec_order: EXEC_ORDER scoped per (FTYPE_ID, FELEM_ID) of the new row (the -1
+            sentinel is part of the scope). Absent or <= 0 = auto-allocate (max in scope
+            + 1, 1 for an empty scope); > 0 and free = used verbatim; > 0 and taken =
+            ALREADY_EXISTS. ``None`` omits it.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, NOT_FOUND,
@@ -1031,7 +1397,7 @@ def add_standardize_call_element(
     *,
     felem_id: int | None = None,
     exec_order: int | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Add a CFG_SFCALL row addressed by raw ids (FTYPE_ID, SFUNC_ID, FELEM_ID).
 
     Args:
@@ -1046,8 +1412,47 @@ def add_standardize_call_element(
             ALREADY_EXISTS. ``None`` omits it.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``add_standardize_call_element_result``
+        (same arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, ALREADY_PRESENT,
+            ALREADY_EXISTS; any call may also raise INVALID_INPUT (bad arguments) or
+            INTERNAL.
+
+    Notes:
+        Returns (modified config, the new CFG_SFCALL row). ALREADY_PRESENT when a row
+        with the same (FTYPE_ID, SFUNC_ID, FELEM_ID) exists (checked first). SFCALL_ID
+        auto-allocated (max + 1, floor 1000); MISSING_SECTION when CFG_SFCALL is absent.
+        Unlike add_standardize_call there is no feature-xor-element rule and no id
+        validation.
+    """
+
+def add_standardize_call_element_result(
+    config_json: str,
+    ftype_id: int,
+    sfunc_id: int,
+    *,
+    felem_id: int | None = None,
+    exec_order: int | None = None,
+) -> str:
+    """The record (row / ids) of ``add_standardize_call_element``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Add a
+    CFG_SFCALL row addressed by raw ids (FTYPE_ID, SFUNC_ID, FELEM_ID).
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        ftype_id: Stored verbatim as FTYPE_ID. NOT validated against CFG_FTYPE (use -1
+            for an element-bound row).
+        sfunc_id: Stored verbatim as SFUNC_ID. NOT validated against CFG_SFUNC.
+        felem_id: Stored as FELEM_ID; absent = -1. NOT validated against CFG_FELEM.
+            ``None`` omits it.
+        exec_order: EXEC_ORDER scoped per (FTYPE_ID, FELEM_ID). Absent or <= 0 =
+            auto-allocate (max in scope + 1); > 0 and free = verbatim; > 0 and taken =
+            ALREADY_EXISTS. ``None`` omits it.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, ALREADY_PRESENT,
@@ -1216,7 +1621,7 @@ def remove_config_section_field(
     config_json: str,
     section_name: str,
     field_name: str,
-) -> ConfigAndJson:
+) -> str:
     """Remove a field from every item of an array section, returning how many items had
     it.
 
@@ -1228,8 +1633,37 @@ def remove_config_section_field(
             removed).
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``remove_config_section_field_result``
+        (same arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
+            INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Record is the integer count of items the field was removed from (0 when no item
+        had it; the config is still returned). Non-object items are skipped. A config
+        with no G2_CONFIG key succeeds unchanged with count 0.
+    """
+
+def remove_config_section_field_result(
+    config_json: str,
+    section_name: str,
+    field_name: str,
+) -> str:
+    """The record (row / ids) of ``remove_config_section_field``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Remove
+    a field from every item of an array section, returning how many items had it.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        section_name: Uppercased before lookup. Must name an ARRAY section, else
+            NOT_FOUND.
+        field_name: Uppercased before removal (a lowercase key in a row can never be
+            removed).
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
@@ -1246,7 +1680,7 @@ def add_config_section_field(
     section_name: str,
     field_name: str,
     field_value: Any,
-) -> ConfigAndJson:
+) -> str:
     """Add a field to every item of an array section that lacks it, returning
     existed/updated counts.
 
@@ -1259,8 +1693,41 @@ def add_config_section_field(
             the field.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``add_config_section_field_result``
+        (same arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
+            INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Record is {"existed": n, "updated": n}: items that already had the field (value
+        preserved, never overwritten) vs. items it was inserted into. Non-object items
+        are skipped (counted in neither). A config with no G2_CONFIG key succeeds
+        unchanged with both counts 0.
+    """
+
+def add_config_section_field_result(
+    config_json: str,
+    section_name: str,
+    field_name: str,
+    field_value: Any,
+) -> str:
+    """The record (row / ids) of ``add_config_section_field``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Add a
+    field to every item of an array section that lacks it, returning existed/updated
+    counts.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        section_name: Uppercased before lookup. Must name an ARRAY section, else
+            NOT_FOUND.
+        field_name: Uppercased before insertion.
+        field_value: Any JSON value, stored verbatim (cloned) into each item that lacks
+            the field.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
@@ -1681,7 +2148,13 @@ def add_feature(
             No). Any other item type is INVALID_INPUT. Element codes are uppercased; a
             code not in CFG_FELEM is AUTO-CREATED (FELEM_ID max+1 floor 1000, DATA_TYPE
             string, FELEM_DESC = code). The FBOM EXEC_ORDER is the item's 1-based
-            position (per feature, not whole-table).
+            position (per feature, not whole-table). Shape: ``[string | {element?:
+            string|null, ELEMENT?: string|null, expressed?: string|null, EXPRESSED?:
+            string|null, compared?: string|null, COMPARED?: string|null, display?:
+            string|null, DISPLAY?: string|null, displaylevel?: int|null, DISPLAYLEVEL?:
+            int|null, display_level?: int|null, displaydelim?: string|null,
+            DISPLAYDELIM?: string|null, display_delim?: string|null, derived?:
+            string|null, DERIVED?: string|null}]``.
         class_: CFG_FCLASS code, case-insensitive; unknown is NOT_FOUND. Wire name
             ``class``. ``None`` omits it. Library default when omitted: ``"OTHER"``.
         behavior: Behavior code (A1, F1, FF, FM, FVM, NONE, NAME; E/S suffixes set
@@ -2054,7 +2527,7 @@ def update_feature_version(
 def add_fragment(
     config_json: str,
     fragment_config: Any,
-) -> ConfigAndJson:
+) -> str:
     """Add a rule fragment (CFG_ERFRAG row), returning the assigned ERFRAG_ID.
 
     Args:
@@ -2068,11 +2541,52 @@ def add_fragment(
             without FRAGMENT[ (including "") is accepted unvalidated. ERFRAG_ID
             (integer, optional): absent or <= 0 auto-allocates (max + 1, floor 1, so
             1000 on the template); a taken id > 0 is ALREADY_EXISTS. Any ERFRAG_DESC key
-            is IGNORED.
+            is IGNORED. Shape: ``{ERFRAG_CODE: string, ERFRAG_SOURCE: string,
+            ERFRAG_ID?: int|null, ERFRAG_DESC?: any, ERFRAG_DEPENDS?: any}``.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``add_fragment_result`` (same arguments)
+        returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS,
+            INVALID_INPUT, INVALID_CONFIG, MISSING_SECTION; any call may also raise
+            INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Record is the assigned ERFRAG_ID (integer). The row always carries every
+        CFG_ERFRAG key: ERFRAG_DESC is set to the uppercased code, ERFRAG_DEPENDS is the
+        referenced fragments' ids sorted as STRINGS, deduplicated and comma-joined
+        ("11,61"), or null when there are none. ERFRAG_CODE and ERFRAG_SOURCE are
+        checked BEFORE the config is parsed (MISSING_FIELD wins). A config without
+        G2_CONFIG is INVALID_CONFIG; with G2_CONFIG but no CFG_ERFRAG it is
+        MISSING_SECTION.
+    """
+
+def add_fragment_result(
+    config_json: str,
+    fragment_config: Any,
+) -> str:
+    """The record (row / ids) of ``add_fragment``: same arguments and operation, but
+    returns the record instead of the configuration. Operation: Add a rule fragment
+    (CFG_ERFRAG row), returning the assigned ERFRAG_ID.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        fragment_config: Object with on-disk keys. ERFRAG_CODE (string, required, else
+            MISSING_FIELD) is uppercased for storage and the duplicate check
+            (ALREADY_EXISTS). ERFRAG_SOURCE (string, required, else MISSING_FIELD) is
+            stored verbatim; every name referenced inside a FRAGMENT[...] clause (e.g.
+            "./FRAGMENT[./SAME_NAME>0 and ./SAME_STAB>0]") must be an existing
+            ERFRAG_CODE matched EXACTLY (case-sensitive), else INVALID_INPUT. A source
+            without FRAGMENT[ (including "") is accepted unvalidated. ERFRAG_ID
+            (integer, optional): absent or <= 0 auto-allocates (max + 1, floor 1, so
+            1000 on the template); a taken id > 0 is ALREADY_EXISTS. Any ERFRAG_DESC key
+            is IGNORED. Shape: ``{ERFRAG_CODE: string, ERFRAG_SOURCE: string,
+            ERFRAG_ID?: int|null, ERFRAG_DESC?: any, ERFRAG_DEPENDS?: any}``.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS,
@@ -2195,7 +2709,7 @@ def add_comparison_function(
     description: str | None = None,
     language: str | None = None,
     anon_support: str | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Add a comparison function (CFG_CFUNC row).
 
     Args:
@@ -2211,8 +2725,49 @@ def add_comparison_function(
             ``None`` omits it. Library default when omitted: ``"No"``.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``add_comparison_function_result`` (same
+        arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, INVALID_INPUT; any
+            call may also raise INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the new complete CFG_CFUNC row: CFUNC_ID, CFUNC_CODE,
+        CONNECT_STR, ANON_SUPPORT, CFUNC_DESC, LANGUAGE). CFUNC_ID is always
+        auto-allocated (max existing + 1, floor 1); no id can be requested. TRAP: a
+        duplicate code is INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS.
+        Validation order: duplicate code, anon_support, then section. MISSING_SECTION
+        only when CFG_CFUNC is absent.
+    """
+
+def add_comparison_function_result(
+    config_json: str,
+    code: str,
+    *,
+    connect_str: str | None = None,
+    description: str | None = None,
+    language: str | None = None,
+    anon_support: str | None = None,
+) -> str:
+    """The record (row / ids) of ``add_comparison_function``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Add a
+    comparison function (CFG_CFUNC row).
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        code: Uppercased before the duplicate check and storage (CFUNC_CODE).
+        connect_str: Absent stores CONNECT_STR null; any string (including "") is stored
+            verbatim. ``None`` omits it.
+        description: Absent stores CFUNC_DESC null; any string is stored verbatim.
+            ``None`` omits it.
+        language: Absent stores LANGUAGE null; any string is stored verbatim. ``None``
+            omits it.
+        anon_support: Case-insensitive; normalized to Yes or No, else INVALID_INPUT.
+            ``None`` omits it. Library default when omitted: ``"No"``.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, INVALID_INPUT; any
@@ -2230,7 +2785,7 @@ def add_comparison_function(
 def delete_comparison_function(
     config_json: str,
     code: str,
-) -> ConfigAndJson:
+) -> str:
     """Delete a comparison function's CFG_CFUNC row only (no cascade).
 
     Args:
@@ -2238,8 +2793,34 @@ def delete_comparison_function(
         code: Uppercased before lookup.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``delete_comparison_function_result``
+        (same arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
+            INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the deleted CFG_CFUNC row). Removes ONLY the CFG_CFUNC
+        row; CFG_CFCALL rows referencing it are left dangling (use
+        delete_comparison_function_cascade). A missing CFG_CFUNC section is NOT_FOUND
+        (not MISSING_SECTION).
+    """
+
+def delete_comparison_function_result(
+    config_json: str,
+    code: str,
+) -> str:
+    """The record (row / ids) of ``delete_comparison_function``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Delete
+    a comparison function's CFG_CFUNC row only (no cascade).
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        code: Uppercased before lookup.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
@@ -2255,7 +2836,7 @@ def delete_comparison_function(
 def delete_comparison_function_cascade(
     config_json: str,
     code: str,
-) -> ConfigAndJson:
+) -> str:
     """Delete a comparison function and its CFG_CFBOM / CFG_CFCALL / CFG_CFRTN rows.
 
     Args:
@@ -2263,8 +2844,38 @@ def delete_comparison_function_cascade(
         code: Uppercased before lookup.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string.
+        ``delete_comparison_function_cascade_result`` (same arguments) returns the
+        record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND, MISSING_FIELD; any call
+            may also raise INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the deleted CFG_CFUNC row). Order: CFG_CFBOM rows
+        whose CFCALL_ID belongs to one of the function's CFG_CFCALL rows; every
+        CFG_CFCALL row with that CFUNC_ID; every CFG_CFRTN row with that CFUNC_ID
+        (well-formed rows via thresholds::delete_comparison_threshold, then a sweep of
+        the rest); finally the CFG_CFUNC row. Absent CFBOM/CFCALL/CFRTN sections are
+        skipped. MISSING_FIELD when the found row has no integer CFUNC_ID. A missing
+        CFG_CFUNC section is NOT_FOUND.
+    """
+
+def delete_comparison_function_cascade_result(
+    config_json: str,
+    code: str,
+) -> str:
+    """The record (row / ids) of ``delete_comparison_function_cascade``: same arguments
+    and operation, but returns the record instead of the configuration. Operation:
+    Delete a comparison function and its CFG_CFBOM / CFG_CFCALL / CFG_CFRTN rows.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        code: Uppercased before lookup.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND, MISSING_FIELD; any call
@@ -2332,7 +2943,7 @@ def set_comparison_function(
     description: str | None = None,
     language: str | None = None,
     anon_support: str | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Update a comparison function's connect string / description / language / anon
     support.
 
@@ -2349,8 +2960,46 @@ def set_comparison_function(
             normalized; any string is stored verbatim. ``None`` omits it.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``set_comparison_function_result`` (same
+        arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
+            INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the updated CFG_CFUNC row). No value validation. The
+        row is deleted and re-appended, so it moves to the END of CFG_CFUNC. A missing
+        CFG_CFUNC section is NOT_FOUND.
+    """
+
+def set_comparison_function_result(
+    config_json: str,
+    code: str,
+    *,
+    connect_str: str | None | UnsetType = ...,
+    description: str | None = None,
+    language: str | None = None,
+    anon_support: str | None = None,
+) -> str:
+    """The record (row / ids) of ``set_comparison_function``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Update
+    a comparison function's connect string / description / language / anon support.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        code: Uppercased before lookup.
+        connect_str: Absent leaves CONNECT_STR; null clears it to null; a string
+            (including "") sets it. ``UNSET`` leaves it, ``None`` clears it.
+        description: Absent leaves CFUNC_DESC; a string is stored verbatim. Cannot be
+            cleared to null. ``None`` omits it.
+        language: Absent leaves LANGUAGE; a string is stored verbatim. Cannot be cleared
+            to null. ``None`` omits it.
+        anon_support: Absent leaves ANON_SUPPORT. TRAP: unlike add, NOT validated or
+            normalized; any string is stored verbatim. ``None`` omits it.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
@@ -2370,7 +3019,7 @@ def add_distinct_function(
     description: str | None = None,
     language: str | None = None,
     anon_support: str | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Add a distinct function (CFG_DFUNC row) to the configuration.
 
     Args:
@@ -2385,8 +3034,48 @@ def add_distinct_function(
             INVALID_INPUT. ``None`` omits it. Library default when omitted: ``"No"``.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``add_distinct_function_result`` (same
+        arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, INVALID_INPUT; any
+            call may also raise INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the new complete CFG_DFUNC row: DFUNC_ID, DFUNC_CODE,
+        DFUNC_DESC, CONNECT_STR, ANON_SUPPORT, LANGUAGE; unset optionals are null).
+        DFUNC_ID is auto-allocated as max existing + 1 (floor 1); no id can be
+        requested. TRAP: a duplicate code is INVALID_INPUT, not ALREADY_EXISTS
+        (SzConfigError::validation). The duplicate check runs before anon_support
+        validation. MISSING_SECTION only when G2_CONFIG.CFG_DFUNC is absent.
+    """
+
+def add_distinct_function_result(
+    config_json: str,
+    code: str,
+    *,
+    connect_str: str | None = None,
+    description: str | None = None,
+    language: str | None = None,
+    anon_support: str | None = None,
+) -> str:
+    """The record (row / ids) of ``add_distinct_function``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Add a
+    distinct function (CFG_DFUNC row) to the configuration.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        code: Uppercased before the duplicate check and storage (DFUNC_CODE).
+        connect_str: Absent stores CONNECT_STR null; any string (including "") is stored
+            verbatim. ``None`` omits it.
+        description: Stored verbatim in DFUNC_DESC; absent stores null (NOT defaulted to
+            the code). ``None`` omits it.
+        language: Stored verbatim in LANGUAGE; absent stores null. ``None`` omits it.
+        anon_support: Case-insensitive; normalized to Yes or No, any other value is
+            INVALID_INPUT. ``None`` omits it. Library default when omitted: ``"No"``.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, INVALID_INPUT; any
@@ -2404,7 +3093,7 @@ def add_distinct_function(
 def delete_distinct_function(
     config_json: str,
     code: str,
-) -> ConfigAndJson:
+) -> str:
     """Delete a distinct function by code.
 
     Args:
@@ -2412,8 +3101,33 @@ def delete_distinct_function(
         code: Uppercased before lookup.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``delete_distinct_function_result``
+        (same arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
+            INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the deleted CFG_DFUNC row). No dependency check:
+        CFG_DFCALL rows referencing the DFUNC_ID are left in place. A config without
+        CFG_DFUNC is NOT_FOUND (not MISSING_SECTION).
+    """
+
+def delete_distinct_function_result(
+    config_json: str,
+    code: str,
+) -> str:
+    """The record (row / ids) of ``delete_distinct_function``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Delete
+    a distinct function by code.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        code: Uppercased before lookup.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
@@ -2477,7 +3191,7 @@ def set_distinct_function(
     description: str | None = None,
     language: str | None = None,
     anon_support: str | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Update a distinct function's connect string, description, language or anon
     support.
 
@@ -2495,8 +3209,47 @@ def set_distinct_function(
             ``None`` omits it.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``set_distinct_function_result`` (same
+        arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
+            INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the updated CFG_DFUNC row). The row is removed and
+        re-appended, so it moves to the END of CFG_DFUNC (list order changes). A config
+        without CFG_DFUNC is NOT_FOUND.
+    """
+
+def set_distinct_function_result(
+    config_json: str,
+    code: str,
+    *,
+    connect_str: str | None | UnsetType = ...,
+    description: str | None = None,
+    language: str | None = None,
+    anon_support: str | None = None,
+) -> str:
+    """The record (row / ids) of ``set_distinct_function``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Update
+    a distinct function's connect string, description, language or anon support.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        code: Uppercased before lookup.
+        connect_str: Absent leaves CONNECT_STR; null writes null; a string (including
+            "") is written. ``UNSET`` leaves it, ``None`` clears it.
+        description: Absent leaves DFUNC_DESC; a string is written verbatim. ``None``
+            omits it.
+        language: Absent leaves LANGUAGE; a string is written verbatim. ``None`` omits
+            it.
+        anon_support: Absent leaves ANON_SUPPORT. TRAP: unlike add_distinct_function the
+            value is written VERBATIM, with no Yes/No validation or case normalization.
+            ``None`` omits it.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
@@ -2515,7 +3268,7 @@ def add_expression_function(
     connect_str: str | None = None,
     description: str | None = None,
     language: str | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Add an expression function (CFG_EFUNC row).
 
     Args:
@@ -2529,8 +3282,45 @@ def add_expression_function(
             omits it.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``add_expression_function_result`` (same
+        arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, INVALID_INPUT; any
+            call may also raise INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the new complete CFG_EFUNC row: EFUNC_ID, EFUNC_CODE,
+        CONNECT_STR, EFUNC_DESC, LANGUAGE). EFUNC_ID is always auto-allocated (max
+        existing + 1, floor 1); no id can be requested. TRAP: a duplicate code is
+        INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS. MISSING_SECTION
+        only when CFG_EFUNC is absent.
+    """
+
+def add_expression_function_result(
+    config_json: str,
+    code: str,
+    *,
+    connect_str: str | None = None,
+    description: str | None = None,
+    language: str | None = None,
+) -> str:
+    """The record (row / ids) of ``add_expression_function``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Add an
+    expression function (CFG_EFUNC row).
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        code: Uppercased before the duplicate check and storage (EFUNC_CODE).
+        connect_str: Absent stores CONNECT_STR null; any string (including "") is stored
+            verbatim. ``None`` omits it.
+        description: Absent stores EFUNC_DESC null; any string is stored verbatim.
+            ``None`` omits it.
+        language: Absent stores LANGUAGE null; any string is stored verbatim. ``None``
+            omits it.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, INVALID_INPUT; any
@@ -2547,7 +3337,7 @@ def add_expression_function(
 def delete_expression_function(
     config_json: str,
     code: str,
-) -> ConfigAndJson:
+) -> str:
     """Delete an expression function's CFG_EFUNC row only (no cascade).
 
     Args:
@@ -2555,8 +3345,34 @@ def delete_expression_function(
         code: Uppercased before lookup.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``delete_expression_function_result``
+        (same arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
+            INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the deleted CFG_EFUNC row). Removes ONLY the CFG_EFUNC
+        row; CFG_EFCALL rows referencing it are left dangling (use
+        delete_expression_function_cascade). A missing CFG_EFUNC section is NOT_FOUND
+        (not MISSING_SECTION).
+    """
+
+def delete_expression_function_result(
+    config_json: str,
+    code: str,
+) -> str:
+    """The record (row / ids) of ``delete_expression_function``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Delete
+    an expression function's CFG_EFUNC row only (no cascade).
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        code: Uppercased before lookup.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
@@ -2572,7 +3388,7 @@ def delete_expression_function(
 def delete_expression_function_cascade(
     config_json: str,
     code: str,
-) -> ConfigAndJson:
+) -> str:
     """Delete an expression function and its CFG_EFCALL / CFG_EFBOM rows.
 
     Args:
@@ -2580,8 +3396,36 @@ def delete_expression_function_cascade(
         code: Uppercased before lookup.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string.
+        ``delete_expression_function_cascade_result`` (same arguments) returns the
+        record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND, MISSING_FIELD; any call
+            may also raise INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the deleted CFG_EFUNC row). Removes the CFG_EFBOM rows
+        whose EFCALL_ID belongs to one of the function's CFG_EFCALL rows, then every
+        CFG_EFCALL row whose EFUNC_ID matches (each step skipped if its section is
+        absent), then the CFG_EFUNC row. MISSING_FIELD when the found row has no integer
+        EFUNC_ID. A missing CFG_EFUNC section is NOT_FOUND.
+    """
+
+def delete_expression_function_cascade_result(
+    config_json: str,
+    code: str,
+) -> str:
+    """The record (row / ids) of ``delete_expression_function_cascade``: same arguments
+    and operation, but returns the record instead of the configuration. Operation:
+    Delete an expression function and its CFG_EFCALL / CFG_EFBOM rows.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        code: Uppercased before lookup.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND, MISSING_FIELD; any call
@@ -2645,7 +3489,7 @@ def set_expression_function(
     connect_str: str | None | UnsetType = ...,
     description: str | None = None,
     language: str | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Update an expression function's connect string / description / language.
 
     Args:
@@ -2659,8 +3503,43 @@ def set_expression_function(
             to null. ``None`` omits it.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``set_expression_function_result`` (same
+        arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
+            INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the updated CFG_EFUNC row). No value validation. The
+        row is deleted and re-appended, so it moves to the END of CFG_EFUNC. A missing
+        CFG_EFUNC section is NOT_FOUND.
+    """
+
+def set_expression_function_result(
+    config_json: str,
+    code: str,
+    *,
+    connect_str: str | None | UnsetType = ...,
+    description: str | None = None,
+    language: str | None = None,
+) -> str:
+    """The record (row / ids) of ``set_expression_function``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Update
+    an expression function's connect string / description / language.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        code: Uppercased before lookup.
+        connect_str: Absent leaves CONNECT_STR; null clears it to null; a string
+            (including "") sets it. ``UNSET`` leaves it, ``None`` clears it.
+        description: Absent leaves EFUNC_DESC; a string is stored verbatim. Cannot be
+            cleared to null. ``None`` omits it.
+        language: Absent leaves LANGUAGE; a string is stored verbatim. Cannot be cleared
+            to null. ``None`` omits it.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
@@ -2679,7 +3558,7 @@ def add_standardize_function(
     connect_str: str | None = None,
     description: str | None = None,
     language: str | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Add a standardize function (CFG_SFUNC row).
 
     Args:
@@ -2693,8 +3572,45 @@ def add_standardize_function(
             omits it.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``add_standardize_function_result``
+        (same arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, INVALID_INPUT; any
+            call may also raise INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the new complete CFG_SFUNC row: SFUNC_ID, SFUNC_CODE,
+        CONNECT_STR, SFUNC_DESC, LANGUAGE). SFUNC_ID is always auto-allocated (max
+        existing + 1, floor 1); no id can be requested. TRAP: a duplicate code is
+        INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS. MISSING_SECTION
+        only when CFG_SFUNC is absent.
+    """
+
+def add_standardize_function_result(
+    config_json: str,
+    code: str,
+    *,
+    connect_str: str | None = None,
+    description: str | None = None,
+    language: str | None = None,
+) -> str:
+    """The record (row / ids) of ``add_standardize_function``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Add a
+    standardize function (CFG_SFUNC row).
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        code: Uppercased before the duplicate check and storage (SFUNC_CODE).
+        connect_str: Absent stores CONNECT_STR null; any string (including "") is stored
+            verbatim. ``None`` omits it.
+        description: Absent stores SFUNC_DESC null; any string is stored verbatim.
+            ``None`` omits it.
+        language: Absent stores LANGUAGE null; any string is stored verbatim. ``None``
+            omits it.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION, INVALID_INPUT; any
@@ -2711,7 +3627,7 @@ def add_standardize_function(
 def delete_standardize_function(
     config_json: str,
     code: str,
-) -> ConfigAndJson:
+) -> str:
     """Delete a standardize function's CFG_SFUNC row only (no cascade).
 
     Args:
@@ -2719,8 +3635,34 @@ def delete_standardize_function(
         code: Uppercased before lookup.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``delete_standardize_function_result``
+        (same arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
+            INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the deleted CFG_SFUNC row). Removes ONLY the CFG_SFUNC
+        row; CFG_SFCALL rows referencing it are left dangling (use
+        delete_standardize_function_cascade). A missing CFG_SFUNC section is NOT_FOUND
+        (not MISSING_SECTION).
+    """
+
+def delete_standardize_function_result(
+    config_json: str,
+    code: str,
+) -> str:
+    """The record (row / ids) of ``delete_standardize_function``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Delete
+    a standardize function's CFG_SFUNC row only (no cascade).
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        code: Uppercased before lookup.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
@@ -2736,7 +3678,7 @@ def delete_standardize_function(
 def delete_standardize_function_cascade(
     config_json: str,
     code: str,
-) -> ConfigAndJson:
+) -> str:
     """Delete a standardize function and its CFG_SFCALL rows.
 
     Args:
@@ -2744,8 +3686,35 @@ def delete_standardize_function_cascade(
         code: Uppercased before lookup.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string.
+        ``delete_standardize_function_cascade_result`` (same arguments) returns the
+        record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND, MISSING_FIELD; any call
+            may also raise INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the deleted CFG_SFUNC row). Removes every CFG_SFCALL
+        row whose SFUNC_ID matches (skipped if CFG_SFCALL is absent), then the CFG_SFUNC
+        row; no other section is touched. MISSING_FIELD when the found row has no
+        integer SFUNC_ID. A missing CFG_SFUNC section is NOT_FOUND.
+    """
+
+def delete_standardize_function_cascade_result(
+    config_json: str,
+    code: str,
+) -> str:
+    """The record (row / ids) of ``delete_standardize_function_cascade``: same arguments
+    and operation, but returns the record instead of the configuration. Operation:
+    Delete a standardize function and its CFG_SFCALL rows.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        code: Uppercased before lookup.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND, MISSING_FIELD; any call
@@ -2808,7 +3777,7 @@ def set_standardize_function(
     connect_str: str | None | UnsetType = ...,
     description: str | None = None,
     language: str | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Update a standardize function's connect string / description / language.
 
     Args:
@@ -2822,8 +3791,43 @@ def set_standardize_function(
             to null. ``None`` omits it.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``set_standardize_function_result``
+        (same arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
+            INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (modified config, the updated CFG_SFUNC row). No value validation. The
+        row is deleted and re-appended, so it moves to the END of CFG_SFUNC. A missing
+        CFG_SFUNC section is NOT_FOUND.
+    """
+
+def set_standardize_function_result(
+    config_json: str,
+    code: str,
+    *,
+    connect_str: str | None | UnsetType = ...,
+    description: str | None = None,
+    language: str | None = None,
+) -> str:
+    """The record (row / ids) of ``set_standardize_function``: same arguments and
+    operation, but returns the record instead of the configuration. Operation: Update
+    a standardize function's connect string / description / language.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        code: Uppercased before lookup.
+        connect_str: Absent leaves CONNECT_STR; null clears it to null; a string
+            (including "") sets it. ``UNSET`` leaves it, ``None`` clears it.
+        description: Absent leaves SFUNC_DESC; a string is stored verbatim. Cannot be
+            cleared to null. ``None`` omits it.
+        language: Absent leaves LANGUAGE; a string is stored verbatim. Cannot be cleared
+            to null. ``None`` omits it.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND; any call may also raise
@@ -2841,7 +3845,7 @@ def clone_generic_plan(
     new_gplan_code: str,
     *,
     new_gplan_desc: str | None = None,
-) -> ConfigAndJson:
+) -> str:
     """Clone a generic plan, copying every CFG_GENERIC_THRESHOLD row of the source to
     the new plan.
 
@@ -2855,8 +3859,44 @@ def clone_generic_plan(
             ``None`` omits it.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``clone_generic_plan_result`` (same
+        arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND, ALREADY_EXISTS,
+            INVALID_CONFIG; any call may also raise INVALID_INPUT (bad arguments) or
+            INTERNAL.
+
+    Notes:
+        Returns (modified config, new GPLAN_ID); the record is the integer id. The new
+        id is always max existing GPLAN_ID + 1 (no floor, no id arg). Cloned threshold
+        rows are verbatim copies with GPLAN_ID rewritten, appended after existing rows;
+        an absent CFG_GENERIC_THRESHOLD section is skipped silently. INVALID_CONFIG when
+        the source row's GPLAN_ID is not an integer.
+    """
+
+def clone_generic_plan_result(
+    config_json: str,
+    source_gplan_code: str,
+    new_gplan_code: str,
+    *,
+    new_gplan_desc: str | None = None,
+) -> str:
+    """The record (row / ids) of ``clone_generic_plan``: same arguments and operation,
+    but returns the record instead of the configuration. Operation: Clone a generic
+    plan, copying every CFG_GENERIC_THRESHOLD row of the source to the new plan.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        source_gplan_code: Uppercased, then matched exactly against GPLAN_CODE; unknown
+            = NOT_FOUND.
+        new_gplan_code: Uppercased before the duplicate check and storage; an existing
+            code = ALREADY_EXISTS.
+        new_gplan_desc: Stored verbatim in GPLAN_DESC; absent = the uppercased new code.
+            ``None`` omits it.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, NOT_FOUND, ALREADY_EXISTS,
@@ -2927,7 +3967,7 @@ def set_generic_plan(
     config_json: str,
     gplan_code: str,
     gplan_desc: str,
-) -> SetGenericPlanResult:
+) -> str:
     """Create a generic plan, or update the description of an existing one (upsert).
 
     Args:
@@ -2936,8 +3976,37 @@ def set_generic_plan(
         gplan_desc: Written verbatim to GPLAN_DESC.
 
     Returns:
-        ``SetGenericPlanResult(config, plan_id, was_created)`` (``config`` is the
-        modified configuration); each named field is that record member's JSON text.
+        The modified configuration JSON string. ``set_generic_plan_result`` (same
+        arguments) returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION; any call may also
+            raise INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Returns (config, {plan_id, was_created}). Existing code: only GPLAN_DESC is
+        replaced (other keys kept), was_created false. New code: a row with GPLAN_ID =
+        max + 1 is appended, was_created true; an absent CFG_GPLAN section is
+        MISSING_SECTION on this create path.
+    """
+
+def set_generic_plan_result(
+    config_json: str,
+    gplan_code: str,
+    gplan_desc: str,
+) -> SetGenericPlanRecord:
+    """The record (row / ids) of ``set_generic_plan``: same arguments and operation, but
+    returns the record instead of the configuration. Operation: Create a generic
+    plan, or update the description of an existing one (upsert).
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        gplan_code: Uppercased, then matched exactly against GPLAN_CODE.
+        gplan_desc: Written verbatim to GPLAN_DESC.
+
+    Returns:
+        ``SetGenericPlanRecord(plan_id, was_created)``; each named field is that record
+        member's JSON text.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, MISSING_SECTION; any call may also
@@ -2954,7 +4023,7 @@ def add_rule(
     config_json: str,
     id: int,
     rule_config: Any,
-) -> ConfigAndJson:
+) -> str:
     """Add an entity resolution rule (CFG_ERRULE row), returning the assigned ERRULE_ID.
 
     Args:
@@ -2974,11 +4043,61 @@ def add_rule(
             ERRULE_TIER (INVALID_INPUT) and forces RTYPE_ID to 1; RELATE=Yes requires
             RTYPE_ID in 2,3,4 (INVALID_INPUT). RTYPE_ID defaults to 1; ERRULE_TIER
             defaults to null. A non-string / non-integer value for any of these keys is
-            treated as absent.
+            treated as absent. Shape: ``{ERRULE_CODE: string, QUAL_ERFRAG_CODE: string,
+            DISQ_ERFRAG_CODE?: string|null, RESOLVE?: string|null, RELATE?: string|null,
+            RTYPE_ID?: int|null, ERRULE_TIER?: int|null, ERRULE_ID?: int|null}``.
 
     Returns:
-        ``ConfigAndJson(config, json)``: the modified configuration and the record as a
-        JSON string.
+        The modified configuration JSON string. ``add_rule_result`` (same arguments)
+        returns the record this operation produces.
+
+    Raises:
+        SzConfigToolError: reason codes JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS,
+            NOT_FOUND, INVALID_INPUT, MISSING_SECTION; any call may also raise
+            INVALID_INPUT (bad arguments) or INTERNAL.
+
+    Notes:
+        Record is the assigned ERRULE_ID (integer). The written row always carries every
+        CFG_ERRULE key (ERRULE_ID, ERRULE_CODE, RESOLVE, RELATE, RTYPE_ID,
+        QUAL_ERFRAG_CODE, DISQ_ERFRAG_CODE, ERRULE_TIER; optional ones as null).
+        ERRULE_CODE is checked BEFORE the config is parsed, so a missing code is
+        MISSING_FIELD even for invalid config JSON. A config without CFG_ERRULE is
+        MISSING_SECTION (after validation). Validation order: fragment, disqualifier,
+        duplicate code, RESOLVE, RELATE, exclusivity, tier, RTYPE_ID.
+    """
+
+def add_rule_result(
+    config_json: str,
+    id: int,
+    rule_config: Any,
+) -> str:
+    """The record (row / ids) of ``add_rule``: same arguments and operation, but returns
+    the record instead of the configuration. Operation: Add an entity resolution rule
+    (CFG_ERRULE row), returning the assigned ERRULE_ID.
+
+    Args:
+        config_json: The configuration JSON (opaque).
+        id: Requested ERRULE_ID. 0 or any negative value means auto-allocate (max
+            existing + 1, floor 1000, so 1000 on the template). A taken id > 0 is
+            ALREADY_EXISTS. Any ERRULE_ID key inside rule_config is IGNORED.
+        rule_config: Object with on-disk keys. ERRULE_CODE (string) is required, else
+            MISSING_FIELD; uppercased for storage and the case-insensitive duplicate
+            check (ALREADY_EXISTS). QUAL_ERFRAG_CODE (the fragment) is required:
+            absent/non-string is MISSING_FIELD, "" or an unknown code is NOT_FOUND
+            (existence is case-insensitive). DISQ_ERFRAG_CODE is optional: "" is
+            accepted and stored as "", an unknown code is NOT_FOUND. TRAP: both fragment
+            codes are stored VERBATIM (not uppercased). RESOLVE / RELATE default "No",
+            must be Yes/No case-insensitively (stored title-case) else INVALID_INPUT,
+            and may not both be Yes (INVALID_INPUT). RESOLVE=Yes requires a non-zero
+            ERRULE_TIER (INVALID_INPUT) and forces RTYPE_ID to 1; RELATE=Yes requires
+            RTYPE_ID in 2,3,4 (INVALID_INPUT). RTYPE_ID defaults to 1; ERRULE_TIER
+            defaults to null. A non-string / non-integer value for any of these keys is
+            treated as absent. Shape: ``{ERRULE_CODE: string, QUAL_ERFRAG_CODE: string,
+            DISQ_ERFRAG_CODE?: string|null, RESOLVE?: string|null, RELATE?: string|null,
+            RTYPE_ID?: int|null, ERRULE_TIER?: int|null, ERRULE_ID?: int|null}``.
+
+    Returns:
+        The record (e.g. the created row or ids) as a JSON string.
 
     Raises:
         SzConfigToolError: reason codes JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS,
@@ -3143,7 +4262,8 @@ def add_search_profile(
             listed twice is VALIDATION_ERRORS (field "overrides", DUPLICATE); a flag
             other than Yes/Y/No/N (trimmed, case-insensitive) is VALIDATION_ERRORS
             (field "overrides", OUT_OF_DOMAIN). Stored in FTYPE_OVERRIDES as
-            "[{<ftypeId>,<Y|N>},...]" sorted by FTYPE_ID, or "[]". ``None`` omits it.
+            "[{<ftypeId>,<Y|N>},...]" sorted by FTYPE_ID, or "[]". Shape: ``[{feature:
+            string, flag: "Yes"|"No"|"Y"|"N"}]``. ``None`` omits it.
 
     Returns:
         The modified configuration JSON string.
@@ -3732,7 +4852,7 @@ def update_compatibility_version(
 def verify_compatibility_version(
     config_json: str,
     expected_version: str,
-) -> VerifyCompatibilityVersionResult:
+) -> VerifyCompatibilityVersionRecord:
     """Compare COMPATIBILITY_VERSION.CONFIG_VERSION with an expected value.
 
     Args:
@@ -3740,7 +4860,7 @@ def verify_compatibility_version(
         expected_version: Compared by exact, case-sensitive string equality.
 
     Returns:
-        ``VerifyCompatibilityVersionResult(current_version, matches)``; each named field
+        ``VerifyCompatibilityVersionRecord(current_version, matches)``; each named field
         is that record member's JSON text.
 
     Raises:

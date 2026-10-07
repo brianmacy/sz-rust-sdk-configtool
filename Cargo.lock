@@ -596,7 +596,7 @@ dependencies = [
 
 [[package]]
 name = "sz-configtool-api"
-version = "4.4.0-1"
+version = "4.4.0-2"
 dependencies = [
  "serde",
  "serde_json",
@@ -605,7 +605,7 @@ dependencies = [
 
 [[package]]
 name = "sz-configtool-codegen"
-version = "4.4.0-1"
+version = "4.4.0-2"
 dependencies = [
  "anyhow",
  "serde",
@@ -615,7 +615,7 @@ dependencies = [
 
 [[package]]
 name = "sz-configtool-ffi"
-version = "4.4.0-1"
+version = "4.4.0-2"
 dependencies = [
  "serde",
  "serde_json",
@@ -625,7 +625,7 @@ dependencies = [
 
 [[package]]
 name = "sz-configtool-jni"
-version = "4.4.0-1"
+version = "4.4.0-2"
 dependencies = [
  "jni",
  "serde_json",
@@ -634,7 +634,7 @@ dependencies = [
 
 [[package]]
 name = "sz-configtool-node"
-version = "4.4.0-1"
+version = "4.4.0-2"
 dependencies = [
  "napi",
  "napi-build",
@@ -645,7 +645,7 @@ dependencies = [
 
 [[package]]
 name = "sz-configtool-python"
-version = "4.4.0-1"
+version = "4.4.0-2"
 dependencies = [
  "pyo3",
  "sz-configtool-api",
@@ -653,7 +653,7 @@ dependencies = [
 
 [[package]]
 name = "sz_configtool_lib"
-version = "4.4.0-1"
+version = "4.4.0-2"
 dependencies = [
  "anyhow",
  "serde",

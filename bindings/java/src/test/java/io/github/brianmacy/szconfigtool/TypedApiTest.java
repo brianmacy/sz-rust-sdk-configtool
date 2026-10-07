@@ -99,12 +99,16 @@ class TypedApiTest {
 
     @Test
     void reservedWordArgIsRenamed() throws Exception {
-        ConfigAndJson r = SzConfigTool.addAttribute(TEMPLATE, "JAVA_ATTR", "NAME", "FULL_NAME",
-                "NAME", new SzConfigTool.AddAttributeOptions().internal("yes").id(7777));
-        Map<?, ?> row = (Map<?, ?>) Json.parse(r.json());
+        SzConfigTool.AddAttributeOptions o =
+                new SzConfigTool.AddAttributeOptions().internal("yes").id(7777);
+        String json = SzConfigTool.addAttributeResult(TEMPLATE, "JAVA_ATTR", "NAME", "FULL_NAME",
+                "NAME", o);
+        Map<?, ?> row = (Map<?, ?>) Json.parse(json);
         assertEquals(7777L, row.get("ATTR_ID"));
         assertEquals("Yes", row.get("INTERNAL"));
-        Map<?, ?> got = (Map<?, ?>) Json.parse(SzConfigTool.getAttribute(r.config(), "JAVA_ATTR"));
+        String config = SzConfigTool.addAttribute(TEMPLATE, "JAVA_ATTR", "NAME", "FULL_NAME",
+                "NAME", o);
+        Map<?, ?> got = (Map<?, ?>) Json.parse(SzConfigTool.getAttribute(config, "JAVA_ATTR"));
         assertEquals("NAME", got.get("ATTR_CLASS"));
     }
 
@@ -142,27 +146,14 @@ class TypedApiTest {
     @Test
     void tupleNamesBecomeRecordFields() throws Exception {
         // Fields are each the record member's JSON text (strings keep their quotes).
-        SzConfigTool.VerifyCompatibilityVersionResult r =
+        SzConfigTool.VerifyCompatibilityVersionRecord r =
                 SzConfigTool.verifyCompatibilityVersion(TEMPLATE, "11");
         assertEquals("\"11\"", r.currentVersion());
         assertEquals("true", r.matches());
-        SzConfigTool.VerifyCompatibilityVersionResult miss =
+        SzConfigTool.VerifyCompatibilityVersionRecord miss =
                 SzConfigTool.verifyCompatibilityVersion(TEMPLATE, "99");
         assertEquals("\"11\"", miss.currentVersion());
         assertEquals("false", miss.matches());
-    }
-
-    @Test
-    void configAndJsonTupleNamesBecomeRecordFields() throws Exception {
-        SzConfigTool.SetGenericPlanResult created =
-                SzConfigTool.setGenericPlan(TEMPLATE, "JAVA_PLAN", "Java plan");
-        assertEquals("3", created.planId());
-        assertEquals("true", created.wasCreated());
-        assertTrue(created.config().contains("\"JAVA_PLAN\""));
-        SzConfigTool.SetGenericPlanResult updated =
-                SzConfigTool.setGenericPlan(created.config(), "INGEST", "Renamed");
-        assertEquals("1", updated.planId());
-        assertEquals("false", updated.wasCreated());
     }
 
     @Test
@@ -187,7 +178,7 @@ class TypedApiTest {
     void intOrStrSelectorOnDelete() throws Exception {
         // Mirrors conformance: put FULL_NAME on comparison call 4 (GENDER), then
         // delete it by feature code (String) and GENDER by call id (long).
-        String added = SzConfigTool.addComparisonCallElement(TEMPLATE, 4, 4, 2).config();
+        String added = SzConfigTool.addComparisonCallElement(TEMPLATE, 4, 4, 2);
         String byFeature = SzConfigTool.deleteComparisonCallElement(added, "gender", "full_name");
         assertEquals(List.of("GENDER"), elementList(byFeature, 4L));
         String byId = SzConfigTool.deleteComparisonCallElement(byFeature, 4L, "GENDER");

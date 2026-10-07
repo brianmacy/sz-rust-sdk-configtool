@@ -21,13 +21,13 @@ namespace Sz.ConfigTool
         /// <param name="internal">Optional; null omits it. Library default when omitted: "No". Case-insensitive; normalized to Yes or No, else INVALID_INPUT.</param>
         /// <param name="required">Optional; null omits it. Library default when omitted: "No". Case-insensitive; normalized to Yes, No, Any or Desired (stored in FELEM_REQ), else INVALID_INPUT.</param>
         /// <param name="id">Optional; null omits it. Requested ATTR_ID. Absent OR &lt;= 0 means auto-allocate (max existing + 1, floor 1000). A taken id &gt; 0 is ALREADY_EXISTS.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="AddAttributeResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the new CFG_ATTR row). Validation order: class, duplicate attribute, feature, element, required, internal, id. Does not create a CFG_FBOM row.
         /// Wire name: <c>add_attribute</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, INVALID_INPUT, NOT_FOUND (plus the universal wire errors).</exception>
-        public static ConfigAndJson AddAttribute(string configJson, string attribute, string feature, string element, string @class, string? defaultValue = null, string? @internal = null, string? required = null, long? id = null)
+        public static string AddAttribute(string configJson, string attribute, string feature, string element, string @class, string? defaultValue = null, string? @internal = null, string? required = null, long? id = null)
         {
             var args = new ArgsWriter();
             args.Str("attribute", attribute, nameof(attribute));
@@ -38,7 +38,37 @@ namespace Sz.ConfigTool
             args.OptStr("internal", @internal);
             args.OptStr("required", required);
             args.OptInt("id", id);
-            return NativeCall.ConfigAndJson("add_attribute", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("add_attribute", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of AddAttribute: same arguments and operation, but returns the record instead of the configuration. Operation: Add an attribute (CFG_ATTR row) mapping an input attribute to a feature element.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="attribute">Uppercased before storage and duplicate check.</param>
+        /// <param name="feature">Must name an existing CFG_FTYPE (case-insensitive) or NOT_FOUND; stored uppercased in FTYPE_CODE.</param>
+        /// <param name="element">Must name an existing CFG_FELEM (case-insensitive) or NOT_FOUND; stored uppercased in FELEM_CODE.</param>
+        /// <param name="class">CASE-SENSITIVE (not uppercased): must be exactly one of NAME, ATTRIBUTE, IDENTIFIER, ADDRESS, PHONE, RELATIONSHIP, OTHER, else INVALID_INPUT.</param>
+        /// <param name="defaultValue">Optional; null omits it. Absent stores DEFAULT_VALUE null; any string (including "") is stored verbatim.</param>
+        /// <param name="internal">Optional; null omits it. Library default when omitted: "No". Case-insensitive; normalized to Yes or No, else INVALID_INPUT.</param>
+        /// <param name="required">Optional; null omits it. Library default when omitted: "No". Case-insensitive; normalized to Yes, No, Any or Desired (stored in FELEM_REQ), else INVALID_INPUT.</param>
+        /// <param name="id">Optional; null omits it. Requested ATTR_ID. Absent OR &lt;= 0 means auto-allocate (max existing + 1, floor 1000). A taken id &gt; 0 is ALREADY_EXISTS.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the new CFG_ATTR row). Validation order: class, duplicate attribute, feature, element, required, internal, id. Does not create a CFG_FBOM row.
+        /// Wire name: <c>add_attribute</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, INVALID_INPUT, NOT_FOUND (plus the universal wire errors).</exception>
+        public static string AddAttributeResult(string configJson, string attribute, string feature, string element, string @class, string? defaultValue = null, string? @internal = null, string? required = null, long? id = null)
+        {
+            var args = new ArgsWriter();
+            args.Str("attribute", attribute, nameof(attribute));
+            args.Str("feature", feature, nameof(feature));
+            args.Str("element", element, nameof(element));
+            args.Str("class", @class, nameof(@class));
+            args.OptStr("default_value", defaultValue);
+            args.OptStr("internal", @internal);
+            args.OptStr("required", required);
+            args.OptInt("id", id);
+            return NativeCall.ConfigAndJsonResult("add_attribute", configJson, args.ToJson());
         }
 
         /// <summary>Delete an attribute by code.</summary>
@@ -196,20 +226,42 @@ namespace Sz.ConfigTool
         /// <param name="cfuncCode">Comparison function code; case-insensitive lookup in CFG_CFUNC, else NOT_FOUND.</param>
         /// <param name="elementList">Element codes, each a case-insensitive GLOBAL CFG_FELEM lookup (the element need NOT be in the feature's CFG_FBOM), else NOT_FOUND. Empty list or a blank/whitespace-only item is INVALID_INPUT. One CFG_CFBOM row is written per item with FTYPE_ID = the call's feature and EXEC_ORDER = 1-based list position (outside the exec-order allocation policy). Duplicate items are not rejected.</param>
         /// <param name="id">Optional; null omits it. Requested CFCALL_ID. Absent OR &lt;= 0 means auto-allocate (max existing + 1, floor 1000). A taken id &gt; 0 is ALREADY_EXISTS (checked before any lookup).</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="AddComparisonCallResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the new CFG_CFCALL row {CFCALL_ID, FTYPE_ID, CFUNC_ID}). Validation order: id (MISSING_SECTION if CFG_CFCALL is absent or not an array; ALREADY_EXISTS if taken), feature, one-call-per-feature (ALREADY_PRESENT), function, empty list, then per item blank check and element lookup; MISSING_SECTION if CFG_CFBOM is absent. The function's applicability to the feature is not checked.
         /// Wire name: <c>add_comparison_call</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, NOT_FOUND, ALREADY_PRESENT, INVALID_INPUT (plus the universal wire errors).</exception>
-        public static ConfigAndJson AddComparisonCall(string configJson, string ftypeCode, string cfuncCode, System.Collections.Generic.IReadOnlyList<string> elementList, long? id = null)
+        public static string AddComparisonCall(string configJson, string ftypeCode, string cfuncCode, System.Collections.Generic.IReadOnlyList<string> elementList, long? id = null)
         {
             var args = new ArgsWriter();
             args.Str("ftype_code", ftypeCode, nameof(ftypeCode));
             args.Str("cfunc_code", cfuncCode, nameof(cfuncCode));
             args.StrList("element_list", elementList, nameof(elementList));
             args.OptInt("id", id);
-            return NativeCall.ConfigAndJson("add_comparison_call", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("add_comparison_call", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of AddComparisonCall: same arguments and operation, but returns the record instead of the configuration. Operation: Add a comparison call (CFG_CFCALL row) binding a comparison function to a feature, with its element list (CFG_CFBOM rows).</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="ftypeCode">Feature code; case-insensitive lookup in CFG_FTYPE, else NOT_FOUND. Only one comparison call per feature: if any CFG_CFCALL row already has this FTYPE_ID the call fails with ALREADY_PRESENT.</param>
+        /// <param name="cfuncCode">Comparison function code; case-insensitive lookup in CFG_CFUNC, else NOT_FOUND.</param>
+        /// <param name="elementList">Element codes, each a case-insensitive GLOBAL CFG_FELEM lookup (the element need NOT be in the feature's CFG_FBOM), else NOT_FOUND. Empty list or a blank/whitespace-only item is INVALID_INPUT. One CFG_CFBOM row is written per item with FTYPE_ID = the call's feature and EXEC_ORDER = 1-based list position (outside the exec-order allocation policy). Duplicate items are not rejected.</param>
+        /// <param name="id">Optional; null omits it. Requested CFCALL_ID. Absent OR &lt;= 0 means auto-allocate (max existing + 1, floor 1000). A taken id &gt; 0 is ALREADY_EXISTS (checked before any lookup).</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the new CFG_CFCALL row {CFCALL_ID, FTYPE_ID, CFUNC_ID}). Validation order: id (MISSING_SECTION if CFG_CFCALL is absent or not an array; ALREADY_EXISTS if taken), feature, one-call-per-feature (ALREADY_PRESENT), function, empty list, then per item blank check and element lookup; MISSING_SECTION if CFG_CFBOM is absent. The function's applicability to the feature is not checked.
+        /// Wire name: <c>add_comparison_call</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, NOT_FOUND, ALREADY_PRESENT, INVALID_INPUT (plus the universal wire errors).</exception>
+        public static string AddComparisonCallResult(string configJson, string ftypeCode, string cfuncCode, System.Collections.Generic.IReadOnlyList<string> elementList, long? id = null)
+        {
+            var args = new ArgsWriter();
+            args.Str("ftype_code", ftypeCode, nameof(ftypeCode));
+            args.Str("cfunc_code", cfuncCode, nameof(cfuncCode));
+            args.StrList("element_list", elementList, nameof(elementList));
+            args.OptInt("id", id);
+            return NativeCall.ConfigAndJsonResult("add_comparison_call", configJson, args.ToJson());
         }
 
         /// <summary>Delete a comparison call by CFCALL_ID, cascading to its CFG_CFBOM rows.</summary>
@@ -279,20 +331,42 @@ namespace Sz.ConfigTool
         /// <param name="ftypeId">The ELEMENT's feature id written to the BOM row's FTYPE_ID. Negative is INVALID_INPUT; otherwise NOT validated against CFG_FTYPE.</param>
         /// <param name="felemId">FELEM_ID written verbatim. NOT validated against CFG_FELEM or CFG_FBOM.</param>
         /// <param name="execOrder">Optional; null omits it. Allocated per CFCALL_ID. Absent OR &lt;= 0 means auto-allocate (max EXEC_ORDER on this call + 1, seed 0 so an empty call starts at 1). A taken order &gt; 0 on the same call is ALREADY_EXISTS.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="AddComparisonCallElementResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the new CFG_CFBOM row {CFCALL_ID, FTYPE_ID, FELEM_ID, EXEC_ORDER}). Duplicate identity is (CFCALL_ID, FTYPE_ID, FELEM_ID) regardless of EXEC_ORDER -&gt; ALREADY_PRESENT. Order of checks: ftype_id &lt; 0, duplicate, exec_order, then MISSING_SECTION if CFG_CFBOM is absent. The same FELEM_ID may be added under a different ftype_id, which makes a later feature-less delete_comparison_call_element ambiguous.
         /// Wire name: <c>add_comparison_call_element</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION (plus the universal wire errors).</exception>
-        public static ConfigAndJson AddComparisonCallElement(string configJson, long cfcallId, long ftypeId, long felemId, long? execOrder = null)
+        public static string AddComparisonCallElement(string configJson, long cfcallId, long ftypeId, long felemId, long? execOrder = null)
         {
             var args = new ArgsWriter();
             args.Int("cfcall_id", cfcallId);
             args.Int("ftype_id", ftypeId);
             args.Int("felem_id", felemId);
             args.OptInt("exec_order", execOrder);
-            return NativeCall.ConfigAndJson("add_comparison_call_element", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("add_comparison_call_element", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of AddComparisonCallElement: same arguments and operation, but returns the record instead of the configuration. Operation: Add one element (CFG_CFBOM row) to a comparison call, addressed by raw ids.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="cfcallId">CFCALL_ID written verbatim. NOT validated — the call need not exist.</param>
+        /// <param name="ftypeId">The ELEMENT's feature id written to the BOM row's FTYPE_ID. Negative is INVALID_INPUT; otherwise NOT validated against CFG_FTYPE.</param>
+        /// <param name="felemId">FELEM_ID written verbatim. NOT validated against CFG_FELEM or CFG_FBOM.</param>
+        /// <param name="execOrder">Optional; null omits it. Allocated per CFCALL_ID. Absent OR &lt;= 0 means auto-allocate (max EXEC_ORDER on this call + 1, seed 0 so an empty call starts at 1). A taken order &gt; 0 on the same call is ALREADY_EXISTS.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the new CFG_CFBOM row {CFCALL_ID, FTYPE_ID, FELEM_ID, EXEC_ORDER}). Duplicate identity is (CFCALL_ID, FTYPE_ID, FELEM_ID) regardless of EXEC_ORDER -&gt; ALREADY_PRESENT. Order of checks: ftype_id &lt; 0, duplicate, exec_order, then MISSING_SECTION if CFG_CFBOM is absent. The same FELEM_ID may be added under a different ftype_id, which makes a later feature-less delete_comparison_call_element ambiguous.
+        /// Wire name: <c>add_comparison_call_element</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION (plus the universal wire errors).</exception>
+        public static string AddComparisonCallElementResult(string configJson, long cfcallId, long ftypeId, long felemId, long? execOrder = null)
+        {
+            var args = new ArgsWriter();
+            args.Int("cfcall_id", cfcallId);
+            args.Int("ftype_id", ftypeId);
+            args.Int("felem_id", felemId);
+            args.OptInt("exec_order", execOrder);
+            return NativeCall.ConfigAndJsonResult("add_comparison_call_element", configJson, args.ToJson());
         }
 
         /// <summary>Delete one element (CFG_CFBOM row) from a comparison call, addressed by call id or feature code plus element code.</summary>
@@ -340,19 +414,39 @@ namespace Sz.ConfigTool
         /// <param name="ftypeCode">Feature code; case-insensitive lookup in CFG_FTYPE, else NOT_FOUND. Only one distinct call per feature: if any CFG_DFCALL row already has this FTYPE_ID the call fails with ALREADY_PRESENT.</param>
         /// <param name="dfuncCode">Distinct function code; case-insensitive lookup in CFG_DFUNC, else NOT_FOUND.</param>
         /// <param name="elementList">Element codes, each a case-insensitive GLOBAL CFG_FELEM lookup (the element need NOT be in the feature's CFG_FBOM), else NOT_FOUND. Empty list or a blank/whitespace-only item is INVALID_INPUT (checked before anything else). One CFG_DFBOM row is written per item with FTYPE_ID = the call's feature and EXEC_ORDER = 1-based list position. Duplicate items are not rejected.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="AddDistinctCallResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the new CFG_DFCALL row {DFCALL_ID, FTYPE_ID, DFUNC_ID} — no EXEC_ORDER). DFCALL_ID is ALWAYS auto-allocated (max existing + 1, floor 1000): unlike add_comparison_call there is no `id` parameter. Validation order: empty list / blank item, id (MISSING_SECTION if G2_CONFIG.CFG_DFCALL is absent), feature, one-call-per-feature (ALREADY_PRESENT), function, element lookups; MISSING_SECTION if CFG_DFCALL is not an array or CFG_DFBOM is absent.
         /// Wire name: <c>add_distinct_call</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, INVALID_INPUT, MISSING_SECTION, NOT_FOUND, ALREADY_PRESENT (plus the universal wire errors).</exception>
-        public static ConfigAndJson AddDistinctCall(string configJson, string ftypeCode, string dfuncCode, System.Collections.Generic.IReadOnlyList<string> elementList)
+        public static string AddDistinctCall(string configJson, string ftypeCode, string dfuncCode, System.Collections.Generic.IReadOnlyList<string> elementList)
         {
             var args = new ArgsWriter();
             args.Str("ftype_code", ftypeCode, nameof(ftypeCode));
             args.Str("dfunc_code", dfuncCode, nameof(dfuncCode));
             args.StrList("element_list", elementList, nameof(elementList));
-            return NativeCall.ConfigAndJson("add_distinct_call", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("add_distinct_call", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of AddDistinctCall: same arguments and operation, but returns the record instead of the configuration. Operation: Add a distinct call (CFG_DFCALL row) binding a distinct function to a feature, with its element list (CFG_DFBOM rows).</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="ftypeCode">Feature code; case-insensitive lookup in CFG_FTYPE, else NOT_FOUND. Only one distinct call per feature: if any CFG_DFCALL row already has this FTYPE_ID the call fails with ALREADY_PRESENT.</param>
+        /// <param name="dfuncCode">Distinct function code; case-insensitive lookup in CFG_DFUNC, else NOT_FOUND.</param>
+        /// <param name="elementList">Element codes, each a case-insensitive GLOBAL CFG_FELEM lookup (the element need NOT be in the feature's CFG_FBOM), else NOT_FOUND. Empty list or a blank/whitespace-only item is INVALID_INPUT (checked before anything else). One CFG_DFBOM row is written per item with FTYPE_ID = the call's feature and EXEC_ORDER = 1-based list position. Duplicate items are not rejected.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the new CFG_DFCALL row {DFCALL_ID, FTYPE_ID, DFUNC_ID} — no EXEC_ORDER). DFCALL_ID is ALWAYS auto-allocated (max existing + 1, floor 1000): unlike add_comparison_call there is no `id` parameter. Validation order: empty list / blank item, id (MISSING_SECTION if G2_CONFIG.CFG_DFCALL is absent), feature, one-call-per-feature (ALREADY_PRESENT), function, element lookups; MISSING_SECTION if CFG_DFCALL is not an array or CFG_DFBOM is absent.
+        /// Wire name: <c>add_distinct_call</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, INVALID_INPUT, MISSING_SECTION, NOT_FOUND, ALREADY_PRESENT (plus the universal wire errors).</exception>
+        public static string AddDistinctCallResult(string configJson, string ftypeCode, string dfuncCode, System.Collections.Generic.IReadOnlyList<string> elementList)
+        {
+            var args = new ArgsWriter();
+            args.Str("ftype_code", ftypeCode, nameof(ftypeCode));
+            args.Str("dfunc_code", dfuncCode, nameof(dfuncCode));
+            args.StrList("element_list", elementList, nameof(elementList));
+            return NativeCall.ConfigAndJsonResult("add_distinct_call", configJson, args.ToJson());
         }
 
         /// <summary>Delete a distinct call by DFCALL_ID, cascading to its CFG_DFBOM rows.</summary>
@@ -422,20 +516,42 @@ namespace Sz.ConfigTool
         /// <param name="ftypeId">The ELEMENT's feature id written to the BOM row's FTYPE_ID. NOT validated at all — unlike add_comparison_call_element, a negative id is accepted and stored.</param>
         /// <param name="felemId">FELEM_ID written verbatim. NOT validated against CFG_FELEM or CFG_FBOM.</param>
         /// <param name="execOrder">Optional; null omits it. Allocated per DFCALL_ID. Absent OR &lt;= 0 means auto-allocate (max EXEC_ORDER on this call + 1, seed 0). A taken order &gt; 0 on the same call is ALREADY_EXISTS.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="AddDistinctCallElementResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the new CFG_DFBOM row {DFCALL_ID, FTYPE_ID, FELEM_ID, EXEC_ORDER}). Duplicate identity is (DFCALL_ID, FTYPE_ID, FELEM_ID) regardless of EXEC_ORDER -&gt; ALREADY_PRESENT. Order of checks: duplicate, exec_order, then MISSING_SECTION if CFG_DFBOM is absent.
         /// Wire name: <c>add_distinct_call_element</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION (plus the universal wire errors).</exception>
-        public static ConfigAndJson AddDistinctCallElement(string configJson, long dfcallId, long ftypeId, long felemId, long? execOrder = null)
+        public static string AddDistinctCallElement(string configJson, long dfcallId, long ftypeId, long felemId, long? execOrder = null)
         {
             var args = new ArgsWriter();
             args.Int("dfcall_id", dfcallId);
             args.Int("ftype_id", ftypeId);
             args.Int("felem_id", felemId);
             args.OptInt("exec_order", execOrder);
-            return NativeCall.ConfigAndJson("add_distinct_call_element", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("add_distinct_call_element", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of AddDistinctCallElement: same arguments and operation, but returns the record instead of the configuration. Operation: Add one element (CFG_DFBOM row) to a distinct call, addressed by raw ids.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="dfcallId">DFCALL_ID written verbatim. NOT validated — the call need not exist.</param>
+        /// <param name="ftypeId">The ELEMENT's feature id written to the BOM row's FTYPE_ID. NOT validated at all — unlike add_comparison_call_element, a negative id is accepted and stored.</param>
+        /// <param name="felemId">FELEM_ID written verbatim. NOT validated against CFG_FELEM or CFG_FBOM.</param>
+        /// <param name="execOrder">Optional; null omits it. Allocated per DFCALL_ID. Absent OR &lt;= 0 means auto-allocate (max EXEC_ORDER on this call + 1, seed 0). A taken order &gt; 0 on the same call is ALREADY_EXISTS.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the new CFG_DFBOM row {DFCALL_ID, FTYPE_ID, FELEM_ID, EXEC_ORDER}). Duplicate identity is (DFCALL_ID, FTYPE_ID, FELEM_ID) regardless of EXEC_ORDER -&gt; ALREADY_PRESENT. Order of checks: duplicate, exec_order, then MISSING_SECTION if CFG_DFBOM is absent.
+        /// Wire name: <c>add_distinct_call_element</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION (plus the universal wire errors).</exception>
+        public static string AddDistinctCallElementResult(string configJson, long dfcallId, long ftypeId, long felemId, long? execOrder = null)
+        {
+            var args = new ArgsWriter();
+            args.Int("dfcall_id", dfcallId);
+            args.Int("ftype_id", ftypeId);
+            args.Int("felem_id", felemId);
+            args.OptInt("exec_order", execOrder);
+            return NativeCall.ConfigAndJsonResult("add_distinct_call_element", configJson, args.ToJson());
         }
 
         /// <summary>Delete one element (CFG_DFBOM row) from a distinct call, addressed by call id or feature code plus element code.</summary>
@@ -481,19 +597,19 @@ namespace Sz.ConfigTool
         /// <summary>Add an expression call (CFG_EFCALL row) plus its element list (CFG_EFBOM rows).</summary>
         /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
         /// <param name="efuncCode">Expression function code (CFG_EFUNC, case-insensitive) or NOT_FOUND.</param>
-        /// <param name="elementList">Raw JSON text. JSON array of {"element": str, "required": str, "feature"?: str} objects (unknown keys, non-objects, non-string values = INVALID_INPUT; missing element/required = MISSING_FIELD). One CFG_EFBOM row per item, EXEC_ORDER = 1-based list position. element: global CFG_FELEM lookup (case-insensitive) or NOT_FOUND. required: stored verbatim in FELEM_REQ (not validated or normalized). feature: absent stores BOM FTYPE_ID -1 (G2 WILDCARDED_FTYPE: any feature in the record carrying the element); "PARENT" (case-insensitive) stores BOM FTYPE_ID 0 (G2 PARENT_FEATURE_LINKED_FTYPE: the feature that triggered the call); otherwise a feature code (case-insensitive) or NOT_FOUND. The element is NOT checked for membership in that feature. [] is allowed.</param>
+        /// <param name="elementList">Raw JSON text. JSON array of {"element": str, "required": str, "feature"?: str} objects (unknown keys, non-objects, non-string values = INVALID_INPUT; missing element/required = MISSING_FIELD). One CFG_EFBOM row per item, EXEC_ORDER = 1-based list position. element: global CFG_FELEM lookup (case-insensitive) or NOT_FOUND. required: stored verbatim in FELEM_REQ (not validated or normalized). feature: absent stores BOM FTYPE_ID -1 (G2 WILDCARDED_FTYPE: any feature in the record carrying the element); "PARENT" (case-insensitive) stores BOM FTYPE_ID 0 (G2 PARENT_FEATURE_LINKED_FTYPE: the feature that triggered the call); otherwise a feature code (case-insensitive) or NOT_FOUND. The element is NOT checked for membership in that feature. [] is allowed. Shape: `[{element: string, required: string, feature?: string}]`.</param>
         /// <param name="isVirtual">Stored verbatim in IS_VIRTUAL (not validated or normalized; the Rust `new()` default is "No").</param>
         /// <param name="ftypeCode">Optional; null omits it. Feature code (case-insensitive) or NOT_FOUND; "ALL" (case-insensitive) = absent; absent stores FTYPE_ID -1.</param>
         /// <param name="felemCode">Optional; null omits it. Element code (case-insensitive) or NOT_FOUND; "N/A" (case-insensitive) = absent; absent stores FELEM_ID -1. Exactly one of ftype_code / felem_code must resolve, else INVALID_INPUT.</param>
         /// <param name="execOrder">Optional; null omits it. CFG_EFCALL EXEC_ORDER scoped per (FTYPE_ID, FELEM_ID). Absent or &lt;= 0 = auto-allocate (max in scope + 1); &gt; 0 and free = verbatim; &gt; 0 and taken = ALREADY_EXISTS.</param>
         /// <param name="expressionFeature">Optional; null omits it. Feature code stored as EFEAT_FTYPE_ID (case-insensitive) or NOT_FOUND; absent or "N/A" (case-insensitive) stores -1.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="AddExpressionCallResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the new CFG_EFCALL row {EFCALL_ID, FTYPE_ID, FELEM_ID, EFUNC_ID, EXEC_ORDER, EFEAT_FTYPE_ID, IS_VIRTUAL}); the created CFG_EFBOM rows are NOT in the record (see list_expression_calls). EFCALL_ID is auto-allocated (max + 1, floor 1000). Check order: EFCALL_ID allocation (MISSING_SECTION if CFG_EFCALL absent), efunc, feature, element, exactly-one rule, exec order, expression_feature, element list, then MISSING_SECTION if CFG_EFBOM absent. BOM FTYPE_ID sentinels (G2 EFBomConfig.cpp): 0 = parent feature link, -1 = any feature. The BOM-feature column is not rendered by get/list_expression_calls; read raw rows with get_config_section("CFG_EFBOM").
         /// Wire name: <c>add_expression_call</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS, MISSING_FIELD (plus the universal wire errors).</exception>
-        public static ConfigAndJson AddExpressionCall(string configJson, string efuncCode, string elementList, string isVirtual, string? ftypeCode = null, string? felemCode = null, long? execOrder = null, string? expressionFeature = null)
+        public static string AddExpressionCall(string configJson, string efuncCode, string elementList, string isVirtual, string? ftypeCode = null, string? felemCode = null, long? execOrder = null, string? expressionFeature = null)
         {
             var args = new ArgsWriter();
             args.Str("efunc_code", efuncCode, nameof(efuncCode));
@@ -503,7 +619,35 @@ namespace Sz.ConfigTool
             args.OptInt("exec_order", execOrder);
             args.OptStr("expression_feature", expressionFeature);
             args.Str("is_virtual", isVirtual, nameof(isVirtual));
-            return NativeCall.ConfigAndJson("add_expression_call", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("add_expression_call", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of AddExpressionCall: same arguments and operation, but returns the record instead of the configuration. Operation: Add an expression call (CFG_EFCALL row) plus its element list (CFG_EFBOM rows).</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="efuncCode">Expression function code (CFG_EFUNC, case-insensitive) or NOT_FOUND.</param>
+        /// <param name="elementList">Raw JSON text. JSON array of {"element": str, "required": str, "feature"?: str} objects (unknown keys, non-objects, non-string values = INVALID_INPUT; missing element/required = MISSING_FIELD). One CFG_EFBOM row per item, EXEC_ORDER = 1-based list position. element: global CFG_FELEM lookup (case-insensitive) or NOT_FOUND. required: stored verbatim in FELEM_REQ (not validated or normalized). feature: absent stores BOM FTYPE_ID -1 (G2 WILDCARDED_FTYPE: any feature in the record carrying the element); "PARENT" (case-insensitive) stores BOM FTYPE_ID 0 (G2 PARENT_FEATURE_LINKED_FTYPE: the feature that triggered the call); otherwise a feature code (case-insensitive) or NOT_FOUND. The element is NOT checked for membership in that feature. [] is allowed. Shape: `[{element: string, required: string, feature?: string}]`.</param>
+        /// <param name="isVirtual">Stored verbatim in IS_VIRTUAL (not validated or normalized; the Rust `new()` default is "No").</param>
+        /// <param name="ftypeCode">Optional; null omits it. Feature code (case-insensitive) or NOT_FOUND; "ALL" (case-insensitive) = absent; absent stores FTYPE_ID -1.</param>
+        /// <param name="felemCode">Optional; null omits it. Element code (case-insensitive) or NOT_FOUND; "N/A" (case-insensitive) = absent; absent stores FELEM_ID -1. Exactly one of ftype_code / felem_code must resolve, else INVALID_INPUT.</param>
+        /// <param name="execOrder">Optional; null omits it. CFG_EFCALL EXEC_ORDER scoped per (FTYPE_ID, FELEM_ID). Absent or &lt;= 0 = auto-allocate (max in scope + 1); &gt; 0 and free = verbatim; &gt; 0 and taken = ALREADY_EXISTS.</param>
+        /// <param name="expressionFeature">Optional; null omits it. Feature code stored as EFEAT_FTYPE_ID (case-insensitive) or NOT_FOUND; absent or "N/A" (case-insensitive) stores -1.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the new CFG_EFCALL row {EFCALL_ID, FTYPE_ID, FELEM_ID, EFUNC_ID, EXEC_ORDER, EFEAT_FTYPE_ID, IS_VIRTUAL}); the created CFG_EFBOM rows are NOT in the record (see list_expression_calls). EFCALL_ID is auto-allocated (max + 1, floor 1000). Check order: EFCALL_ID allocation (MISSING_SECTION if CFG_EFCALL absent), efunc, feature, element, exactly-one rule, exec order, expression_feature, element list, then MISSING_SECTION if CFG_EFBOM absent. BOM FTYPE_ID sentinels (G2 EFBomConfig.cpp): 0 = parent feature link, -1 = any feature. The BOM-feature column is not rendered by get/list_expression_calls; read raw rows with get_config_section("CFG_EFBOM").
+        /// Wire name: <c>add_expression_call</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS, MISSING_FIELD (plus the universal wire errors).</exception>
+        public static string AddExpressionCallResult(string configJson, string efuncCode, string elementList, string isVirtual, string? ftypeCode = null, string? felemCode = null, long? execOrder = null, string? expressionFeature = null)
+        {
+            var args = new ArgsWriter();
+            args.Str("efunc_code", efuncCode, nameof(efuncCode));
+            args.Json("element_list", elementList, nameof(elementList));
+            args.OptStr("ftype_code", ftypeCode);
+            args.OptStr("felem_code", felemCode);
+            args.OptInt("exec_order", execOrder);
+            args.OptStr("expression_feature", expressionFeature);
+            args.Str("is_virtual", isVirtual, nameof(isVirtual));
+            return NativeCall.ConfigAndJsonResult("add_expression_call", configJson, args.ToJson());
         }
 
         /// <summary>Delete an expression call by EFCALL_ID, cascading its CFG_EFBOM rows.</summary>
@@ -574,13 +718,13 @@ namespace Sz.ConfigTool
         /// <param name="felemId">Stored verbatim as FELEM_ID. NOT validated against CFG_FELEM.</param>
         /// <param name="felemReq">Stored verbatim in FELEM_REQ (not validated or normalized).</param>
         /// <param name="execOrder">Optional; null omits it. BOM EXEC_ORDER scoped per EFCALL_ID. Absent or &lt;= 0 = auto-allocate (max on the call + 1); &gt; 0 and free = verbatim; &gt; 0 and taken = ALREADY_EXISTS.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="AddExpressionCallElementResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the new CFG_EFBOM row {EFCALL_ID, FTYPE_ID, FELEM_ID, EXEC_ORDER, FELEM_REQ}). Check order: ftype_id &lt; 0, ALREADY_PRESENT when (EFCALL_ID, FTYPE_ID, FELEM_ID) already exists (EXEC_ORDER ignored), exec order, then MISSING_SECTION if CFG_EFBOM is absent.
         /// Wire name: <c>add_expression_call_element</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION (plus the universal wire errors).</exception>
-        public static ConfigAndJson AddExpressionCallElement(string configJson, long efcallId, long ftypeId, long felemId, string felemReq, long? execOrder = null)
+        public static string AddExpressionCallElement(string configJson, long efcallId, long ftypeId, long felemId, string felemReq, long? execOrder = null)
         {
             var args = new ArgsWriter();
             args.Int("efcall_id", efcallId);
@@ -588,7 +732,31 @@ namespace Sz.ConfigTool
             args.Int("felem_id", felemId);
             args.OptInt("exec_order", execOrder);
             args.Str("felem_req", felemReq, nameof(felemReq));
-            return NativeCall.ConfigAndJson("add_expression_call_element", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("add_expression_call_element", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of AddExpressionCallElement: same arguments and operation, but returns the record instead of the configuration. Operation: Add one CFG_EFBOM row to an expression call, addressed by raw ids.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="efcallId">Stored as EFCALL_ID. NOT validated — the call need not exist.</param>
+        /// <param name="ftypeId">The ELEMENT's feature id, stored verbatim as BOM FTYPE_ID. &lt; 0 = INVALID_INPUT; 0 is accepted and is the G2 parent feature link (same as add_expression_call's feature "PARENT"); -1 (any feature) is not addable here; NOT validated against CFG_FTYPE.</param>
+        /// <param name="felemId">Stored verbatim as FELEM_ID. NOT validated against CFG_FELEM.</param>
+        /// <param name="felemReq">Stored verbatim in FELEM_REQ (not validated or normalized).</param>
+        /// <param name="execOrder">Optional; null omits it. BOM EXEC_ORDER scoped per EFCALL_ID. Absent or &lt;= 0 = auto-allocate (max on the call + 1); &gt; 0 and free = verbatim; &gt; 0 and taken = ALREADY_EXISTS.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the new CFG_EFBOM row {EFCALL_ID, FTYPE_ID, FELEM_ID, EXEC_ORDER, FELEM_REQ}). Check order: ftype_id &lt; 0, ALREADY_PRESENT when (EFCALL_ID, FTYPE_ID, FELEM_ID) already exists (EXEC_ORDER ignored), exec order, then MISSING_SECTION if CFG_EFBOM is absent.
+        /// Wire name: <c>add_expression_call_element</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION (plus the universal wire errors).</exception>
+        public static string AddExpressionCallElementResult(string configJson, long efcallId, long ftypeId, long felemId, string felemReq, long? execOrder = null)
+        {
+            var args = new ArgsWriter();
+            args.Int("efcall_id", efcallId);
+            args.Int("ftype_id", ftypeId);
+            args.Int("felem_id", felemId);
+            args.OptInt("exec_order", execOrder);
+            args.Str("felem_req", felemReq, nameof(felemReq));
+            return NativeCall.ConfigAndJsonResult("add_expression_call_element", configJson, args.ToJson());
         }
 
         /// <summary>Delete one CFG_EFBOM row from an expression call, addressed by call + element code.</summary>
@@ -637,20 +805,42 @@ namespace Sz.ConfigTool
         /// <param name="ftypeCode">Optional; null omits it. Feature code (case-insensitive) or NOT_FOUND. "ALL" (case-insensitive) is treated as absent. Stored as FTYPE_ID; absent stores FTYPE_ID -1.</param>
         /// <param name="felemCode">Optional; null omits it. Element code (case-insensitive) or NOT_FOUND. "N/A" (case-insensitive) is treated as absent. Stored as FELEM_ID; absent stores FELEM_ID -1. Exactly one of ftype_code / felem_code must resolve, else INVALID_INPUT.</param>
         /// <param name="execOrder">Optional; null omits it. EXEC_ORDER scoped per (FTYPE_ID, FELEM_ID) of the new row (the -1 sentinel is part of the scope). Absent or &lt;= 0 = auto-allocate (max in scope + 1, 1 for an empty scope); &gt; 0 and free = used verbatim; &gt; 0 and taken = ALREADY_EXISTS.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="AddStandardizeCallResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the new CFG_SFCALL row {SFCALL_ID, FTYPE_ID, FELEM_ID, SFUNC_ID, EXEC_ORDER}). SFCALL_ID is always auto-allocated (max + 1, floor 1000). MISSING_SECTION when CFG_SFCALL is absent. Check order: SFCALL_ID allocation, sfunc, feature, element, exactly-one rule, exec order. TRAP: the exec-order scope does not include SFUNC_ID, so a second call on the same feature continues that feature's order sequence.
         /// Wire name: <c>add_standardize_call</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS (plus the universal wire errors).</exception>
-        public static ConfigAndJson AddStandardizeCall(string configJson, string sfuncCode, string? ftypeCode = null, string? felemCode = null, long? execOrder = null)
+        public static string AddStandardizeCall(string configJson, string sfuncCode, string? ftypeCode = null, string? felemCode = null, long? execOrder = null)
         {
             var args = new ArgsWriter();
             args.Str("sfunc_code", sfuncCode, nameof(sfuncCode));
             args.OptStr("ftype_code", ftypeCode);
             args.OptStr("felem_code", felemCode);
             args.OptInt("exec_order", execOrder);
-            return NativeCall.ConfigAndJson("add_standardize_call", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("add_standardize_call", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of AddStandardizeCall: same arguments and operation, but returns the record instead of the configuration. Operation: Add a standardize call (CFG_SFCALL row) binding a standardize function to a feature or an element.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="sfuncCode">Standardize function code (CFG_SFUNC, case-insensitive) or NOT_FOUND. Looked up before the feature/element.</param>
+        /// <param name="ftypeCode">Optional; null omits it. Feature code (case-insensitive) or NOT_FOUND. "ALL" (case-insensitive) is treated as absent. Stored as FTYPE_ID; absent stores FTYPE_ID -1.</param>
+        /// <param name="felemCode">Optional; null omits it. Element code (case-insensitive) or NOT_FOUND. "N/A" (case-insensitive) is treated as absent. Stored as FELEM_ID; absent stores FELEM_ID -1. Exactly one of ftype_code / felem_code must resolve, else INVALID_INPUT.</param>
+        /// <param name="execOrder">Optional; null omits it. EXEC_ORDER scoped per (FTYPE_ID, FELEM_ID) of the new row (the -1 sentinel is part of the scope). Absent or &lt;= 0 = auto-allocate (max in scope + 1, 1 for an empty scope); &gt; 0 and free = used verbatim; &gt; 0 and taken = ALREADY_EXISTS.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the new CFG_SFCALL row {SFCALL_ID, FTYPE_ID, FELEM_ID, SFUNC_ID, EXEC_ORDER}). SFCALL_ID is always auto-allocated (max + 1, floor 1000). MISSING_SECTION when CFG_SFCALL is absent. Check order: SFCALL_ID allocation, sfunc, feature, element, exactly-one rule, exec order. TRAP: the exec-order scope does not include SFUNC_ID, so a second call on the same feature continues that feature's order sequence.
+        /// Wire name: <c>add_standardize_call</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS (plus the universal wire errors).</exception>
+        public static string AddStandardizeCallResult(string configJson, string sfuncCode, string? ftypeCode = null, string? felemCode = null, long? execOrder = null)
+        {
+            var args = new ArgsWriter();
+            args.Str("sfunc_code", sfuncCode, nameof(sfuncCode));
+            args.OptStr("ftype_code", ftypeCode);
+            args.OptStr("felem_code", felemCode);
+            args.OptInt("exec_order", execOrder);
+            return NativeCall.ConfigAndJsonResult("add_standardize_call", configJson, args.ToJson());
         }
 
         /// <summary>Delete a standardize call by SFCALL_ID.</summary>
@@ -720,20 +910,42 @@ namespace Sz.ConfigTool
         /// <param name="sfuncId">Stored verbatim as SFUNC_ID. NOT validated against CFG_SFUNC.</param>
         /// <param name="felemId">Optional; null omits it. Stored as FELEM_ID; absent = -1. NOT validated against CFG_FELEM.</param>
         /// <param name="execOrder">Optional; null omits it. EXEC_ORDER scoped per (FTYPE_ID, FELEM_ID). Absent or &lt;= 0 = auto-allocate (max in scope + 1); &gt; 0 and free = verbatim; &gt; 0 and taken = ALREADY_EXISTS.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="AddStandardizeCallElementResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the new CFG_SFCALL row). ALREADY_PRESENT when a row with the same (FTYPE_ID, SFUNC_ID, FELEM_ID) exists (checked first). SFCALL_ID auto-allocated (max + 1, floor 1000); MISSING_SECTION when CFG_SFCALL is absent. Unlike add_standardize_call there is no feature-xor-element rule and no id validation.
         /// Wire name: <c>add_standardize_call_element</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_PRESENT, ALREADY_EXISTS (plus the universal wire errors).</exception>
-        public static ConfigAndJson AddStandardizeCallElement(string configJson, long ftypeId, long sfuncId, long? felemId = null, long? execOrder = null)
+        public static string AddStandardizeCallElement(string configJson, long ftypeId, long sfuncId, long? felemId = null, long? execOrder = null)
         {
             var args = new ArgsWriter();
             args.Int("ftype_id", ftypeId);
             args.Int("sfunc_id", sfuncId);
             args.OptInt("felem_id", felemId);
             args.OptInt("exec_order", execOrder);
-            return NativeCall.ConfigAndJson("add_standardize_call_element", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("add_standardize_call_element", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of AddStandardizeCallElement: same arguments and operation, but returns the record instead of the configuration. Operation: Add a CFG_SFCALL row addressed by raw ids (FTYPE_ID, SFUNC_ID, FELEM_ID).</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="ftypeId">Stored verbatim as FTYPE_ID. NOT validated against CFG_FTYPE (use -1 for an element-bound row).</param>
+        /// <param name="sfuncId">Stored verbatim as SFUNC_ID. NOT validated against CFG_SFUNC.</param>
+        /// <param name="felemId">Optional; null omits it. Stored as FELEM_ID; absent = -1. NOT validated against CFG_FELEM.</param>
+        /// <param name="execOrder">Optional; null omits it. EXEC_ORDER scoped per (FTYPE_ID, FELEM_ID). Absent or &lt;= 0 = auto-allocate (max in scope + 1); &gt; 0 and free = verbatim; &gt; 0 and taken = ALREADY_EXISTS.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the new CFG_SFCALL row). ALREADY_PRESENT when a row with the same (FTYPE_ID, SFUNC_ID, FELEM_ID) exists (checked first). SFCALL_ID auto-allocated (max + 1, floor 1000); MISSING_SECTION when CFG_SFCALL is absent. Unlike add_standardize_call there is no feature-xor-element rule and no id validation.
+        /// Wire name: <c>add_standardize_call_element</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_PRESENT, ALREADY_EXISTS (plus the universal wire errors).</exception>
+        public static string AddStandardizeCallElementResult(string configJson, long ftypeId, long sfuncId, long? felemId = null, long? execOrder = null)
+        {
+            var args = new ArgsWriter();
+            args.Int("ftype_id", ftypeId);
+            args.Int("sfunc_id", sfuncId);
+            args.OptInt("felem_id", felemId);
+            args.OptInt("exec_order", execOrder);
+            return NativeCall.ConfigAndJsonResult("add_standardize_call_element", configJson, args.ToJson());
         }
 
         /// <summary>Delete CFG_SFCALL rows matching raw ids (FTYPE_ID, SFUNC_ID, FELEM_ID).</summary>
@@ -839,18 +1051,36 @@ namespace Sz.ConfigTool
         /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
         /// <param name="sectionName">Uppercased before lookup. Must name an ARRAY section, else NOT_FOUND.</param>
         /// <param name="fieldName">Uppercased before removal (a lowercase key in a row can never be removed).</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="RemoveConfigSectionFieldResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Record is the integer count of items the field was removed from (0 when no item had it; the config is still returned). Non-object items are skipped. A config with no G2_CONFIG key succeeds unchanged with count 0.
         /// Wire name: <c>remove_config_section_field</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
-        public static ConfigAndJson RemoveConfigSectionField(string configJson, string sectionName, string fieldName)
+        public static string RemoveConfigSectionField(string configJson, string sectionName, string fieldName)
         {
             var args = new ArgsWriter();
             args.Str("section_name", sectionName, nameof(sectionName));
             args.Str("field_name", fieldName, nameof(fieldName));
-            return NativeCall.ConfigAndJson("remove_config_section_field", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("remove_config_section_field", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of RemoveConfigSectionField: same arguments and operation, but returns the record instead of the configuration. Operation: Remove a field from every item of an array section, returning how many items had it.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="sectionName">Uppercased before lookup. Must name an ARRAY section, else NOT_FOUND.</param>
+        /// <param name="fieldName">Uppercased before removal (a lowercase key in a row can never be removed).</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Record is the integer count of items the field was removed from (0 when no item had it; the config is still returned). Non-object items are skipped. A config with no G2_CONFIG key succeeds unchanged with count 0.
+        /// Wire name: <c>remove_config_section_field</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
+        public static string RemoveConfigSectionFieldResult(string configJson, string sectionName, string fieldName)
+        {
+            var args = new ArgsWriter();
+            args.Str("section_name", sectionName, nameof(sectionName));
+            args.Str("field_name", fieldName, nameof(fieldName));
+            return NativeCall.ConfigAndJsonResult("remove_config_section_field", configJson, args.ToJson());
         }
 
         /// <summary>Add a field to every item of an array section that lacks it, returning existed/updated counts.</summary>
@@ -858,19 +1088,39 @@ namespace Sz.ConfigTool
         /// <param name="sectionName">Uppercased before lookup. Must name an ARRAY section, else NOT_FOUND.</param>
         /// <param name="fieldName">Uppercased before insertion.</param>
         /// <param name="fieldValue">Raw JSON text. Any JSON value, stored verbatim (cloned) into each item that lacks the field.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="AddConfigSectionFieldResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Record is {"existed": n, "updated": n}: items that already had the field (value preserved, never overwritten) vs. items it was inserted into. Non-object items are skipped (counted in neither). A config with no G2_CONFIG key succeeds unchanged with both counts 0.
         /// Wire name: <c>add_config_section_field</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
-        public static ConfigAndJson AddConfigSectionField(string configJson, string sectionName, string fieldName, string fieldValue)
+        public static string AddConfigSectionField(string configJson, string sectionName, string fieldName, string fieldValue)
         {
             var args = new ArgsWriter();
             args.Str("section_name", sectionName, nameof(sectionName));
             args.Str("field_name", fieldName, nameof(fieldName));
             args.Json("field_value", fieldValue, nameof(fieldValue));
-            return NativeCall.ConfigAndJson("add_config_section_field", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("add_config_section_field", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of AddConfigSectionField: same arguments and operation, but returns the record instead of the configuration. Operation: Add a field to every item of an array section that lacks it, returning existed/updated counts.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="sectionName">Uppercased before lookup. Must name an ARRAY section, else NOT_FOUND.</param>
+        /// <param name="fieldName">Uppercased before insertion.</param>
+        /// <param name="fieldValue">Raw JSON text. Any JSON value, stored verbatim (cloned) into each item that lacks the field.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Record is {"existed": n, "updated": n}: items that already had the field (value preserved, never overwritten) vs. items it was inserted into. Non-object items are skipped (counted in neither). A config with no G2_CONFIG key succeeds unchanged with both counts 0.
+        /// Wire name: <c>add_config_section_field</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
+        public static string AddConfigSectionFieldResult(string configJson, string sectionName, string fieldName, string fieldValue)
+        {
+            var args = new ArgsWriter();
+            args.Str("section_name", sectionName, nameof(sectionName));
+            args.Str("field_name", fieldName, nameof(fieldName));
+            args.Json("field_value", fieldValue, nameof(fieldValue));
+            return NativeCall.ConfigAndJsonResult("add_config_section_field", configJson, args.ToJson());
         }
 
         /// <summary>Add a data source (CFG_DSRC row) to the configuration.</summary>
@@ -1128,7 +1378,7 @@ namespace Sz.ConfigTool
         /// <summary>Add a feature (CFG_FTYPE row) with its element list (CFG_FBOM rows) and optional standardize/expression/comparison calls.</summary>
         /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
         /// <param name="feature">Uppercased; stored as FTYPE_CODE and FTYPE_DESC. Duplicate (exact match on the uppercased code) is ALREADY_EXISTS.</param>
-        /// <param name="elementList">Raw JSON text. Must be a non-empty JSON array, else INVALID_INPUT. Each item is either an element-code string, or an object with `element` (or `ELEMENT`, required, else INVALID_INPUT) and optional `expressed`/`EXPRESSED`, `compared`/`COMPARED` ("yes" case-insensitive = true), `display`/`DISPLAY` ("yes" = DISPLAY_LEVEL 1, anything else 0) or `displaylevel`/`DISPLAYLEVEL`/`display_level` (int, default 1, negative = INVALID_INPUT), `displaydelim`/`DISPLAYDELIM`/`display_delim`, `derived`/`DERIVED` (Yes/No case-insensitive, else INVALID_INPUT; default No). Any other item type is INVALID_INPUT. Element codes are uppercased; a code not in CFG_FELEM is AUTO-CREATED (FELEM_ID max+1 floor 1000, DATA_TYPE string, FELEM_DESC = code). The FBOM EXEC_ORDER is the item's 1-based position (per feature, not whole-table).</param>
+        /// <param name="elementList">Raw JSON text. Must be a non-empty JSON array, else INVALID_INPUT. Each item is either an element-code string, or an object with `element` (or `ELEMENT`, required, else INVALID_INPUT) and optional `expressed`/`EXPRESSED`, `compared`/`COMPARED` ("yes" case-insensitive = true), `display`/`DISPLAY` ("yes" = DISPLAY_LEVEL 1, anything else 0) or `displaylevel`/`DISPLAYLEVEL`/`display_level` (int, default 1, negative = INVALID_INPUT), `displaydelim`/`DISPLAYDELIM`/`display_delim`, `derived`/`DERIVED` (Yes/No case-insensitive, else INVALID_INPUT; default No). Any other item type is INVALID_INPUT. Element codes are uppercased; a code not in CFG_FELEM is AUTO-CREATED (FELEM_ID max+1 floor 1000, DATA_TYPE string, FELEM_DESC = code). The FBOM EXEC_ORDER is the item's 1-based position (per feature, not whole-table). Shape: `[string | {element?: string|null, ELEMENT?: string|null, expressed?: string|null, EXPRESSED?: string|null, compared?: string|null, COMPARED?: string|null, display?: string|null, DISPLAY?: string|null, displaylevel?: int|null, DISPLAYLEVEL?: int|null, display_level?: int|null, displaydelim?: string|null, DISPLAYDELIM?: string|null, display_delim?: string|null, derived?: string|null, DERIVED?: string|null}]`.</param>
         /// <param name="class">Optional; null omits it. Library default when omitted: "OTHER". CFG_FCLASS code, case-insensitive; unknown is NOT_FOUND.</param>
         /// <param name="behavior">Optional; null omits it. Library default when omitted: "FM". Behavior code (A1, F1, FF, FM, FVM, NONE, NAME; E/S suffixes set FTYPE_EXCL/FTYPE_STAB), case-insensitive; otherwise INVALID_INPUT.</param>
         /// <param name="candidates">Optional; null omits it. Library default when omitted: "No". USED_FOR_CAND; case-insensitive Yes/No, normalized, else INVALID_INPUT.</param>
@@ -1389,18 +1639,34 @@ namespace Sz.ConfigTool
 
         /// <summary>Add a rule fragment (CFG_ERFRAG row), returning the assigned ERFRAG_ID.</summary>
         /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
-        /// <param name="fragmentConfig">Raw JSON text. Object with on-disk keys. ERFRAG_CODE (string, required, else MISSING_FIELD) is uppercased for storage and the duplicate check (ALREADY_EXISTS). ERFRAG_SOURCE (string, required, else MISSING_FIELD) is stored verbatim; every name referenced inside a FRAGMENT[...] clause (e.g. "./FRAGMENT[./SAME_NAME&gt;0 and ./SAME_STAB&gt;0]") must be an existing ERFRAG_CODE matched EXACTLY (case-sensitive), else INVALID_INPUT. A source without FRAGMENT[ (including "") is accepted unvalidated. ERFRAG_ID (integer, optional): absent or &lt;= 0 auto-allocates (max + 1, floor 1, so 1000 on the template); a taken id &gt; 0 is ALREADY_EXISTS. Any ERFRAG_DESC key is IGNORED.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <param name="fragmentConfig">Raw JSON text. Object with on-disk keys. ERFRAG_CODE (string, required, else MISSING_FIELD) is uppercased for storage and the duplicate check (ALREADY_EXISTS). ERFRAG_SOURCE (string, required, else MISSING_FIELD) is stored verbatim; every name referenced inside a FRAGMENT[...] clause (e.g. "./FRAGMENT[./SAME_NAME&gt;0 and ./SAME_STAB&gt;0]") must be an existing ERFRAG_CODE matched EXACTLY (case-sensitive), else INVALID_INPUT. A source without FRAGMENT[ (including "") is accepted unvalidated. ERFRAG_ID (integer, optional): absent or &lt;= 0 auto-allocates (max + 1, floor 1, so 1000 on the template); a taken id &gt; 0 is ALREADY_EXISTS. Any ERFRAG_DESC key is IGNORED. Shape: `{ERFRAG_CODE: string, ERFRAG_SOURCE: string, ERFRAG_ID?: int|null, ERFRAG_DESC?: any, ERFRAG_DEPENDS?: any}`.</param>
+        /// <returns>The modified configuration JSON. <see cref="AddFragmentResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Record is the assigned ERFRAG_ID (integer). The row always carries every CFG_ERFRAG key: ERFRAG_DESC is set to the uppercased code, ERFRAG_DEPENDS is the referenced fragments' ids sorted as STRINGS, deduplicated and comma-joined ("11,61"), or null when there are none. ERFRAG_CODE and ERFRAG_SOURCE are checked BEFORE the config is parsed (MISSING_FIELD wins). A config without G2_CONFIG is INVALID_CONFIG; with G2_CONFIG but no CFG_ERFRAG it is MISSING_SECTION.
         /// Wire name: <c>add_fragment</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, INVALID_INPUT, INVALID_CONFIG, MISSING_SECTION (plus the universal wire errors).</exception>
-        public static ConfigAndJson AddFragment(string configJson, string fragmentConfig)
+        public static string AddFragment(string configJson, string fragmentConfig)
         {
             var args = new ArgsWriter();
             args.Json("fragment_config", fragmentConfig, nameof(fragmentConfig));
-            return NativeCall.ConfigAndJson("add_fragment", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("add_fragment", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of AddFragment: same arguments and operation, but returns the record instead of the configuration. Operation: Add a rule fragment (CFG_ERFRAG row), returning the assigned ERFRAG_ID.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="fragmentConfig">Raw JSON text. Object with on-disk keys. ERFRAG_CODE (string, required, else MISSING_FIELD) is uppercased for storage and the duplicate check (ALREADY_EXISTS). ERFRAG_SOURCE (string, required, else MISSING_FIELD) is stored verbatim; every name referenced inside a FRAGMENT[...] clause (e.g. "./FRAGMENT[./SAME_NAME&gt;0 and ./SAME_STAB&gt;0]") must be an existing ERFRAG_CODE matched EXACTLY (case-sensitive), else INVALID_INPUT. A source without FRAGMENT[ (including "") is accepted unvalidated. ERFRAG_ID (integer, optional): absent or &lt;= 0 auto-allocates (max + 1, floor 1, so 1000 on the template); a taken id &gt; 0 is ALREADY_EXISTS. Any ERFRAG_DESC key is IGNORED. Shape: `{ERFRAG_CODE: string, ERFRAG_SOURCE: string, ERFRAG_ID?: int|null, ERFRAG_DESC?: any, ERFRAG_DEPENDS?: any}`.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Record is the assigned ERFRAG_ID (integer). The row always carries every CFG_ERFRAG key: ERFRAG_DESC is set to the uppercased code, ERFRAG_DEPENDS is the referenced fragments' ids sorted as STRINGS, deduplicated and comma-joined ("11,61"), or null when there are none. ERFRAG_CODE and ERFRAG_SOURCE are checked BEFORE the config is parsed (MISSING_FIELD wins). A config without G2_CONFIG is INVALID_CONFIG; with G2_CONFIG but no CFG_ERFRAG it is MISSING_SECTION.
+        /// Wire name: <c>add_fragment</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, INVALID_INPUT, INVALID_CONFIG, MISSING_SECTION (plus the universal wire errors).</exception>
+        public static string AddFragmentResult(string configJson, string fragmentConfig)
+        {
+            var args = new ArgsWriter();
+            args.Json("fragment_config", fragmentConfig, nameof(fragmentConfig));
+            return NativeCall.ConfigAndJsonResult("add_fragment", configJson, args.ToJson());
         }
 
         /// <summary>Delete a fragment by code.</summary>
@@ -1475,13 +1741,13 @@ namespace Sz.ConfigTool
         /// <param name="description">Optional; null omits it. Absent stores CFUNC_DESC null; any string is stored verbatim.</param>
         /// <param name="language">Optional; null omits it. Absent stores LANGUAGE null; any string is stored verbatim.</param>
         /// <param name="anonSupport">Optional; null omits it. Library default when omitted: "No". Case-insensitive; normalized to Yes or No, else INVALID_INPUT.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="AddComparisonFunctionResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the new complete CFG_CFUNC row: CFUNC_ID, CFUNC_CODE, CONNECT_STR, ANON_SUPPORT, CFUNC_DESC, LANGUAGE). CFUNC_ID is always auto-allocated (max existing + 1, floor 1); no id can be requested. TRAP: a duplicate code is INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS. Validation order: duplicate code, anon_support, then section. MISSING_SECTION only when CFG_CFUNC is absent.
         /// Wire name: <c>add_comparison_function</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, INVALID_INPUT (plus the universal wire errors).</exception>
-        public static ConfigAndJson AddComparisonFunction(string configJson, string code, string? connectStr = null, string? description = null, string? language = null, string? anonSupport = null)
+        public static string AddComparisonFunction(string configJson, string code, string? connectStr = null, string? description = null, string? language = null, string? anonSupport = null)
         {
             var args = new ArgsWriter();
             args.Str("code", code, nameof(code));
@@ -1489,39 +1755,95 @@ namespace Sz.ConfigTool
             args.OptStr("description", description);
             args.OptStr("language", language);
             args.OptStr("anon_support", anonSupport);
-            return NativeCall.ConfigAndJson("add_comparison_function", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("add_comparison_function", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of AddComparisonFunction: same arguments and operation, but returns the record instead of the configuration. Operation: Add a comparison function (CFG_CFUNC row).</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="code">Uppercased before the duplicate check and storage (CFUNC_CODE).</param>
+        /// <param name="connectStr">Optional; null omits it. Absent stores CONNECT_STR null; any string (including "") is stored verbatim.</param>
+        /// <param name="description">Optional; null omits it. Absent stores CFUNC_DESC null; any string is stored verbatim.</param>
+        /// <param name="language">Optional; null omits it. Absent stores LANGUAGE null; any string is stored verbatim.</param>
+        /// <param name="anonSupport">Optional; null omits it. Library default when omitted: "No". Case-insensitive; normalized to Yes or No, else INVALID_INPUT.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the new complete CFG_CFUNC row: CFUNC_ID, CFUNC_CODE, CONNECT_STR, ANON_SUPPORT, CFUNC_DESC, LANGUAGE). CFUNC_ID is always auto-allocated (max existing + 1, floor 1); no id can be requested. TRAP: a duplicate code is INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS. Validation order: duplicate code, anon_support, then section. MISSING_SECTION only when CFG_CFUNC is absent.
+        /// Wire name: <c>add_comparison_function</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, INVALID_INPUT (plus the universal wire errors).</exception>
+        public static string AddComparisonFunctionResult(string configJson, string code, string? connectStr = null, string? description = null, string? language = null, string? anonSupport = null)
+        {
+            var args = new ArgsWriter();
+            args.Str("code", code, nameof(code));
+            args.OptStr("connect_str", connectStr);
+            args.OptStr("description", description);
+            args.OptStr("language", language);
+            args.OptStr("anon_support", anonSupport);
+            return NativeCall.ConfigAndJsonResult("add_comparison_function", configJson, args.ToJson());
         }
 
         /// <summary>Delete a comparison function's CFG_CFUNC row only (no cascade).</summary>
         /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
         /// <param name="code">Uppercased before lookup.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="DeleteComparisonFunctionResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the deleted CFG_CFUNC row). Removes ONLY the CFG_CFUNC row; CFG_CFCALL rows referencing it are left dangling (use delete_comparison_function_cascade). A missing CFG_CFUNC section is NOT_FOUND (not MISSING_SECTION).
         /// Wire name: <c>delete_comparison_function</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
-        public static ConfigAndJson DeleteComparisonFunction(string configJson, string code)
+        public static string DeleteComparisonFunction(string configJson, string code)
         {
             var args = new ArgsWriter();
             args.Str("code", code, nameof(code));
-            return NativeCall.ConfigAndJson("delete_comparison_function", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("delete_comparison_function", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of DeleteComparisonFunction: same arguments and operation, but returns the record instead of the configuration. Operation: Delete a comparison function's CFG_CFUNC row only (no cascade).</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="code">Uppercased before lookup.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the deleted CFG_CFUNC row). Removes ONLY the CFG_CFUNC row; CFG_CFCALL rows referencing it are left dangling (use delete_comparison_function_cascade). A missing CFG_CFUNC section is NOT_FOUND (not MISSING_SECTION).
+        /// Wire name: <c>delete_comparison_function</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
+        public static string DeleteComparisonFunctionResult(string configJson, string code)
+        {
+            var args = new ArgsWriter();
+            args.Str("code", code, nameof(code));
+            return NativeCall.ConfigAndJsonResult("delete_comparison_function", configJson, args.ToJson());
         }
 
         /// <summary>Delete a comparison function and its CFG_CFBOM / CFG_CFCALL / CFG_CFRTN rows.</summary>
         /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
         /// <param name="code">Uppercased before lookup.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="DeleteComparisonFunctionCascadeResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the deleted CFG_CFUNC row). Order: CFG_CFBOM rows whose CFCALL_ID belongs to one of the function's CFG_CFCALL rows; every CFG_CFCALL row with that CFUNC_ID; every CFG_CFRTN row with that CFUNC_ID (well-formed rows via thresholds::delete_comparison_threshold, then a sweep of the rest); finally the CFG_CFUNC row. Absent CFBOM/CFCALL/CFRTN sections are skipped. MISSING_FIELD when the found row has no integer CFUNC_ID. A missing CFG_CFUNC section is NOT_FOUND.
         /// Wire name: <c>delete_comparison_function_cascade</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND, MISSING_FIELD (plus the universal wire errors).</exception>
-        public static ConfigAndJson DeleteComparisonFunctionCascade(string configJson, string code)
+        public static string DeleteComparisonFunctionCascade(string configJson, string code)
         {
             var args = new ArgsWriter();
             args.Str("code", code, nameof(code));
-            return NativeCall.ConfigAndJson("delete_comparison_function_cascade", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("delete_comparison_function_cascade", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of DeleteComparisonFunctionCascade: same arguments and operation, but returns the record instead of the configuration. Operation: Delete a comparison function and its CFG_CFBOM / CFG_CFCALL / CFG_CFRTN rows.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="code">Uppercased before lookup.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the deleted CFG_CFUNC row). Order: CFG_CFBOM rows whose CFCALL_ID belongs to one of the function's CFG_CFCALL rows; every CFG_CFCALL row with that CFUNC_ID; every CFG_CFRTN row with that CFUNC_ID (well-formed rows via thresholds::delete_comparison_threshold, then a sweep of the rest); finally the CFG_CFUNC row. Absent CFBOM/CFCALL/CFRTN sections are skipped. MISSING_FIELD when the found row has no integer CFUNC_ID. A missing CFG_CFUNC section is NOT_FOUND.
+        /// Wire name: <c>delete_comparison_function_cascade</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND, MISSING_FIELD (plus the universal wire errors).</exception>
+        public static string DeleteComparisonFunctionCascadeResult(string configJson, string code)
+        {
+            var args = new ArgsWriter();
+            args.Str("code", code, nameof(code));
+            return NativeCall.ConfigAndJsonResult("delete_comparison_function_cascade", configJson, args.ToJson());
         }
 
         /// <summary>Get one comparison function's raw CFG_CFUNC row by code.</summary>
@@ -1560,13 +1882,13 @@ namespace Sz.ConfigTool
         /// <param name="description">Optional; null omits it. Absent leaves CFUNC_DESC; a string is stored verbatim. Cannot be cleared to null.</param>
         /// <param name="language">Optional; null omits it. Absent leaves LANGUAGE; a string is stored verbatim. Cannot be cleared to null.</param>
         /// <param name="anonSupport">Optional; null omits it. Absent leaves ANON_SUPPORT. TRAP: unlike add, NOT validated or normalized; any string is stored verbatim.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="SetComparisonFunctionResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the updated CFG_CFUNC row). No value validation. The row is deleted and re-appended, so it moves to the END of CFG_CFUNC. A missing CFG_CFUNC section is NOT_FOUND.
         /// Wire name: <c>set_comparison_function</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
-        public static ConfigAndJson SetComparisonFunction(string configJson, string code, FieldUpdate<string> connectStr = default, string? description = null, string? language = null, string? anonSupport = null)
+        public static string SetComparisonFunction(string configJson, string code, FieldUpdate<string> connectStr = default, string? description = null, string? language = null, string? anonSupport = null)
         {
             var args = new ArgsWriter();
             args.Str("code", code, nameof(code));
@@ -1574,7 +1896,31 @@ namespace Sz.ConfigTool
             args.OptStr("description", description);
             args.OptStr("language", language);
             args.OptStr("anon_support", anonSupport);
-            return NativeCall.ConfigAndJson("set_comparison_function", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("set_comparison_function", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of SetComparisonFunction: same arguments and operation, but returns the record instead of the configuration. Operation: Update a comparison function's connect string / description / language / anon support.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="code">Uppercased before lookup.</param>
+        /// <param name="connectStr">Tri-state: Leave (default) / Clear / Set. Absent leaves CONNECT_STR; null clears it to null; a string (including "") sets it.</param>
+        /// <param name="description">Optional; null omits it. Absent leaves CFUNC_DESC; a string is stored verbatim. Cannot be cleared to null.</param>
+        /// <param name="language">Optional; null omits it. Absent leaves LANGUAGE; a string is stored verbatim. Cannot be cleared to null.</param>
+        /// <param name="anonSupport">Optional; null omits it. Absent leaves ANON_SUPPORT. TRAP: unlike add, NOT validated or normalized; any string is stored verbatim.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the updated CFG_CFUNC row). No value validation. The row is deleted and re-appended, so it moves to the END of CFG_CFUNC. A missing CFG_CFUNC section is NOT_FOUND.
+        /// Wire name: <c>set_comparison_function</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
+        public static string SetComparisonFunctionResult(string configJson, string code, FieldUpdate<string> connectStr = default, string? description = null, string? language = null, string? anonSupport = null)
+        {
+            var args = new ArgsWriter();
+            args.Str("code", code, nameof(code));
+            args.TriStr("connect_str", connectStr);
+            args.OptStr("description", description);
+            args.OptStr("language", language);
+            args.OptStr("anon_support", anonSupport);
+            return NativeCall.ConfigAndJsonResult("set_comparison_function", configJson, args.ToJson());
         }
 
         /// <summary>Add a distinct function (CFG_DFUNC row) to the configuration.</summary>
@@ -1584,13 +1930,13 @@ namespace Sz.ConfigTool
         /// <param name="description">Optional; null omits it. Stored verbatim in DFUNC_DESC; absent stores null (NOT defaulted to the code).</param>
         /// <param name="language">Optional; null omits it. Stored verbatim in LANGUAGE; absent stores null.</param>
         /// <param name="anonSupport">Optional; null omits it. Library default when omitted: "No". Case-insensitive; normalized to Yes or No, any other value is INVALID_INPUT.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="AddDistinctFunctionResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the new complete CFG_DFUNC row: DFUNC_ID, DFUNC_CODE, DFUNC_DESC, CONNECT_STR, ANON_SUPPORT, LANGUAGE; unset optionals are null). DFUNC_ID is auto-allocated as max existing + 1 (floor 1); no id can be requested. TRAP: a duplicate code is INVALID_INPUT, not ALREADY_EXISTS (SzConfigError::validation). The duplicate check runs before anon_support validation. MISSING_SECTION only when G2_CONFIG.CFG_DFUNC is absent.
         /// Wire name: <c>add_distinct_function</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, INVALID_INPUT (plus the universal wire errors).</exception>
-        public static ConfigAndJson AddDistinctFunction(string configJson, string code, string? connectStr = null, string? description = null, string? language = null, string? anonSupport = null)
+        public static string AddDistinctFunction(string configJson, string code, string? connectStr = null, string? description = null, string? language = null, string? anonSupport = null)
         {
             var args = new ArgsWriter();
             args.Str("code", code, nameof(code));
@@ -1598,23 +1944,63 @@ namespace Sz.ConfigTool
             args.OptStr("description", description);
             args.OptStr("language", language);
             args.OptStr("anon_support", anonSupport);
-            return NativeCall.ConfigAndJson("add_distinct_function", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("add_distinct_function", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of AddDistinctFunction: same arguments and operation, but returns the record instead of the configuration. Operation: Add a distinct function (CFG_DFUNC row) to the configuration.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="code">Uppercased before the duplicate check and storage (DFUNC_CODE).</param>
+        /// <param name="connectStr">Optional; null omits it. Absent stores CONNECT_STR null; any string (including "") is stored verbatim.</param>
+        /// <param name="description">Optional; null omits it. Stored verbatim in DFUNC_DESC; absent stores null (NOT defaulted to the code).</param>
+        /// <param name="language">Optional; null omits it. Stored verbatim in LANGUAGE; absent stores null.</param>
+        /// <param name="anonSupport">Optional; null omits it. Library default when omitted: "No". Case-insensitive; normalized to Yes or No, any other value is INVALID_INPUT.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the new complete CFG_DFUNC row: DFUNC_ID, DFUNC_CODE, DFUNC_DESC, CONNECT_STR, ANON_SUPPORT, LANGUAGE; unset optionals are null). DFUNC_ID is auto-allocated as max existing + 1 (floor 1); no id can be requested. TRAP: a duplicate code is INVALID_INPUT, not ALREADY_EXISTS (SzConfigError::validation). The duplicate check runs before anon_support validation. MISSING_SECTION only when G2_CONFIG.CFG_DFUNC is absent.
+        /// Wire name: <c>add_distinct_function</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, INVALID_INPUT (plus the universal wire errors).</exception>
+        public static string AddDistinctFunctionResult(string configJson, string code, string? connectStr = null, string? description = null, string? language = null, string? anonSupport = null)
+        {
+            var args = new ArgsWriter();
+            args.Str("code", code, nameof(code));
+            args.OptStr("connect_str", connectStr);
+            args.OptStr("description", description);
+            args.OptStr("language", language);
+            args.OptStr("anon_support", anonSupport);
+            return NativeCall.ConfigAndJsonResult("add_distinct_function", configJson, args.ToJson());
         }
 
         /// <summary>Delete a distinct function by code.</summary>
         /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
         /// <param name="code">Uppercased before lookup.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="DeleteDistinctFunctionResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the deleted CFG_DFUNC row). No dependency check: CFG_DFCALL rows referencing the DFUNC_ID are left in place. A config without CFG_DFUNC is NOT_FOUND (not MISSING_SECTION).
         /// Wire name: <c>delete_distinct_function</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
-        public static ConfigAndJson DeleteDistinctFunction(string configJson, string code)
+        public static string DeleteDistinctFunction(string configJson, string code)
         {
             var args = new ArgsWriter();
             args.Str("code", code, nameof(code));
-            return NativeCall.ConfigAndJson("delete_distinct_function", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("delete_distinct_function", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of DeleteDistinctFunction: same arguments and operation, but returns the record instead of the configuration. Operation: Delete a distinct function by code.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="code">Uppercased before lookup.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the deleted CFG_DFUNC row). No dependency check: CFG_DFCALL rows referencing the DFUNC_ID are left in place. A config without CFG_DFUNC is NOT_FOUND (not MISSING_SECTION).
+        /// Wire name: <c>delete_distinct_function</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
+        public static string DeleteDistinctFunctionResult(string configJson, string code)
+        {
+            var args = new ArgsWriter();
+            args.Str("code", code, nameof(code));
+            return NativeCall.ConfigAndJsonResult("delete_distinct_function", configJson, args.ToJson());
         }
 
         /// <summary>Get one distinct function's raw CFG_DFUNC row by code.</summary>
@@ -1653,13 +2039,13 @@ namespace Sz.ConfigTool
         /// <param name="description">Optional; null omits it. Absent leaves DFUNC_DESC; a string is written verbatim.</param>
         /// <param name="language">Optional; null omits it. Absent leaves LANGUAGE; a string is written verbatim.</param>
         /// <param name="anonSupport">Optional; null omits it. Absent leaves ANON_SUPPORT. TRAP: unlike add_distinct_function the value is written VERBATIM, with no Yes/No validation or case normalization.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="SetDistinctFunctionResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the updated CFG_DFUNC row). The row is removed and re-appended, so it moves to the END of CFG_DFUNC (list order changes). A config without CFG_DFUNC is NOT_FOUND.
         /// Wire name: <c>set_distinct_function</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
-        public static ConfigAndJson SetDistinctFunction(string configJson, string code, FieldUpdate<string> connectStr = default, string? description = null, string? language = null, string? anonSupport = null)
+        public static string SetDistinctFunction(string configJson, string code, FieldUpdate<string> connectStr = default, string? description = null, string? language = null, string? anonSupport = null)
         {
             var args = new ArgsWriter();
             args.Str("code", code, nameof(code));
@@ -1667,7 +2053,31 @@ namespace Sz.ConfigTool
             args.OptStr("description", description);
             args.OptStr("language", language);
             args.OptStr("anon_support", anonSupport);
-            return NativeCall.ConfigAndJson("set_distinct_function", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("set_distinct_function", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of SetDistinctFunction: same arguments and operation, but returns the record instead of the configuration. Operation: Update a distinct function's connect string, description, language or anon support.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="code">Uppercased before lookup.</param>
+        /// <param name="connectStr">Tri-state: Leave (default) / Clear / Set. Absent leaves CONNECT_STR; null writes null; a string (including "") is written.</param>
+        /// <param name="description">Optional; null omits it. Absent leaves DFUNC_DESC; a string is written verbatim.</param>
+        /// <param name="language">Optional; null omits it. Absent leaves LANGUAGE; a string is written verbatim.</param>
+        /// <param name="anonSupport">Optional; null omits it. Absent leaves ANON_SUPPORT. TRAP: unlike add_distinct_function the value is written VERBATIM, with no Yes/No validation or case normalization.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the updated CFG_DFUNC row). The row is removed and re-appended, so it moves to the END of CFG_DFUNC (list order changes). A config without CFG_DFUNC is NOT_FOUND.
+        /// Wire name: <c>set_distinct_function</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
+        public static string SetDistinctFunctionResult(string configJson, string code, FieldUpdate<string> connectStr = default, string? description = null, string? language = null, string? anonSupport = null)
+        {
+            var args = new ArgsWriter();
+            args.Str("code", code, nameof(code));
+            args.TriStr("connect_str", connectStr);
+            args.OptStr("description", description);
+            args.OptStr("language", language);
+            args.OptStr("anon_support", anonSupport);
+            return NativeCall.ConfigAndJsonResult("set_distinct_function", configJson, args.ToJson());
         }
 
         /// <summary>Add an expression function (CFG_EFUNC row).</summary>
@@ -1676,52 +2086,106 @@ namespace Sz.ConfigTool
         /// <param name="connectStr">Optional; null omits it. Absent stores CONNECT_STR null; any string (including "") is stored verbatim.</param>
         /// <param name="description">Optional; null omits it. Absent stores EFUNC_DESC null; any string is stored verbatim.</param>
         /// <param name="language">Optional; null omits it. Absent stores LANGUAGE null; any string is stored verbatim.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="AddExpressionFunctionResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the new complete CFG_EFUNC row: EFUNC_ID, EFUNC_CODE, CONNECT_STR, EFUNC_DESC, LANGUAGE). EFUNC_ID is always auto-allocated (max existing + 1, floor 1); no id can be requested. TRAP: a duplicate code is INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS. MISSING_SECTION only when CFG_EFUNC is absent.
         /// Wire name: <c>add_expression_function</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, INVALID_INPUT (plus the universal wire errors).</exception>
-        public static ConfigAndJson AddExpressionFunction(string configJson, string code, string? connectStr = null, string? description = null, string? language = null)
+        public static string AddExpressionFunction(string configJson, string code, string? connectStr = null, string? description = null, string? language = null)
         {
             var args = new ArgsWriter();
             args.Str("code", code, nameof(code));
             args.OptStr("connect_str", connectStr);
             args.OptStr("description", description);
             args.OptStr("language", language);
-            return NativeCall.ConfigAndJson("add_expression_function", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("add_expression_function", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of AddExpressionFunction: same arguments and operation, but returns the record instead of the configuration. Operation: Add an expression function (CFG_EFUNC row).</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="code">Uppercased before the duplicate check and storage (EFUNC_CODE).</param>
+        /// <param name="connectStr">Optional; null omits it. Absent stores CONNECT_STR null; any string (including "") is stored verbatim.</param>
+        /// <param name="description">Optional; null omits it. Absent stores EFUNC_DESC null; any string is stored verbatim.</param>
+        /// <param name="language">Optional; null omits it. Absent stores LANGUAGE null; any string is stored verbatim.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the new complete CFG_EFUNC row: EFUNC_ID, EFUNC_CODE, CONNECT_STR, EFUNC_DESC, LANGUAGE). EFUNC_ID is always auto-allocated (max existing + 1, floor 1); no id can be requested. TRAP: a duplicate code is INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS. MISSING_SECTION only when CFG_EFUNC is absent.
+        /// Wire name: <c>add_expression_function</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, INVALID_INPUT (plus the universal wire errors).</exception>
+        public static string AddExpressionFunctionResult(string configJson, string code, string? connectStr = null, string? description = null, string? language = null)
+        {
+            var args = new ArgsWriter();
+            args.Str("code", code, nameof(code));
+            args.OptStr("connect_str", connectStr);
+            args.OptStr("description", description);
+            args.OptStr("language", language);
+            return NativeCall.ConfigAndJsonResult("add_expression_function", configJson, args.ToJson());
         }
 
         /// <summary>Delete an expression function's CFG_EFUNC row only (no cascade).</summary>
         /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
         /// <param name="code">Uppercased before lookup.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="DeleteExpressionFunctionResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the deleted CFG_EFUNC row). Removes ONLY the CFG_EFUNC row; CFG_EFCALL rows referencing it are left dangling (use delete_expression_function_cascade). A missing CFG_EFUNC section is NOT_FOUND (not MISSING_SECTION).
         /// Wire name: <c>delete_expression_function</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
-        public static ConfigAndJson DeleteExpressionFunction(string configJson, string code)
+        public static string DeleteExpressionFunction(string configJson, string code)
         {
             var args = new ArgsWriter();
             args.Str("code", code, nameof(code));
-            return NativeCall.ConfigAndJson("delete_expression_function", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("delete_expression_function", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of DeleteExpressionFunction: same arguments and operation, but returns the record instead of the configuration. Operation: Delete an expression function's CFG_EFUNC row only (no cascade).</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="code">Uppercased before lookup.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the deleted CFG_EFUNC row). Removes ONLY the CFG_EFUNC row; CFG_EFCALL rows referencing it are left dangling (use delete_expression_function_cascade). A missing CFG_EFUNC section is NOT_FOUND (not MISSING_SECTION).
+        /// Wire name: <c>delete_expression_function</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
+        public static string DeleteExpressionFunctionResult(string configJson, string code)
+        {
+            var args = new ArgsWriter();
+            args.Str("code", code, nameof(code));
+            return NativeCall.ConfigAndJsonResult("delete_expression_function", configJson, args.ToJson());
         }
 
         /// <summary>Delete an expression function and its CFG_EFCALL / CFG_EFBOM rows.</summary>
         /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
         /// <param name="code">Uppercased before lookup.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="DeleteExpressionFunctionCascadeResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the deleted CFG_EFUNC row). Removes the CFG_EFBOM rows whose EFCALL_ID belongs to one of the function's CFG_EFCALL rows, then every CFG_EFCALL row whose EFUNC_ID matches (each step skipped if its section is absent), then the CFG_EFUNC row. MISSING_FIELD when the found row has no integer EFUNC_ID. A missing CFG_EFUNC section is NOT_FOUND.
         /// Wire name: <c>delete_expression_function_cascade</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND, MISSING_FIELD (plus the universal wire errors).</exception>
-        public static ConfigAndJson DeleteExpressionFunctionCascade(string configJson, string code)
+        public static string DeleteExpressionFunctionCascade(string configJson, string code)
         {
             var args = new ArgsWriter();
             args.Str("code", code, nameof(code));
-            return NativeCall.ConfigAndJson("delete_expression_function_cascade", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("delete_expression_function_cascade", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of DeleteExpressionFunctionCascade: same arguments and operation, but returns the record instead of the configuration. Operation: Delete an expression function and its CFG_EFCALL / CFG_EFBOM rows.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="code">Uppercased before lookup.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the deleted CFG_EFUNC row). Removes the CFG_EFBOM rows whose EFCALL_ID belongs to one of the function's CFG_EFCALL rows, then every CFG_EFCALL row whose EFUNC_ID matches (each step skipped if its section is absent), then the CFG_EFUNC row. MISSING_FIELD when the found row has no integer EFUNC_ID. A missing CFG_EFUNC section is NOT_FOUND.
+        /// Wire name: <c>delete_expression_function_cascade</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND, MISSING_FIELD (plus the universal wire errors).</exception>
+        public static string DeleteExpressionFunctionCascadeResult(string configJson, string code)
+        {
+            var args = new ArgsWriter();
+            args.Str("code", code, nameof(code));
+            return NativeCall.ConfigAndJsonResult("delete_expression_function_cascade", configJson, args.ToJson());
         }
 
         /// <summary>Get one expression function's raw CFG_EFUNC row by code.</summary>
@@ -1759,20 +2223,42 @@ namespace Sz.ConfigTool
         /// <param name="connectStr">Tri-state: Leave (default) / Clear / Set. Absent leaves CONNECT_STR; null clears it to null; a string (including "") sets it.</param>
         /// <param name="description">Optional; null omits it. Absent leaves EFUNC_DESC; a string is stored verbatim. Cannot be cleared to null.</param>
         /// <param name="language">Optional; null omits it. Absent leaves LANGUAGE; a string is stored verbatim. Cannot be cleared to null.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="SetExpressionFunctionResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the updated CFG_EFUNC row). No value validation. The row is deleted and re-appended, so it moves to the END of CFG_EFUNC. A missing CFG_EFUNC section is NOT_FOUND.
         /// Wire name: <c>set_expression_function</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
-        public static ConfigAndJson SetExpressionFunction(string configJson, string code, FieldUpdate<string> connectStr = default, string? description = null, string? language = null)
+        public static string SetExpressionFunction(string configJson, string code, FieldUpdate<string> connectStr = default, string? description = null, string? language = null)
         {
             var args = new ArgsWriter();
             args.Str("code", code, nameof(code));
             args.TriStr("connect_str", connectStr);
             args.OptStr("description", description);
             args.OptStr("language", language);
-            return NativeCall.ConfigAndJson("set_expression_function", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("set_expression_function", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of SetExpressionFunction: same arguments and operation, but returns the record instead of the configuration. Operation: Update an expression function's connect string / description / language.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="code">Uppercased before lookup.</param>
+        /// <param name="connectStr">Tri-state: Leave (default) / Clear / Set. Absent leaves CONNECT_STR; null clears it to null; a string (including "") sets it.</param>
+        /// <param name="description">Optional; null omits it. Absent leaves EFUNC_DESC; a string is stored verbatim. Cannot be cleared to null.</param>
+        /// <param name="language">Optional; null omits it. Absent leaves LANGUAGE; a string is stored verbatim. Cannot be cleared to null.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the updated CFG_EFUNC row). No value validation. The row is deleted and re-appended, so it moves to the END of CFG_EFUNC. A missing CFG_EFUNC section is NOT_FOUND.
+        /// Wire name: <c>set_expression_function</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
+        public static string SetExpressionFunctionResult(string configJson, string code, FieldUpdate<string> connectStr = default, string? description = null, string? language = null)
+        {
+            var args = new ArgsWriter();
+            args.Str("code", code, nameof(code));
+            args.TriStr("connect_str", connectStr);
+            args.OptStr("description", description);
+            args.OptStr("language", language);
+            return NativeCall.ConfigAndJsonResult("set_expression_function", configJson, args.ToJson());
         }
 
         /// <summary>Add a standardize function (CFG_SFUNC row).</summary>
@@ -1781,52 +2267,106 @@ namespace Sz.ConfigTool
         /// <param name="connectStr">Optional; null omits it. Absent stores CONNECT_STR null; any string (including "") is stored verbatim.</param>
         /// <param name="description">Optional; null omits it. Absent stores SFUNC_DESC null; any string is stored verbatim.</param>
         /// <param name="language">Optional; null omits it. Absent stores LANGUAGE null; any string is stored verbatim.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="AddStandardizeFunctionResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the new complete CFG_SFUNC row: SFUNC_ID, SFUNC_CODE, CONNECT_STR, SFUNC_DESC, LANGUAGE). SFUNC_ID is always auto-allocated (max existing + 1, floor 1); no id can be requested. TRAP: a duplicate code is INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS. MISSING_SECTION only when CFG_SFUNC is absent.
         /// Wire name: <c>add_standardize_function</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, INVALID_INPUT (plus the universal wire errors).</exception>
-        public static ConfigAndJson AddStandardizeFunction(string configJson, string code, string? connectStr = null, string? description = null, string? language = null)
+        public static string AddStandardizeFunction(string configJson, string code, string? connectStr = null, string? description = null, string? language = null)
         {
             var args = new ArgsWriter();
             args.Str("code", code, nameof(code));
             args.OptStr("connect_str", connectStr);
             args.OptStr("description", description);
             args.OptStr("language", language);
-            return NativeCall.ConfigAndJson("add_standardize_function", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("add_standardize_function", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of AddStandardizeFunction: same arguments and operation, but returns the record instead of the configuration. Operation: Add a standardize function (CFG_SFUNC row).</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="code">Uppercased before the duplicate check and storage (SFUNC_CODE).</param>
+        /// <param name="connectStr">Optional; null omits it. Absent stores CONNECT_STR null; any string (including "") is stored verbatim.</param>
+        /// <param name="description">Optional; null omits it. Absent stores SFUNC_DESC null; any string is stored verbatim.</param>
+        /// <param name="language">Optional; null omits it. Absent stores LANGUAGE null; any string is stored verbatim.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the new complete CFG_SFUNC row: SFUNC_ID, SFUNC_CODE, CONNECT_STR, SFUNC_DESC, LANGUAGE). SFUNC_ID is always auto-allocated (max existing + 1, floor 1); no id can be requested. TRAP: a duplicate code is INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS. MISSING_SECTION only when CFG_SFUNC is absent.
+        /// Wire name: <c>add_standardize_function</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION, INVALID_INPUT (plus the universal wire errors).</exception>
+        public static string AddStandardizeFunctionResult(string configJson, string code, string? connectStr = null, string? description = null, string? language = null)
+        {
+            var args = new ArgsWriter();
+            args.Str("code", code, nameof(code));
+            args.OptStr("connect_str", connectStr);
+            args.OptStr("description", description);
+            args.OptStr("language", language);
+            return NativeCall.ConfigAndJsonResult("add_standardize_function", configJson, args.ToJson());
         }
 
         /// <summary>Delete a standardize function's CFG_SFUNC row only (no cascade).</summary>
         /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
         /// <param name="code">Uppercased before lookup.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="DeleteStandardizeFunctionResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the deleted CFG_SFUNC row). Removes ONLY the CFG_SFUNC row; CFG_SFCALL rows referencing it are left dangling (use delete_standardize_function_cascade). A missing CFG_SFUNC section is NOT_FOUND (not MISSING_SECTION).
         /// Wire name: <c>delete_standardize_function</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
-        public static ConfigAndJson DeleteStandardizeFunction(string configJson, string code)
+        public static string DeleteStandardizeFunction(string configJson, string code)
         {
             var args = new ArgsWriter();
             args.Str("code", code, nameof(code));
-            return NativeCall.ConfigAndJson("delete_standardize_function", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("delete_standardize_function", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of DeleteStandardizeFunction: same arguments and operation, but returns the record instead of the configuration. Operation: Delete a standardize function's CFG_SFUNC row only (no cascade).</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="code">Uppercased before lookup.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the deleted CFG_SFUNC row). Removes ONLY the CFG_SFUNC row; CFG_SFCALL rows referencing it are left dangling (use delete_standardize_function_cascade). A missing CFG_SFUNC section is NOT_FOUND (not MISSING_SECTION).
+        /// Wire name: <c>delete_standardize_function</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
+        public static string DeleteStandardizeFunctionResult(string configJson, string code)
+        {
+            var args = new ArgsWriter();
+            args.Str("code", code, nameof(code));
+            return NativeCall.ConfigAndJsonResult("delete_standardize_function", configJson, args.ToJson());
         }
 
         /// <summary>Delete a standardize function and its CFG_SFCALL rows.</summary>
         /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
         /// <param name="code">Uppercased before lookup.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="DeleteStandardizeFunctionCascadeResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the deleted CFG_SFUNC row). Removes every CFG_SFCALL row whose SFUNC_ID matches (skipped if CFG_SFCALL is absent), then the CFG_SFUNC row; no other section is touched. MISSING_FIELD when the found row has no integer SFUNC_ID. A missing CFG_SFUNC section is NOT_FOUND.
         /// Wire name: <c>delete_standardize_function_cascade</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND, MISSING_FIELD (plus the universal wire errors).</exception>
-        public static ConfigAndJson DeleteStandardizeFunctionCascade(string configJson, string code)
+        public static string DeleteStandardizeFunctionCascade(string configJson, string code)
         {
             var args = new ArgsWriter();
             args.Str("code", code, nameof(code));
-            return NativeCall.ConfigAndJson("delete_standardize_function_cascade", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("delete_standardize_function_cascade", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of DeleteStandardizeFunctionCascade: same arguments and operation, but returns the record instead of the configuration. Operation: Delete a standardize function and its CFG_SFCALL rows.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="code">Uppercased before lookup.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the deleted CFG_SFUNC row). Removes every CFG_SFCALL row whose SFUNC_ID matches (skipped if CFG_SFCALL is absent), then the CFG_SFUNC row; no other section is touched. MISSING_FIELD when the found row has no integer SFUNC_ID. A missing CFG_SFUNC section is NOT_FOUND.
+        /// Wire name: <c>delete_standardize_function_cascade</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND, MISSING_FIELD (plus the universal wire errors).</exception>
+        public static string DeleteStandardizeFunctionCascadeResult(string configJson, string code)
+        {
+            var args = new ArgsWriter();
+            args.Str("code", code, nameof(code));
+            return NativeCall.ConfigAndJsonResult("delete_standardize_function_cascade", configJson, args.ToJson());
         }
 
         /// <summary>Get one standardize function's raw CFG_SFUNC row by code.</summary>
@@ -1864,20 +2404,42 @@ namespace Sz.ConfigTool
         /// <param name="connectStr">Tri-state: Leave (default) / Clear / Set. Absent leaves CONNECT_STR; null clears it to null; a string (including "") sets it.</param>
         /// <param name="description">Optional; null omits it. Absent leaves SFUNC_DESC; a string is stored verbatim. Cannot be cleared to null.</param>
         /// <param name="language">Optional; null omits it. Absent leaves LANGUAGE; a string is stored verbatim. Cannot be cleared to null.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="SetStandardizeFunctionResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, the updated CFG_SFUNC row). No value validation. The row is deleted and re-appended, so it moves to the END of CFG_SFUNC. A missing CFG_SFUNC section is NOT_FOUND.
         /// Wire name: <c>set_standardize_function</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
-        public static ConfigAndJson SetStandardizeFunction(string configJson, string code, FieldUpdate<string> connectStr = default, string? description = null, string? language = null)
+        public static string SetStandardizeFunction(string configJson, string code, FieldUpdate<string> connectStr = default, string? description = null, string? language = null)
         {
             var args = new ArgsWriter();
             args.Str("code", code, nameof(code));
             args.TriStr("connect_str", connectStr);
             args.OptStr("description", description);
             args.OptStr("language", language);
-            return NativeCall.ConfigAndJson("set_standardize_function", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("set_standardize_function", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of SetStandardizeFunction: same arguments and operation, but returns the record instead of the configuration. Operation: Update a standardize function's connect string / description / language.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="code">Uppercased before lookup.</param>
+        /// <param name="connectStr">Tri-state: Leave (default) / Clear / Set. Absent leaves CONNECT_STR; null clears it to null; a string (including "") sets it.</param>
+        /// <param name="description">Optional; null omits it. Absent leaves SFUNC_DESC; a string is stored verbatim. Cannot be cleared to null.</param>
+        /// <param name="language">Optional; null omits it. Absent leaves LANGUAGE; a string is stored verbatim. Cannot be cleared to null.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, the updated CFG_SFUNC row). No value validation. The row is deleted and re-appended, so it moves to the END of CFG_SFUNC. A missing CFG_SFUNC section is NOT_FOUND.
+        /// Wire name: <c>set_standardize_function</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
+        public static string SetStandardizeFunctionResult(string configJson, string code, FieldUpdate<string> connectStr = default, string? description = null, string? language = null)
+        {
+            var args = new ArgsWriter();
+            args.Str("code", code, nameof(code));
+            args.TriStr("connect_str", connectStr);
+            args.OptStr("description", description);
+            args.OptStr("language", language);
+            return NativeCall.ConfigAndJsonResult("set_standardize_function", configJson, args.ToJson());
         }
 
         /// <summary>Clone a generic plan, copying every CFG_GENERIC_THRESHOLD row of the source to the new plan.</summary>
@@ -1885,19 +2447,39 @@ namespace Sz.ConfigTool
         /// <param name="sourceGplanCode">Uppercased, then matched exactly against GPLAN_CODE; unknown = NOT_FOUND.</param>
         /// <param name="newGplanCode">Uppercased before the duplicate check and storage; an existing code = ALREADY_EXISTS.</param>
         /// <param name="newGplanDesc">Optional; null omits it. Stored verbatim in GPLAN_DESC; absent = the uppercased new code.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="CloneGenericPlanResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (modified config, new GPLAN_ID); the record is the integer id. The new id is always max existing GPLAN_ID + 1 (no floor, no id arg). Cloned threshold rows are verbatim copies with GPLAN_ID rewritten, appended after existing rows; an absent CFG_GENERIC_THRESHOLD section is skipped silently. INVALID_CONFIG when the source row's GPLAN_ID is not an integer.
         /// Wire name: <c>clone_generic_plan</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND, ALREADY_EXISTS, INVALID_CONFIG (plus the universal wire errors).</exception>
-        public static ConfigAndJson CloneGenericPlan(string configJson, string sourceGplanCode, string newGplanCode, string? newGplanDesc = null)
+        public static string CloneGenericPlan(string configJson, string sourceGplanCode, string newGplanCode, string? newGplanDesc = null)
         {
             var args = new ArgsWriter();
             args.Str("source_gplan_code", sourceGplanCode, nameof(sourceGplanCode));
             args.Str("new_gplan_code", newGplanCode, nameof(newGplanCode));
             args.OptStr("new_gplan_desc", newGplanDesc);
-            return NativeCall.ConfigAndJson("clone_generic_plan", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("clone_generic_plan", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of CloneGenericPlan: same arguments and operation, but returns the record instead of the configuration. Operation: Clone a generic plan, copying every CFG_GENERIC_THRESHOLD row of the source to the new plan.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="sourceGplanCode">Uppercased, then matched exactly against GPLAN_CODE; unknown = NOT_FOUND.</param>
+        /// <param name="newGplanCode">Uppercased before the duplicate check and storage; an existing code = ALREADY_EXISTS.</param>
+        /// <param name="newGplanDesc">Optional; null omits it. Stored verbatim in GPLAN_DESC; absent = the uppercased new code.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Returns (modified config, new GPLAN_ID); the record is the integer id. The new id is always max existing GPLAN_ID + 1 (no floor, no id arg). Cloned threshold rows are verbatim copies with GPLAN_ID rewritten, appended after existing rows; an absent CFG_GENERIC_THRESHOLD section is skipped silently. INVALID_CONFIG when the source row's GPLAN_ID is not an integer.
+        /// Wire name: <c>clone_generic_plan</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND, ALREADY_EXISTS, INVALID_CONFIG (plus the universal wire errors).</exception>
+        public static string CloneGenericPlanResult(string configJson, string sourceGplanCode, string newGplanCode, string? newGplanDesc = null)
+        {
+            var args = new ArgsWriter();
+            args.Str("source_gplan_code", sourceGplanCode, nameof(sourceGplanCode));
+            args.Str("new_gplan_code", newGplanCode, nameof(newGplanCode));
+            args.OptStr("new_gplan_desc", newGplanDesc);
+            return NativeCall.ConfigAndJsonResult("clone_generic_plan", configJson, args.ToJson());
         }
 
         /// <summary>Delete a generic plan and all of its generic thresholds.</summary>
@@ -1936,38 +2518,74 @@ namespace Sz.ConfigTool
         /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
         /// <param name="gplanCode">Uppercased, then matched exactly against GPLAN_CODE.</param>
         /// <param name="gplanDesc">Written verbatim to GPLAN_DESC.</param>
-        /// <returns>The modified configuration and the named fields PlanId, WasCreated (each as JSON text).</returns>
+        /// <returns>The modified configuration JSON. <see cref="SetGenericPlanResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Returns (config, {plan_id, was_created}). Existing code: only GPLAN_DESC is replaced (other keys kept), was_created false. New code: a row with GPLAN_ID = max + 1 is appended, was_created true; an absent CFG_GPLAN section is MISSING_SECTION on this create path.
         /// Wire name: <c>set_generic_plan</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION (plus the universal wire errors).</exception>
-        public static SetGenericPlanResult SetGenericPlan(string configJson, string gplanCode, string gplanDesc)
+        public static string SetGenericPlan(string configJson, string gplanCode, string gplanDesc)
         {
             var args = new ArgsWriter();
             args.Str("gplan_code", gplanCode, nameof(gplanCode));
             args.Str("gplan_desc", gplanDesc, nameof(gplanDesc));
-            var r = NativeCall.ConfigAndJson("set_generic_plan", configJson, args.ToJson());
-            string[] m = NativeCall.Members(r.Json, "plan_id", "was_created");
-            return new SetGenericPlanResult(r.Config, m[0], m[1]);
+            return NativeCall.ConfigAndJsonConfig("set_generic_plan", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of SetGenericPlan: same arguments and operation, but returns the record instead of the configuration. Operation: Create a generic plan, or update the description of an existing one (upsert).</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="gplanCode">Uppercased, then matched exactly against GPLAN_CODE.</param>
+        /// <param name="gplanDesc">Written verbatim to GPLAN_DESC.</param>
+        /// <returns>The named result fields PlanId, WasCreated (each as JSON text).</returns>
+        /// <remarks>
+        /// Returns (config, {plan_id, was_created}). Existing code: only GPLAN_DESC is replaced (other keys kept), was_created false. New code: a row with GPLAN_ID = max + 1 is appended, was_created true; an absent CFG_GPLAN section is MISSING_SECTION on this create path.
+        /// Wire name: <c>set_generic_plan</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_SECTION (plus the universal wire errors).</exception>
+        public static SetGenericPlanRecord SetGenericPlanResult(string configJson, string gplanCode, string gplanDesc)
+        {
+            var args = new ArgsWriter();
+            args.Str("gplan_code", gplanCode, nameof(gplanCode));
+            args.Str("gplan_desc", gplanDesc, nameof(gplanDesc));
+            var r = NativeCall.ConfigAndJsonResult("set_generic_plan", configJson, args.ToJson());
+            string[] m = NativeCall.Members(r, "plan_id", "was_created");
+            return new SetGenericPlanRecord(m[0], m[1]);
         }
 
         /// <summary>Add an entity resolution rule (CFG_ERRULE row), returning the assigned ERRULE_ID.</summary>
         /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
         /// <param name="id">Requested ERRULE_ID. 0 or any negative value means auto-allocate (max existing + 1, floor 1000, so 1000 on the template). A taken id &gt; 0 is ALREADY_EXISTS. Any ERRULE_ID key inside rule_config is IGNORED.</param>
-        /// <param name="ruleConfig">Raw JSON text. Object with on-disk keys. ERRULE_CODE (string) is required, else MISSING_FIELD; uppercased for storage and the case-insensitive duplicate check (ALREADY_EXISTS). QUAL_ERFRAG_CODE (the fragment) is required: absent/non-string is MISSING_FIELD, "" or an unknown code is NOT_FOUND (existence is case-insensitive). DISQ_ERFRAG_CODE is optional: "" is accepted and stored as "", an unknown code is NOT_FOUND. TRAP: both fragment codes are stored VERBATIM (not uppercased). RESOLVE / RELATE default "No", must be Yes/No case-insensitively (stored title-case) else INVALID_INPUT, and may not both be Yes (INVALID_INPUT). RESOLVE=Yes requires a non-zero ERRULE_TIER (INVALID_INPUT) and forces RTYPE_ID to 1; RELATE=Yes requires RTYPE_ID in 2,3,4 (INVALID_INPUT). RTYPE_ID defaults to 1; ERRULE_TIER defaults to null. A non-string / non-integer value for any of these keys is treated as absent.</param>
-        /// <returns>The modified configuration and the record (JSON text).</returns>
+        /// <param name="ruleConfig">Raw JSON text. Object with on-disk keys. ERRULE_CODE (string) is required, else MISSING_FIELD; uppercased for storage and the case-insensitive duplicate check (ALREADY_EXISTS). QUAL_ERFRAG_CODE (the fragment) is required: absent/non-string is MISSING_FIELD, "" or an unknown code is NOT_FOUND (existence is case-insensitive). DISQ_ERFRAG_CODE is optional: "" is accepted and stored as "", an unknown code is NOT_FOUND. TRAP: both fragment codes are stored VERBATIM (not uppercased). RESOLVE / RELATE default "No", must be Yes/No case-insensitively (stored title-case) else INVALID_INPUT, and may not both be Yes (INVALID_INPUT). RESOLVE=Yes requires a non-zero ERRULE_TIER (INVALID_INPUT) and forces RTYPE_ID to 1; RELATE=Yes requires RTYPE_ID in 2,3,4 (INVALID_INPUT). RTYPE_ID defaults to 1; ERRULE_TIER defaults to null. A non-string / non-integer value for any of these keys is treated as absent. Shape: `{ERRULE_CODE: string, QUAL_ERFRAG_CODE: string, DISQ_ERFRAG_CODE?: string|null, RESOLVE?: string|null, RELATE?: string|null, RTYPE_ID?: int|null, ERRULE_TIER?: int|null, ERRULE_ID?: int|null}`.</param>
+        /// <returns>The modified configuration JSON. <see cref="AddRuleResult"/> (same arguments) returns the record this operation produces.</returns>
         /// <remarks>
         /// Record is the assigned ERRULE_ID (integer). The written row always carries every CFG_ERRULE key (ERRULE_ID, ERRULE_CODE, RESOLVE, RELATE, RTYPE_ID, QUAL_ERFRAG_CODE, DISQ_ERFRAG_CODE, ERRULE_TIER; optional ones as null). ERRULE_CODE is checked BEFORE the config is parsed, so a missing code is MISSING_FIELD even for invalid config JSON. A config without CFG_ERRULE is MISSING_SECTION (after validation). Validation order: fragment, disqualifier, duplicate code, RESOLVE, RELATE, exclusivity, tier, RTYPE_ID.
         /// Wire name: <c>add_rule</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, NOT_FOUND, INVALID_INPUT, MISSING_SECTION (plus the universal wire errors).</exception>
-        public static ConfigAndJson AddRule(string configJson, long id, string ruleConfig)
+        public static string AddRule(string configJson, long id, string ruleConfig)
         {
             var args = new ArgsWriter();
             args.Int("id", id);
             args.Json("rule_config", ruleConfig, nameof(ruleConfig));
-            return NativeCall.ConfigAndJson("add_rule", configJson, args.ToJson());
+            return NativeCall.ConfigAndJsonConfig("add_rule", configJson, args.ToJson());
+        }
+
+        /// <summary>The record (row / ids) of AddRule: same arguments and operation, but returns the record instead of the configuration. Operation: Add an entity resolution rule (CFG_ERRULE row), returning the assigned ERRULE_ID.</summary>
+        /// <param name="configJson">The configuration JSON (opaque; passed byte-exact).</param>
+        /// <param name="id">Requested ERRULE_ID. 0 or any negative value means auto-allocate (max existing + 1, floor 1000, so 1000 on the template). A taken id &gt; 0 is ALREADY_EXISTS. Any ERRULE_ID key inside rule_config is IGNORED.</param>
+        /// <param name="ruleConfig">Raw JSON text. Object with on-disk keys. ERRULE_CODE (string) is required, else MISSING_FIELD; uppercased for storage and the case-insensitive duplicate check (ALREADY_EXISTS). QUAL_ERFRAG_CODE (the fragment) is required: absent/non-string is MISSING_FIELD, "" or an unknown code is NOT_FOUND (existence is case-insensitive). DISQ_ERFRAG_CODE is optional: "" is accepted and stored as "", an unknown code is NOT_FOUND. TRAP: both fragment codes are stored VERBATIM (not uppercased). RESOLVE / RELATE default "No", must be Yes/No case-insensitively (stored title-case) else INVALID_INPUT, and may not both be Yes (INVALID_INPUT). RESOLVE=Yes requires a non-zero ERRULE_TIER (INVALID_INPUT) and forces RTYPE_ID to 1; RELATE=Yes requires RTYPE_ID in 2,3,4 (INVALID_INPUT). RTYPE_ID defaults to 1; ERRULE_TIER defaults to null. A non-string / non-integer value for any of these keys is treated as absent. Shape: `{ERRULE_CODE: string, QUAL_ERFRAG_CODE: string, DISQ_ERFRAG_CODE?: string|null, RESOLVE?: string|null, RELATE?: string|null, RTYPE_ID?: int|null, ERRULE_TIER?: int|null, ERRULE_ID?: int|null}`.</param>
+        /// <returns>The record (e.g. the created row or ids), as JSON text.</returns>
+        /// <remarks>
+        /// Record is the assigned ERRULE_ID (integer). The written row always carries every CFG_ERRULE key (ERRULE_ID, ERRULE_CODE, RESOLVE, RELATE, RTYPE_ID, QUAL_ERFRAG_CODE, DISQ_ERFRAG_CODE, ERRULE_TIER; optional ones as null). ERRULE_CODE is checked BEFORE the config is parsed, so a missing code is MISSING_FIELD even for invalid config JSON. A config without CFG_ERRULE is MISSING_SECTION (after validation). Validation order: fragment, disqualifier, duplicate code, RESOLVE, RELATE, exclusivity, tier, RTYPE_ID.
+        /// Wire name: <c>add_rule</c>.
+        /// </remarks>
+        /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, NOT_FOUND, INVALID_INPUT, MISSING_SECTION (plus the universal wire errors).</exception>
+        public static string AddRuleResult(string configJson, long id, string ruleConfig)
+        {
+            var args = new ArgsWriter();
+            args.Int("id", id);
+            args.Json("rule_config", ruleConfig, nameof(ruleConfig));
+            return NativeCall.ConfigAndJsonResult("add_rule", configJson, args.ToJson());
         }
 
         /// <summary>Delete a rule by code.</summary>
@@ -2049,7 +2667,7 @@ namespace Sz.ConfigTool
         /// <param name="genericPlan">GPLAN_CODE, matched case-insensitively against CFG_GPLAN (NOT_FOUND); stored as GPLAN_ID.</param>
         /// <param name="candidates">Optional; null omits it. Library default when omitted: "Normal". DEFAULT_USED_FOR_CAND; trimmed, case-insensitive, normalized to Normal or Off. Absent or blank = Normal. Anything else is VALIDATION_ERRORS (field "candidates", OUT_OF_DOMAIN).</param>
         /// <param name="description">Optional; null omits it. Library default when omitted: "". SPROFILE_DESC, stored verbatim; absent = "".</param>
-        /// <param name="elements">Optional; null omits it. Raw JSON text. Feature candidate overrides: an array of {"feature": FTYPE_CODE, "flag": Yes|No|Y|N} objects (only those two keys, both strings, else INVALID_INPUT; a missing key = MISSING_FIELD); absent = none. Each feature is resolved case-insensitively against CFG_FTYPE (NOT_FOUND); a feature listed twice is VALIDATION_ERRORS (field "overrides", DUPLICATE); a flag other than Yes/Y/No/N (trimmed, case-insensitive) is VALIDATION_ERRORS (field "overrides", OUT_OF_DOMAIN). Stored in FTYPE_OVERRIDES as "[{&lt;ftypeId&gt;,&lt;Y|N&gt;},...]" sorted by FTYPE_ID, or "[]".</param>
+        /// <param name="elements">Optional; null omits it. Raw JSON text. Feature candidate overrides: an array of {"feature": FTYPE_CODE, "flag": Yes|No|Y|N} objects (only those two keys, both strings, else INVALID_INPUT; a missing key = MISSING_FIELD); absent = none. Each feature is resolved case-insensitively against CFG_FTYPE (NOT_FOUND); a feature listed twice is VALIDATION_ERRORS (field "overrides", DUPLICATE); a flag other than Yes/Y/No/N (trimmed, case-insensitive) is VALIDATION_ERRORS (field "overrides", OUT_OF_DOMAIN). Stored in FTYPE_OVERRIDES as "[{&lt;ftypeId&gt;,&lt;Y|N&gt;},...]" sorted by FTYPE_ID, or "[]". Shape: `[{feature: string, flag: "Yes"|"No"|"Y"|"N"}]`.</param>
         /// <returns>The modified configuration JSON.</returns>
         /// <remarks>
         /// SPROFILE_ID is always auto-allocated (max + 1, floor 1; 3 on the template, whose only profile is SEARCH = 2); no explicit id can be requested. CFG_SPROFILE is created when absent. Validation order: code, candidates, generic plan, overrides (per element: feature, duplicate, flag), duplicate code. A config without G2_CONFIG fails the generic-plan lookup (NOT_FOUND), so the library's MISSING_SECTION branch is unreachable; a non-array CFG_SPROFILE is INVALID_STRUCTURE.
@@ -2430,24 +3048,23 @@ namespace Sz.ConfigTool
         /// Wire name: <c>verify_compatibility_version</c>.
         /// </remarks>
         /// <exception cref="SzConfigToolException">Reason codes: JSON_PARSE, NOT_FOUND (plus the universal wire errors).</exception>
-        public static VerifyCompatibilityVersionResult VerifyCompatibilityVersion(string configJson, string expectedVersion)
+        public static VerifyCompatibilityVersionRecord VerifyCompatibilityVersion(string configJson, string expectedVersion)
         {
             var args = new ArgsWriter();
             args.Str("expected_version", expectedVersion, nameof(expectedVersion));
             var r = NativeCall.Json("verify_compatibility_version", configJson, args.ToJson());
             string[] m = NativeCall.Members(r, "current_version", "matches");
-            return new VerifyCompatibilityVersionResult(m[0], m[1]);
+            return new VerifyCompatibilityVersionRecord(m[0], m[1]);
         }
     }
 
-    /// <summary>Named result of <see cref="SzConfigTool.SetGenericPlan"/>; each field is the record member's JSON text (e.g. <c>1001</c>, <c>true</c>, <c>"4.0.0"</c>).</summary>
-    /// <param name="Config">The modified configuration JSON (opaque, byte-exact).</param>
+    /// <summary>Named result of <see cref="SzConfigTool.SetGenericPlanResult"/>; each field is the record member's JSON text (e.g. <c>1001</c>, <c>true</c>, <c>"4.0.0"</c>).</summary>
     /// <param name="PlanId">The <c>plan_id</c> value, as JSON text.</param>
     /// <param name="WasCreated">The <c>was_created</c> value, as JSON text.</param>
-    public sealed record SetGenericPlanResult(string Config, string PlanId, string WasCreated);
+    public sealed record SetGenericPlanRecord(string PlanId, string WasCreated);
 
     /// <summary>Named result of <see cref="SzConfigTool.VerifyCompatibilityVersion"/>; each field is the record member's JSON text (e.g. <c>1001</c>, <c>true</c>, <c>"4.0.0"</c>).</summary>
     /// <param name="CurrentVersion">The <c>current_version</c> value, as JSON text.</param>
     /// <param name="Matches">The <c>matches</c> value, as JSON text.</param>
-    public sealed record VerifyCompatibilityVersionResult(string CurrentVersion, string Matches);
+    public sealed record VerifyCompatibilityVersionRecord(string CurrentVersion, string Matches);
 }

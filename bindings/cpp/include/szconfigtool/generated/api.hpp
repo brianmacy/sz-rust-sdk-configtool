@@ -36,9 +36,9 @@ struct AddAttributeOptions {
 /// @param element Wire arg `element` (str). Must name an existing CFG_FELEM (case-insensitive) or NOT_FOUND; stored uppercased in FELEM_CODE.
 /// @param class_ Wire arg `class` (str). CASE-SENSITIVE (not uppercased): must be exactly one of NAME, ATTRIBUTE, IDENTIFIER, ADDRESS, PHONE, RELATIONSHIP, OTHER, else INVALID_INPUT.
 /// @param options Optional arguments (see AddAttributeOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. AddAttributeResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, INVALID_INPUT, NOT_FOUND.
-[[nodiscard]] inline ConfigAndJson AddAttribute(const std::string& config_json, std::string_view attribute, std::string_view feature, std::string_view element, std::string_view class_, const AddAttributeOptions& options = {}) {
+[[nodiscard]] inline std::string AddAttribute(const std::string& config_json, std::string_view attribute, std::string_view feature, std::string_view element, std::string_view class_, const AddAttributeOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Str("attribute", attribute);
     sz_args.Str("feature", feature);
@@ -57,7 +57,41 @@ struct AddAttributeOptions {
         sz_args.Int("id", *options.id);
     }
     auto sz_env = detail::Call("add_attribute", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of AddAttribute(): same arguments and operation, but returns the record instead of the configuration. Operation: Add an attribute (CFG_ATTR row) mapping an input attribute to a feature element.
+///
+/// Returns (modified config, the new CFG_ATTR row). Validation order: class, duplicate attribute, feature, element, required, internal, id. Does not create a CFG_FBOM row.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param attribute Wire arg `attribute` (str). Uppercased before storage and duplicate check.
+/// @param feature Wire arg `feature` (str). Must name an existing CFG_FTYPE (case-insensitive) or NOT_FOUND; stored uppercased in FTYPE_CODE.
+/// @param element Wire arg `element` (str). Must name an existing CFG_FELEM (case-insensitive) or NOT_FOUND; stored uppercased in FELEM_CODE.
+/// @param class_ Wire arg `class` (str). CASE-SENSITIVE (not uppercased): must be exactly one of NAME, ATTRIBUTE, IDENTIFIER, ADDRESS, PHONE, RELATIONSHIP, OTHER, else INVALID_INPUT.
+/// @param options Optional arguments (see AddAttributeOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, INVALID_INPUT, NOT_FOUND.
+[[nodiscard]] inline std::string AddAttributeResult(const std::string& config_json, std::string_view attribute, std::string_view feature, std::string_view element, std::string_view class_, const AddAttributeOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("attribute", attribute);
+    sz_args.Str("feature", feature);
+    sz_args.Str("element", element);
+    sz_args.Str("class", class_);
+    if (options.default_value) {
+        sz_args.Str("default_value", *options.default_value);
+    }
+    if (options.internal) {
+        sz_args.Str("internal", *options.internal);
+    }
+    if (options.required) {
+        sz_args.Str("required", *options.required);
+    }
+    if (options.id) {
+        sz_args.Int("id", *options.id);
+    }
+    auto sz_env = detail::Call("add_attribute", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Delete an attribute by code.
@@ -232,9 +266,9 @@ struct AddComparisonCallOptions {
 /// @param cfunc_code Wire arg `cfunc_code` (str). Comparison function code; case-insensitive lookup in CFG_CFUNC, else NOT_FOUND.
 /// @param element_list Wire arg `element_list` (str_list). Element codes, each a case-insensitive GLOBAL CFG_FELEM lookup (the element need NOT be in the feature's CFG_FBOM), else NOT_FOUND. Empty list or a blank/whitespace-only item is INVALID_INPUT. One CFG_CFBOM row is written per item with FTYPE_ID = the call's feature and EXEC_ORDER = 1-based list position (outside the exec-order allocation policy). Duplicate items are not rejected.
 /// @param options Optional arguments (see AddComparisonCallOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. AddComparisonCallResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, NOT_FOUND, ALREADY_PRESENT, INVALID_INPUT.
-[[nodiscard]] inline ConfigAndJson AddComparisonCall(const std::string& config_json, std::string_view ftype_code, std::string_view cfunc_code, const std::vector<std::string>& element_list, const AddComparisonCallOptions& options = {}) {
+[[nodiscard]] inline std::string AddComparisonCall(const std::string& config_json, std::string_view ftype_code, std::string_view cfunc_code, const std::vector<std::string>& element_list, const AddComparisonCallOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Str("ftype_code", ftype_code);
     sz_args.Str("cfunc_code", cfunc_code);
@@ -243,7 +277,30 @@ struct AddComparisonCallOptions {
         sz_args.Int("id", *options.id);
     }
     auto sz_env = detail::Call("add_comparison_call", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of AddComparisonCall(): same arguments and operation, but returns the record instead of the configuration. Operation: Add a comparison call (CFG_CFCALL row) binding a comparison function to a feature, with its element list (CFG_CFBOM rows).
+///
+/// Returns (modified config, the new CFG_CFCALL row {CFCALL_ID, FTYPE_ID, CFUNC_ID}). Validation order: id (MISSING_SECTION if CFG_CFCALL is absent or not an array; ALREADY_EXISTS if taken), feature, one-call-per-feature (ALREADY_PRESENT), function, empty list, then per item blank check and element lookup; MISSING_SECTION if CFG_CFBOM is absent. The function's applicability to the feature is not checked.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param ftype_code Wire arg `ftype_code` (str). Feature code; case-insensitive lookup in CFG_FTYPE, else NOT_FOUND. Only one comparison call per feature: if any CFG_CFCALL row already has this FTYPE_ID the call fails with ALREADY_PRESENT.
+/// @param cfunc_code Wire arg `cfunc_code` (str). Comparison function code; case-insensitive lookup in CFG_CFUNC, else NOT_FOUND.
+/// @param element_list Wire arg `element_list` (str_list). Element codes, each a case-insensitive GLOBAL CFG_FELEM lookup (the element need NOT be in the feature's CFG_FBOM), else NOT_FOUND. Empty list or a blank/whitespace-only item is INVALID_INPUT. One CFG_CFBOM row is written per item with FTYPE_ID = the call's feature and EXEC_ORDER = 1-based list position (outside the exec-order allocation policy). Duplicate items are not rejected.
+/// @param options Optional arguments (see AddComparisonCallOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, NOT_FOUND, ALREADY_PRESENT, INVALID_INPUT.
+[[nodiscard]] inline std::string AddComparisonCallResult(const std::string& config_json, std::string_view ftype_code, std::string_view cfunc_code, const std::vector<std::string>& element_list, const AddComparisonCallOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("ftype_code", ftype_code);
+    sz_args.Str("cfunc_code", cfunc_code);
+    sz_args.StrList("element_list", element_list);
+    if (options.id) {
+        sz_args.Int("id", *options.id);
+    }
+    auto sz_env = detail::Call("add_comparison_call", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Delete a comparison call by CFCALL_ID, cascading to its CFG_CFBOM rows.
@@ -319,9 +376,9 @@ struct AddComparisonCallElementOptions {
 /// @param ftype_id Wire arg `ftype_id` (int). The ELEMENT's feature id written to the BOM row's FTYPE_ID. Negative is INVALID_INPUT; otherwise NOT validated against CFG_FTYPE.
 /// @param felem_id Wire arg `felem_id` (int). FELEM_ID written verbatim. NOT validated against CFG_FELEM or CFG_FBOM.
 /// @param options Optional arguments (see AddComparisonCallElementOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. AddComparisonCallElementResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION.
-[[nodiscard]] inline ConfigAndJson AddComparisonCallElement(const std::string& config_json, std::int64_t cfcall_id, std::int64_t ftype_id, std::int64_t felem_id, const AddComparisonCallElementOptions& options = {}) {
+[[nodiscard]] inline std::string AddComparisonCallElement(const std::string& config_json, std::int64_t cfcall_id, std::int64_t ftype_id, std::int64_t felem_id, const AddComparisonCallElementOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Int("cfcall_id", cfcall_id);
     sz_args.Int("ftype_id", ftype_id);
@@ -330,7 +387,30 @@ struct AddComparisonCallElementOptions {
         sz_args.Int("exec_order", *options.exec_order);
     }
     auto sz_env = detail::Call("add_comparison_call_element", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of AddComparisonCallElement(): same arguments and operation, but returns the record instead of the configuration. Operation: Add one element (CFG_CFBOM row) to a comparison call, addressed by raw ids.
+///
+/// Returns (modified config, the new CFG_CFBOM row {CFCALL_ID, FTYPE_ID, FELEM_ID, EXEC_ORDER}). Duplicate identity is (CFCALL_ID, FTYPE_ID, FELEM_ID) regardless of EXEC_ORDER -\> ALREADY_PRESENT. Order of checks: ftype_id \< 0, duplicate, exec_order, then MISSING_SECTION if CFG_CFBOM is absent. The same FELEM_ID may be added under a different ftype_id, which makes a later feature-less delete_comparison_call_element ambiguous.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param cfcall_id Wire arg `cfcall_id` (int). CFCALL_ID written verbatim. NOT validated — the call need not exist.
+/// @param ftype_id Wire arg `ftype_id` (int). The ELEMENT's feature id written to the BOM row's FTYPE_ID. Negative is INVALID_INPUT; otherwise NOT validated against CFG_FTYPE.
+/// @param felem_id Wire arg `felem_id` (int). FELEM_ID written verbatim. NOT validated against CFG_FELEM or CFG_FBOM.
+/// @param options Optional arguments (see AddComparisonCallElementOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION.
+[[nodiscard]] inline std::string AddComparisonCallElementResult(const std::string& config_json, std::int64_t cfcall_id, std::int64_t ftype_id, std::int64_t felem_id, const AddComparisonCallElementOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Int("cfcall_id", cfcall_id);
+    sz_args.Int("ftype_id", ftype_id);
+    sz_args.Int("felem_id", felem_id);
+    if (options.exec_order) {
+        sz_args.Int("exec_order", *options.exec_order);
+    }
+    auto sz_env = detail::Call("add_comparison_call_element", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// Optional arguments of DeleteComparisonCallElement(); omitted fields are not sent.
@@ -389,15 +469,34 @@ struct DeleteComparisonCallElementOptions {
 /// @param ftype_code Wire arg `ftype_code` (str). Feature code; case-insensitive lookup in CFG_FTYPE, else NOT_FOUND. Only one distinct call per feature: if any CFG_DFCALL row already has this FTYPE_ID the call fails with ALREADY_PRESENT.
 /// @param dfunc_code Wire arg `dfunc_code` (str). Distinct function code; case-insensitive lookup in CFG_DFUNC, else NOT_FOUND.
 /// @param element_list Wire arg `element_list` (str_list). Element codes, each a case-insensitive GLOBAL CFG_FELEM lookup (the element need NOT be in the feature's CFG_FBOM), else NOT_FOUND. Empty list or a blank/whitespace-only item is INVALID_INPUT (checked before anything else). One CFG_DFBOM row is written per item with FTYPE_ID = the call's feature and EXEC_ORDER = 1-based list position. Duplicate items are not rejected.
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. AddDistinctCallResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, INVALID_INPUT, MISSING_SECTION, NOT_FOUND, ALREADY_PRESENT.
-[[nodiscard]] inline ConfigAndJson AddDistinctCall(const std::string& config_json, std::string_view ftype_code, std::string_view dfunc_code, const std::vector<std::string>& element_list) {
+[[nodiscard]] inline std::string AddDistinctCall(const std::string& config_json, std::string_view ftype_code, std::string_view dfunc_code, const std::vector<std::string>& element_list) {
     detail::ArgsWriter sz_args;
     sz_args.Str("ftype_code", ftype_code);
     sz_args.Str("dfunc_code", dfunc_code);
     sz_args.StrList("element_list", element_list);
     auto sz_env = detail::Call("add_distinct_call", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of AddDistinctCall(): same arguments and operation, but returns the record instead of the configuration. Operation: Add a distinct call (CFG_DFCALL row) binding a distinct function to a feature, with its element list (CFG_DFBOM rows).
+///
+/// Returns (modified config, the new CFG_DFCALL row {DFCALL_ID, FTYPE_ID, DFUNC_ID} — no EXEC_ORDER). DFCALL_ID is ALWAYS auto-allocated (max existing + 1, floor 1000): unlike add_comparison_call there is no `id` parameter. Validation order: empty list / blank item, id (MISSING_SECTION if G2_CONFIG.CFG_DFCALL is absent), feature, one-call-per-feature (ALREADY_PRESENT), function, element lookups; MISSING_SECTION if CFG_DFCALL is not an array or CFG_DFBOM is absent.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param ftype_code Wire arg `ftype_code` (str). Feature code; case-insensitive lookup in CFG_FTYPE, else NOT_FOUND. Only one distinct call per feature: if any CFG_DFCALL row already has this FTYPE_ID the call fails with ALREADY_PRESENT.
+/// @param dfunc_code Wire arg `dfunc_code` (str). Distinct function code; case-insensitive lookup in CFG_DFUNC, else NOT_FOUND.
+/// @param element_list Wire arg `element_list` (str_list). Element codes, each a case-insensitive GLOBAL CFG_FELEM lookup (the element need NOT be in the feature's CFG_FBOM), else NOT_FOUND. Empty list or a blank/whitespace-only item is INVALID_INPUT (checked before anything else). One CFG_DFBOM row is written per item with FTYPE_ID = the call's feature and EXEC_ORDER = 1-based list position. Duplicate items are not rejected.
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, INVALID_INPUT, MISSING_SECTION, NOT_FOUND, ALREADY_PRESENT.
+[[nodiscard]] inline std::string AddDistinctCallResult(const std::string& config_json, std::string_view ftype_code, std::string_view dfunc_code, const std::vector<std::string>& element_list) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("ftype_code", ftype_code);
+    sz_args.Str("dfunc_code", dfunc_code);
+    sz_args.StrList("element_list", element_list);
+    auto sz_env = detail::Call("add_distinct_call", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Delete a distinct call by DFCALL_ID, cascading to its CFG_DFBOM rows.
@@ -473,9 +572,9 @@ struct AddDistinctCallElementOptions {
 /// @param ftype_id Wire arg `ftype_id` (int). The ELEMENT's feature id written to the BOM row's FTYPE_ID. NOT validated at all — unlike add_comparison_call_element, a negative id is accepted and stored.
 /// @param felem_id Wire arg `felem_id` (int). FELEM_ID written verbatim. NOT validated against CFG_FELEM or CFG_FBOM.
 /// @param options Optional arguments (see AddDistinctCallElementOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. AddDistinctCallElementResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION.
-[[nodiscard]] inline ConfigAndJson AddDistinctCallElement(const std::string& config_json, std::int64_t dfcall_id, std::int64_t ftype_id, std::int64_t felem_id, const AddDistinctCallElementOptions& options = {}) {
+[[nodiscard]] inline std::string AddDistinctCallElement(const std::string& config_json, std::int64_t dfcall_id, std::int64_t ftype_id, std::int64_t felem_id, const AddDistinctCallElementOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Int("dfcall_id", dfcall_id);
     sz_args.Int("ftype_id", ftype_id);
@@ -484,7 +583,30 @@ struct AddDistinctCallElementOptions {
         sz_args.Int("exec_order", *options.exec_order);
     }
     auto sz_env = detail::Call("add_distinct_call_element", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of AddDistinctCallElement(): same arguments and operation, but returns the record instead of the configuration. Operation: Add one element (CFG_DFBOM row) to a distinct call, addressed by raw ids.
+///
+/// Returns (modified config, the new CFG_DFBOM row {DFCALL_ID, FTYPE_ID, FELEM_ID, EXEC_ORDER}). Duplicate identity is (DFCALL_ID, FTYPE_ID, FELEM_ID) regardless of EXEC_ORDER -\> ALREADY_PRESENT. Order of checks: duplicate, exec_order, then MISSING_SECTION if CFG_DFBOM is absent.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param dfcall_id Wire arg `dfcall_id` (int). DFCALL_ID written verbatim. NOT validated — the call need not exist.
+/// @param ftype_id Wire arg `ftype_id` (int). The ELEMENT's feature id written to the BOM row's FTYPE_ID. NOT validated at all — unlike add_comparison_call_element, a negative id is accepted and stored.
+/// @param felem_id Wire arg `felem_id` (int). FELEM_ID written verbatim. NOT validated against CFG_FELEM or CFG_FBOM.
+/// @param options Optional arguments (see AddDistinctCallElementOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION.
+[[nodiscard]] inline std::string AddDistinctCallElementResult(const std::string& config_json, std::int64_t dfcall_id, std::int64_t ftype_id, std::int64_t felem_id, const AddDistinctCallElementOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Int("dfcall_id", dfcall_id);
+    sz_args.Int("ftype_id", ftype_id);
+    sz_args.Int("felem_id", felem_id);
+    if (options.exec_order) {
+        sz_args.Int("exec_order", *options.exec_order);
+    }
+    auto sz_env = detail::Call("add_distinct_call_element", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// Optional arguments of DeleteDistinctCallElement(); omitted fields are not sent.
@@ -553,12 +675,12 @@ struct AddExpressionCallOptions {
 ///
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param efunc_code Wire arg `efunc_code` (str). Expression function code (CFG_EFUNC, case-insensitive) or NOT_FOUND.
-/// @param element_list Wire arg `element_list` (json). JSON array of {"element": str, "required": str, "feature"?: str} objects (unknown keys, non-objects, non-string values = INVALID_INPUT; missing element/required = MISSING_FIELD). One CFG_EFBOM row per item, EXEC_ORDER = 1-based list position. element: global CFG_FELEM lookup (case-insensitive) or NOT_FOUND. required: stored verbatim in FELEM_REQ (not validated or normalized). feature: absent stores BOM FTYPE_ID -1 (G2 WILDCARDED_FTYPE: any feature in the record carrying the element); "PARENT" (case-insensitive) stores BOM FTYPE_ID 0 (G2 PARENT_FEATURE_LINKED_FTYPE: the feature that triggered the call); otherwise a feature code (case-insensitive) or NOT_FOUND. The element is NOT checked for membership in that feature. [] is allowed.
+/// @param element_list Wire arg `element_list` (json). JSON array of {"element": str, "required": str, "feature"?: str} objects (unknown keys, non-objects, non-string values = INVALID_INPUT; missing element/required = MISSING_FIELD). One CFG_EFBOM row per item, EXEC_ORDER = 1-based list position. element: global CFG_FELEM lookup (case-insensitive) or NOT_FOUND. required: stored verbatim in FELEM_REQ (not validated or normalized). feature: absent stores BOM FTYPE_ID -1 (G2 WILDCARDED_FTYPE: any feature in the record carrying the element); "PARENT" (case-insensitive) stores BOM FTYPE_ID 0 (G2 PARENT_FEATURE_LINKED_FTYPE: the feature that triggered the call); otherwise a feature code (case-insensitive) or NOT_FOUND. The element is NOT checked for membership in that feature. [] is allowed. Shape: `[{element: string, required: string, feature?: string}]`.
 /// @param is_virtual Wire arg `is_virtual` (str). Stored verbatim in IS_VIRTUAL (not validated or normalized; the Rust `new()` default is "No").
 /// @param options Optional arguments (see AddExpressionCallOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. AddExpressionCallResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS, MISSING_FIELD.
-[[nodiscard]] inline ConfigAndJson AddExpressionCall(const std::string& config_json, std::string_view efunc_code, std::string_view element_list, std::string_view is_virtual, const AddExpressionCallOptions& options = {}) {
+[[nodiscard]] inline std::string AddExpressionCall(const std::string& config_json, std::string_view efunc_code, std::string_view element_list, std::string_view is_virtual, const AddExpressionCallOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Str("efunc_code", efunc_code);
     sz_args.Json("element_list", element_list);
@@ -576,7 +698,39 @@ struct AddExpressionCallOptions {
     }
     sz_args.Str("is_virtual", is_virtual);
     auto sz_env = detail::Call("add_expression_call", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of AddExpressionCall(): same arguments and operation, but returns the record instead of the configuration. Operation: Add an expression call (CFG_EFCALL row) plus its element list (CFG_EFBOM rows).
+///
+/// Returns (modified config, the new CFG_EFCALL row {EFCALL_ID, FTYPE_ID, FELEM_ID, EFUNC_ID, EXEC_ORDER, EFEAT_FTYPE_ID, IS_VIRTUAL}); the created CFG_EFBOM rows are NOT in the record (see list_expression_calls). EFCALL_ID is auto-allocated (max + 1, floor 1000). Check order: EFCALL_ID allocation (MISSING_SECTION if CFG_EFCALL absent), efunc, feature, element, exactly-one rule, exec order, expression_feature, element list, then MISSING_SECTION if CFG_EFBOM absent. BOM FTYPE_ID sentinels (G2 EFBomConfig.cpp): 0 = parent feature link, -1 = any feature. The BOM-feature column is not rendered by get/list_expression_calls; read raw rows with get_config_section("CFG_EFBOM").
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param efunc_code Wire arg `efunc_code` (str). Expression function code (CFG_EFUNC, case-insensitive) or NOT_FOUND.
+/// @param element_list Wire arg `element_list` (json). JSON array of {"element": str, "required": str, "feature"?: str} objects (unknown keys, non-objects, non-string values = INVALID_INPUT; missing element/required = MISSING_FIELD). One CFG_EFBOM row per item, EXEC_ORDER = 1-based list position. element: global CFG_FELEM lookup (case-insensitive) or NOT_FOUND. required: stored verbatim in FELEM_REQ (not validated or normalized). feature: absent stores BOM FTYPE_ID -1 (G2 WILDCARDED_FTYPE: any feature in the record carrying the element); "PARENT" (case-insensitive) stores BOM FTYPE_ID 0 (G2 PARENT_FEATURE_LINKED_FTYPE: the feature that triggered the call); otherwise a feature code (case-insensitive) or NOT_FOUND. The element is NOT checked for membership in that feature. [] is allowed. Shape: `[{element: string, required: string, feature?: string}]`.
+/// @param is_virtual Wire arg `is_virtual` (str). Stored verbatim in IS_VIRTUAL (not validated or normalized; the Rust `new()` default is "No").
+/// @param options Optional arguments (see AddExpressionCallOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS, MISSING_FIELD.
+[[nodiscard]] inline std::string AddExpressionCallResult(const std::string& config_json, std::string_view efunc_code, std::string_view element_list, std::string_view is_virtual, const AddExpressionCallOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("efunc_code", efunc_code);
+    sz_args.Json("element_list", element_list);
+    if (options.ftype_code) {
+        sz_args.Str("ftype_code", *options.ftype_code);
+    }
+    if (options.felem_code) {
+        sz_args.Str("felem_code", *options.felem_code);
+    }
+    if (options.exec_order) {
+        sz_args.Int("exec_order", *options.exec_order);
+    }
+    if (options.expression_feature) {
+        sz_args.Str("expression_feature", *options.expression_feature);
+    }
+    sz_args.Str("is_virtual", is_virtual);
+    auto sz_env = detail::Call("add_expression_call", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Delete an expression call by EFCALL_ID, cascading its CFG_EFBOM rows.
@@ -653,9 +807,9 @@ struct AddExpressionCallElementOptions {
 /// @param felem_id Wire arg `felem_id` (int). Stored verbatim as FELEM_ID. NOT validated against CFG_FELEM.
 /// @param felem_req Wire arg `felem_req` (str). Stored verbatim in FELEM_REQ (not validated or normalized).
 /// @param options Optional arguments (see AddExpressionCallElementOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. AddExpressionCallElementResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION.
-[[nodiscard]] inline ConfigAndJson AddExpressionCallElement(const std::string& config_json, std::int64_t efcall_id, std::int64_t ftype_id, std::int64_t felem_id, std::string_view felem_req, const AddExpressionCallElementOptions& options = {}) {
+[[nodiscard]] inline std::string AddExpressionCallElement(const std::string& config_json, std::int64_t efcall_id, std::int64_t ftype_id, std::int64_t felem_id, std::string_view felem_req, const AddExpressionCallElementOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Int("efcall_id", efcall_id);
     sz_args.Int("ftype_id", ftype_id);
@@ -665,7 +819,32 @@ struct AddExpressionCallElementOptions {
     }
     sz_args.Str("felem_req", felem_req);
     auto sz_env = detail::Call("add_expression_call_element", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of AddExpressionCallElement(): same arguments and operation, but returns the record instead of the configuration. Operation: Add one CFG_EFBOM row to an expression call, addressed by raw ids.
+///
+/// Returns (modified config, the new CFG_EFBOM row {EFCALL_ID, FTYPE_ID, FELEM_ID, EXEC_ORDER, FELEM_REQ}). Check order: ftype_id \< 0, ALREADY_PRESENT when (EFCALL_ID, FTYPE_ID, FELEM_ID) already exists (EXEC_ORDER ignored), exec order, then MISSING_SECTION if CFG_EFBOM is absent.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param efcall_id Wire arg `efcall_id` (int). Stored as EFCALL_ID. NOT validated — the call need not exist.
+/// @param ftype_id Wire arg `ftype_id` (int). The ELEMENT's feature id, stored verbatim as BOM FTYPE_ID. \< 0 = INVALID_INPUT; 0 is accepted and is the G2 parent feature link (same as add_expression_call's feature "PARENT"); -1 (any feature) is not addable here; NOT validated against CFG_FTYPE.
+/// @param felem_id Wire arg `felem_id` (int). Stored verbatim as FELEM_ID. NOT validated against CFG_FELEM.
+/// @param felem_req Wire arg `felem_req` (str). Stored verbatim in FELEM_REQ (not validated or normalized).
+/// @param options Optional arguments (see AddExpressionCallElementOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION.
+[[nodiscard]] inline std::string AddExpressionCallElementResult(const std::string& config_json, std::int64_t efcall_id, std::int64_t ftype_id, std::int64_t felem_id, std::string_view felem_req, const AddExpressionCallElementOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Int("efcall_id", efcall_id);
+    sz_args.Int("ftype_id", ftype_id);
+    sz_args.Int("felem_id", felem_id);
+    if (options.exec_order) {
+        sz_args.Int("exec_order", *options.exec_order);
+    }
+    sz_args.Str("felem_req", felem_req);
+    auto sz_env = detail::Call("add_expression_call_element", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// Optional arguments of DeleteExpressionCallElement(); omitted fields are not sent.
@@ -733,9 +912,9 @@ struct AddStandardizeCallOptions {
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param sfunc_code Wire arg `sfunc_code` (str). Standardize function code (CFG_SFUNC, case-insensitive) or NOT_FOUND. Looked up before the feature/element.
 /// @param options Optional arguments (see AddStandardizeCallOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. AddStandardizeCallResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS.
-[[nodiscard]] inline ConfigAndJson AddStandardizeCall(const std::string& config_json, std::string_view sfunc_code, const AddStandardizeCallOptions& options = {}) {
+[[nodiscard]] inline std::string AddStandardizeCall(const std::string& config_json, std::string_view sfunc_code, const AddStandardizeCallOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Str("sfunc_code", sfunc_code);
     if (options.ftype_code) {
@@ -748,7 +927,32 @@ struct AddStandardizeCallOptions {
         sz_args.Int("exec_order", *options.exec_order);
     }
     auto sz_env = detail::Call("add_standardize_call", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of AddStandardizeCall(): same arguments and operation, but returns the record instead of the configuration. Operation: Add a standardize call (CFG_SFCALL row) binding a standardize function to a feature or an element.
+///
+/// Returns (modified config, the new CFG_SFCALL row {SFCALL_ID, FTYPE_ID, FELEM_ID, SFUNC_ID, EXEC_ORDER}). SFCALL_ID is always auto-allocated (max + 1, floor 1000). MISSING_SECTION when CFG_SFCALL is absent. Check order: SFCALL_ID allocation, sfunc, feature, element, exactly-one rule, exec order. TRAP: the exec-order scope does not include SFUNC_ID, so a second call on the same feature continues that feature's order sequence.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param sfunc_code Wire arg `sfunc_code` (str). Standardize function code (CFG_SFUNC, case-insensitive) or NOT_FOUND. Looked up before the feature/element.
+/// @param options Optional arguments (see AddStandardizeCallOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS.
+[[nodiscard]] inline std::string AddStandardizeCallResult(const std::string& config_json, std::string_view sfunc_code, const AddStandardizeCallOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("sfunc_code", sfunc_code);
+    if (options.ftype_code) {
+        sz_args.Str("ftype_code", *options.ftype_code);
+    }
+    if (options.felem_code) {
+        sz_args.Str("felem_code", *options.felem_code);
+    }
+    if (options.exec_order) {
+        sz_args.Int("exec_order", *options.exec_order);
+    }
+    auto sz_env = detail::Call("add_standardize_call", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Delete a standardize call by SFCALL_ID.
@@ -825,9 +1029,9 @@ struct AddStandardizeCallElementOptions {
 /// @param ftype_id Wire arg `ftype_id` (int). Stored verbatim as FTYPE_ID. NOT validated against CFG_FTYPE (use -1 for an element-bound row).
 /// @param sfunc_id Wire arg `sfunc_id` (int). Stored verbatim as SFUNC_ID. NOT validated against CFG_SFUNC.
 /// @param options Optional arguments (see AddStandardizeCallElementOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. AddStandardizeCallElementResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_PRESENT, ALREADY_EXISTS.
-[[nodiscard]] inline ConfigAndJson AddStandardizeCallElement(const std::string& config_json, std::int64_t ftype_id, std::int64_t sfunc_id, const AddStandardizeCallElementOptions& options = {}) {
+[[nodiscard]] inline std::string AddStandardizeCallElement(const std::string& config_json, std::int64_t ftype_id, std::int64_t sfunc_id, const AddStandardizeCallElementOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Int("ftype_id", ftype_id);
     sz_args.Int("sfunc_id", sfunc_id);
@@ -838,7 +1042,31 @@ struct AddStandardizeCallElementOptions {
         sz_args.Int("exec_order", *options.exec_order);
     }
     auto sz_env = detail::Call("add_standardize_call_element", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of AddStandardizeCallElement(): same arguments and operation, but returns the record instead of the configuration. Operation: Add a CFG_SFCALL row addressed by raw ids (FTYPE_ID, SFUNC_ID, FELEM_ID).
+///
+/// Returns (modified config, the new CFG_SFCALL row). ALREADY_PRESENT when a row with the same (FTYPE_ID, SFUNC_ID, FELEM_ID) exists (checked first). SFCALL_ID auto-allocated (max + 1, floor 1000); MISSING_SECTION when CFG_SFCALL is absent. Unlike add_standardize_call there is no feature-xor-element rule and no id validation.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param ftype_id Wire arg `ftype_id` (int). Stored verbatim as FTYPE_ID. NOT validated against CFG_FTYPE (use -1 for an element-bound row).
+/// @param sfunc_id Wire arg `sfunc_id` (int). Stored verbatim as SFUNC_ID. NOT validated against CFG_SFUNC.
+/// @param options Optional arguments (see AddStandardizeCallElementOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_PRESENT, ALREADY_EXISTS.
+[[nodiscard]] inline std::string AddStandardizeCallElementResult(const std::string& config_json, std::int64_t ftype_id, std::int64_t sfunc_id, const AddStandardizeCallElementOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Int("ftype_id", ftype_id);
+    sz_args.Int("sfunc_id", sfunc_id);
+    if (options.felem_id) {
+        sz_args.Int("felem_id", *options.felem_id);
+    }
+    if (options.exec_order) {
+        sz_args.Int("exec_order", *options.exec_order);
+    }
+    auto sz_env = detail::Call("add_standardize_call_element", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// Optional arguments of DeleteStandardizeCallElement(); omitted fields are not sent.
@@ -958,14 +1186,31 @@ struct GetConfigSectionOptions {
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param section_name Wire arg `section_name` (str). Uppercased before lookup. Must name an ARRAY section, else NOT_FOUND.
 /// @param field_name Wire arg `field_name` (str). Uppercased before removal (a lowercase key in a row can never be removed).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. RemoveConfigSectionFieldResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
-[[nodiscard]] inline ConfigAndJson RemoveConfigSectionField(const std::string& config_json, std::string_view section_name, std::string_view field_name) {
+[[nodiscard]] inline std::string RemoveConfigSectionField(const std::string& config_json, std::string_view section_name, std::string_view field_name) {
     detail::ArgsWriter sz_args;
     sz_args.Str("section_name", section_name);
     sz_args.Str("field_name", field_name);
     auto sz_env = detail::Call("remove_config_section_field", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of RemoveConfigSectionField(): same arguments and operation, but returns the record instead of the configuration. Operation: Remove a field from every item of an array section, returning how many items had it.
+///
+/// Record is the integer count of items the field was removed from (0 when no item had it; the config is still returned). Non-object items are skipped. A config with no G2_CONFIG key succeeds unchanged with count 0.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param section_name Wire arg `section_name` (str). Uppercased before lookup. Must name an ARRAY section, else NOT_FOUND.
+/// @param field_name Wire arg `field_name` (str). Uppercased before removal (a lowercase key in a row can never be removed).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
+[[nodiscard]] inline std::string RemoveConfigSectionFieldResult(const std::string& config_json, std::string_view section_name, std::string_view field_name) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("section_name", section_name);
+    sz_args.Str("field_name", field_name);
+    auto sz_env = detail::Call("remove_config_section_field", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Add a field to every item of an array section that lacks it, returning existed/updated counts.
@@ -976,15 +1221,34 @@ struct GetConfigSectionOptions {
 /// @param section_name Wire arg `section_name` (str). Uppercased before lookup. Must name an ARRAY section, else NOT_FOUND.
 /// @param field_name Wire arg `field_name` (str). Uppercased before insertion.
 /// @param field_value Wire arg `field_value` (json). Any JSON value, stored verbatim (cloned) into each item that lacks the field.
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. AddConfigSectionFieldResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
-[[nodiscard]] inline ConfigAndJson AddConfigSectionField(const std::string& config_json, std::string_view section_name, std::string_view field_name, std::string_view field_value) {
+[[nodiscard]] inline std::string AddConfigSectionField(const std::string& config_json, std::string_view section_name, std::string_view field_name, std::string_view field_value) {
     detail::ArgsWriter sz_args;
     sz_args.Str("section_name", section_name);
     sz_args.Str("field_name", field_name);
     sz_args.Json("field_value", field_value);
     auto sz_env = detail::Call("add_config_section_field", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of AddConfigSectionField(): same arguments and operation, but returns the record instead of the configuration. Operation: Add a field to every item of an array section that lacks it, returning existed/updated counts.
+///
+/// Record is {"existed": n, "updated": n}: items that already had the field (value preserved, never overwritten) vs. items it was inserted into. Non-object items are skipped (counted in neither). A config with no G2_CONFIG key succeeds unchanged with both counts 0.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param section_name Wire arg `section_name` (str). Uppercased before lookup. Must name an ARRAY section, else NOT_FOUND.
+/// @param field_name Wire arg `field_name` (str). Uppercased before insertion.
+/// @param field_value Wire arg `field_value` (json). Any JSON value, stored verbatim (cloned) into each item that lacks the field.
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
+[[nodiscard]] inline std::string AddConfigSectionFieldResult(const std::string& config_json, std::string_view section_name, std::string_view field_name, std::string_view field_value) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("section_name", section_name);
+    sz_args.Str("field_name", field_name);
+    sz_args.Json("field_value", field_value);
+    auto sz_env = detail::Call("add_config_section_field", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// Optional arguments of AddDataSource(); omitted fields are not sent.
@@ -1336,7 +1600,7 @@ struct AddFeatureOptions {
 ///
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param feature Wire arg `feature` (str). Uppercased; stored as FTYPE_CODE and FTYPE_DESC. Duplicate (exact match on the uppercased code) is ALREADY_EXISTS.
-/// @param element_list Wire arg `element_list` (json). Must be a non-empty JSON array, else INVALID_INPUT. Each item is either an element-code string, or an object with `element` (or `ELEMENT`, required, else INVALID_INPUT) and optional `expressed`/`EXPRESSED`, `compared`/`COMPARED` ("yes" case-insensitive = true), `display`/`DISPLAY` ("yes" = DISPLAY_LEVEL 1, anything else 0) or `displaylevel`/`DISPLAYLEVEL`/`display_level` (int, default 1, negative = INVALID_INPUT), `displaydelim`/`DISPLAYDELIM`/`display_delim`, `derived`/`DERIVED` (Yes/No case-insensitive, else INVALID_INPUT; default No). Any other item type is INVALID_INPUT. Element codes are uppercased; a code not in CFG_FELEM is AUTO-CREATED (FELEM_ID max+1 floor 1000, DATA_TYPE string, FELEM_DESC = code). The FBOM EXEC_ORDER is the item's 1-based position (per feature, not whole-table).
+/// @param element_list Wire arg `element_list` (json). Must be a non-empty JSON array, else INVALID_INPUT. Each item is either an element-code string, or an object with `element` (or `ELEMENT`, required, else INVALID_INPUT) and optional `expressed`/`EXPRESSED`, `compared`/`COMPARED` ("yes" case-insensitive = true), `display`/`DISPLAY` ("yes" = DISPLAY_LEVEL 1, anything else 0) or `displaylevel`/`DISPLAYLEVEL`/`display_level` (int, default 1, negative = INVALID_INPUT), `displaydelim`/`DISPLAYDELIM`/`display_delim`, `derived`/`DERIVED` (Yes/No case-insensitive, else INVALID_INPUT; default No). Any other item type is INVALID_INPUT. Element codes are uppercased; a code not in CFG_FELEM is AUTO-CREATED (FELEM_ID max+1 floor 1000, DATA_TYPE string, FELEM_DESC = code). The FBOM EXEC_ORDER is the item's 1-based position (per feature, not whole-table). Shape: `[string | {element?: string|null, ELEMENT?: string|null, expressed?: string|null, EXPRESSED?: string|null, compared?: string|null, COMPARED?: string|null, display?: string|null, DISPLAY?: string|null, displaylevel?: int|null, DISPLAYLEVEL?: int|null, display_level?: int|null, displaydelim?: string|null, DISPLAYDELIM?: string|null, display_delim?: string|null, derived?: string|null, DERIVED?: string|null}]`.
 /// @param options Optional arguments (see AddFeatureOptions).
 /// @return The modified configuration JSON.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, INVALID_INPUT, NOT_FOUND, INVALID_STRUCTURE.
@@ -1658,14 +1922,29 @@ struct AddFeatureDistinctCallElementOptions {
 /// Record is the assigned ERFRAG_ID (integer). The row always carries every CFG_ERFRAG key: ERFRAG_DESC is set to the uppercased code, ERFRAG_DEPENDS is the referenced fragments' ids sorted as STRINGS, deduplicated and comma-joined ("11,61"), or null when there are none. ERFRAG_CODE and ERFRAG_SOURCE are checked BEFORE the config is parsed (MISSING_FIELD wins). A config without G2_CONFIG is INVALID_CONFIG; with G2_CONFIG but no CFG_ERFRAG it is MISSING_SECTION.
 ///
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
-/// @param fragment_config Wire arg `fragment_config` (json). Object with on-disk keys. ERFRAG_CODE (string, required, else MISSING_FIELD) is uppercased for storage and the duplicate check (ALREADY_EXISTS). ERFRAG_SOURCE (string, required, else MISSING_FIELD) is stored verbatim; every name referenced inside a FRAGMENT[...] clause (e.g. "./FRAGMENT[./SAME_NAME\>0 and ./SAME_STAB\>0]") must be an existing ERFRAG_CODE matched EXACTLY (case-sensitive), else INVALID_INPUT. A source without FRAGMENT[ (including "") is accepted unvalidated. ERFRAG_ID (integer, optional): absent or \<= 0 auto-allocates (max + 1, floor 1, so 1000 on the template); a taken id \> 0 is ALREADY_EXISTS. Any ERFRAG_DESC key is IGNORED.
-/// @return The modified configuration and the record JSON text.
+/// @param fragment_config Wire arg `fragment_config` (json). Object with on-disk keys. ERFRAG_CODE (string, required, else MISSING_FIELD) is uppercased for storage and the duplicate check (ALREADY_EXISTS). ERFRAG_SOURCE (string, required, else MISSING_FIELD) is stored verbatim; every name referenced inside a FRAGMENT[...] clause (e.g. "./FRAGMENT[./SAME_NAME\>0 and ./SAME_STAB\>0]") must be an existing ERFRAG_CODE matched EXACTLY (case-sensitive), else INVALID_INPUT. A source without FRAGMENT[ (including "") is accepted unvalidated. ERFRAG_ID (integer, optional): absent or \<= 0 auto-allocates (max + 1, floor 1, so 1000 on the template); a taken id \> 0 is ALREADY_EXISTS. Any ERFRAG_DESC key is IGNORED. Shape: `{ERFRAG_CODE: string, ERFRAG_SOURCE: string, ERFRAG_ID?: int|null, ERFRAG_DESC?: any, ERFRAG_DEPENDS?: any}`.
+/// @return The modified configuration JSON. AddFragmentResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, INVALID_INPUT, INVALID_CONFIG, MISSING_SECTION.
-[[nodiscard]] inline ConfigAndJson AddFragment(const std::string& config_json, std::string_view fragment_config) {
+[[nodiscard]] inline std::string AddFragment(const std::string& config_json, std::string_view fragment_config) {
     detail::ArgsWriter sz_args;
     sz_args.Json("fragment_config", fragment_config);
     auto sz_env = detail::Call("add_fragment", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of AddFragment(): same arguments and operation, but returns the record instead of the configuration. Operation: Add a rule fragment (CFG_ERFRAG row), returning the assigned ERFRAG_ID.
+///
+/// Record is the assigned ERFRAG_ID (integer). The row always carries every CFG_ERFRAG key: ERFRAG_DESC is set to the uppercased code, ERFRAG_DEPENDS is the referenced fragments' ids sorted as STRINGS, deduplicated and comma-joined ("11,61"), or null when there are none. ERFRAG_CODE and ERFRAG_SOURCE are checked BEFORE the config is parsed (MISSING_FIELD wins). A config without G2_CONFIG is INVALID_CONFIG; with G2_CONFIG but no CFG_ERFRAG it is MISSING_SECTION.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param fragment_config Wire arg `fragment_config` (json). Object with on-disk keys. ERFRAG_CODE (string, required, else MISSING_FIELD) is uppercased for storage and the duplicate check (ALREADY_EXISTS). ERFRAG_SOURCE (string, required, else MISSING_FIELD) is stored verbatim; every name referenced inside a FRAGMENT[...] clause (e.g. "./FRAGMENT[./SAME_NAME\>0 and ./SAME_STAB\>0]") must be an existing ERFRAG_CODE matched EXACTLY (case-sensitive), else INVALID_INPUT. A source without FRAGMENT[ (including "") is accepted unvalidated. ERFRAG_ID (integer, optional): absent or \<= 0 auto-allocates (max + 1, floor 1, so 1000 on the template); a taken id \> 0 is ALREADY_EXISTS. Any ERFRAG_DESC key is IGNORED. Shape: `{ERFRAG_CODE: string, ERFRAG_SOURCE: string, ERFRAG_ID?: int|null, ERFRAG_DESC?: any, ERFRAG_DEPENDS?: any}`.
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, INVALID_INPUT, INVALID_CONFIG, MISSING_SECTION.
+[[nodiscard]] inline std::string AddFragmentResult(const std::string& config_json, std::string_view fragment_config) {
+    detail::ArgsWriter sz_args;
+    sz_args.Json("fragment_config", fragment_config);
+    auto sz_env = detail::Call("add_fragment", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Delete a fragment by code.
@@ -1764,9 +2043,9 @@ struct AddComparisonFunctionOptions {
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param code Wire arg `code` (str). Uppercased before the duplicate check and storage (CFUNC_CODE).
 /// @param options Optional arguments (see AddComparisonFunctionOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. AddComparisonFunctionResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, INVALID_INPUT.
-[[nodiscard]] inline ConfigAndJson AddComparisonFunction(const std::string& config_json, std::string_view code, const AddComparisonFunctionOptions& options = {}) {
+[[nodiscard]] inline std::string AddComparisonFunction(const std::string& config_json, std::string_view code, const AddComparisonFunctionOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Str("code", code);
     if (options.connect_str) {
@@ -1782,7 +2061,35 @@ struct AddComparisonFunctionOptions {
         sz_args.Str("anon_support", *options.anon_support);
     }
     auto sz_env = detail::Call("add_comparison_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of AddComparisonFunction(): same arguments and operation, but returns the record instead of the configuration. Operation: Add a comparison function (CFG_CFUNC row).
+///
+/// Returns (modified config, the new complete CFG_CFUNC row: CFUNC_ID, CFUNC_CODE, CONNECT_STR, ANON_SUPPORT, CFUNC_DESC, LANGUAGE). CFUNC_ID is always auto-allocated (max existing + 1, floor 1); no id can be requested. TRAP: a duplicate code is INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS. Validation order: duplicate code, anon_support, then section. MISSING_SECTION only when CFG_CFUNC is absent.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param code Wire arg `code` (str). Uppercased before the duplicate check and storage (CFUNC_CODE).
+/// @param options Optional arguments (see AddComparisonFunctionOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, INVALID_INPUT.
+[[nodiscard]] inline std::string AddComparisonFunctionResult(const std::string& config_json, std::string_view code, const AddComparisonFunctionOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("code", code);
+    if (options.connect_str) {
+        sz_args.Str("connect_str", *options.connect_str);
+    }
+    if (options.description) {
+        sz_args.Str("description", *options.description);
+    }
+    if (options.language) {
+        sz_args.Str("language", *options.language);
+    }
+    if (options.anon_support) {
+        sz_args.Str("anon_support", *options.anon_support);
+    }
+    auto sz_env = detail::Call("add_comparison_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Delete a comparison function's CFG_CFUNC row only (no cascade).
@@ -1791,13 +2098,28 @@ struct AddComparisonFunctionOptions {
 ///
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param code Wire arg `code` (str). Uppercased before lookup.
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. DeleteComparisonFunctionResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
-[[nodiscard]] inline ConfigAndJson DeleteComparisonFunction(const std::string& config_json, std::string_view code) {
+[[nodiscard]] inline std::string DeleteComparisonFunction(const std::string& config_json, std::string_view code) {
     detail::ArgsWriter sz_args;
     sz_args.Str("code", code);
     auto sz_env = detail::Call("delete_comparison_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of DeleteComparisonFunction(): same arguments and operation, but returns the record instead of the configuration. Operation: Delete a comparison function's CFG_CFUNC row only (no cascade).
+///
+/// Returns (modified config, the deleted CFG_CFUNC row). Removes ONLY the CFG_CFUNC row; CFG_CFCALL rows referencing it are left dangling (use delete_comparison_function_cascade). A missing CFG_CFUNC section is NOT_FOUND (not MISSING_SECTION).
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param code Wire arg `code` (str). Uppercased before lookup.
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
+[[nodiscard]] inline std::string DeleteComparisonFunctionResult(const std::string& config_json, std::string_view code) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("code", code);
+    auto sz_env = detail::Call("delete_comparison_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Delete a comparison function and its CFG_CFBOM / CFG_CFCALL / CFG_CFRTN rows.
@@ -1806,13 +2128,28 @@ struct AddComparisonFunctionOptions {
 ///
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param code Wire arg `code` (str). Uppercased before lookup.
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. DeleteComparisonFunctionCascadeResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND, MISSING_FIELD.
-[[nodiscard]] inline ConfigAndJson DeleteComparisonFunctionCascade(const std::string& config_json, std::string_view code) {
+[[nodiscard]] inline std::string DeleteComparisonFunctionCascade(const std::string& config_json, std::string_view code) {
     detail::ArgsWriter sz_args;
     sz_args.Str("code", code);
     auto sz_env = detail::Call("delete_comparison_function_cascade", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of DeleteComparisonFunctionCascade(): same arguments and operation, but returns the record instead of the configuration. Operation: Delete a comparison function and its CFG_CFBOM / CFG_CFCALL / CFG_CFRTN rows.
+///
+/// Returns (modified config, the deleted CFG_CFUNC row). Order: CFG_CFBOM rows whose CFCALL_ID belongs to one of the function's CFG_CFCALL rows; every CFG_CFCALL row with that CFUNC_ID; every CFG_CFRTN row with that CFUNC_ID (well-formed rows via thresholds::delete_comparison_threshold, then a sweep of the rest); finally the CFG_CFUNC row. Absent CFBOM/CFCALL/CFRTN sections are skipped. MISSING_FIELD when the found row has no integer CFUNC_ID. A missing CFG_CFUNC section is NOT_FOUND.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param code Wire arg `code` (str). Uppercased before lookup.
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND, MISSING_FIELD.
+[[nodiscard]] inline std::string DeleteComparisonFunctionCascadeResult(const std::string& config_json, std::string_view code) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("code", code);
+    auto sz_env = detail::Call("delete_comparison_function_cascade", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Get one comparison function's raw CFG_CFUNC row by code.
@@ -1862,9 +2199,9 @@ struct SetComparisonFunctionOptions {
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param code Wire arg `code` (str). Uppercased before lookup.
 /// @param options Optional arguments (see SetComparisonFunctionOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. SetComparisonFunctionResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
-[[nodiscard]] inline ConfigAndJson SetComparisonFunction(const std::string& config_json, std::string_view code, const SetComparisonFunctionOptions& options = {}) {
+[[nodiscard]] inline std::string SetComparisonFunction(const std::string& config_json, std::string_view code, const SetComparisonFunctionOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Str("code", code);
     if (options.connect_str.IsSet()) {
@@ -1882,7 +2219,37 @@ struct SetComparisonFunctionOptions {
         sz_args.Str("anon_support", *options.anon_support);
     }
     auto sz_env = detail::Call("set_comparison_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of SetComparisonFunction(): same arguments and operation, but returns the record instead of the configuration. Operation: Update a comparison function's connect string / description / language / anon support.
+///
+/// Returns (modified config, the updated CFG_CFUNC row). No value validation. The row is deleted and re-appended, so it moves to the END of CFG_CFUNC. A missing CFG_CFUNC section is NOT_FOUND.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param code Wire arg `code` (str). Uppercased before lookup.
+/// @param options Optional arguments (see SetComparisonFunctionOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
+[[nodiscard]] inline std::string SetComparisonFunctionResult(const std::string& config_json, std::string_view code, const SetComparisonFunctionOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("code", code);
+    if (options.connect_str.IsSet()) {
+        sz_args.Str("connect_str", options.connect_str.Value());
+    } else if (options.connect_str.IsClear()) {
+        sz_args.Null("connect_str");
+    }
+    if (options.description) {
+        sz_args.Str("description", *options.description);
+    }
+    if (options.language) {
+        sz_args.Str("language", *options.language);
+    }
+    if (options.anon_support) {
+        sz_args.Str("anon_support", *options.anon_support);
+    }
+    auto sz_env = detail::Call("set_comparison_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// Optional arguments of AddDistinctFunction(); omitted fields are not sent.
@@ -1904,9 +2271,9 @@ struct AddDistinctFunctionOptions {
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param code Wire arg `code` (str). Uppercased before the duplicate check and storage (DFUNC_CODE).
 /// @param options Optional arguments (see AddDistinctFunctionOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. AddDistinctFunctionResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, INVALID_INPUT.
-[[nodiscard]] inline ConfigAndJson AddDistinctFunction(const std::string& config_json, std::string_view code, const AddDistinctFunctionOptions& options = {}) {
+[[nodiscard]] inline std::string AddDistinctFunction(const std::string& config_json, std::string_view code, const AddDistinctFunctionOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Str("code", code);
     if (options.connect_str) {
@@ -1922,7 +2289,35 @@ struct AddDistinctFunctionOptions {
         sz_args.Str("anon_support", *options.anon_support);
     }
     auto sz_env = detail::Call("add_distinct_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of AddDistinctFunction(): same arguments and operation, but returns the record instead of the configuration. Operation: Add a distinct function (CFG_DFUNC row) to the configuration.
+///
+/// Returns (modified config, the new complete CFG_DFUNC row: DFUNC_ID, DFUNC_CODE, DFUNC_DESC, CONNECT_STR, ANON_SUPPORT, LANGUAGE; unset optionals are null). DFUNC_ID is auto-allocated as max existing + 1 (floor 1); no id can be requested. TRAP: a duplicate code is INVALID_INPUT, not ALREADY_EXISTS (SzConfigError::validation). The duplicate check runs before anon_support validation. MISSING_SECTION only when G2_CONFIG.CFG_DFUNC is absent.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param code Wire arg `code` (str). Uppercased before the duplicate check and storage (DFUNC_CODE).
+/// @param options Optional arguments (see AddDistinctFunctionOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, INVALID_INPUT.
+[[nodiscard]] inline std::string AddDistinctFunctionResult(const std::string& config_json, std::string_view code, const AddDistinctFunctionOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("code", code);
+    if (options.connect_str) {
+        sz_args.Str("connect_str", *options.connect_str);
+    }
+    if (options.description) {
+        sz_args.Str("description", *options.description);
+    }
+    if (options.language) {
+        sz_args.Str("language", *options.language);
+    }
+    if (options.anon_support) {
+        sz_args.Str("anon_support", *options.anon_support);
+    }
+    auto sz_env = detail::Call("add_distinct_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Delete a distinct function by code.
@@ -1931,13 +2326,28 @@ struct AddDistinctFunctionOptions {
 ///
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param code Wire arg `code` (str). Uppercased before lookup.
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. DeleteDistinctFunctionResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
-[[nodiscard]] inline ConfigAndJson DeleteDistinctFunction(const std::string& config_json, std::string_view code) {
+[[nodiscard]] inline std::string DeleteDistinctFunction(const std::string& config_json, std::string_view code) {
     detail::ArgsWriter sz_args;
     sz_args.Str("code", code);
     auto sz_env = detail::Call("delete_distinct_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of DeleteDistinctFunction(): same arguments and operation, but returns the record instead of the configuration. Operation: Delete a distinct function by code.
+///
+/// Returns (modified config, the deleted CFG_DFUNC row). No dependency check: CFG_DFCALL rows referencing the DFUNC_ID are left in place. A config without CFG_DFUNC is NOT_FOUND (not MISSING_SECTION).
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param code Wire arg `code` (str). Uppercased before lookup.
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
+[[nodiscard]] inline std::string DeleteDistinctFunctionResult(const std::string& config_json, std::string_view code) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("code", code);
+    auto sz_env = detail::Call("delete_distinct_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Get one distinct function's raw CFG_DFUNC row by code.
@@ -1987,9 +2397,9 @@ struct SetDistinctFunctionOptions {
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param code Wire arg `code` (str). Uppercased before lookup.
 /// @param options Optional arguments (see SetDistinctFunctionOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. SetDistinctFunctionResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
-[[nodiscard]] inline ConfigAndJson SetDistinctFunction(const std::string& config_json, std::string_view code, const SetDistinctFunctionOptions& options = {}) {
+[[nodiscard]] inline std::string SetDistinctFunction(const std::string& config_json, std::string_view code, const SetDistinctFunctionOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Str("code", code);
     if (options.connect_str.IsSet()) {
@@ -2007,7 +2417,37 @@ struct SetDistinctFunctionOptions {
         sz_args.Str("anon_support", *options.anon_support);
     }
     auto sz_env = detail::Call("set_distinct_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of SetDistinctFunction(): same arguments and operation, but returns the record instead of the configuration. Operation: Update a distinct function's connect string, description, language or anon support.
+///
+/// Returns (modified config, the updated CFG_DFUNC row). The row is removed and re-appended, so it moves to the END of CFG_DFUNC (list order changes). A config without CFG_DFUNC is NOT_FOUND.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param code Wire arg `code` (str). Uppercased before lookup.
+/// @param options Optional arguments (see SetDistinctFunctionOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
+[[nodiscard]] inline std::string SetDistinctFunctionResult(const std::string& config_json, std::string_view code, const SetDistinctFunctionOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("code", code);
+    if (options.connect_str.IsSet()) {
+        sz_args.Str("connect_str", options.connect_str.Value());
+    } else if (options.connect_str.IsClear()) {
+        sz_args.Null("connect_str");
+    }
+    if (options.description) {
+        sz_args.Str("description", *options.description);
+    }
+    if (options.language) {
+        sz_args.Str("language", *options.language);
+    }
+    if (options.anon_support) {
+        sz_args.Str("anon_support", *options.anon_support);
+    }
+    auto sz_env = detail::Call("set_distinct_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// Optional arguments of AddExpressionFunction(); omitted fields are not sent.
@@ -2027,9 +2467,9 @@ struct AddExpressionFunctionOptions {
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param code Wire arg `code` (str). Uppercased before the duplicate check and storage (EFUNC_CODE).
 /// @param options Optional arguments (see AddExpressionFunctionOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. AddExpressionFunctionResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, INVALID_INPUT.
-[[nodiscard]] inline ConfigAndJson AddExpressionFunction(const std::string& config_json, std::string_view code, const AddExpressionFunctionOptions& options = {}) {
+[[nodiscard]] inline std::string AddExpressionFunction(const std::string& config_json, std::string_view code, const AddExpressionFunctionOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Str("code", code);
     if (options.connect_str) {
@@ -2042,7 +2482,32 @@ struct AddExpressionFunctionOptions {
         sz_args.Str("language", *options.language);
     }
     auto sz_env = detail::Call("add_expression_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of AddExpressionFunction(): same arguments and operation, but returns the record instead of the configuration. Operation: Add an expression function (CFG_EFUNC row).
+///
+/// Returns (modified config, the new complete CFG_EFUNC row: EFUNC_ID, EFUNC_CODE, CONNECT_STR, EFUNC_DESC, LANGUAGE). EFUNC_ID is always auto-allocated (max existing + 1, floor 1); no id can be requested. TRAP: a duplicate code is INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS. MISSING_SECTION only when CFG_EFUNC is absent.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param code Wire arg `code` (str). Uppercased before the duplicate check and storage (EFUNC_CODE).
+/// @param options Optional arguments (see AddExpressionFunctionOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, INVALID_INPUT.
+[[nodiscard]] inline std::string AddExpressionFunctionResult(const std::string& config_json, std::string_view code, const AddExpressionFunctionOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("code", code);
+    if (options.connect_str) {
+        sz_args.Str("connect_str", *options.connect_str);
+    }
+    if (options.description) {
+        sz_args.Str("description", *options.description);
+    }
+    if (options.language) {
+        sz_args.Str("language", *options.language);
+    }
+    auto sz_env = detail::Call("add_expression_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Delete an expression function's CFG_EFUNC row only (no cascade).
@@ -2051,13 +2516,28 @@ struct AddExpressionFunctionOptions {
 ///
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param code Wire arg `code` (str). Uppercased before lookup.
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. DeleteExpressionFunctionResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
-[[nodiscard]] inline ConfigAndJson DeleteExpressionFunction(const std::string& config_json, std::string_view code) {
+[[nodiscard]] inline std::string DeleteExpressionFunction(const std::string& config_json, std::string_view code) {
     detail::ArgsWriter sz_args;
     sz_args.Str("code", code);
     auto sz_env = detail::Call("delete_expression_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of DeleteExpressionFunction(): same arguments and operation, but returns the record instead of the configuration. Operation: Delete an expression function's CFG_EFUNC row only (no cascade).
+///
+/// Returns (modified config, the deleted CFG_EFUNC row). Removes ONLY the CFG_EFUNC row; CFG_EFCALL rows referencing it are left dangling (use delete_expression_function_cascade). A missing CFG_EFUNC section is NOT_FOUND (not MISSING_SECTION).
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param code Wire arg `code` (str). Uppercased before lookup.
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
+[[nodiscard]] inline std::string DeleteExpressionFunctionResult(const std::string& config_json, std::string_view code) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("code", code);
+    auto sz_env = detail::Call("delete_expression_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Delete an expression function and its CFG_EFCALL / CFG_EFBOM rows.
@@ -2066,13 +2546,28 @@ struct AddExpressionFunctionOptions {
 ///
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param code Wire arg `code` (str). Uppercased before lookup.
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. DeleteExpressionFunctionCascadeResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND, MISSING_FIELD.
-[[nodiscard]] inline ConfigAndJson DeleteExpressionFunctionCascade(const std::string& config_json, std::string_view code) {
+[[nodiscard]] inline std::string DeleteExpressionFunctionCascade(const std::string& config_json, std::string_view code) {
     detail::ArgsWriter sz_args;
     sz_args.Str("code", code);
     auto sz_env = detail::Call("delete_expression_function_cascade", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of DeleteExpressionFunctionCascade(): same arguments and operation, but returns the record instead of the configuration. Operation: Delete an expression function and its CFG_EFCALL / CFG_EFBOM rows.
+///
+/// Returns (modified config, the deleted CFG_EFUNC row). Removes the CFG_EFBOM rows whose EFCALL_ID belongs to one of the function's CFG_EFCALL rows, then every CFG_EFCALL row whose EFUNC_ID matches (each step skipped if its section is absent), then the CFG_EFUNC row. MISSING_FIELD when the found row has no integer EFUNC_ID. A missing CFG_EFUNC section is NOT_FOUND.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param code Wire arg `code` (str). Uppercased before lookup.
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND, MISSING_FIELD.
+[[nodiscard]] inline std::string DeleteExpressionFunctionCascadeResult(const std::string& config_json, std::string_view code) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("code", code);
+    auto sz_env = detail::Call("delete_expression_function_cascade", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Get one expression function's raw CFG_EFUNC row by code.
@@ -2120,9 +2615,9 @@ struct SetExpressionFunctionOptions {
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param code Wire arg `code` (str). Uppercased before lookup.
 /// @param options Optional arguments (see SetExpressionFunctionOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. SetExpressionFunctionResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
-[[nodiscard]] inline ConfigAndJson SetExpressionFunction(const std::string& config_json, std::string_view code, const SetExpressionFunctionOptions& options = {}) {
+[[nodiscard]] inline std::string SetExpressionFunction(const std::string& config_json, std::string_view code, const SetExpressionFunctionOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Str("code", code);
     if (options.connect_str.IsSet()) {
@@ -2137,7 +2632,34 @@ struct SetExpressionFunctionOptions {
         sz_args.Str("language", *options.language);
     }
     auto sz_env = detail::Call("set_expression_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of SetExpressionFunction(): same arguments and operation, but returns the record instead of the configuration. Operation: Update an expression function's connect string / description / language.
+///
+/// Returns (modified config, the updated CFG_EFUNC row). No value validation. The row is deleted and re-appended, so it moves to the END of CFG_EFUNC. A missing CFG_EFUNC section is NOT_FOUND.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param code Wire arg `code` (str). Uppercased before lookup.
+/// @param options Optional arguments (see SetExpressionFunctionOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
+[[nodiscard]] inline std::string SetExpressionFunctionResult(const std::string& config_json, std::string_view code, const SetExpressionFunctionOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("code", code);
+    if (options.connect_str.IsSet()) {
+        sz_args.Str("connect_str", options.connect_str.Value());
+    } else if (options.connect_str.IsClear()) {
+        sz_args.Null("connect_str");
+    }
+    if (options.description) {
+        sz_args.Str("description", *options.description);
+    }
+    if (options.language) {
+        sz_args.Str("language", *options.language);
+    }
+    auto sz_env = detail::Call("set_expression_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// Optional arguments of AddStandardizeFunction(); omitted fields are not sent.
@@ -2157,9 +2679,9 @@ struct AddStandardizeFunctionOptions {
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param code Wire arg `code` (str). Uppercased before the duplicate check and storage (SFUNC_CODE).
 /// @param options Optional arguments (see AddStandardizeFunctionOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. AddStandardizeFunctionResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, INVALID_INPUT.
-[[nodiscard]] inline ConfigAndJson AddStandardizeFunction(const std::string& config_json, std::string_view code, const AddStandardizeFunctionOptions& options = {}) {
+[[nodiscard]] inline std::string AddStandardizeFunction(const std::string& config_json, std::string_view code, const AddStandardizeFunctionOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Str("code", code);
     if (options.connect_str) {
@@ -2172,7 +2694,32 @@ struct AddStandardizeFunctionOptions {
         sz_args.Str("language", *options.language);
     }
     auto sz_env = detail::Call("add_standardize_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of AddStandardizeFunction(): same arguments and operation, but returns the record instead of the configuration. Operation: Add a standardize function (CFG_SFUNC row).
+///
+/// Returns (modified config, the new complete CFG_SFUNC row: SFUNC_ID, SFUNC_CODE, CONNECT_STR, SFUNC_DESC, LANGUAGE). SFUNC_ID is always auto-allocated (max existing + 1, floor 1); no id can be requested. TRAP: a duplicate code is INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS. MISSING_SECTION only when CFG_SFUNC is absent.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param code Wire arg `code` (str). Uppercased before the duplicate check and storage (SFUNC_CODE).
+/// @param options Optional arguments (see AddStandardizeFunctionOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION, INVALID_INPUT.
+[[nodiscard]] inline std::string AddStandardizeFunctionResult(const std::string& config_json, std::string_view code, const AddStandardizeFunctionOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("code", code);
+    if (options.connect_str) {
+        sz_args.Str("connect_str", *options.connect_str);
+    }
+    if (options.description) {
+        sz_args.Str("description", *options.description);
+    }
+    if (options.language) {
+        sz_args.Str("language", *options.language);
+    }
+    auto sz_env = detail::Call("add_standardize_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Delete a standardize function's CFG_SFUNC row only (no cascade).
@@ -2181,13 +2728,28 @@ struct AddStandardizeFunctionOptions {
 ///
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param code Wire arg `code` (str). Uppercased before lookup.
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. DeleteStandardizeFunctionResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
-[[nodiscard]] inline ConfigAndJson DeleteStandardizeFunction(const std::string& config_json, std::string_view code) {
+[[nodiscard]] inline std::string DeleteStandardizeFunction(const std::string& config_json, std::string_view code) {
     detail::ArgsWriter sz_args;
     sz_args.Str("code", code);
     auto sz_env = detail::Call("delete_standardize_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of DeleteStandardizeFunction(): same arguments and operation, but returns the record instead of the configuration. Operation: Delete a standardize function's CFG_SFUNC row only (no cascade).
+///
+/// Returns (modified config, the deleted CFG_SFUNC row). Removes ONLY the CFG_SFUNC row; CFG_SFCALL rows referencing it are left dangling (use delete_standardize_function_cascade). A missing CFG_SFUNC section is NOT_FOUND (not MISSING_SECTION).
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param code Wire arg `code` (str). Uppercased before lookup.
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
+[[nodiscard]] inline std::string DeleteStandardizeFunctionResult(const std::string& config_json, std::string_view code) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("code", code);
+    auto sz_env = detail::Call("delete_standardize_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Delete a standardize function and its CFG_SFCALL rows.
@@ -2196,13 +2758,28 @@ struct AddStandardizeFunctionOptions {
 ///
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param code Wire arg `code` (str). Uppercased before lookup.
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. DeleteStandardizeFunctionCascadeResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND, MISSING_FIELD.
-[[nodiscard]] inline ConfigAndJson DeleteStandardizeFunctionCascade(const std::string& config_json, std::string_view code) {
+[[nodiscard]] inline std::string DeleteStandardizeFunctionCascade(const std::string& config_json, std::string_view code) {
     detail::ArgsWriter sz_args;
     sz_args.Str("code", code);
     auto sz_env = detail::Call("delete_standardize_function_cascade", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of DeleteStandardizeFunctionCascade(): same arguments and operation, but returns the record instead of the configuration. Operation: Delete a standardize function and its CFG_SFCALL rows.
+///
+/// Returns (modified config, the deleted CFG_SFUNC row). Removes every CFG_SFCALL row whose SFUNC_ID matches (skipped if CFG_SFCALL is absent), then the CFG_SFUNC row; no other section is touched. MISSING_FIELD when the found row has no integer SFUNC_ID. A missing CFG_SFUNC section is NOT_FOUND.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param code Wire arg `code` (str). Uppercased before lookup.
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND, MISSING_FIELD.
+[[nodiscard]] inline std::string DeleteStandardizeFunctionCascadeResult(const std::string& config_json, std::string_view code) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("code", code);
+    auto sz_env = detail::Call("delete_standardize_function_cascade", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Get one standardize function's raw CFG_SFUNC row by code.
@@ -2250,9 +2827,9 @@ struct SetStandardizeFunctionOptions {
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param code Wire arg `code` (str). Uppercased before lookup.
 /// @param options Optional arguments (see SetStandardizeFunctionOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. SetStandardizeFunctionResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
-[[nodiscard]] inline ConfigAndJson SetStandardizeFunction(const std::string& config_json, std::string_view code, const SetStandardizeFunctionOptions& options = {}) {
+[[nodiscard]] inline std::string SetStandardizeFunction(const std::string& config_json, std::string_view code, const SetStandardizeFunctionOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Str("code", code);
     if (options.connect_str.IsSet()) {
@@ -2267,7 +2844,34 @@ struct SetStandardizeFunctionOptions {
         sz_args.Str("language", *options.language);
     }
     auto sz_env = detail::Call("set_standardize_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of SetStandardizeFunction(): same arguments and operation, but returns the record instead of the configuration. Operation: Update a standardize function's connect string / description / language.
+///
+/// Returns (modified config, the updated CFG_SFUNC row). No value validation. The row is deleted and re-appended, so it moves to the END of CFG_SFUNC. A missing CFG_SFUNC section is NOT_FOUND.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param code Wire arg `code` (str). Uppercased before lookup.
+/// @param options Optional arguments (see SetStandardizeFunctionOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
+[[nodiscard]] inline std::string SetStandardizeFunctionResult(const std::string& config_json, std::string_view code, const SetStandardizeFunctionOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("code", code);
+    if (options.connect_str.IsSet()) {
+        sz_args.Str("connect_str", options.connect_str.Value());
+    } else if (options.connect_str.IsClear()) {
+        sz_args.Null("connect_str");
+    }
+    if (options.description) {
+        sz_args.Str("description", *options.description);
+    }
+    if (options.language) {
+        sz_args.Str("language", *options.language);
+    }
+    auto sz_env = detail::Call("set_standardize_function", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// Optional arguments of CloneGenericPlan(); omitted fields are not sent.
@@ -2284,9 +2888,9 @@ struct CloneGenericPlanOptions {
 /// @param source_gplan_code Wire arg `source_gplan_code` (str). Uppercased, then matched exactly against GPLAN_CODE; unknown = NOT_FOUND.
 /// @param new_gplan_code Wire arg `new_gplan_code` (str). Uppercased before the duplicate check and storage; an existing code = ALREADY_EXISTS.
 /// @param options Optional arguments (see CloneGenericPlanOptions).
-/// @return The modified configuration and the record JSON text.
+/// @return The modified configuration JSON. CloneGenericPlanResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND, ALREADY_EXISTS, INVALID_CONFIG.
-[[nodiscard]] inline ConfigAndJson CloneGenericPlan(const std::string& config_json, std::string_view source_gplan_code, std::string_view new_gplan_code, const CloneGenericPlanOptions& options = {}) {
+[[nodiscard]] inline std::string CloneGenericPlan(const std::string& config_json, std::string_view source_gplan_code, std::string_view new_gplan_code, const CloneGenericPlanOptions& options = {}) {
     detail::ArgsWriter sz_args;
     sz_args.Str("source_gplan_code", source_gplan_code);
     sz_args.Str("new_gplan_code", new_gplan_code);
@@ -2294,7 +2898,28 @@ struct CloneGenericPlanOptions {
         sz_args.Str("new_gplan_desc", *options.new_gplan_desc);
     }
     auto sz_env = detail::Call("clone_generic_plan", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of CloneGenericPlan(): same arguments and operation, but returns the record instead of the configuration. Operation: Clone a generic plan, copying every CFG_GENERIC_THRESHOLD row of the source to the new plan.
+///
+/// Returns (modified config, new GPLAN_ID); the record is the integer id. The new id is always max existing GPLAN_ID + 1 (no floor, no id arg). Cloned threshold rows are verbatim copies with GPLAN_ID rewritten, appended after existing rows; an absent CFG_GENERIC_THRESHOLD section is skipped silently. INVALID_CONFIG when the source row's GPLAN_ID is not an integer.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param source_gplan_code Wire arg `source_gplan_code` (str). Uppercased, then matched exactly against GPLAN_CODE; unknown = NOT_FOUND.
+/// @param new_gplan_code Wire arg `new_gplan_code` (str). Uppercased before the duplicate check and storage; an existing code = ALREADY_EXISTS.
+/// @param options Optional arguments (see CloneGenericPlanOptions).
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND, ALREADY_EXISTS, INVALID_CONFIG.
+[[nodiscard]] inline std::string CloneGenericPlanResult(const std::string& config_json, std::string_view source_gplan_code, std::string_view new_gplan_code, const CloneGenericPlanOptions& options = {}) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("source_gplan_code", source_gplan_code);
+    sz_args.Str("new_gplan_code", new_gplan_code);
+    if (options.new_gplan_desc) {
+        sz_args.Str("new_gplan_desc", *options.new_gplan_desc);
+    }
+    auto sz_env = detail::Call("clone_generic_plan", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Delete a generic plan and all of its generic thresholds.
@@ -2335,11 +2960,9 @@ struct ListGenericPlansOptions {
     return std::move(sz_env.result);
 }
 
-/// Result of SetGenericPlan(): each named record field as JSON text (exactly the
+/// Result of SetGenericPlanResult(): each named record field as JSON text (exactly the
 /// record member's JSON, e.g. `1001`, `true`, `"4.0.0"`).
-struct SetGenericPlanResult {
-    /// The modified configuration JSON.
-    std::string config{};
+struct SetGenericPlanRecord {
     /// Record field `plan_id` (JSON text).
     std::string plan_id{};
     /// Record field `was_created` (JSON text).
@@ -2353,15 +2976,32 @@ struct SetGenericPlanResult {
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param gplan_code Wire arg `gplan_code` (str). Uppercased, then matched exactly against GPLAN_CODE.
 /// @param gplan_desc Wire arg `gplan_desc` (str). Written verbatim to GPLAN_DESC.
-/// @return SetGenericPlanResult (fields: plan_id, was_created).
+/// @return The modified configuration JSON. SetGenericPlanResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION.
-[[nodiscard]] inline SetGenericPlanResult SetGenericPlan(const std::string& config_json, std::string_view gplan_code, std::string_view gplan_desc) {
+[[nodiscard]] inline std::string SetGenericPlan(const std::string& config_json, std::string_view gplan_code, std::string_view gplan_desc) {
+    detail::ArgsWriter sz_args;
+    sz_args.Str("gplan_code", gplan_code);
+    sz_args.Str("gplan_desc", gplan_desc);
+    auto sz_env = detail::Call("set_generic_plan", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of SetGenericPlan(): same arguments and operation, but returns the record instead of the configuration. Operation: Create a generic plan, or update the description of an existing one (upsert).
+///
+/// Returns (config, {plan_id, was_created}). Existing code: only GPLAN_DESC is replaced (other keys kept), was_created false. New code: a row with GPLAN_ID = max + 1 is appended, was_created true; an absent CFG_GPLAN section is MISSING_SECTION on this create path.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param gplan_code Wire arg `gplan_code` (str). Uppercased, then matched exactly against GPLAN_CODE.
+/// @param gplan_desc Wire arg `gplan_desc` (str). Written verbatim to GPLAN_DESC.
+/// @return SetGenericPlanRecord (fields: plan_id, was_created).
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_SECTION.
+[[nodiscard]] inline SetGenericPlanRecord SetGenericPlanResult(const std::string& config_json, std::string_view gplan_code, std::string_view gplan_desc) {
     detail::ArgsWriter sz_args;
     sz_args.Str("gplan_code", gplan_code);
     sz_args.Str("gplan_desc", gplan_desc);
     auto sz_env = detail::Call("set_generic_plan", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
     const detail::Record sz_rec(std::move(sz_env.result));
-    return SetGenericPlanResult{.config = std::move(sz_env.config), .plan_id = sz_rec.Member("plan_id"), .was_created = sz_rec.Member("was_created")};
+    return SetGenericPlanRecord{.plan_id = sz_rec.Member("plan_id"), .was_created = sz_rec.Member("was_created")};
 }
 
 /// @brief Add an entity resolution rule (CFG_ERRULE row), returning the assigned ERRULE_ID.
@@ -2370,15 +3010,32 @@ struct SetGenericPlanResult {
 ///
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param id Wire arg `id` (int). Requested ERRULE_ID. 0 or any negative value means auto-allocate (max existing + 1, floor 1000, so 1000 on the template). A taken id \> 0 is ALREADY_EXISTS. Any ERRULE_ID key inside rule_config is IGNORED.
-/// @param rule_config Wire arg `rule_config` (json). Object with on-disk keys. ERRULE_CODE (string) is required, else MISSING_FIELD; uppercased for storage and the case-insensitive duplicate check (ALREADY_EXISTS). QUAL_ERFRAG_CODE (the fragment) is required: absent/non-string is MISSING_FIELD, "" or an unknown code is NOT_FOUND (existence is case-insensitive). DISQ_ERFRAG_CODE is optional: "" is accepted and stored as "", an unknown code is NOT_FOUND. TRAP: both fragment codes are stored VERBATIM (not uppercased). RESOLVE / RELATE default "No", must be Yes/No case-insensitively (stored title-case) else INVALID_INPUT, and may not both be Yes (INVALID_INPUT). RESOLVE=Yes requires a non-zero ERRULE_TIER (INVALID_INPUT) and forces RTYPE_ID to 1; RELATE=Yes requires RTYPE_ID in 2,3,4 (INVALID_INPUT). RTYPE_ID defaults to 1; ERRULE_TIER defaults to null. A non-string / non-integer value for any of these keys is treated as absent.
-/// @return The modified configuration and the record JSON text.
+/// @param rule_config Wire arg `rule_config` (json). Object with on-disk keys. ERRULE_CODE (string) is required, else MISSING_FIELD; uppercased for storage and the case-insensitive duplicate check (ALREADY_EXISTS). QUAL_ERFRAG_CODE (the fragment) is required: absent/non-string is MISSING_FIELD, "" or an unknown code is NOT_FOUND (existence is case-insensitive). DISQ_ERFRAG_CODE is optional: "" is accepted and stored as "", an unknown code is NOT_FOUND. TRAP: both fragment codes are stored VERBATIM (not uppercased). RESOLVE / RELATE default "No", must be Yes/No case-insensitively (stored title-case) else INVALID_INPUT, and may not both be Yes (INVALID_INPUT). RESOLVE=Yes requires a non-zero ERRULE_TIER (INVALID_INPUT) and forces RTYPE_ID to 1; RELATE=Yes requires RTYPE_ID in 2,3,4 (INVALID_INPUT). RTYPE_ID defaults to 1; ERRULE_TIER defaults to null. A non-string / non-integer value for any of these keys is treated as absent. Shape: `{ERRULE_CODE: string, QUAL_ERFRAG_CODE: string, DISQ_ERFRAG_CODE?: string|null, RESOLVE?: string|null, RELATE?: string|null, RTYPE_ID?: int|null, ERRULE_TIER?: int|null, ERRULE_ID?: int|null}`.
+/// @return The modified configuration JSON. AddRuleResult() (same arguments) returns the record this operation produces.
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, NOT_FOUND, INVALID_INPUT, MISSING_SECTION.
-[[nodiscard]] inline ConfigAndJson AddRule(const std::string& config_json, std::int64_t id, std::string_view rule_config) {
+[[nodiscard]] inline std::string AddRule(const std::string& config_json, std::int64_t id, std::string_view rule_config) {
     detail::ArgsWriter sz_args;
     sz_args.Int("id", id);
     sz_args.Json("rule_config", rule_config);
     auto sz_env = detail::Call("add_rule", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
-    return ConfigAndJson{std::move(sz_env.config), std::move(sz_env.result)};
+    return std::move(sz_env.config);
+}
+
+/// @brief The record (row / ids) of AddRule(): same arguments and operation, but returns the record instead of the configuration. Operation: Add an entity resolution rule (CFG_ERRULE row), returning the assigned ERRULE_ID.
+///
+/// Record is the assigned ERRULE_ID (integer). The written row always carries every CFG_ERRULE key (ERRULE_ID, ERRULE_CODE, RESOLVE, RELATE, RTYPE_ID, QUAL_ERFRAG_CODE, DISQ_ERFRAG_CODE, ERRULE_TIER; optional ones as null). ERRULE_CODE is checked BEFORE the config is parsed, so a missing code is MISSING_FIELD even for invalid config JSON. A config without CFG_ERRULE is MISSING_SECTION (after validation). Validation order: fragment, disqualifier, duplicate code, RESOLVE, RELATE, exclusivity, tier, RTYPE_ID.
+///
+/// @param config_json Configuration JSON (opaque; passed byte-exact).
+/// @param id Wire arg `id` (int). Requested ERRULE_ID. 0 or any negative value means auto-allocate (max existing + 1, floor 1000, so 1000 on the template). A taken id \> 0 is ALREADY_EXISTS. Any ERRULE_ID key inside rule_config is IGNORED.
+/// @param rule_config Wire arg `rule_config` (json). Object with on-disk keys. ERRULE_CODE (string) is required, else MISSING_FIELD; uppercased for storage and the case-insensitive duplicate check (ALREADY_EXISTS). QUAL_ERFRAG_CODE (the fragment) is required: absent/non-string is MISSING_FIELD, "" or an unknown code is NOT_FOUND (existence is case-insensitive). DISQ_ERFRAG_CODE is optional: "" is accepted and stored as "", an unknown code is NOT_FOUND. TRAP: both fragment codes are stored VERBATIM (not uppercased). RESOLVE / RELATE default "No", must be Yes/No case-insensitively (stored title-case) else INVALID_INPUT, and may not both be Yes (INVALID_INPUT). RESOLVE=Yes requires a non-zero ERRULE_TIER (INVALID_INPUT) and forces RTYPE_ID to 1; RELATE=Yes requires RTYPE_ID in 2,3,4 (INVALID_INPUT). RTYPE_ID defaults to 1; ERRULE_TIER defaults to null. A non-string / non-integer value for any of these keys is treated as absent. Shape: `{ERRULE_CODE: string, QUAL_ERFRAG_CODE: string, DISQ_ERFRAG_CODE?: string|null, RESOLVE?: string|null, RELATE?: string|null, RTYPE_ID?: int|null, ERRULE_TIER?: int|null, ERRULE_ID?: int|null}`.
+/// @return The record (e.g. the created row or ids) as JSON text.
+/// @throws SzConfigToolException Library reason codes: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, NOT_FOUND, INVALID_INPUT, MISSING_SECTION.
+[[nodiscard]] inline std::string AddRuleResult(const std::string& config_json, std::int64_t id, std::string_view rule_config) {
+    detail::ArgsWriter sz_args;
+    sz_args.Int("id", id);
+    sz_args.Json("rule_config", rule_config);
+    auto sz_env = detail::Call("add_rule", config_json, sz_args.Finish(), ResultKind::ConfigAndJson);
+    return std::move(sz_env.result);
 }
 
 /// @brief Delete a rule by code.
@@ -2486,7 +3143,7 @@ struct AddSearchProfileOptions {
     std::optional<std::string> candidates{};
     /// Wire arg `description` (str). SPROFILE_DESC, stored verbatim; absent = "". Library default when absent: "".
     std::optional<std::string> description{};
-    /// Wire arg `elements` (json). Feature candidate overrides: an array of {"feature": FTYPE_CODE, "flag": Yes|No|Y|N} objects (only those two keys, both strings, else INVALID_INPUT; a missing key = MISSING_FIELD); absent = none. Each feature is resolved case-insensitively against CFG_FTYPE (NOT_FOUND); a feature listed twice is VALIDATION_ERRORS (field "overrides", DUPLICATE); a flag other than Yes/Y/No/N (trimmed, case-insensitive) is VALIDATION_ERRORS (field "overrides", OUT_OF_DOMAIN). Stored in FTYPE_OVERRIDES as "[{\<ftypeId\>,\<Y|N\>},...]" sorted by FTYPE_ID, or "[]".
+    /// Wire arg `elements` (json). Feature candidate overrides: an array of {"feature": FTYPE_CODE, "flag": Yes|No|Y|N} objects (only those two keys, both strings, else INVALID_INPUT; a missing key = MISSING_FIELD); absent = none. Each feature is resolved case-insensitively against CFG_FTYPE (NOT_FOUND); a feature listed twice is VALIDATION_ERRORS (field "overrides", DUPLICATE); a flag other than Yes/Y/No/N (trimmed, case-insensitive) is VALIDATION_ERRORS (field "overrides", OUT_OF_DOMAIN). Stored in FTYPE_OVERRIDES as "[{\<ftypeId\>,\<Y|N\>},...]" sorted by FTYPE_ID, or "[]". Shape: `[{feature: string, flag: "Yes"|"No"|"Y"|"N"}]`.
     std::optional<std::string> elements{};
 };
 
@@ -2953,7 +3610,7 @@ inline void ValidateConfig(const std::string& config_json) {
 
 /// Result of VerifyCompatibilityVersion(): each named record field as JSON text (exactly the
 /// record member's JSON, e.g. `1001`, `true`, `"4.0.0"`).
-struct VerifyCompatibilityVersionResult {
+struct VerifyCompatibilityVersionRecord {
     /// Record field `current_version` (JSON text).
     std::string current_version{};
     /// Record field `matches` (JSON text).
@@ -2966,14 +3623,14 @@ struct VerifyCompatibilityVersionResult {
 ///
 /// @param config_json Configuration JSON (opaque; passed byte-exact).
 /// @param expected_version Wire arg `expected_version` (str). Compared by exact, case-sensitive string equality.
-/// @return VerifyCompatibilityVersionResult (fields: current_version, matches).
+/// @return VerifyCompatibilityVersionRecord (fields: current_version, matches).
 /// @throws SzConfigToolException Library reason codes: JSON_PARSE, NOT_FOUND.
-[[nodiscard]] inline VerifyCompatibilityVersionResult VerifyCompatibilityVersion(const std::string& config_json, std::string_view expected_version) {
+[[nodiscard]] inline VerifyCompatibilityVersionRecord VerifyCompatibilityVersion(const std::string& config_json, std::string_view expected_version) {
     detail::ArgsWriter sz_args;
     sz_args.Str("expected_version", expected_version);
     auto sz_env = detail::Call("verify_compatibility_version", config_json, sz_args.Finish(), ResultKind::Json);
     const detail::Record sz_rec(std::move(sz_env.result));
-    return VerifyCompatibilityVersionResult{.current_version = sz_rec.Member("current_version"), .matches = sz_rec.Member("matches")};
+    return VerifyCompatibilityVersionRecord{.current_version = sz_rec.Member("current_version"), .matches = sz_rec.Member("matches")};
 }
 
 }  // namespace szconfigtool

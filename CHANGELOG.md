@@ -10,7 +10,78 @@ and the Rust API is additive only within `4.x` (README, "Versioning").
 
 ## [Unreleased]
 
-## [4.4.0-1] - 2026-10-06
+## [4.4.0-2] - 2026-10-07
+
+Follow-up to 4.4.0-1 (tag `v4.4.0-2`): the two Node-binding issues #75 and #76, Python platform
+alignment with Senzing, and a much smaller release asset list. **Breaking for 4.4.0-1 users of
+the typed bindings** (config-changing return shapes, Node option validation, Python wheels).
+
+### Changed
+
+- **BREAKING (all five typed bindings, #75):** every config-changing function now returns the
+  **new config text**. In 4.4.0-1, 30 of them returned a `{config, json}` record
+  (`ConfigAndJson`) while the other 46 returned the config text, so plain-JavaScript callers
+  chaining `cfg = ct.addFeature(cfg, ...)` then `cfg = ct.addAttribute(cfg, ...)` failed on the
+  *next* call. The created or removed row, or the assigned ids, now come from a companion
+  `<name>Result` with the same arguments (Python `<name>_result`, Java/TypeScript
+  `<name>Result`, C#/C++ `<Name>Result`); it returns the row JSON text, or the named-fields
+  record for `set_generic_plan`. The 30 functions: `add_attribute`; `add_{comparison,
+  distinct,expression,standardize}_call` and their `_element` forms; `add_config_section_field`,
+  `remove_config_section_field`; `add_fragment`; `add_rule`; `add_/set_/delete_{comparison,
+  distinct,expression,standardize}_function`; `delete_{comparison,expression,standardize}_function_cascade`;
+  `clone_generic_plan`; `set_generic_plan`. `ConfigAndJson` is removed and the named-fields record
+  types are renamed `<Fn>Record` (e.g. `SetGenericPlanRecord`; no `config` field). Node and
+  Python now fail early with `INVALID_INPUT` ("config must be a string ...") when a non-string
+  config is passed. A `<name>Result` companion re-runs the operation, so call it with the SAME
+  input config you gave the primary (on the already-modified config an add fails with
+  `ALREADY_EXISTS`, a delete with `NOT_FOUND`, and `set_generic_plan`'s result reports
+  `was_created: false`). The manifest, the `invoke` wire format and the C ABI are unchanged.
+- **BREAKING (Node binding, #76):** options are validated before the native call. Unknown option
+  keys fail with `INVALID_INPUT` and a closest-name hint (`unknown option 'candidate' for
+  addSearchProfile; did you mean 'candidates'?`); a string, array or other non-object where
+  options are expected fails instead of being silently ignored; native errors name the JS
+  option with the wire name in parentheses once (`Missing required field: genericPlan
+  (generic_plan)`). Structured options are now exactly typed (`addSearchProfile.elements`,
+  `addFeature`/`addExpressionCall` `elementList`, `addFragment.fragmentConfig`,
+  `addRule.ruleConfig`) with runtime shape checks naming the path, and the tRPC router's Zod
+  objects are strict. Optional nested keys the library itself reads as optional accept `null`
+  (stored `CFG_ERRULE`/`CFG_ERFRAG` rows round-trip through `addRule`/`addFragment`), keys set to
+  `undefined` count as absent, and wire-name translation never rewrites quoted values. Node is
+  stricter than the library here: it accepts only `Yes`/`No`/`Y`/`N`
+  for search-profile element flags and rejects keys the library would ignore; `invoke` is
+  unchanged. Python, Java, C# and C++ already reject unknown or misspelled options at call or
+  compile time.
+- **Python wheels are Linux-only** (`manylinux_2_34` x64 and arm64), matching Senzing's Linux-only
+  Python SDK (v4 System Requirements). The macOS and Windows wheels and their SBOMs are no longer
+  built, and were deleted from the published 4.4.0-1 release. Java, C#, C++, Node and the C
+  library still ship for Linux x64/arm64, macOS arm64 and Windows x64.
+- Wheel, crate and package metadata: the author is name-only (the 4.4.0-1 wheels carried a
+  senzing.com email address).
+
+### Added
+
+- Optional `json_type` descriptor (with a `nullable` form) for `json` manifest arguments (`api/manifest/schema.md`):
+  drives the exact TypeScript types, runtime shape checks and strict tRPC schemas; other bindings
+  get a `Shape:` doc line.
+- Release notes are the CHANGELOG section for the tag (`packaging/release-notes.sh`, self-tested
+  in CI), and the publish step is re-runnable: if the release already exists it edits the notes
+  and uploads with `--clobber` instead of failing.
+- `packaging/gates/check-release-assets.sh` (self-tested in CI) requires exactly the expected
+  asset set plus `SHA256SUMS` and fails on any SBOM, attestation-bundle, subdirectory or stray
+  file.
+
+### Removed
+
+- Releases no longer carry the per-component `*.cdx.json` SBOMs or the `*.intoto.jsonl`
+  attestation bundle. The C archive still embeds its own SBOM (`sbom/sz-configtool-c.cdx.json`),
+  and the full dependency list is `Cargo.lock` at the tag. Attestations are unchanged and are
+  verified online: `gh attestation verify <file> --repo brianmacy/sz-rust-sdk-configtool`; check
+  integrity with `sha256sum -c SHA256SUMS` (`--ignore-missing` for a partial download).
+  The published 4.4.0-1 release was trimmed the same way (37 -> 22 assets).
+- The "Go (via cgo)" bullet in `docs/FFI_GUIDE.md`: Senzing publishes no Go V4 SDK, and this
+  project ships no Go.
+
+## [4.4.0-1] - 2026-10-07
 
 First release under the Senzing-aligned version scheme (0.10.0 -> 4.4.0-1; tag `v4.4.0-1`).
 SemVer tools (Cargo, npm, NuGet) order `4.4.0-1` BEFORE `4.4.0` (a prerelease), while Python

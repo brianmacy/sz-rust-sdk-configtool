@@ -6,10 +6,10 @@ default-members = ["."]
 resolver = "3"
 
 [workspace.package]
-version = "4.4.0-1"
+version = "4.4.0-2"
 edition = "2024"
 rust-version = "1.88"
-authors = ["Brian Macy <bmacy@senzing.com>"]
+authors = ["Brian Macy"]
 license = "Apache-2.0"
 repository = "https://github.com/brianmacy/sz-rust-sdk-configtool"
 

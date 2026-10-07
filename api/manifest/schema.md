@@ -74,6 +74,7 @@ excluded:                 # optional: this group's exclusions (see excluded.yaml
 | `positional` | no | With `rust_params_struct`: pass this arg positionally instead of as a struct field. |
 | `owned` | no | `json` only: the Rust fn takes an owned `serde_json::Value` instead of `&Value`. |
 | `rust_convert` | no | Name of a converter fn in `api/src/convert.rs` producing a non-wire Rust type (enum, `usize`, slice, ...). See that module's docs. |
+| `json_type` | `json`: yes; else forbidden | The structural type of a `json` arg (see [json_type](#json_type)); `any` for free-form JSON. Emitted in manifest.json. Node/TS types, the TS runtime check and the tRPC Zod schemas are generated from it; the other bindings render it as a `Shape: ...` doc line. |
 
 `rust_convert: required_str_as_some` (a plain, NON-optional `str` arg whose
 Rust field is `Option<&str>`) is equivalent to `optional: true` +
@@ -86,6 +87,38 @@ be in `errors[]`). Prefer `required: true` for new entries.
 List converters (`expression_element_list`, `search_profile_elements`)
 report a missing required key inside an item as `MISSING_FIELD` and a
 wrong-typed value, an unknown key, or a non-object item as `INVALID_INPUT`.
+
+### json_type
+
+A small structural language for the value of a `json` arg:
+
+| Form | Accepts |
+|---|---|
+| `any` | Any JSON value (free-form; no check). |
+| `string` / `int` / `bool` | A JSON string / integer (i64) / boolean. |
+| `{enum: ["Yes", "No"]}` | A string, exactly one of the values (case-sensitive; quote them). |
+| `{array: T}` | An array whose every item is `T`. |
+| `{object: {name: T, "opt?": T}}` | An object with exactly these keys (unknown keys do not fit); a key ending in `?` is optional. Field order is kept (it is the documented order). |
+| `{one_of: [T, ...]}` | One of the alternatives; at least two, each of a different JSON kind (string/enum, int, bool, array, object), never `any`, `nullable` or a nested `one_of`. |
+| `{nullable: T}` | `T` or JSON `null`. Use it where the library reads `null` as absent (e.g. the optional keys of a stored row, so the row round-trips); never around `any` or another `nullable`. |
+
+```yaml
+- name: elements
+  type: json
+  json_type:
+    array:
+      object:
+        feature: string
+        flag: {enum: ["Yes", "No", "Y", "N"]}
+```
+
+Codegen rejects a `json` arg without `json_type`, a `json_type` on another
+type, an empty `enum`/`object`, repeated enum values or fields, and an
+ambiguous `one_of`. Describe what a typed caller should pass, using every key
+spelling the library reads (it may also accept other forms through `invoke`):
+a conformance step whose value does not fit the descriptor is marked
+`wire_only` (see [Conformance files](#conformance-files-apimanifestconformancegroupyaml)), so typed bindings that
+enforce the type (TS) never see it.
 
 ### Rust call mapping
 
@@ -131,10 +164,15 @@ supported by the generator: exclude them (or extend the generator first).
   `config_and_json` (the record — never dropped) and `int`; `unit` has
   neither. The envelope `result` is a JSON value, but typed bindings return
   JSON TEXT (a string), never a parsed object: `config` → config string;
-  `json` → JSON text; `config_and_json` → record `ConfigAndJson(config,
-  json)`; with `tuple_names` → record `<Fn>Result` (plus `config` for
-  `config_and_json`) whose named fields are each JSON text; `int` → integer;
-  `unit` → nothing. See `bindings/CONTRACT.md`.
+  `json` → JSON text; `int` → integer; `unit` → nothing. The wire carries
+  BOTH parts of `config_and_json`; typed wrappers split them so every
+  config-changing function returns the config string: the primary `<fn>`
+  returns the config, and a generated companion `<fn>_result` (same args,
+  same operation; per-language casing) returns the record as JSON text. With
+  `tuple_names` the record is a `<Fn>Record` whose named fields are each JSON
+  text (returned by the `json` function, or by the `config_and_json`
+  companion). No manifest function may be named like a companion (codegen
+  rejects it). See `bindings/CONTRACT.md`.
 - `json` results follow the response shape convention (repo `CLAUDE.md`,
   "Response shape convention"): `get_*` return the stored row (except the
   summary gets `get_feature`, `get_element`, `get_fragment`, `get_rule`);
@@ -263,7 +301,8 @@ Cases must be expressible through TYPED bindings: codegen rejects unknown
 args, missing required args, wrong types and `null` for non-tri-state args.
 One exception: a step may omit a `required: true` arg ONLY when it expects
 `MISSING_FIELD`; codegen marks such steps `"wire_only": true` in
-conformance.json (computed — never written in YAML). Typed runners execute
+conformance.json (computed — never written in YAML). A step passing a `json`
+arg value outside the arg's `json_type` is marked `wire_only` the same way. Typed runners execute
 `wire_only` steps through `invoke` (or skip them).
 Wire-only error behaviour is tested in `api` and `ffi` unit tests instead.
 Every manifest function needs at least one case

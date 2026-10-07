@@ -13,6 +13,8 @@ export interface ManifestArg {
   optional: boolean;
   tristate: boolean;
   required: boolean;
+  /** `json` args only: the manifest `json_type` descriptor. */
+  json_type?: Json;
 }
 
 export interface ManifestFunction {

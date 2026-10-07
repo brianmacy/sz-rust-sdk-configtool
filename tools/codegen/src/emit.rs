@@ -214,6 +214,7 @@ mod tests {
             positional: false,
             owned: false,
             rust_convert: None,
+            json_type: None,
         }
     }
 

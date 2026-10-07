@@ -1,4 +1,3 @@
-import io.github.brianmacy.szconfigtool.ConfigAndJson;
 import io.github.brianmacy.szconfigtool.SzConfigTool;
 import io.github.brianmacy.szconfigtool.SzConfigToolException;
 import java.nio.file.Files;
@@ -18,10 +17,13 @@ public final class Example {
         String config = Files.readString(Path.of(args[0]));
 
         config = SzConfigTool.addDataSource(config, "CUSTOMERS");
-        ConfigAndJson added = SzConfigTool.addAttribute(config, "CUST_NAME", "NAME", "FULL_NAME",
-                "NAME", new SzConfigTool.AddAttributeOptions().internal("No"));
-        config = added.config();
-        System.out.println("new attribute row: " + added.json());
+        // Config-changing methods return the new config; the companion
+        // <name>Result (same arguments) returns the row the operation creates.
+        SzConfigTool.AddAttributeOptions internal = new SzConfigTool.AddAttributeOptions().internal("No");
+        System.out.println("new attribute row: " + SzConfigTool.addAttributeResult(config,
+                "CUST_NAME", "NAME", "FULL_NAME", "NAME", internal));
+        config = SzConfigTool.addAttribute(config, "CUST_NAME", "NAME", "FULL_NAME", "NAME",
+                internal);
         System.out.println("data source: " + SzConfigTool.getDataSource(config, "CUSTOMERS"));
 
         try {

@@ -133,9 +133,10 @@ namespace Sz.ConfigTool.Tests
         [Fact]
         public void String_list_arguments_reach_the_library()
         {
-            ConfigAndJson r = SzConfigTool.AddComparisonCall(Repo.Fixture, "name_key", "exact_comp", new[] { "full_name", "given_name" });
-            Assert.Equal(1000, JsonDocument.Parse(r.Json).RootElement.GetProperty("CFCALL_ID").GetInt64());
-            JsonElement call = JsonDocument.Parse(SzConfigTool.ListComparisonCalls(r.Config)).RootElement
+            string row = SzConfigTool.AddComparisonCallResult(Repo.Fixture, "name_key", "exact_comp", new[] { "full_name", "given_name" });
+            Assert.Equal(1000, JsonDocument.Parse(row).RootElement.GetProperty("CFCALL_ID").GetInt64());
+            string config = SzConfigTool.AddComparisonCall(Repo.Fixture, "name_key", "exact_comp", new[] { "full_name", "given_name" });
+            JsonElement call = JsonDocument.Parse(SzConfigTool.ListComparisonCalls(config)).RootElement
                 .EnumerateArray().Single(c => c.GetProperty("id").GetInt64() == 1000);
             Assert.Equal(new[] { "FULL_NAME", "GIVEN_NAME" }, call.GetProperty("elementList").EnumerateArray().Select(e => e.GetString()));
             Assert.Throws<ArgumentException>(() => SzConfigTool.AddComparisonCall(Repo.Fixture, "name_key", "exact_comp", new[] { "full_name", null! }));

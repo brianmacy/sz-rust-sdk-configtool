@@ -41,6 +41,18 @@ require_target() {
     cfg_keys targets | grep -qxF "${t}" || die "unknown target '${t}'; one of: $(cfg_keys targets | tr '\n' ' ')"
 }
 
+# target_has_python <target>: true when the target ships a Python wheel
+# (config.yaml `python_wheel`; Linux only, like Senzing's Python SDK).
+target_has_python() {
+    local v
+    v="$(tcfg "$1" python_wheel)"
+    case "${v}" in
+        true) return 0 ;;
+        false) return 1 ;;
+        *) die "targets.$1.python_wheel must be \"true\" or \"false\", got '${v}'" ;;
+    esac
+}
+
 # Release version = the Cargo workspace version (single source of truth).
 workspace_version() {
     (cd "${REPO_ROOT}" && cargo metadata --no-deps --format-version 1) |
@@ -129,7 +141,7 @@ shared_lib_name() {
 #   native/c/{lib,bin,include}   C ABI (shared + static + header)
 #   native/jni/                  JNI library
 #   native/node/                 sz-configtool.<napi_tag>.node
-#   sbom/                        CycloneDX SBOMs
+#   sbom/                        CycloneDX SBOM of the C ABI (C archive only)
 #   out/                         release assets for this target
 target_stage() { echo "${SZ_DIST_DIR}/$1"; }
 target_out() { echo "${SZ_DIST_DIR}/$1/out"; }

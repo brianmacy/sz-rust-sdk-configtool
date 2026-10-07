@@ -26,8 +26,7 @@ function camelArgs(args: Record<string, Json>): Record<string, Json> {
 
 /** The configuration a successful typed result carries, if any. */
 function configOf(returns: string, out: unknown): string | undefined {
-  if (returns === "config") return out as string;
-  if (returns === "config_and_json") return (out as { config: string }).config;
+  if (returns === "config" || returns === "config_and_json") return out as string;
   return undefined;
 }
 
@@ -62,14 +61,22 @@ async function runStep(step: Step, current: string): Promise<string> {
   const options = camelArgs(step.args);
   const input = { config, ...options };
   driven.add(name);
+  // A config_and_json function's companion procedure (the record) runs too.
+  const companion = f.returns === "config_and_json" ? `${name}Result` : undefined;
+  if (companion !== undefined) driven.add(companion);
   const want = step.expect.error;
   if (want !== undefined) {
     await expectError(proc, input, want);
+    if (companion !== undefined) await expectError(caller[companion]!, input, want);
     return current;
   }
   const out = await proc(input);
   const direct = typed[name]!(config, options);
   assert.deepEqual(out, direct, `${name}: router result differs from the direct binding`);
+  if (companion !== undefined) {
+    const record = await caller[companion]!(input);
+    assert.deepEqual(record, typed[companion]!(config, options), `${companion} differs`);
+  }
   return configOf(f.returns, out) ?? current;
 }
 

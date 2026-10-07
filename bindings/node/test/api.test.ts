@@ -6,7 +6,6 @@ import * as sz from "../dist/index.js";
 import { loadNative } from "../dist/native.js";
 import { camel, fixture, manifest } from "./helpers.ts";
 
-const exported = new Set(Object.keys(sz));
 
 interface FtypeConfig {
   G2_CONFIG: { CFG_FTYPE: Array<{ FTYPE_ID: number; FTYPE_CODE: string }> };
@@ -84,12 +83,12 @@ describe("arguments", () => {
     const value = { nested: [1, "two", null] };
     const cfg = sz.setSetting(fixture, { name: "foo", value });
     assert.equal(cfg, sz.invoke("set_setting", fixture, { name: "foo", value }).config);
-    const out = sz.addComparisonCall(fixture, {
+    const out = sz.addComparisonCallResult(fixture, {
       ftypeCode: "NAME_KEY",
       cfuncCode: "EXACT_COMP",
       elementList: ["FULL_NAME", "GIVEN_NAME"],
     });
-    assert.match(out.json, /"CFCALL_ID":1000/);
+    assert.match(out, /"CFCALL_ID":1000/);
   });
 
   test("functions with only optional args default options to {}", () => {
@@ -104,20 +103,18 @@ describe("return shapes", () => {
     assert.ok(Array.isArray(JSON.parse(out)));
   });
 
-  test("config_and_json returns { config, json } with json as JSON text", () => {
-    const out = sz.addAttribute(fixture, {
-      attribute: "my_attr",
-      feature: "name",
-      element: "full_name",
-      class: "OTHER",
-    });
-    assert.deepEqual(Object.keys(out).sort(), ["config", "json"]);
-    assert.equal(typeof out.json, "string");
-    assert.equal((JSON.parse(out.json) as { ATTR_CODE: string }).ATTR_CODE, "MY_ATTR");
+  test("config_and_json: the config text, and the record from <name>Result", () => {
+    const options = { attribute: "my_attr", feature: "name", element: "full_name", class: "OTHER" };
+    const cfg: string = sz.addAttribute(fixture, options);
+    const row: string = sz.addAttributeResult(fixture, options);
+    assert.equal(typeof cfg, "string");
+    assert.equal(typeof row, "string");
+    assert.equal((JSON.parse(row) as { ATTR_CODE: string }).ATTR_CODE, "MY_ATTR");
+    assert.match(sz.getAttribute(cfg, { code: "MY_ATTR" }), /"ATTR_CODE":"MY_ATTR"/);
   });
 
   test("json tuple_names: a camelCase record of JSON texts", () => {
-    const v: sz.VerifyCompatibilityVersionResult = sz.verifyCompatibilityVersion(fixture, {
+    const v: sz.VerifyCompatibilityVersionRecord = sz.verifyCompatibilityVersion(fixture, {
       expectedVersion: "11",
     });
     assert.deepEqual(v, { currentVersion: '"11"', matches: "true" });
@@ -125,19 +122,18 @@ describe("return shapes", () => {
     assert.deepEqual(miss, { currentVersion: '"11"', matches: "false" });
   });
 
-  test("config_and_json tuple_names: config plus JSON texts", () => {
-    const created: sz.SetGenericPlanResult = sz.setGenericPlan(fixture, {
-      gplanCode: "my_plan",
-      gplanDesc: "mine",
-    });
-    assert.deepEqual(Object.keys(created).sort(), ["config", "planId", "wasCreated"]);
+  test("config_and_json tuple_names: config text, and JSON texts from <name>Result", () => {
+    const options = { gplanCode: "my_plan", gplanDesc: "mine" };
+    const created: sz.SetGenericPlanRecord = sz.setGenericPlanResult(fixture, options);
+    assert.deepEqual(Object.keys(created).sort(), ["planId", "wasCreated"]);
     assert.equal(created.planId, "3");
     assert.equal(created.wasCreated, "true");
-    assert.equal(created.config, sz.invoke("set_generic_plan", fixture, {
+    const cfg: string = sz.setGenericPlan(fixture, options);
+    assert.equal(cfg, sz.invoke("set_generic_plan", fixture, {
       gplan_code: "my_plan",
       gplan_desc: "mine",
     }).config);
-    const updated = sz.setGenericPlan(created.config, { gplanCode: "MY_PLAN", gplanDesc: "x" });
+    const updated = sz.setGenericPlanResult(cfg, { gplanCode: "MY_PLAN", gplanDesc: "x" });
     assert.equal(updated.planId, "3");
     assert.equal(updated.wasCreated, "false");
   });

@@ -22,11 +22,12 @@ def test_template_round_trip_is_byte_exact(template: str) -> None:
 
 
 def test_non_ascii_and_escapes_pass_through(template: str) -> None:
-    out = sct.add_attribute(
-        template, "UNI", "NAME", "FULL_NAME", "OTHER", default_value='café ☃ "q" \\'
-    )
-    assert '"DEFAULT_VALUE":"café ☃ \\"q\\" \\\\"' in out.config
-    assert json.loads(out.json)["DEFAULT_VALUE"] == 'café ☃ "q" \\'
+    args = ("UNI", "NAME", "FULL_NAME", "OTHER")
+    value = 'café ☃ "q" \\'
+    config = sct.add_attribute(template, *args, default_value=value)
+    record = sct.add_attribute_result(template, *args, default_value=value)
+    assert '"DEFAULT_VALUE":"café ☃ \\"q\\" \\\\"' in config
+    assert json.loads(record)["DEFAULT_VALUE"] == value
 
 
 def test_input_whitespace_is_not_normalized_by_python() -> None:

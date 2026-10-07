@@ -27,7 +27,7 @@ describe("lone UTF-16 surrogates are INVALID_INPUT (napi would turn them into U+
     ["config", () => sz.listDataSources(fixture + "\uD83D")],
     ["function name", () => sz.invoke("list\uD800", fixture)],
     ["nested json value", () => sz.addFeature(fixture, { feature: "F1", elementList: ["E\uD800"] })],
-    ["nested json key", () => sz.addFeature(fixture, { feature: "F1", elementList: [{ ["e\uDFFF"]: "x" }] })],
+    ["nested json key", () => sz.setSetting(fixture, { name: "S1", value: { ["e\uDFFF"]: "x" } })],
     ["raw args_json text", () => sz.invoke("add_data_source", fixture, '{"code":"A\uD800"}')],
   ];
   for (const [label, fn] of cases) {
@@ -55,7 +55,7 @@ describe("numbers JSON cannot carry exactly are INVALID_INPUT (never null / roun
   });
   test("non-finite number inside a json arg", () => {
     assert.equal(
-      code(() => sz.addFeature(fixture, { feature: "F1", elementList: [{ element: "E", displayLevel: Number.NaN }] })),
+      code(() => sz.setSetting(fixture, { name: "S1", value: { level: Number.NaN } })),
       "INVALID_INPUT",
     );
   });

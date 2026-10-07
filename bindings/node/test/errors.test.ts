@@ -92,16 +92,18 @@ describe("wire errors", () => {
   }
 
   test("a JS value napi cannot convert is INVALID_INPUT with the native cause", () => {
-    const err = caught(() => sz.listDataSources(42 as unknown as string));
+    // (A non-string `config` is rejected before the native call; a
+    // non-string function name still reaches napi.)
+    const err = caught(() => sz.invoke(42 as unknown as string, fixture));
     assert.equal(err.code, "INVALID_INPUT");
     assert.equal(err.kind, "INVALID_INPUT");
     assert.ok(err.cause instanceof Error);
   });
 
   test("unserializable args (a circular json value) are INVALID_INPUT", () => {
-    const element: Record<string, unknown> = { element: "E" };
-    element["self"] = element;
-    const err = caught(() => sz.addFeature(fixture, { feature: "F1", elementList: [element as sz.JsonValue] }));
+    const value: Record<string, unknown> = { a: 1 };
+    value["self"] = value;
+    const err = caught(() => sz.setSetting(fixture, { name: "S1", value: value as sz.JsonValue }));
     assert.equal(err.code, "INVALID_INPUT");
   });
 });

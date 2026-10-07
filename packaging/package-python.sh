@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Build the Python wheel (abi3-py310) of one target with maturin:
-#   Linux  : `maturin build --zig --compatibility manylinux_2_34` (glibc floor)
-#   macOS  : MACOSX_DEPLOYMENT_TARGET from config.yaml (macosx_15_0_arm64)
-#   Windows: MSVC (explicit link.exe from lib/build-env.sh)
+# Build the Python wheel (abi3-py310) of one Linux target with maturin:
+#   `maturin build --zig --compatibility manylinux_2_34` (glibc floor).
+# Only targets with config.yaml `python_wheel: "true"` (the Linux legs) ship a
+# wheel: Senzing's Python SDK is Linux only, so macOS / Windows are refused.
 # Output: ${SZ_DIST_DIR}/<target>/out/sz_configtool-<pep440-version>-cp310-abi3-<platform>.whl
 # (<pep440-version>: lib/common.sh pep440_version, e.g. 4.4.0.post1 for 4.4.0-1, 4.5.0rc1 for 4.5.0-rc.1)
-# No SBOM is embedded (bindings/python/pyproject.toml `[tool.maturin.sbom] rust = false`);
-# the crate's CycloneDX SBOM ships separately (build-native.sh). check-no-build-paths.sh
-# scans the wheel.
+# No SBOM is embedded (bindings/python/pyproject.toml `[tool.maturin.sbom] rust = false`)
+# and none is a release asset (Cargo.lock at the tag lists the dependencies).
+# check-no-build-paths.sh scans the wheel.
 # The extension inside the wheel is also extracted to native/python/ so the
 # export / glibc / build-path gates can inspect it.
 #
@@ -21,6 +21,8 @@ source "${PACKAGING_DIR}/lib/build-env.sh"
 
 TARGET="${1:-}"
 require_target "${TARGET}"
+target_has_python "${TARGET}" ||
+    die "no Python wheel for ${TARGET}: wheels are Linux only, like Senzing's Python SDK (config.yaml python_wheel)"
 setup_build_env "${TARGET}"
 VERSION="$(workspace_version)"
 STAGE="$(target_stage "${TARGET}")"

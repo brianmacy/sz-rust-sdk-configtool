@@ -3186,7 +3186,8 @@
           },
           "expect": {
             "error": "MISSING_FIELD"
-          }
+          },
+          "wire_only": true
         }
       ]
     },
@@ -7554,7 +7555,8 @@
           },
           "expect": {
             "error": "INVALID_INPUT"
-          }
+          },
+          "wire_only": true
         }
       ]
     },
@@ -9290,7 +9292,8 @@
           },
           "expect": {
             "error": "MISSING_FIELD"
-          }
+          },
+          "wire_only": true
         }
       ]
     },
@@ -9307,7 +9310,8 @@
           },
           "expect": {
             "error": "MISSING_FIELD"
-          }
+          },
+          "wire_only": true
         }
       ]
     },
@@ -12843,7 +12847,8 @@
           },
           "expect": {
             "error": "MISSING_FIELD"
-          }
+          },
+          "wire_only": true
         }
       ]
     },
@@ -12860,7 +12865,8 @@
           "config_literal": "not json",
           "expect": {
             "error": "MISSING_FIELD"
-          }
+          },
+          "wire_only": true
         }
       ]
     },
@@ -12878,7 +12884,8 @@
           },
           "expect": {
             "error": "MISSING_FIELD"
-          }
+          },
+          "wire_only": true
         }
       ]
     },
@@ -13454,6 +13461,50 @@
     },
     {
       "group": "search_profiles",
+      "name": "add_typed_flags_then_get",
+      "doc": "Every option with the canonical flag spellings (the elements json_type), so typed bindings exercise the full call; add_full_then_get_and_list (lowercase flags) runs through invoke only.",
+      "steps": [
+        {
+          "fn": "add_search_profile",
+          "args": {
+            "code": "typed",
+            "generic_plan": "SEARCH",
+            "candidates": "Off",
+            "description": "Typed profile",
+            "elements": [
+              {
+                "feature": "NAME",
+                "flag": "Y"
+              },
+              {
+                "feature": "ADDRESS",
+                "flag": "No"
+              }
+            ]
+          },
+          "expect": {
+            "kind": "config"
+          }
+        },
+        {
+          "fn": "get_search_profile",
+          "args": {
+            "code": "TYPED"
+          },
+          "expect": {
+            "kind": "json",
+            "result": {
+              "SPROFILE_CODE": "TYPED",
+              "SPROFILE_DESC": "Typed profile",
+              "DEFAULT_USED_FOR_CAND": "Off",
+              "FTYPE_OVERRIDES": "[{1,Y},{5,N}]"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "group": "search_profiles",
       "name": "add_full_then_get_and_list",
       "steps": [
         {
@@ -13476,7 +13527,8 @@
           },
           "expect": {
             "kind": "config"
-          }
+          },
+          "wire_only": true
         },
         {
           "fn": "get_search_profile",
@@ -13597,7 +13649,8 @@
           },
           "expect": {
             "error": "MISSING_FIELD"
-          }
+          },
+          "wire_only": true
         }
       ]
     },
@@ -13716,7 +13769,8 @@
           },
           "expect": {
             "error": "VALIDATION_ERRORS"
-          }
+          },
+          "wire_only": true
         }
       ]
     },
@@ -13738,7 +13792,8 @@
           },
           "expect": {
             "error": "INVALID_INPUT"
-          }
+          },
+          "wire_only": true
         }
       ]
     },
