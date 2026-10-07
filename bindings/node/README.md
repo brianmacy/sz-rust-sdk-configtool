@@ -84,17 +84,17 @@ To produce a tarball yourself: `npm run build && npm pack`.
 
 ```ts
 import { readFileSync } from "node:fs";
-import { addAttribute, addDataSource, listDataSources, SzConfigToolError } from "sz-configtool";
+import {
+  addAttribute, addAttributeResult, addDataSource, listDataSources, SzConfigToolError,
+} from "sz-configtool";
 
 let config = readFileSync(process.argv[2]!, "utf8");
-config = addDataSource(config, { code: "CUSTOMERS" });
-
-const attr = addAttribute(config, {
-  attribute: "CUSTOMER_NAME", feature: "NAME", element: "FULL_NAME", class: "NAME",
-});
-config = attr.config;                       // new configuration
-console.log(JSON.parse(attr.json));          // the new CFG_ATTR row
-console.log(listDataSources(config));        // JSON text
+config = addDataSource(config, { code: "CUSTOMERS" });   // every config-changing
+                                                         // function returns the config
+const attribute = { attribute: "CUSTOMER_NAME", feature: "NAME", element: "FULL_NAME", class: "NAME" };
+console.log(JSON.parse(addAttributeResult(config, attribute))); // the CFG_ATTR row it would add
+config = addAttribute(config, attribute);                // new configuration
+console.log(listDataSources(config));                    // JSON text
 
 try {
   addDataSource(config, { code: "CUSTOMERS" });
@@ -114,13 +114,13 @@ file directly needs Node 22.18+ (type stripping on by default; 22.6-22.17:
 |---|---|
 | Names | manifest snake_case split on `_` → camelCase (`get_ftype_id` → `getFtypeId`); options properties likewise. |
 | Shape | `fn(config, options)` — `options` omitted when there are no args, defaults to `{}` when all are optional. |
-| `config` | Opaque string, passed and returned byte-exact (never parsed). |
+| `config` | Opaque string, passed and returned byte-exact (never parsed). A non-string `config` (e.g. a companion's record passed back) is `INVALID_INPUT` before the native call. |
 | Optional | `name?: T`; `undefined` = absent (the library applies its documented default). |
 | Tri-state | `name?: T \| null`: `undefined` = leave, `null` = clear, value = set. |
 | `int` | `number \| bigint`. A `number` must be a safe integer (`\|n\| <= Number.MAX_SAFE_INTEGER`, else `INVALID_INPUT`: it was already rounded); pass a `bigint` for the full i64 range (`-(2n ** 63n)` .. `2n ** 63n - 1n`), written to the wire as its exact digits. A `bigint` outside i64 is `INVALID_INPUT`. `bigint` is also accepted anywhere inside a `json` arg. |
 | `int_or_str` | `number \| bigint \| string` — a call selector: an integer call id or a feature code (`getComparisonCall(cfg, { call: 1 })` / `{ call: "NAME" }`). A non-integer number is `INVALID_INPUT`. |
 | `required: true` | A required property even though Rust takes `Option` (absent → `MISSING_FIELD` via `invoke`). |
-| Returns | `config` → `string`; `json` → JSON **text** (`JSON.parse` it); `config_and_json` → `ConfigAndJson { config, json }` (json = JSON text); `tuple_names` → `<Fn>Result` whose camelCase fields are each member's JSON **text** (e.g. `SetGenericPlanResult { config, planId: "3", wasCreated: "true" }`; strings keep their quotes: `currentVersion: "\"11\""`); `int` → `number`; `unit` → `void`. |
+| Returns | Every config-changing function (`config`, `config_and_json`) → the new config `string`, so calls chain. A `config_and_json` function also has a companion `<fn>Result` (same options, same operation) → the record as JSON **text** (e.g. `addAttributeResult` → the new `CFG_ATTR` row); with `tuple_names` → `<Fn>Record` whose camelCase fields are each member's JSON **text** (e.g. `setGenericPlanResult` → `SetGenericPlanRecord { planId: "3", wasCreated: "true" }`; strings keep their quotes: `currentVersion: "\"11\""`). `json` → JSON **text** (`JSON.parse` it); `int` → `number`; `unit` → `void`. |
 | Skipped | `status: not_implemented` placeholders; still callable via `invoke(name, config, args)`. |
 | Docs | TSDoc on every function/option from the manifest `doc`, `semantics`, `notes`, `errors`. |
 
@@ -151,10 +151,11 @@ integers), `bool`,
 `json`→`z.json()`, `str_list`→`z.array(z.string())`,
 `int_or_str`→`z.union([z.int(), z.bigint(), z.string()])`; tri-state →
 `.nullable().optional()`). Output is the typed function's result, with the
-same types (`ConfigAndJson`, `<Fn>Result` JSON texts). superjson is the
+same types (config text, JSON text, `<Fn>Record` JSON texts). superjson is the
 transformer.
 
-* Config-changing functions are **mutations**; read-only ones are **queries**.
+* Config-changing functions are **mutations** (they return the config text);
+  read-only ones and the `<fn>Result` companions (the record only) are **queries**.
 * **Every request carries the whole configuration (~150–300KB)**. Send queries
   with POST (`methodOverride: "POST"` on the client, `allowMethodOverride: true`
   on the server) — a GET URL cannot hold it — and size any proxy/body limits

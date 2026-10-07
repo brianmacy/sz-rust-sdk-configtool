@@ -99,13 +99,6 @@ private:
     std::optional<T> value_;
 };
 
-/// Result of a `config_and_json` function: the modified config and the
-/// record as JSON text.
-struct ConfigAndJson {
-    std::string config;
-    std::string json;
-};
-
 /// Wire result kinds (`returns` in the manifest).
 enum class ResultKind { Config, Json, ConfigAndJson, Int, Unit };
 

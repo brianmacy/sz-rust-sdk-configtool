@@ -62,13 +62,16 @@ def test_required_true_optional_is_a_required_parameter(template: str) -> None:
 
 def test_optional_none_means_omitted(template: str) -> None:
     args = ("MY_ATTR", "NAME", "FULL_NAME", "OTHER")
-    omitted = sct.add_attribute(template, *args)
-    explicit_none = sct.add_attribute(template, *args, internal=None, id=None)
+    omitted = sct.add_attribute_result(template, *args)
+    explicit_none = sct.add_attribute_result(template, *args, internal=None, id=None)
     assert omitted == explicit_none
-    assert json.loads(omitted.json)["INTERNAL"] == "No"
-    valued = sct.add_attribute(template, *args, internal="yes", id=5000)
-    assert json.loads(valued.json)["INTERNAL"] == "Yes"
-    assert json.loads(valued.json)["ATTR_ID"] == 5000
+    assert sct.add_attribute(template, *args) == sct.add_attribute(
+        template, *args, internal=None, id=None
+    )
+    assert json.loads(omitted)["INTERNAL"] == "No"
+    valued = sct.add_attribute_result(template, *args, internal="yes", id=5000)
+    assert json.loads(valued)["INTERNAL"] == "Yes"
+    assert json.loads(valued)["ATTR_ID"] == 5000
 
 
 def test_tristate_unset_none_value(template: str) -> None:
@@ -78,14 +81,14 @@ def test_tristate_unset_none_value(template: str) -> None:
 
     original = connect(template)
     assert original is not None
-    left = sct.set_comparison_function(template, "str_comp", language="C").config
+    left = sct.set_comparison_function(template, "str_comp", language="C")
     assert connect(left) == original
     unset = sct.set_comparison_function(template, "str_comp", connect_str=sct.UNSET)
-    assert connect(unset.config) == original
+    assert connect(unset) == original
     valued = sct.set_comparison_function(template, "str_comp", connect_str="g2New")
-    assert connect(valued.config) == "g2New"
-    cleared = sct.set_comparison_function(valued.config, "str_comp", connect_str=None)
-    assert connect(cleared.config) is None
+    assert connect(valued) == "g2New"
+    cleared = sct.set_comparison_function(valued, "str_comp", connect_str=None)
+    assert connect(cleared) is None
 
 
 def test_unset_sentinel() -> None:
@@ -95,46 +98,39 @@ def test_unset_sentinel() -> None:
     assert isinstance(sct.UNSET, sct.UnsetType)
 
 
-def test_config_and_json_is_a_named_tuple(template: str) -> None:
-    out = sct.add_attribute(template, "X_ATTR", "NAME", "FULL_NAME", "OTHER")
-    config, record = out
-    assert out._fields == ("config", "json")
-    assert config == out.config and record == out.json
-    assert json.loads(record)["ATTR_CODE"] == "X_ATTR"
-
-
 def record_class(f: dict) -> type:
     return getattr(
-        sct, "".join(w.capitalize() for w in f["name"].split("_")) + "Result"
+        sct, "".join(w.capitalize() for w in f["name"].split("_")) + "Record"
     )
 
 
 @pytest.mark.parametrize("f", TUPLE_NAMED, ids=lambda f: f["name"])
 def test_tuple_names_give_a_named_record(f: dict) -> None:
     cls = record_class(f)
-    lead = ["config"] if f["returns"] == "config_and_json" else []
-    assert cls._fields == tuple(lead + f["tuple_names"])
+    assert cls._fields == tuple(f["tuple_names"])
     assert cls.__name__ in sct.__all__
-    hint = inspect.signature(getattr(sct, f["name"])).return_annotation
+    typed = f["name"] + ("_result" if f["returns"] == "config_and_json" else "")
+    hint = inspect.signature(getattr(sct, typed)).return_annotation
     assert hint == cls.__name__
 
 
 def test_set_generic_plan_record_fields_are_json_text(template: str) -> None:
-    created = sct.set_generic_plan(template, "my_plan", "Mine")
-    assert isinstance(created, sct.SetGenericPlanResult)
+    created = sct.set_generic_plan_result(template, "my_plan", "Mine")
+    assert isinstance(created, sct.SetGenericPlanRecord)
     assert (created.plan_id, created.was_created) == ("3", "true")
     raw = sct.invoke(
         "set_generic_plan", template, {"gplan_code": "my_plan", "gplan_desc": "Mine"}
     )
-    assert created.config == raw.config
-    updated = sct.set_generic_plan(created.config, "MY_PLAN", "Renamed")
+    config = sct.set_generic_plan(template, "my_plan", "Mine")
+    assert config == raw.config
+    updated = sct.set_generic_plan_result(config, "MY_PLAN", "Renamed")
     assert (updated.plan_id, updated.was_created) == ("3", "false")
 
 
 def test_verify_compatibility_version_record_fields(template: str) -> None:
     current = json.loads(sct.get_compatibility_version(template))
     hit = sct.verify_compatibility_version(template, current)
-    assert isinstance(hit, sct.VerifyCompatibilityVersionResult)
+    assert isinstance(hit, sct.VerifyCompatibilityVersionRecord)
     assert hit == (json.dumps(current), "true")
     miss = sct.verify_compatibility_version(template, "no-such-version")
     assert (miss.current_version, miss.matches) == (json.dumps(current), "false")

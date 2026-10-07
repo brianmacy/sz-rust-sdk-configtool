@@ -18,14 +18,6 @@ export interface InvokeEnvelope {
   result?: string;
 }
 
-/** Result of a `config_and_json` function (without `tuple_names`). */
-export interface ConfigAndJson {
-  /** The modified configuration JSON text. */
-  readonly config: string;
-  /** The record as JSON text (not parsed). */
-  readonly json: string;
-}
-
 /** Wire args: snake_case keys; `undefined` values are dropped (= absent). */
 export type WireArgs = Readonly<Record<string, unknown>>;
 
@@ -36,6 +28,23 @@ function wellFormed(s: string): boolean {
 
 function invalid(message: string): SzConfigToolError {
   return new SzConfigToolError("INVALID_INPUT", message);
+}
+
+/**
+ * `config` must be the configuration JSON TEXT. Checked before the native
+ * call so a common mistake (passing a previous call's non-config value, such
+ * as a companion's record, back as the config) fails here with a clear
+ * message instead of napi's "Failed to convert JavaScript value" on a later
+ * call.
+ */
+function checkConfig(config: unknown): void {
+  if (typeof config === "string") return;
+  const got = config === null ? "null" : typeof config;
+  throw invalid(
+    `config must be a string (the configuration JSON text), got ${got}; if this came from a ` +
+      "previous call, use the value that call returned (config-changing functions return the " +
+      "config text; use <name>Result for the created row)",
+  );
 }
 
 /** A string napi would silently change (a lone surrogate becomes U+FFFD). */
@@ -106,6 +115,7 @@ export function wireJson(v: unknown): string {
  */
 export function invoke(name: string, config: string, args: WireArgs | string = {}): InvokeEnvelope {
   checkText("function name", name);
+  checkConfig(config);
   checkText("config", config);
   if (typeof args === "string") checkText("args_json", args);
   else checkWire("args", args);
@@ -140,17 +150,14 @@ function field(env: InvokeEnvelope, key: "config" | "result", name: string): str
   return value;
 }
 
+/** `returns: config`, or the primary of a `config_and_json` function: the config. */
 export function callConfig(name: string, config: string, args: WireArgs): string {
   return field(invoke(name, config, args), "config", name);
 }
 
+/** `returns: json`, or a `config_and_json` companion: the result JSON text. */
 export function callJson(name: string, config: string, args: WireArgs): string {
   return field(invoke(name, config, args), "result", name);
-}
-
-export function callConfigAndJson(name: string, config: string, args: WireArgs): ConfigAndJson {
-  const env = invoke(name, config, args);
-  return { config: field(env, "config", name), json: field(env, "result", name) };
 }
 
 export function callInt(name: string, config: string, args: WireArgs): number {
@@ -225,9 +232,10 @@ export function memberTexts(text: string): Map<string, string> {
 }
 
 /**
- * A `tuple_names` function: the wire record `{snake: value}` becomes
- * `{camel: "<value as JSON text>"}`, plus `config` when the function returns
- * one. A missing member is the JSON text `null`.
+ * A `tuple_names` result (a `json` function, or a `config_and_json`
+ * companion): the wire record `{snake: value}` becomes
+ * `{camel: "<value as JSON text>"}` (never the config). A missing member is
+ * the JSON text `null`.
  */
 export function callNamed<T>(
   name: string,
@@ -235,10 +243,8 @@ export function callNamed<T>(
   args: WireArgs,
   fields: ReadonlyArray<readonly [string, string]>,
 ): T {
-  const env = invoke(name, config, args);
-  const members = memberTexts(field(env, "result", name));
+  const members = memberTexts(field(invoke(name, config, args), "result", name));
   const out: Record<string, string> = {};
-  if (env.config !== undefined) out["config"] = env.config;
   for (const [wire, camel] of fields) out[camel] = members.get(wire) ?? "null";
   return out as T;
 }

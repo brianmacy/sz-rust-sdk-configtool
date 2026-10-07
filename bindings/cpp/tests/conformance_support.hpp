@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -126,12 +127,34 @@ struct Outcome {
 
     static Outcome FromConfig(std::string c) { return {"config", std::move(c), std::nullopt}; }
     static Outcome FromJson(std::string j) { return {"json", std::nullopt, std::move(j)}; }
-    static Outcome FromConfigAndJson(szconfigtool::ConfigAndJson r) {
-        return {"config_and_json", std::move(r.config), std::move(r.json)};
+    /// A `config_and_json` step through BOTH typed functions: `primary` (the
+    /// config text) and its `<Name>Result` `companion` (the record JSON text).
+    /// When either fails, the other must fail with the same reason code.
+    template <class Primary, class Companion>
+    static Outcome FromConfigAndJson(Primary primary, Companion companion) {
+        static_assert(std::is_same_v<std::invoke_result_t<Primary>, std::string>,
+                      "a config-changing function must return the config text");
+        static_assert(std::is_same_v<std::invoke_result_t<Companion>, std::string>);
+        std::string config;
+        try {
+            config = primary();
+        } catch (const szconfigtool::SzConfigToolException& e) {
+            try {
+                (void)companion();
+            } catch (const szconfigtool::SzConfigToolException& other) {
+                if (other.ReasonCode() != e.ReasonCode()) {
+                    throw std::logic_error("companion failed with " + std::string(other.ReasonCode()) +
+                                           ", primary with " + std::string(e.ReasonCode()));
+                }
+                throw;
+            }
+            throw std::logic_error("companion succeeded where the primary failed");
+        }
+        return {"config_and_json", std::move(config), companion()};
     }
-    /// A named-field result: rebuilds the record `{"name": <json text>, ...}`.
-    static Outcome FromRecord(std::string kind, std::optional<std::string> config,
-                              std::initializer_list<std::pair<std::string_view, std::string_view>> fields) {
+    /// A named-field record `{"name": <json text>, ...}`.
+    static std::string RecordJson(
+        std::initializer_list<std::pair<std::string_view, std::string_view>> fields) {
         std::string rec = "{";
         for (const auto& [name, text] : fields) {
             if (rec.size() > 1) {
@@ -142,7 +165,12 @@ struct Outcome {
             rec.append(text);
         }
         rec.push_back('}');
-        return {std::move(kind), std::move(config), std::move(rec)};
+        return rec;
+    }
+    /// A named-field result: rebuilds the record `{"name": <json text>, ...}`.
+    static Outcome FromRecord(std::string kind,
+                              std::initializer_list<std::pair<std::string_view, std::string_view>> fields) {
+        return {std::move(kind), std::nullopt, RecordJson(fields)};
     }
     static Outcome FromInt(std::int64_t v) { return {"int", std::nullopt, std::to_string(v)}; }
     static Outcome Unit() { return {"unit", std::nullopt, std::nullopt}; }

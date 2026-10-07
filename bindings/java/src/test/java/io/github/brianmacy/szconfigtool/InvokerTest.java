@@ -25,7 +25,7 @@ class InvokerTest {
     void everyHelperRejectsAResultOfAnotherKind() {
         Map<String, Executable> helpers = Map.of(
                 "config", () -> Invoker.config(JSON_FN, CFG, new Args()),
-                "config_and_json", () -> Invoker.configAndJson(JSON_FN, CFG, new Args()),
+                "config_and_json", () -> Invoker.result(JSON_FN, "config_and_json", CFG, new Args()),
                 "unit", () -> Invoker.unit(JSON_FN, CFG, new Args()));
         helpers.forEach((kind, call) -> internal(
                 JSON_FN + ": expected result kind " + kind + " but got json", call));
@@ -36,6 +36,7 @@ class InvokerTest {
         String[] out = Invoker.call(JSON_FN, "json", CFG, new Args());
         assertArrayEquals(new String[] {"json", null, "[]"}, out);
         assertEquals("[]", Invoker.json(JSON_FN, CFG, new Args()));
+        assertEquals("[]", Invoker.result(JSON_FN, "json", CFG, new Args()));
     }
 
     @Test

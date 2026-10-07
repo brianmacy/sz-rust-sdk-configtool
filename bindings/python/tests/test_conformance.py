@@ -28,8 +28,14 @@ def record_json(value: tuple, names: list[str]) -> str:
 
 
 def call_typed(fn: str, config: str, args: dict[str, Any]) -> sct.Invocation:
-    """Call the typed wrapper; normalize its value to an ``Invocation``."""
-    value = getattr(sct, fn)(config, **{py_name(k): v for k, v in args.items()})
+    """Call the typed wrapper(s); normalize the value(s) to an ``Invocation``.
+
+    A ``config_and_json`` function is the primary (the new config text) plus
+    its ``<fn>_result`` companion (the record), both called with the step's
+    arguments on the same input config.
+    """
+    kwargs = {py_name(k): v for k, v in args.items()}
+    value = getattr(sct, fn)(config, **kwargs)
     names = FUNCTIONS[fn].get("tuple_names") or []
     match (FUNCTIONS[fn]["returns"], bool(names)):
         case ("config", _):
@@ -42,12 +48,15 @@ def call_typed(fn: str, config: str, args: dict[str, Any]) -> sct.Invocation:
             assert value._fields == tuple(names)
             return sct.Invocation("json", None, record_json(value, names))
         case ("config_and_json", False):
-            assert isinstance(value, sct.ConfigAndJson)
-            return sct.Invocation("config_and_json", value.config, value.json)
+            assert isinstance(value, str)
+            record = getattr(sct, f"{fn}_result")(config, **kwargs)
+            assert isinstance(record, str)
+            return sct.Invocation("config_and_json", value, record)
         case ("config_and_json", True):
-            assert value._fields == ("config", *names)
-            result = record_json(value, names)
-            return sct.Invocation("config_and_json", value.config, result)
+            assert isinstance(value, str)
+            record = getattr(sct, f"{fn}_result")(config, **kwargs)
+            assert record._fields == tuple(names)
+            return sct.Invocation("config_and_json", value, record_json(record, names))
         case ("int", _):
             assert isinstance(value, int)
             return sct.Invocation("int", None, json.dumps(value))
@@ -80,6 +89,10 @@ def expect_error(step: dict[str, Any], config: str) -> None:
     with pytest.raises(sct.SzConfigToolError) as typed:
         getattr(sct, step["fn"])(config, **typed_args)
     assert typed.value.reason_code == want, typed.value
+    if FUNCTIONS[step["fn"]]["returns"] == "config_and_json":
+        with pytest.raises(sct.SzConfigToolError) as companion:
+            getattr(sct, f"{step['fn']}_result")(config, **typed_args)
+        assert companion.value.reason_code == want, companion.value
 
 
 @pytest.mark.parametrize(

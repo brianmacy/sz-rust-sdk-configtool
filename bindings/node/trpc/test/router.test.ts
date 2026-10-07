@@ -24,14 +24,20 @@ async function rejects(p: Promise<unknown>): Promise<TRPCError> {
 }
 
 describe("router shape", () => {
-  test("one procedure per typed function, none for not_implemented", () => {
-    assert.deepEqual(Object.keys(procedures).sort(), implemented.map((f) => camel(f.name)).sort());
+  test("one procedure per typed function (+ companions), none for not_implemented", () => {
+    const want = implemented.flatMap((f) =>
+      f.returns === "config_and_json" ? [camel(f.name), `${camel(f.name)}Result`] : [camel(f.name)],
+    );
+    assert.deepEqual(Object.keys(procedures).sort(), want.sort());
   });
 
-  test("config-returning functions are mutations, read-only ones queries", () => {
+  test("config-returning functions are mutations; read-only ones and companions queries", () => {
     for (const f of implemented) {
       const want = f.returns === "config" || f.returns === "config_and_json" ? "mutation" : "query";
       assert.equal(procedures[camel(f.name)]?._def.type, want, f.name);
+      if (f.returns === "config_and_json") {
+        assert.equal(procedures[`${camel(f.name)}Result`]?._def.type, "query", f.name);
+      }
     }
   });
 
@@ -61,27 +67,29 @@ describe("procedures", () => {
     const v = (await caller["verifyCompatibilityVersion"]!({
       config: fixture,
       expectedVersion: "11",
-    })) as sz.VerifyCompatibilityVersionResult;
+    })) as sz.VerifyCompatibilityVersionRecord;
     assert.deepEqual(v, { currentVersion: '"11"', matches: "true" });
-    const p = (await caller["setGenericPlan"]!({
-      config: fixture,
-      gplanCode: "my_plan",
-      gplanDesc: "mine",
-    })) as sz.SetGenericPlanResult;
-    assert.deepEqual([p.planId, p.wasCreated], ["3", "true"]);
-    assert.equal(p.config, sz.setGenericPlan(fixture, { gplanCode: "my_plan", gplanDesc: "mine" }).config);
+    const input = { config: fixture, gplanCode: "my_plan", gplanDesc: "mine" };
+    const p = (await caller["setGenericPlanResult"]!(input)) as sz.SetGenericPlanRecord;
+    assert.deepEqual(p, { planId: "3", wasCreated: "true" });
+    const cfg = await caller["setGenericPlan"]!(input);
+    assert.equal(cfg, sz.setGenericPlan(fixture, { gplanCode: "my_plan", gplanDesc: "mine" }));
   });
 
-  test("config_and_json output is { config, json }", async () => {
-    const out = (await caller["addAttribute"]!({
+  test("config_and_json: the procedure returns the config, <name>Result the row", async () => {
+    const input = {
       config: fixture,
       attribute: "my_attr",
       feature: "name",
       element: "full_name",
       class: "OTHER",
-    })) as sz.ConfigAndJson;
-    assert.deepEqual(Object.keys(out).sort(), ["config", "json"]);
-    assert.match(out.json, /"ATTR_CODE":"MY_ATTR"/);
+    };
+    const cfg = await caller["addAttribute"]!(input);
+    assert.equal(typeof cfg, "string");
+    assert.match(sz.getAttribute(cfg as string, { code: "MY_ATTR" }), /"ATTR_CODE":"MY_ATTR"/);
+    const row = await caller["addAttributeResult"]!(input);
+    assert.equal(typeof row, "string");
+    assert.match(row as string, /"ATTR_CODE":"MY_ATTR"/);
   });
 
   test("int_or_str call selector: id and feature code", async () => {

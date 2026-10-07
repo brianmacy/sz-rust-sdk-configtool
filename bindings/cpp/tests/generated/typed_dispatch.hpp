@@ -5,6 +5,7 @@
 
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <variant>
 #include "conformance_support.hpp"
@@ -15,6 +16,13 @@ namespace szconfigtool_test {
 /// Workspace-relative inputs (from project.yaml `paths`).
 inline constexpr const char* kManifestJson = "api/manifest/generated/manifest.json";
 inline constexpr const char* kConformanceJson = "api/manifest/generated/conformance.json";
+
+/// Wire names whose typed call runs the primary AND its `<Name>Result`
+/// companion (every implemented `config_and_json` function).
+inline const std::set<std::string>& TypedCompanions() {
+    static const std::set<std::string> names = {"add_attribute", "add_comparison_call", "add_comparison_call_element", "add_distinct_call", "add_distinct_call_element", "add_expression_call", "add_expression_call_element", "add_standardize_call", "add_standardize_call_element", "remove_config_section_field", "add_config_section_field", "add_fragment", "add_comparison_function", "delete_comparison_function", "delete_comparison_function_cascade", "set_comparison_function", "add_distinct_function", "delete_distinct_function", "set_distinct_function", "add_expression_function", "delete_expression_function", "delete_expression_function_cascade", "set_expression_function", "add_standardize_function", "delete_standardize_function", "delete_standardize_function_cascade", "set_standardize_function", "clone_generic_plan", "set_generic_plan", "add_rule"};
+    return names;
+}
 
 /// Wire name -> typed call, for every IMPLEMENTED manifest function.
 inline const std::map<std::string, TypedCall>& TypedFunctions() {
@@ -34,7 +42,9 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("id")) {
             options.id = args.Int("id");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::AddAttribute(config, args.Str("attribute"), args.Str("feature"), args.Str("element"), args.Str("class"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::AddAttribute(config, args.Str("attribute"), args.Str("feature"), args.Str("element"), args.Str("class"), options); },
+            [&] { return szconfigtool::AddAttributeResult(config, args.Str("attribute"), args.Str("feature"), args.Str("element"), args.Str("class"), options); });
     }},
     {"delete_attribute", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code"});
@@ -88,7 +98,9 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("id")) {
             options.id = args.Int("id");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::AddComparisonCall(config, args.Str("ftype_code"), args.Str("cfunc_code"), args.StrList("element_list"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::AddComparisonCall(config, args.Str("ftype_code"), args.Str("cfunc_code"), args.StrList("element_list"), options); },
+            [&] { return szconfigtool::AddComparisonCallResult(config, args.Str("ftype_code"), args.Str("cfunc_code"), args.StrList("element_list"), options); });
     }},
     {"delete_comparison_call", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"cfcall_id"});
@@ -110,7 +122,9 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("exec_order")) {
             options.exec_order = args.Int("exec_order");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::AddComparisonCallElement(config, args.Int("cfcall_id"), args.Int("ftype_id"), args.Int("felem_id"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::AddComparisonCallElement(config, args.Int("cfcall_id"), args.Int("ftype_id"), args.Int("felem_id"), options); },
+            [&] { return szconfigtool::AddComparisonCallElementResult(config, args.Int("cfcall_id"), args.Int("ftype_id"), args.Int("felem_id"), options); });
     }},
     {"delete_comparison_call_element", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"call", "element_code", "element_feature"});
@@ -124,7 +138,9 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
     }},
     {"add_distinct_call", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"ftype_code", "dfunc_code", "element_list"});
-        return Outcome::FromConfigAndJson(szconfigtool::AddDistinctCall(config, args.Str("ftype_code"), args.Str("dfunc_code"), args.StrList("element_list")));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::AddDistinctCall(config, args.Str("ftype_code"), args.Str("dfunc_code"), args.StrList("element_list")); },
+            [&] { return szconfigtool::AddDistinctCallResult(config, args.Str("ftype_code"), args.Str("dfunc_code"), args.StrList("element_list")); });
     }},
     {"delete_distinct_call", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"dfcall_id"});
@@ -146,7 +162,9 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("exec_order")) {
             options.exec_order = args.Int("exec_order");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::AddDistinctCallElement(config, args.Int("dfcall_id"), args.Int("ftype_id"), args.Int("felem_id"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::AddDistinctCallElement(config, args.Int("dfcall_id"), args.Int("ftype_id"), args.Int("felem_id"), options); },
+            [&] { return szconfigtool::AddDistinctCallElementResult(config, args.Int("dfcall_id"), args.Int("ftype_id"), args.Int("felem_id"), options); });
     }},
     {"delete_distinct_call_element", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"call", "element_code", "element_feature"});
@@ -173,7 +191,9 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("expression_feature")) {
             options.expression_feature = args.Str("expression_feature");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::AddExpressionCall(config, args.Str("efunc_code"), args.Json("element_list"), args.Str("is_virtual"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::AddExpressionCall(config, args.Str("efunc_code"), args.Json("element_list"), args.Str("is_virtual"), options); },
+            [&] { return szconfigtool::AddExpressionCallResult(config, args.Str("efunc_code"), args.Json("element_list"), args.Str("is_virtual"), options); });
     }},
     {"delete_expression_call", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"efcall_id"});
@@ -195,7 +215,9 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("exec_order")) {
             options.exec_order = args.Int("exec_order");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::AddExpressionCallElement(config, args.Int("efcall_id"), args.Int("ftype_id"), args.Int("felem_id"), args.Str("felem_req"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::AddExpressionCallElement(config, args.Int("efcall_id"), args.Int("ftype_id"), args.Int("felem_id"), args.Str("felem_req"), options); },
+            [&] { return szconfigtool::AddExpressionCallElementResult(config, args.Int("efcall_id"), args.Int("ftype_id"), args.Int("felem_id"), args.Str("felem_req"), options); });
     }},
     {"delete_expression_call_element", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"call", "element_code", "element_feature"});
@@ -219,7 +241,9 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("exec_order")) {
             options.exec_order = args.Int("exec_order");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::AddStandardizeCall(config, args.Str("sfunc_code"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::AddStandardizeCall(config, args.Str("sfunc_code"), options); },
+            [&] { return szconfigtool::AddStandardizeCallResult(config, args.Str("sfunc_code"), options); });
     }},
     {"delete_standardize_call", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"sfcall_id"});
@@ -244,7 +268,9 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("exec_order")) {
             options.exec_order = args.Int("exec_order");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::AddStandardizeCallElement(config, args.Int("ftype_id"), args.Int("sfunc_id"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::AddStandardizeCallElement(config, args.Int("ftype_id"), args.Int("sfunc_id"), options); },
+            [&] { return szconfigtool::AddStandardizeCallElementResult(config, args.Int("ftype_id"), args.Int("sfunc_id"), options); });
     }},
     {"delete_standardize_call_element", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"ftype_id", "sfunc_id", "felem_id"});
@@ -280,11 +306,15 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
     }},
     {"remove_config_section_field", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"section_name", "field_name"});
-        return Outcome::FromConfigAndJson(szconfigtool::RemoveConfigSectionField(config, args.Str("section_name"), args.Str("field_name")));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::RemoveConfigSectionField(config, args.Str("section_name"), args.Str("field_name")); },
+            [&] { return szconfigtool::RemoveConfigSectionFieldResult(config, args.Str("section_name"), args.Str("field_name")); });
     }},
     {"add_config_section_field", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"section_name", "field_name", "field_value"});
-        return Outcome::FromConfigAndJson(szconfigtool::AddConfigSectionField(config, args.Str("section_name"), args.Str("field_name"), args.Json("field_value")));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::AddConfigSectionField(config, args.Str("section_name"), args.Str("field_name"), args.Json("field_value")); },
+            [&] { return szconfigtool::AddConfigSectionFieldResult(config, args.Str("section_name"), args.Str("field_name"), args.Json("field_value")); });
     }},
     {"add_data_source", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code", "retention_level", "id"});
@@ -535,7 +565,9 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
     }},
     {"add_fragment", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"fragment_config"});
-        return Outcome::FromConfigAndJson(szconfigtool::AddFragment(config, args.Json("fragment_config")));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::AddFragment(config, args.Json("fragment_config")); },
+            [&] { return szconfigtool::AddFragmentResult(config, args.Json("fragment_config")); });
     }},
     {"delete_fragment", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code"});
@@ -575,15 +607,21 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("anon_support")) {
             options.anon_support = args.Str("anon_support");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::AddComparisonFunction(config, args.Str("code"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::AddComparisonFunction(config, args.Str("code"), options); },
+            [&] { return szconfigtool::AddComparisonFunctionResult(config, args.Str("code"), options); });
     }},
     {"delete_comparison_function", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code"});
-        return Outcome::FromConfigAndJson(szconfigtool::DeleteComparisonFunction(config, args.Str("code")));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::DeleteComparisonFunction(config, args.Str("code")); },
+            [&] { return szconfigtool::DeleteComparisonFunctionResult(config, args.Str("code")); });
     }},
     {"delete_comparison_function_cascade", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code"});
-        return Outcome::FromConfigAndJson(szconfigtool::DeleteComparisonFunctionCascade(config, args.Str("code")));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::DeleteComparisonFunctionCascade(config, args.Str("code")); },
+            [&] { return szconfigtool::DeleteComparisonFunctionCascadeResult(config, args.Str("code")); });
     }},
     {"get_comparison_function", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code"});
@@ -608,7 +646,9 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("anon_support")) {
             options.anon_support = args.Str("anon_support");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::SetComparisonFunction(config, args.Str("code"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::SetComparisonFunction(config, args.Str("code"), options); },
+            [&] { return szconfigtool::SetComparisonFunctionResult(config, args.Str("code"), options); });
     }},
     {"add_distinct_function", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code", "connect_str", "description", "language", "anon_support"});
@@ -625,11 +665,15 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("anon_support")) {
             options.anon_support = args.Str("anon_support");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::AddDistinctFunction(config, args.Str("code"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::AddDistinctFunction(config, args.Str("code"), options); },
+            [&] { return szconfigtool::AddDistinctFunctionResult(config, args.Str("code"), options); });
     }},
     {"delete_distinct_function", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code"});
-        return Outcome::FromConfigAndJson(szconfigtool::DeleteDistinctFunction(config, args.Str("code")));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::DeleteDistinctFunction(config, args.Str("code")); },
+            [&] { return szconfigtool::DeleteDistinctFunctionResult(config, args.Str("code")); });
     }},
     {"get_distinct_function", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code"});
@@ -654,7 +698,9 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("anon_support")) {
             options.anon_support = args.Str("anon_support");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::SetDistinctFunction(config, args.Str("code"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::SetDistinctFunction(config, args.Str("code"), options); },
+            [&] { return szconfigtool::SetDistinctFunctionResult(config, args.Str("code"), options); });
     }},
     {"add_expression_function", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code", "connect_str", "description", "language"});
@@ -668,15 +714,21 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("language")) {
             options.language = args.Str("language");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::AddExpressionFunction(config, args.Str("code"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::AddExpressionFunction(config, args.Str("code"), options); },
+            [&] { return szconfigtool::AddExpressionFunctionResult(config, args.Str("code"), options); });
     }},
     {"delete_expression_function", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code"});
-        return Outcome::FromConfigAndJson(szconfigtool::DeleteExpressionFunction(config, args.Str("code")));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::DeleteExpressionFunction(config, args.Str("code")); },
+            [&] { return szconfigtool::DeleteExpressionFunctionResult(config, args.Str("code")); });
     }},
     {"delete_expression_function_cascade", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code"});
-        return Outcome::FromConfigAndJson(szconfigtool::DeleteExpressionFunctionCascade(config, args.Str("code")));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::DeleteExpressionFunctionCascade(config, args.Str("code")); },
+            [&] { return szconfigtool::DeleteExpressionFunctionCascadeResult(config, args.Str("code")); });
     }},
     {"get_expression_function", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code"});
@@ -698,7 +750,9 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("language")) {
             options.language = args.Str("language");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::SetExpressionFunction(config, args.Str("code"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::SetExpressionFunction(config, args.Str("code"), options); },
+            [&] { return szconfigtool::SetExpressionFunctionResult(config, args.Str("code"), options); });
     }},
     {"add_standardize_function", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code", "connect_str", "description", "language"});
@@ -712,15 +766,21 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("language")) {
             options.language = args.Str("language");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::AddStandardizeFunction(config, args.Str("code"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::AddStandardizeFunction(config, args.Str("code"), options); },
+            [&] { return szconfigtool::AddStandardizeFunctionResult(config, args.Str("code"), options); });
     }},
     {"delete_standardize_function", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code"});
-        return Outcome::FromConfigAndJson(szconfigtool::DeleteStandardizeFunction(config, args.Str("code")));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::DeleteStandardizeFunction(config, args.Str("code")); },
+            [&] { return szconfigtool::DeleteStandardizeFunctionResult(config, args.Str("code")); });
     }},
     {"delete_standardize_function_cascade", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code"});
-        return Outcome::FromConfigAndJson(szconfigtool::DeleteStandardizeFunctionCascade(config, args.Str("code")));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::DeleteStandardizeFunctionCascade(config, args.Str("code")); },
+            [&] { return szconfigtool::DeleteStandardizeFunctionCascadeResult(config, args.Str("code")); });
     }},
     {"get_standardize_function", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code"});
@@ -742,7 +802,9 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("language")) {
             options.language = args.Str("language");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::SetStandardizeFunction(config, args.Str("code"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::SetStandardizeFunction(config, args.Str("code"), options); },
+            [&] { return szconfigtool::SetStandardizeFunctionResult(config, args.Str("code"), options); });
     }},
     {"clone_generic_plan", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"source_gplan_code", "new_gplan_code", "new_gplan_desc"});
@@ -750,7 +812,9 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
         if (args.Has("new_gplan_desc")) {
             options.new_gplan_desc = args.Str("new_gplan_desc");
         }
-        return Outcome::FromConfigAndJson(szconfigtool::CloneGenericPlan(config, args.Str("source_gplan_code"), args.Str("new_gplan_code"), options));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::CloneGenericPlan(config, args.Str("source_gplan_code"), args.Str("new_gplan_code"), options); },
+            [&] { return szconfigtool::CloneGenericPlanResult(config, args.Str("source_gplan_code"), args.Str("new_gplan_code"), options); });
     }},
     {"delete_generic_plan", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"gplan_code"});
@@ -766,12 +830,18 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
     }},
     {"set_generic_plan", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"gplan_code", "gplan_desc"});
-        const auto sz_r = szconfigtool::SetGenericPlan(config, args.Str("gplan_code"), args.Str("gplan_desc"));
-        return Outcome::FromRecord("config_and_json", std::optional<std::string>(sz_r.config), {{"plan_id", sz_r.plan_id}, {"was_created", sz_r.was_created}});
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::SetGenericPlan(config, args.Str("gplan_code"), args.Str("gplan_desc")); },
+            [&] {
+                const auto sz_r = szconfigtool::SetGenericPlanResult(config, args.Str("gplan_code"), args.Str("gplan_desc"));
+                return Outcome::RecordJson({{"plan_id", sz_r.plan_id}, {"was_created", sz_r.was_created}});
+            });
     }},
     {"add_rule", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"id", "rule_config"});
-        return Outcome::FromConfigAndJson(szconfigtool::AddRule(config, args.Int("id"), args.Json("rule_config")));
+        return Outcome::FromConfigAndJson(
+            [&] { return szconfigtool::AddRule(config, args.Int("id"), args.Json("rule_config")); },
+            [&] { return szconfigtool::AddRuleResult(config, args.Int("id"), args.Json("rule_config")); });
     }},
     {"delete_rule", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"code"});
@@ -969,7 +1039,7 @@ inline const std::map<std::string, TypedCall>& TypedFunctions() {
     {"verify_compatibility_version", [](const std::string& config, const TestArgs& args) -> Outcome {
         args.CheckKnown({"expected_version"});
         const auto sz_r = szconfigtool::VerifyCompatibilityVersion(config, args.Str("expected_version"));
-        return Outcome::FromRecord("json", std::nullopt, {{"current_version", sz_r.current_version}, {"matches", sz_r.matches}});
+        return Outcome::FromRecord("json", {{"current_version", sz_r.current_version}, {"matches", sz_r.matches}});
     }},
     };
     return table;

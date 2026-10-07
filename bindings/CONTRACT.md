@@ -36,23 +36,38 @@ sz_configtool_lib (pure Rust)
   `message`, optional `details` (validation-failures/v1 JSON).
 * Return types in typed wrappers (every value that is not the config or an
   `int` is JSON TEXT — a string — never a parsed object, matching the official
-  SzConfig `export()` style):
+  SzConfig `export()` style). EVERY config-changing function returns the new
+  config string, so calls chain uniformly (`cfg = f(cfg, ...)`). A
+  `config_and_json` function (the wire carries config AND a record) is split
+  into two typed functions with the SAME parameters/overloads/options type
+  that perform the same operation: the primary `<fn>` returns the config, the
+  companion `<fn>Result` returns only the record (the created/removed row,
+  ids or counts):
 
   | `returns` | `tuple_names` | Typed result |
   |---|---|---|
   | `config` | — | config string |
   | `json` | — | JSON text |
-  | `json` | `[a, b]` | record `<Fn>Result` with fields `a`, `b` (each JSON text) |
-  | `config_and_json` | — | record `ConfigAndJson` with `config` + `json` (record JSON text) |
-  | `config_and_json` | `[a, b]` | record `<Fn>Result` with `config` + fields `a`, `b` (each JSON text) |
+  | `json` | `[a, b]` | record `<Fn>Record` with fields `a`, `b` (each JSON text) |
+  | `config_and_json` | — | `<fn>` → config string; `<fn>Result` → record JSON text |
+  | `config_and_json` | `[a, b]` | `<fn>` → config string; `<fn>Result` → record `<Fn>Record` with fields `a`, `b` (each JSON text) |
   | `int` | — | integer |
   | `unit` | — | nothing |
 
-  `<Fn>` is the PascalCase function name (e.g. `SetGenericPlanResult`); field
-  names follow the language's casing (Python/C++ `plan_id`, Java/TS `planId`,
-  C# `PlanId`). Python uses `NamedTuple`s, Java records, C# records, C++
-  structs, TS interfaces. A field's JSON text is exactly the record member's
-  JSON (`1001`, `true`, `"4.0.0"` including quotes).
+  Companion names follow each language's casing of `<name>_result`: Python
+  `add_attribute_result`, Java/TS `addAttributeResult`, C#/C++
+  `AddAttributeResult`. `<Fn>Record` is the PascalCase function name +
+  `Record` (e.g. `SetGenericPlanRecord`, `VerifyCompatibilityVersionRecord`);
+  it is not `<Fn>Result` because in C# and C++ the companion METHOD is
+  `<Fn>Result` (a C++ function and struct of one name cannot coexist
+  usefully). There is no `ConfigAndJson` type. Field names follow the
+  language's casing (Python/C++ `plan_id`, Java/TS `planId`, C# `PlanId`).
+  Python uses `NamedTuple`s, Java records, C# records, C++ structs, TS
+  interfaces. A field's JSON text is exactly the record member's JSON
+  (`1001`, `true`, `"4.0.0"` including quotes). Codegen rejects a manifest
+  function named like another's companion. The tRPC router has a procedure
+  per typed function: config-returning ones are mutations, companions are
+  queries.
 * JSON results follow the library's response shape convention (repo
   `CLAUDE.md`; summary in `api/manifest/schema.md`, Wire convention): `get_*`
   return the stored row (except `get_feature`, `get_element`, `get_fragment`,
@@ -134,7 +149,11 @@ Python), and in args JSON `serde_json` also rejects lone-surrogate escapes
 with `INVALID_INPUT`. Python also maps a `name` or `config` that is not a
 `str`, and an arg JSON cannot carry (`set`, `Decimal`, `bytes`, any object,
 `NaN`/`±Infinity`), to `INVALID_INPUT` (never `TypeError` / `ValueError` /
-`UnicodeEncodeError`). C# throws `ArgumentNullException` for a null
+`UnicodeEncodeError`). Python and TS reject a `config` that is not a string
+(e.g. a previous call's record passed back) with `INVALID_INPUT` before the
+native call, naming the cause ("config must be a str/string (the
+configuration JSON text) ...; use `<name>_result`/`<name>Result` for the
+created row"). C# throws `ArgumentNullException` for a null
 `name`/`config` (a programming error, not input). TS also rejects numbers `JSON.stringify` would change (`NaN`/`±Infinity`
 become `null` — a tri-state Clear — and `number` integers beyond
 `Number.MAX_SAFE_INTEGER` are already rounded) with `INVALID_INPUT`; TS `int`
@@ -164,7 +183,9 @@ seam:
 ## Tests (real library, no mocks)
 
 Each binding runs `api/manifest/generated/conformance.json` against the real
-built native library (cases flagged `wire_only` call the raw `invoke` seam),
+built native library (cases flagged `wire_only` call the raw `invoke` seam;
+a `config_and_json` step calls the primary AND its companion, which must
+agree with `invoke` and fail with the same reason code),
 plus tests for naming, optional/tri-state/required args, error mapping (all 14
 reason codes where reachable), config opacity (byte-exact round trip), and the
 absence of leaked `SzConfigTool_*` exports (Rust-native seams).

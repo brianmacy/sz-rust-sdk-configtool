@@ -131,10 +131,15 @@ supported by the generator: exclude them (or extend the generator first).
   `config_and_json` (the record — never dropped) and `int`; `unit` has
   neither. The envelope `result` is a JSON value, but typed bindings return
   JSON TEXT (a string), never a parsed object: `config` → config string;
-  `json` → JSON text; `config_and_json` → record `ConfigAndJson(config,
-  json)`; with `tuple_names` → record `<Fn>Result` (plus `config` for
-  `config_and_json`) whose named fields are each JSON text; `int` → integer;
-  `unit` → nothing. See `bindings/CONTRACT.md`.
+  `json` → JSON text; `int` → integer; `unit` → nothing. The wire carries
+  BOTH parts of `config_and_json`; typed wrappers split them so every
+  config-changing function returns the config string: the primary `<fn>`
+  returns the config, and a generated companion `<fn>_result` (same args,
+  same operation; per-language casing) returns the record as JSON text. With
+  `tuple_names` the record is a `<Fn>Record` whose named fields are each JSON
+  text (returned by the `json` function, or by the `config_and_json`
+  companion). No manifest function may be named like a companion (codegen
+  rejects it). See `bindings/CONTRACT.md`.
 - `json` results follow the response shape convention (repo `CLAUDE.md`,
   "Response shape convention"): `get_*` return the stored row (except the
   summary gets `get_feature`, `get_element`, `get_fragment`, `get_rule`);

@@ -297,3 +297,20 @@ fn test_rejects_c_abi_text_in_notes_doc_and_semantics() {
         assert!(err.contains("move C-ABI text to c_notes"), "{name}: {err}");
     }
 }
+
+/// A `config_and_json` function's typed bindings add a `<name>_result`
+/// companion, so a manifest function of that name would collide.
+#[test]
+fn test_rejects_function_named_like_a_companion() {
+    let pair = GROUP.replace("returns: json", "returns: config_and_json");
+    let clash = format!(
+        "{pair}  - name: get_thing_result\n    doc: Clash.\n    rust: things::get_thing_result\n    \
+         returns: json\n"
+    );
+    assert!(
+        error_of("companion_clash", &clash, CASES)
+            .contains("get_thing_result: collides with the typed companion of get_thing")
+    );
+    let root = workspace("companion_ok", &pair, CASES);
+    generate(&root, Path::new("m/project.yaml")).expect("no clash");
+}

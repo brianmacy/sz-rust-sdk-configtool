@@ -30,10 +30,13 @@ final class Invoker {
         return call(name, "json", config, args)[2];
     }
 
-    static ConfigAndJson configAndJson(String name, String config, Args args)
+    /**
+     * The result JSON text of a {@code json} function, or the record of a
+     * {@code config_and_json} function (its companion {@code <name>Result}).
+     */
+    static String result(String name, String expectedKind, String config, Args args)
             throws SzConfigToolException {
-        String[] out = call(name, "config_and_json", config, args);
-        return new ConfigAndJson(out[1], out[2]);
+        return call(name, expectedKind, config, args)[2];
     }
 
     static void unit(String name, String config, Args args) throws SzConfigToolException {

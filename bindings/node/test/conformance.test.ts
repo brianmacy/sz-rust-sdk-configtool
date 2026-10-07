@@ -37,6 +37,7 @@ function viaInvoke(step: Step, config: string): Outcome {
 
 /** Named results are JSON texts: every field must be a string that parses. */
 function namedToWire(f: ManifestFunction, ret: Record<string, string>): Json {
+  assert.deepEqual(Object.keys(ret).sort(), (f.tuple_names ?? []).map(camel).sort());
   return Object.fromEntries(
     (f.tuple_names ?? []).map((n) => {
       const text = ret[camel(n)];
@@ -46,24 +47,29 @@ function namedToWire(f: ManifestFunction, ret: Record<string, string>): Json {
   );
 }
 
-/** Shape a typed return value back into the wire outcome for checking. */
-function shape(f: ManifestFunction, ret: unknown): Outcome {
+/**
+ * Shape a typed return value back into the wire outcome for checking. For a
+ * `config_and_json` function `ret` is the primary's config text and
+ * `record` the `<fn>Result` companion's value (same args, same input).
+ */
+function shape(f: ManifestFunction, ret: unknown, record?: unknown): Outcome {
   const kind = f.returns;
+  if (kind === "config_and_json") {
+    assert.equal(typeof ret, "string", `${f.name} must return the config text`);
+    const result = f.tuple_names?.length
+      ? namedToWire(f, record as Record<string, string>)
+      : (JSON.parse(record as string) as Json);
+    return { kind, config: ret as string, result };
+  }
   if (f.tuple_names?.length) {
-    const rec = ret as Record<string, string>;
-    const out: Outcome = { kind, result: namedToWire(f, rec) };
-    if (kind === "config_and_json") out.config = rec["config"];
-    return out;
+    return { kind, result: namedToWire(f, ret as Record<string, string>) };
   }
   switch (kind) {
     case "config":
+      assert.equal(typeof ret, "string", `${f.name} must return the config text`);
       return { kind, config: ret as string };
     case "json":
       return { kind, result: JSON.parse(ret as string) as Json };
-    case "config_and_json": {
-      const r = ret as sz.ConfigAndJson;
-      return { kind, config: r.config, result: JSON.parse(r.json) as Json };
-    }
     case "int":
       return { kind, result: ret as number };
     case "unit":
@@ -83,7 +89,11 @@ function run(step: Step, config: string): Outcome {
   // wire_only: omits a `required` arg to test MISSING_FIELD (not typeable).
   if (step.wire_only) return viaInvoke(step, config);
   assert.equal(typeof fn, "function", `typed export ${camel(step.fn)}`);
-  return shape(f, fn!(config, camelArgs(step.args)));
+  const ret = fn!(config, camelArgs(step.args));
+  if (f.returns !== "config_and_json") return shape(f, ret);
+  const companion = typed[`${camel(step.fn)}Result`];
+  assert.equal(typeof companion, "function", `typed companion ${camel(step.fn)}Result`);
+  return shape(f, ret, companion!(config, camelArgs(step.args)));
 }
 
 function checkArray(step: Step, result: Json | undefined): void {
@@ -108,6 +118,14 @@ function runStep(step: Step, current: string): string {
       (e: unknown) => e instanceof sz.SzConfigToolError && e.code === want,
       `${step.fn} must fail with ${want}`,
     );
+    const companion = typed[`${camel(step.fn)}Result`];
+    if (byName.get(step.fn)?.returns === "config_and_json" && !step.wire_only) {
+      assert.throws(
+        () => companion!(config, camelArgs(step.args)),
+        (e: unknown) => e instanceof sz.SzConfigToolError && e.code === want,
+        `${step.fn}Result must fail with ${want}`,
+      );
+    }
     return current;
   }
   const out = run(step, config);

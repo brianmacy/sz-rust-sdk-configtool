@@ -92,7 +92,9 @@ describe("wire errors", () => {
   }
 
   test("a JS value napi cannot convert is INVALID_INPUT with the native cause", () => {
-    const err = caught(() => sz.listDataSources(42 as unknown as string));
+    // (A non-string `config` is rejected before the native call; a
+    // non-string function name still reaches napi.)
+    const err = caught(() => sz.invoke(42 as unknown as string, fixture));
     assert.equal(err.code, "INVALID_INPUT");
     assert.equal(err.kind, "INVALID_INPUT");
     assert.ok(err.cause instanceof Error);

@@ -72,11 +72,37 @@ export interface AddAttributeOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link AddAttributeOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link addAttributeResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, INVALID_INPUT, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function addAttribute(config: string, options: AddAttributeOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("add_attribute", config, {
+export function addAttribute(config: string, options: AddAttributeOptions): string {
+  return rt.callConfig("add_attribute", config, {
+    attribute: options.attribute,
+    feature: options.feature,
+    element: options.element,
+    class: options.class,
+    default_value: options.defaultValue,
+    internal: options.internal,
+    required: options.required,
+    id: options.id,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link addAttribute}: same options and operation, but returns the record instead of the configuration. Operation: Add an attribute (CFG_ATTR row) mapping an input attribute to a feature element.
+ *
+ * @remarks
+ * Returns (modified config, the new CFG_ATTR row). Validation order: class, duplicate attribute, feature, element, required, internal, id. Does not create a CFG_FBOM row.
+ *
+ * Wire name: `add_attribute` (group `attributes`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link AddAttributeOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, INVALID_INPUT, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function addAttributeResult(config: string, options: AddAttributeOptions): string {
+  return rt.callJson("add_attribute", config, {
     attribute: options.attribute,
     feature: options.feature,
     element: options.element,
@@ -411,11 +437,33 @@ export interface AddComparisonCallOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link AddComparisonCallOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link addComparisonCallResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, NOT_FOUND, ALREADY_PRESENT, INVALID_INPUT; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function addComparisonCall(config: string, options: AddComparisonCallOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("add_comparison_call", config, {
+export function addComparisonCall(config: string, options: AddComparisonCallOptions): string {
+  return rt.callConfig("add_comparison_call", config, {
+    ftype_code: options.ftypeCode,
+    cfunc_code: options.cfuncCode,
+    element_list: options.elementList,
+    id: options.id,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link addComparisonCall}: same options and operation, but returns the record instead of the configuration. Operation: Add a comparison call (CFG_CFCALL row) binding a comparison function to a feature, with its element list (CFG_CFBOM rows).
+ *
+ * @remarks
+ * Returns (modified config, the new CFG_CFCALL row {CFCALL_ID, FTYPE_ID, CFUNC_ID}). Validation order: id (MISSING_SECTION if CFG_CFCALL is absent or not an array; ALREADY_EXISTS if taken), feature, one-call-per-feature (ALREADY_PRESENT), function, empty list, then per item blank check and element lookup; MISSING_SECTION if CFG_CFBOM is absent. The function's applicability to the feature is not checked.
+ *
+ * Wire name: `add_comparison_call` (group `calls_comparison`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link AddComparisonCallOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, NOT_FOUND, ALREADY_PRESENT, INVALID_INPUT; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function addComparisonCallResult(config: string, options: AddComparisonCallOptions): string {
+  return rt.callJson("add_comparison_call", config, {
     ftype_code: options.ftypeCode,
     cfunc_code: options.cfuncCode,
     element_list: options.elementList,
@@ -541,11 +589,33 @@ export interface AddComparisonCallElementOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link AddComparisonCallElementOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link addComparisonCallElementResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function addComparisonCallElement(config: string, options: AddComparisonCallElementOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("add_comparison_call_element", config, {
+export function addComparisonCallElement(config: string, options: AddComparisonCallElementOptions): string {
+  return rt.callConfig("add_comparison_call_element", config, {
+    cfcall_id: options.cfcallId,
+    ftype_id: options.ftypeId,
+    felem_id: options.felemId,
+    exec_order: options.execOrder,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link addComparisonCallElement}: same options and operation, but returns the record instead of the configuration. Operation: Add one element (CFG_CFBOM row) to a comparison call, addressed by raw ids.
+ *
+ * @remarks
+ * Returns (modified config, the new CFG_CFBOM row {CFCALL_ID, FTYPE_ID, FELEM_ID, EXEC_ORDER}). Duplicate identity is (CFCALL_ID, FTYPE_ID, FELEM_ID) regardless of EXEC_ORDER -> ALREADY_PRESENT. Order of checks: ftype_id < 0, duplicate, exec_order, then MISSING_SECTION if CFG_CFBOM is absent. The same FELEM_ID may be added under a different ftype_id, which makes a later feature-less delete_comparison_call_element ambiguous.
+ *
+ * Wire name: `add_comparison_call_element` (group `calls_comparison`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link AddComparisonCallElementOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function addComparisonCallElementResult(config: string, options: AddComparisonCallElementOptions): string {
+  return rt.callJson("add_comparison_call_element", config, {
     cfcall_id: options.cfcallId,
     ftype_id: options.ftypeId,
     felem_id: options.felemId,
@@ -632,11 +702,32 @@ export interface AddDistinctCallOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link AddDistinctCallOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link addDistinctCallResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, INVALID_INPUT, MISSING_SECTION, NOT_FOUND, ALREADY_PRESENT; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function addDistinctCall(config: string, options: AddDistinctCallOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("add_distinct_call", config, {
+export function addDistinctCall(config: string, options: AddDistinctCallOptions): string {
+  return rt.callConfig("add_distinct_call", config, {
+    ftype_code: options.ftypeCode,
+    dfunc_code: options.dfuncCode,
+    element_list: options.elementList,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link addDistinctCall}: same options and operation, but returns the record instead of the configuration. Operation: Add a distinct call (CFG_DFCALL row) binding a distinct function to a feature, with its element list (CFG_DFBOM rows).
+ *
+ * @remarks
+ * Returns (modified config, the new CFG_DFCALL row {DFCALL_ID, FTYPE_ID, DFUNC_ID} — no EXEC_ORDER). DFCALL_ID is ALWAYS auto-allocated (max existing + 1, floor 1000): unlike add_comparison_call there is no `id` parameter. Validation order: empty list / blank item, id (MISSING_SECTION if G2_CONFIG.CFG_DFCALL is absent), feature, one-call-per-feature (ALREADY_PRESENT), function, element lookups; MISSING_SECTION if CFG_DFCALL is not an array or CFG_DFBOM is absent.
+ *
+ * Wire name: `add_distinct_call` (group `calls_distinct`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link AddDistinctCallOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, INVALID_INPUT, MISSING_SECTION, NOT_FOUND, ALREADY_PRESENT; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function addDistinctCallResult(config: string, options: AddDistinctCallOptions): string {
+  return rt.callJson("add_distinct_call", config, {
     ftype_code: options.ftypeCode,
     dfunc_code: options.dfuncCode,
     element_list: options.elementList,
@@ -761,11 +852,33 @@ export interface AddDistinctCallElementOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link AddDistinctCallElementOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link addDistinctCallElementResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function addDistinctCallElement(config: string, options: AddDistinctCallElementOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("add_distinct_call_element", config, {
+export function addDistinctCallElement(config: string, options: AddDistinctCallElementOptions): string {
+  return rt.callConfig("add_distinct_call_element", config, {
+    dfcall_id: options.dfcallId,
+    ftype_id: options.ftypeId,
+    felem_id: options.felemId,
+    exec_order: options.execOrder,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link addDistinctCallElement}: same options and operation, but returns the record instead of the configuration. Operation: Add one element (CFG_DFBOM row) to a distinct call, addressed by raw ids.
+ *
+ * @remarks
+ * Returns (modified config, the new CFG_DFBOM row {DFCALL_ID, FTYPE_ID, FELEM_ID, EXEC_ORDER}). Duplicate identity is (DFCALL_ID, FTYPE_ID, FELEM_ID) regardless of EXEC_ORDER -> ALREADY_PRESENT. Order of checks: duplicate, exec_order, then MISSING_SECTION if CFG_DFBOM is absent.
+ *
+ * Wire name: `add_distinct_call_element` (group `calls_distinct`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link AddDistinctCallElementOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function addDistinctCallElementResult(config: string, options: AddDistinctCallElementOptions): string {
+  return rt.callJson("add_distinct_call_element", config, {
     dfcall_id: options.dfcallId,
     ftype_id: options.ftypeId,
     felem_id: options.felemId,
@@ -876,11 +989,36 @@ export interface AddExpressionCallOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link AddExpressionCallOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link addExpressionCallResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS, MISSING_FIELD; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function addExpressionCall(config: string, options: AddExpressionCallOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("add_expression_call", config, {
+export function addExpressionCall(config: string, options: AddExpressionCallOptions): string {
+  return rt.callConfig("add_expression_call", config, {
+    efunc_code: options.efuncCode,
+    element_list: options.elementList,
+    ftype_code: options.ftypeCode,
+    felem_code: options.felemCode,
+    exec_order: options.execOrder,
+    expression_feature: options.expressionFeature,
+    is_virtual: options.isVirtual,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link addExpressionCall}: same options and operation, but returns the record instead of the configuration. Operation: Add an expression call (CFG_EFCALL row) plus its element list (CFG_EFBOM rows).
+ *
+ * @remarks
+ * Returns (modified config, the new CFG_EFCALL row {EFCALL_ID, FTYPE_ID, FELEM_ID, EFUNC_ID, EXEC_ORDER, EFEAT_FTYPE_ID, IS_VIRTUAL}); the created CFG_EFBOM rows are NOT in the record (see list_expression_calls). EFCALL_ID is auto-allocated (max + 1, floor 1000). Check order: EFCALL_ID allocation (MISSING_SECTION if CFG_EFCALL absent), efunc, feature, element, exactly-one rule, exec order, expression_feature, element list, then MISSING_SECTION if CFG_EFBOM absent. BOM FTYPE_ID sentinels (G2 EFBomConfig.cpp): 0 = parent feature link, -1 = any feature. The BOM-feature column is not rendered by get/list_expression_calls; read raw rows with get_config_section("CFG_EFBOM").
+ *
+ * Wire name: `add_expression_call` (group `calls_expression`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link AddExpressionCallOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS, MISSING_FIELD; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function addExpressionCallResult(config: string, options: AddExpressionCallOptions): string {
+  return rt.callJson("add_expression_call", config, {
     efunc_code: options.efuncCode,
     element_list: options.elementList,
     ftype_code: options.ftypeCode,
@@ -1015,11 +1153,34 @@ export interface AddExpressionCallElementOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link AddExpressionCallElementOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link addExpressionCallElementResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function addExpressionCallElement(config: string, options: AddExpressionCallElementOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("add_expression_call_element", config, {
+export function addExpressionCallElement(config: string, options: AddExpressionCallElementOptions): string {
+  return rt.callConfig("add_expression_call_element", config, {
+    efcall_id: options.efcallId,
+    ftype_id: options.ftypeId,
+    felem_id: options.felemId,
+    exec_order: options.execOrder,
+    felem_req: options.felemReq,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link addExpressionCallElement}: same options and operation, but returns the record instead of the configuration. Operation: Add one CFG_EFBOM row to an expression call, addressed by raw ids.
+ *
+ * @remarks
+ * Returns (modified config, the new CFG_EFBOM row {EFCALL_ID, FTYPE_ID, FELEM_ID, EXEC_ORDER, FELEM_REQ}). Check order: ftype_id < 0, ALREADY_PRESENT when (EFCALL_ID, FTYPE_ID, FELEM_ID) already exists (EXEC_ORDER ignored), exec order, then MISSING_SECTION if CFG_EFBOM is absent.
+ *
+ * Wire name: `add_expression_call_element` (group `calls_expression`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link AddExpressionCallElementOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, INVALID_INPUT, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function addExpressionCallElementResult(config: string, options: AddExpressionCallElementOptions): string {
+  return rt.callJson("add_expression_call_element", config, {
     efcall_id: options.efcallId,
     ftype_id: options.ftypeId,
     felem_id: options.felemId,
@@ -1113,11 +1274,33 @@ export interface AddStandardizeCallOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link AddStandardizeCallOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link addStandardizeCallResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function addStandardizeCall(config: string, options: AddStandardizeCallOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("add_standardize_call", config, {
+export function addStandardizeCall(config: string, options: AddStandardizeCallOptions): string {
+  return rt.callConfig("add_standardize_call", config, {
+    sfunc_code: options.sfuncCode,
+    ftype_code: options.ftypeCode,
+    felem_code: options.felemCode,
+    exec_order: options.execOrder,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link addStandardizeCall}: same options and operation, but returns the record instead of the configuration. Operation: Add a standardize call (CFG_SFCALL row) binding a standardize function to a feature or an element.
+ *
+ * @remarks
+ * Returns (modified config, the new CFG_SFCALL row {SFCALL_ID, FTYPE_ID, FELEM_ID, SFUNC_ID, EXEC_ORDER}). SFCALL_ID is always auto-allocated (max + 1, floor 1000). MISSING_SECTION when CFG_SFCALL is absent. Check order: SFCALL_ID allocation, sfunc, feature, element, exactly-one rule, exec order. TRAP: the exec-order scope does not include SFUNC_ID, so a second call on the same feature continues that feature's order sequence.
+ *
+ * Wire name: `add_standardize_call` (group `calls_standardize`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link AddStandardizeCallOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function addStandardizeCallResult(config: string, options: AddStandardizeCallOptions): string {
+  return rt.callJson("add_standardize_call", config, {
     sfunc_code: options.sfuncCode,
     ftype_code: options.ftypeCode,
     felem_code: options.felemCode,
@@ -1243,11 +1426,33 @@ export interface AddStandardizeCallElementOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link AddStandardizeCallElementOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link addStandardizeCallElementResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, ALREADY_PRESENT, ALREADY_EXISTS; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function addStandardizeCallElement(config: string, options: AddStandardizeCallElementOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("add_standardize_call_element", config, {
+export function addStandardizeCallElement(config: string, options: AddStandardizeCallElementOptions): string {
+  return rt.callConfig("add_standardize_call_element", config, {
+    ftype_id: options.ftypeId,
+    sfunc_id: options.sfuncId,
+    felem_id: options.felemId,
+    exec_order: options.execOrder,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link addStandardizeCallElement}: same options and operation, but returns the record instead of the configuration. Operation: Add a CFG_SFCALL row addressed by raw ids (FTYPE_ID, SFUNC_ID, FELEM_ID).
+ *
+ * @remarks
+ * Returns (modified config, the new CFG_SFCALL row). ALREADY_PRESENT when a row with the same (FTYPE_ID, SFUNC_ID, FELEM_ID) exists (checked first). SFCALL_ID auto-allocated (max + 1, floor 1000); MISSING_SECTION when CFG_SFCALL is absent. Unlike add_standardize_call there is no feature-xor-element rule and no id validation.
+ *
+ * Wire name: `add_standardize_call_element` (group `calls_standardize`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link AddStandardizeCallElementOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, ALREADY_PRESENT, ALREADY_EXISTS; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function addStandardizeCallElementResult(config: string, options: AddStandardizeCallElementOptions): string {
+  return rt.callJson("add_standardize_call_element", config, {
     ftype_id: options.ftypeId,
     sfunc_id: options.sfuncId,
     felem_id: options.felemId,
@@ -1475,11 +1680,31 @@ export interface RemoveConfigSectionFieldOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link RemoveConfigSectionFieldOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link removeConfigSectionFieldResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function removeConfigSectionField(config: string, options: RemoveConfigSectionFieldOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("remove_config_section_field", config, {
+export function removeConfigSectionField(config: string, options: RemoveConfigSectionFieldOptions): string {
+  return rt.callConfig("remove_config_section_field", config, {
+    section_name: options.sectionName,
+    field_name: options.fieldName,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link removeConfigSectionField}: same options and operation, but returns the record instead of the configuration. Operation: Remove a field from every item of an array section, returning how many items had it.
+ *
+ * @remarks
+ * Record is the integer count of items the field was removed from (0 when no item had it; the config is still returned). Non-object items are skipped. A config with no G2_CONFIG key succeeds unchanged with count 0.
+ *
+ * Wire name: `remove_config_section_field` (group `config_sections`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link RemoveConfigSectionFieldOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function removeConfigSectionFieldResult(config: string, options: RemoveConfigSectionFieldOptions): string {
+  return rt.callJson("remove_config_section_field", config, {
     section_name: options.sectionName,
     field_name: options.fieldName,
   });
@@ -1519,11 +1744,32 @@ export interface AddConfigSectionFieldOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link AddConfigSectionFieldOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link addConfigSectionFieldResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function addConfigSectionField(config: string, options: AddConfigSectionFieldOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("add_config_section_field", config, {
+export function addConfigSectionField(config: string, options: AddConfigSectionFieldOptions): string {
+  return rt.callConfig("add_config_section_field", config, {
+    section_name: options.sectionName,
+    field_name: options.fieldName,
+    field_value: options.fieldValue,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link addConfigSectionField}: same options and operation, but returns the record instead of the configuration. Operation: Add a field to every item of an array section that lacks it, returning existed/updated counts.
+ *
+ * @remarks
+ * Record is {"existed": n, "updated": n}: items that already had the field (value preserved, never overwritten) vs. items it was inserted into. Non-object items are skipped (counted in neither). A config with no G2_CONFIG key succeeds unchanged with both counts 0.
+ *
+ * Wire name: `add_config_section_field` (group `config_sections`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link AddConfigSectionFieldOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function addConfigSectionFieldResult(config: string, options: AddConfigSectionFieldOptions): string {
+  return rt.callJson("add_config_section_field", config, {
     section_name: options.sectionName,
     field_name: options.fieldName,
     field_value: options.fieldValue,
@@ -2680,11 +2926,30 @@ export interface AddFragmentOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link AddFragmentOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link addFragmentResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, INVALID_INPUT, INVALID_CONFIG, MISSING_SECTION; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function addFragment(config: string, options: AddFragmentOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("add_fragment", config, {
+export function addFragment(config: string, options: AddFragmentOptions): string {
+  return rt.callConfig("add_fragment", config, {
+    fragment_config: options.fragmentConfig,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link addFragment}: same options and operation, but returns the record instead of the configuration. Operation: Add a rule fragment (CFG_ERFRAG row), returning the assigned ERFRAG_ID.
+ *
+ * @remarks
+ * Record is the assigned ERFRAG_ID (integer). The row always carries every CFG_ERFRAG key: ERFRAG_DESC is set to the uppercased code, ERFRAG_DEPENDS is the referenced fragments' ids sorted as STRINGS, deduplicated and comma-joined ("11,61"), or null when there are none. ERFRAG_CODE and ERFRAG_SOURCE are checked BEFORE the config is parsed (MISSING_FIELD wins). A config without G2_CONFIG is INVALID_CONFIG; with G2_CONFIG but no CFG_ERFRAG it is MISSING_SECTION.
+ *
+ * Wire name: `add_fragment` (group `fragments`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link AddFragmentOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, INVALID_INPUT, INVALID_CONFIG, MISSING_SECTION; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function addFragmentResult(config: string, options: AddFragmentOptions): string {
+  return rt.callJson("add_fragment", config, {
     fragment_config: options.fragmentConfig,
   });
 }
@@ -2864,11 +3129,34 @@ export interface AddComparisonFunctionOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link AddComparisonFunctionOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link addComparisonFunctionResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, INVALID_INPUT; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function addComparisonFunction(config: string, options: AddComparisonFunctionOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("add_comparison_function", config, {
+export function addComparisonFunction(config: string, options: AddComparisonFunctionOptions): string {
+  return rt.callConfig("add_comparison_function", config, {
+    code: options.code,
+    connect_str: options.connectStr,
+    description: options.description,
+    language: options.language,
+    anon_support: options.anonSupport,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link addComparisonFunction}: same options and operation, but returns the record instead of the configuration. Operation: Add a comparison function (CFG_CFUNC row).
+ *
+ * @remarks
+ * Returns (modified config, the new complete CFG_CFUNC row: CFUNC_ID, CFUNC_CODE, CONNECT_STR, ANON_SUPPORT, CFUNC_DESC, LANGUAGE). CFUNC_ID is always auto-allocated (max existing + 1, floor 1); no id can be requested. TRAP: a duplicate code is INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS. Validation order: duplicate code, anon_support, then section. MISSING_SECTION only when CFG_CFUNC is absent.
+ *
+ * Wire name: `add_comparison_function` (group `functions_comparison`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link AddComparisonFunctionOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, INVALID_INPUT; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function addComparisonFunctionResult(config: string, options: AddComparisonFunctionOptions): string {
+  return rt.callJson("add_comparison_function", config, {
     code: options.code,
     connect_str: options.connectStr,
     description: options.description,
@@ -2899,11 +3187,30 @@ export interface DeleteComparisonFunctionOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link DeleteComparisonFunctionOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link deleteComparisonFunctionResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function deleteComparisonFunction(config: string, options: DeleteComparisonFunctionOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("delete_comparison_function", config, {
+export function deleteComparisonFunction(config: string, options: DeleteComparisonFunctionOptions): string {
+  return rt.callConfig("delete_comparison_function", config, {
+    code: options.code,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link deleteComparisonFunction}: same options and operation, but returns the record instead of the configuration. Operation: Delete a comparison function's CFG_CFUNC row only (no cascade).
+ *
+ * @remarks
+ * Returns (modified config, the deleted CFG_CFUNC row). Removes ONLY the CFG_CFUNC row; CFG_CFCALL rows referencing it are left dangling (use delete_comparison_function_cascade). A missing CFG_CFUNC section is NOT_FOUND (not MISSING_SECTION).
+ *
+ * Wire name: `delete_comparison_function` (group `functions_comparison`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link DeleteComparisonFunctionOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function deleteComparisonFunctionResult(config: string, options: DeleteComparisonFunctionOptions): string {
+  return rt.callJson("delete_comparison_function", config, {
     code: options.code,
   });
 }
@@ -2930,11 +3237,30 @@ export interface DeleteComparisonFunctionCascadeOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link DeleteComparisonFunctionCascadeOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link deleteComparisonFunctionCascadeResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND, MISSING_FIELD; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function deleteComparisonFunctionCascade(config: string, options: DeleteComparisonFunctionCascadeOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("delete_comparison_function_cascade", config, {
+export function deleteComparisonFunctionCascade(config: string, options: DeleteComparisonFunctionCascadeOptions): string {
+  return rt.callConfig("delete_comparison_function_cascade", config, {
+    code: options.code,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link deleteComparisonFunctionCascade}: same options and operation, but returns the record instead of the configuration. Operation: Delete a comparison function and its CFG_CFBOM / CFG_CFCALL / CFG_CFRTN rows.
+ *
+ * @remarks
+ * Returns (modified config, the deleted CFG_CFUNC row). Order: CFG_CFBOM rows whose CFCALL_ID belongs to one of the function's CFG_CFCALL rows; every CFG_CFCALL row with that CFUNC_ID; every CFG_CFRTN row with that CFUNC_ID (well-formed rows via thresholds::delete_comparison_threshold, then a sweep of the rest); finally the CFG_CFUNC row. Absent CFBOM/CFCALL/CFRTN sections are skipped. MISSING_FIELD when the found row has no integer CFUNC_ID. A missing CFG_CFUNC section is NOT_FOUND.
+ *
+ * Wire name: `delete_comparison_function_cascade` (group `functions_comparison`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link DeleteComparisonFunctionCascadeOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND, MISSING_FIELD; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function deleteComparisonFunctionCascadeResult(config: string, options: DeleteComparisonFunctionCascadeOptions): string {
+  return rt.callJson("delete_comparison_function_cascade", config, {
     code: options.code,
   });
 }
@@ -3034,11 +3360,34 @@ export interface SetComparisonFunctionOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link SetComparisonFunctionOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link setComparisonFunctionResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function setComparisonFunction(config: string, options: SetComparisonFunctionOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("set_comparison_function", config, {
+export function setComparisonFunction(config: string, options: SetComparisonFunctionOptions): string {
+  return rt.callConfig("set_comparison_function", config, {
+    code: options.code,
+    connect_str: options.connectStr,
+    description: options.description,
+    language: options.language,
+    anon_support: options.anonSupport,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link setComparisonFunction}: same options and operation, but returns the record instead of the configuration. Operation: Update a comparison function's connect string / description / language / anon support.
+ *
+ * @remarks
+ * Returns (modified config, the updated CFG_CFUNC row). No value validation. The row is deleted and re-appended, so it moves to the END of CFG_CFUNC. A missing CFG_CFUNC section is NOT_FOUND.
+ *
+ * Wire name: `set_comparison_function` (group `functions_comparison`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link SetComparisonFunctionOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function setComparisonFunctionResult(config: string, options: SetComparisonFunctionOptions): string {
+  return rt.callJson("set_comparison_function", config, {
     code: options.code,
     connect_str: options.connectStr,
     description: options.description,
@@ -3095,11 +3444,34 @@ export interface AddDistinctFunctionOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link AddDistinctFunctionOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link addDistinctFunctionResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, INVALID_INPUT; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function addDistinctFunction(config: string, options: AddDistinctFunctionOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("add_distinct_function", config, {
+export function addDistinctFunction(config: string, options: AddDistinctFunctionOptions): string {
+  return rt.callConfig("add_distinct_function", config, {
+    code: options.code,
+    connect_str: options.connectStr,
+    description: options.description,
+    language: options.language,
+    anon_support: options.anonSupport,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link addDistinctFunction}: same options and operation, but returns the record instead of the configuration. Operation: Add a distinct function (CFG_DFUNC row) to the configuration.
+ *
+ * @remarks
+ * Returns (modified config, the new complete CFG_DFUNC row: DFUNC_ID, DFUNC_CODE, DFUNC_DESC, CONNECT_STR, ANON_SUPPORT, LANGUAGE; unset optionals are null). DFUNC_ID is auto-allocated as max existing + 1 (floor 1); no id can be requested. TRAP: a duplicate code is INVALID_INPUT, not ALREADY_EXISTS (SzConfigError::validation). The duplicate check runs before anon_support validation. MISSING_SECTION only when G2_CONFIG.CFG_DFUNC is absent.
+ *
+ * Wire name: `add_distinct_function` (group `functions_distinct`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link AddDistinctFunctionOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, INVALID_INPUT; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function addDistinctFunctionResult(config: string, options: AddDistinctFunctionOptions): string {
+  return rt.callJson("add_distinct_function", config, {
     code: options.code,
     connect_str: options.connectStr,
     description: options.description,
@@ -3130,11 +3502,30 @@ export interface DeleteDistinctFunctionOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link DeleteDistinctFunctionOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link deleteDistinctFunctionResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function deleteDistinctFunction(config: string, options: DeleteDistinctFunctionOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("delete_distinct_function", config, {
+export function deleteDistinctFunction(config: string, options: DeleteDistinctFunctionOptions): string {
+  return rt.callConfig("delete_distinct_function", config, {
+    code: options.code,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link deleteDistinctFunction}: same options and operation, but returns the record instead of the configuration. Operation: Delete a distinct function by code.
+ *
+ * @remarks
+ * Returns (modified config, the deleted CFG_DFUNC row). No dependency check: CFG_DFCALL rows referencing the DFUNC_ID are left in place. A config without CFG_DFUNC is NOT_FOUND (not MISSING_SECTION).
+ *
+ * Wire name: `delete_distinct_function` (group `functions_distinct`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link DeleteDistinctFunctionOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function deleteDistinctFunctionResult(config: string, options: DeleteDistinctFunctionOptions): string {
+  return rt.callJson("delete_distinct_function", config, {
     code: options.code,
   });
 }
@@ -3234,11 +3625,34 @@ export interface SetDistinctFunctionOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link SetDistinctFunctionOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link setDistinctFunctionResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function setDistinctFunction(config: string, options: SetDistinctFunctionOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("set_distinct_function", config, {
+export function setDistinctFunction(config: string, options: SetDistinctFunctionOptions): string {
+  return rt.callConfig("set_distinct_function", config, {
+    code: options.code,
+    connect_str: options.connectStr,
+    description: options.description,
+    language: options.language,
+    anon_support: options.anonSupport,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link setDistinctFunction}: same options and operation, but returns the record instead of the configuration. Operation: Update a distinct function's connect string, description, language or anon support.
+ *
+ * @remarks
+ * Returns (modified config, the updated CFG_DFUNC row). The row is removed and re-appended, so it moves to the END of CFG_DFUNC (list order changes). A config without CFG_DFUNC is NOT_FOUND.
+ *
+ * Wire name: `set_distinct_function` (group `functions_distinct`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link SetDistinctFunctionOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function setDistinctFunctionResult(config: string, options: SetDistinctFunctionOptions): string {
+  return rt.callJson("set_distinct_function", config, {
     code: options.code,
     connect_str: options.connectStr,
     description: options.description,
@@ -3287,11 +3701,33 @@ export interface AddExpressionFunctionOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link AddExpressionFunctionOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link addExpressionFunctionResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, INVALID_INPUT; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function addExpressionFunction(config: string, options: AddExpressionFunctionOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("add_expression_function", config, {
+export function addExpressionFunction(config: string, options: AddExpressionFunctionOptions): string {
+  return rt.callConfig("add_expression_function", config, {
+    code: options.code,
+    connect_str: options.connectStr,
+    description: options.description,
+    language: options.language,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link addExpressionFunction}: same options and operation, but returns the record instead of the configuration. Operation: Add an expression function (CFG_EFUNC row).
+ *
+ * @remarks
+ * Returns (modified config, the new complete CFG_EFUNC row: EFUNC_ID, EFUNC_CODE, CONNECT_STR, EFUNC_DESC, LANGUAGE). EFUNC_ID is always auto-allocated (max existing + 1, floor 1); no id can be requested. TRAP: a duplicate code is INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS. MISSING_SECTION only when CFG_EFUNC is absent.
+ *
+ * Wire name: `add_expression_function` (group `functions_expression`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link AddExpressionFunctionOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, INVALID_INPUT; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function addExpressionFunctionResult(config: string, options: AddExpressionFunctionOptions): string {
+  return rt.callJson("add_expression_function", config, {
     code: options.code,
     connect_str: options.connectStr,
     description: options.description,
@@ -3321,11 +3757,30 @@ export interface DeleteExpressionFunctionOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link DeleteExpressionFunctionOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link deleteExpressionFunctionResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function deleteExpressionFunction(config: string, options: DeleteExpressionFunctionOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("delete_expression_function", config, {
+export function deleteExpressionFunction(config: string, options: DeleteExpressionFunctionOptions): string {
+  return rt.callConfig("delete_expression_function", config, {
+    code: options.code,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link deleteExpressionFunction}: same options and operation, but returns the record instead of the configuration. Operation: Delete an expression function's CFG_EFUNC row only (no cascade).
+ *
+ * @remarks
+ * Returns (modified config, the deleted CFG_EFUNC row). Removes ONLY the CFG_EFUNC row; CFG_EFCALL rows referencing it are left dangling (use delete_expression_function_cascade). A missing CFG_EFUNC section is NOT_FOUND (not MISSING_SECTION).
+ *
+ * Wire name: `delete_expression_function` (group `functions_expression`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link DeleteExpressionFunctionOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function deleteExpressionFunctionResult(config: string, options: DeleteExpressionFunctionOptions): string {
+  return rt.callJson("delete_expression_function", config, {
     code: options.code,
   });
 }
@@ -3352,11 +3807,30 @@ export interface DeleteExpressionFunctionCascadeOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link DeleteExpressionFunctionCascadeOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link deleteExpressionFunctionCascadeResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND, MISSING_FIELD; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function deleteExpressionFunctionCascade(config: string, options: DeleteExpressionFunctionCascadeOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("delete_expression_function_cascade", config, {
+export function deleteExpressionFunctionCascade(config: string, options: DeleteExpressionFunctionCascadeOptions): string {
+  return rt.callConfig("delete_expression_function_cascade", config, {
+    code: options.code,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link deleteExpressionFunctionCascade}: same options and operation, but returns the record instead of the configuration. Operation: Delete an expression function and its CFG_EFCALL / CFG_EFBOM rows.
+ *
+ * @remarks
+ * Returns (modified config, the deleted CFG_EFUNC row). Removes the CFG_EFBOM rows whose EFCALL_ID belongs to one of the function's CFG_EFCALL rows, then every CFG_EFCALL row whose EFUNC_ID matches (each step skipped if its section is absent), then the CFG_EFUNC row. MISSING_FIELD when the found row has no integer EFUNC_ID. A missing CFG_EFUNC section is NOT_FOUND.
+ *
+ * Wire name: `delete_expression_function_cascade` (group `functions_expression`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link DeleteExpressionFunctionCascadeOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND, MISSING_FIELD; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function deleteExpressionFunctionCascadeResult(config: string, options: DeleteExpressionFunctionCascadeOptions): string {
+  return rt.callJson("delete_expression_function_cascade", config, {
     code: options.code,
   });
 }
@@ -3450,11 +3924,33 @@ export interface SetExpressionFunctionOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link SetExpressionFunctionOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link setExpressionFunctionResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function setExpressionFunction(config: string, options: SetExpressionFunctionOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("set_expression_function", config, {
+export function setExpressionFunction(config: string, options: SetExpressionFunctionOptions): string {
+  return rt.callConfig("set_expression_function", config, {
+    code: options.code,
+    connect_str: options.connectStr,
+    description: options.description,
+    language: options.language,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link setExpressionFunction}: same options and operation, but returns the record instead of the configuration. Operation: Update an expression function's connect string / description / language.
+ *
+ * @remarks
+ * Returns (modified config, the updated CFG_EFUNC row). No value validation. The row is deleted and re-appended, so it moves to the END of CFG_EFUNC. A missing CFG_EFUNC section is NOT_FOUND.
+ *
+ * Wire name: `set_expression_function` (group `functions_expression`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link SetExpressionFunctionOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function setExpressionFunctionResult(config: string, options: SetExpressionFunctionOptions): string {
+  return rt.callJson("set_expression_function", config, {
     code: options.code,
     connect_str: options.connectStr,
     description: options.description,
@@ -3502,11 +3998,33 @@ export interface AddStandardizeFunctionOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link AddStandardizeFunctionOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link addStandardizeFunctionResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, INVALID_INPUT; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function addStandardizeFunction(config: string, options: AddStandardizeFunctionOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("add_standardize_function", config, {
+export function addStandardizeFunction(config: string, options: AddStandardizeFunctionOptions): string {
+  return rt.callConfig("add_standardize_function", config, {
+    code: options.code,
+    connect_str: options.connectStr,
+    description: options.description,
+    language: options.language,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link addStandardizeFunction}: same options and operation, but returns the record instead of the configuration. Operation: Add a standardize function (CFG_SFUNC row).
+ *
+ * @remarks
+ * Returns (modified config, the new complete CFG_SFUNC row: SFUNC_ID, SFUNC_CODE, CONNECT_STR, SFUNC_DESC, LANGUAGE). SFUNC_ID is always auto-allocated (max existing + 1, floor 1); no id can be requested. TRAP: a duplicate code is INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS. MISSING_SECTION only when CFG_SFUNC is absent.
+ *
+ * Wire name: `add_standardize_function` (group `functions_standardize`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link AddStandardizeFunctionOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION, INVALID_INPUT; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function addStandardizeFunctionResult(config: string, options: AddStandardizeFunctionOptions): string {
+  return rt.callJson("add_standardize_function", config, {
     code: options.code,
     connect_str: options.connectStr,
     description: options.description,
@@ -3536,11 +4054,30 @@ export interface DeleteStandardizeFunctionOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link DeleteStandardizeFunctionOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link deleteStandardizeFunctionResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function deleteStandardizeFunction(config: string, options: DeleteStandardizeFunctionOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("delete_standardize_function", config, {
+export function deleteStandardizeFunction(config: string, options: DeleteStandardizeFunctionOptions): string {
+  return rt.callConfig("delete_standardize_function", config, {
+    code: options.code,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link deleteStandardizeFunction}: same options and operation, but returns the record instead of the configuration. Operation: Delete a standardize function's CFG_SFUNC row only (no cascade).
+ *
+ * @remarks
+ * Returns (modified config, the deleted CFG_SFUNC row). Removes ONLY the CFG_SFUNC row; CFG_SFCALL rows referencing it are left dangling (use delete_standardize_function_cascade). A missing CFG_SFUNC section is NOT_FOUND (not MISSING_SECTION).
+ *
+ * Wire name: `delete_standardize_function` (group `functions_standardize`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link DeleteStandardizeFunctionOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function deleteStandardizeFunctionResult(config: string, options: DeleteStandardizeFunctionOptions): string {
+  return rt.callJson("delete_standardize_function", config, {
     code: options.code,
   });
 }
@@ -3567,11 +4104,30 @@ export interface DeleteStandardizeFunctionCascadeOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link DeleteStandardizeFunctionCascadeOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link deleteStandardizeFunctionCascadeResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND, MISSING_FIELD; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function deleteStandardizeFunctionCascade(config: string, options: DeleteStandardizeFunctionCascadeOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("delete_standardize_function_cascade", config, {
+export function deleteStandardizeFunctionCascade(config: string, options: DeleteStandardizeFunctionCascadeOptions): string {
+  return rt.callConfig("delete_standardize_function_cascade", config, {
+    code: options.code,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link deleteStandardizeFunctionCascade}: same options and operation, but returns the record instead of the configuration. Operation: Delete a standardize function and its CFG_SFCALL rows.
+ *
+ * @remarks
+ * Returns (modified config, the deleted CFG_SFUNC row). Removes every CFG_SFCALL row whose SFUNC_ID matches (skipped if CFG_SFCALL is absent), then the CFG_SFUNC row; no other section is touched. MISSING_FIELD when the found row has no integer SFUNC_ID. A missing CFG_SFUNC section is NOT_FOUND.
+ *
+ * Wire name: `delete_standardize_function_cascade` (group `functions_standardize`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link DeleteStandardizeFunctionCascadeOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND, MISSING_FIELD; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function deleteStandardizeFunctionCascadeResult(config: string, options: DeleteStandardizeFunctionCascadeOptions): string {
+  return rt.callJson("delete_standardize_function_cascade", config, {
     code: options.code,
   });
 }
@@ -3665,11 +4221,33 @@ export interface SetStandardizeFunctionOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link SetStandardizeFunctionOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link setStandardizeFunctionResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function setStandardizeFunction(config: string, options: SetStandardizeFunctionOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("set_standardize_function", config, {
+export function setStandardizeFunction(config: string, options: SetStandardizeFunctionOptions): string {
+  return rt.callConfig("set_standardize_function", config, {
+    code: options.code,
+    connect_str: options.connectStr,
+    description: options.description,
+    language: options.language,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link setStandardizeFunction}: same options and operation, but returns the record instead of the configuration. Operation: Update a standardize function's connect string / description / language.
+ *
+ * @remarks
+ * Returns (modified config, the updated CFG_SFUNC row). No value validation. The row is deleted and re-appended, so it moves to the END of CFG_SFUNC. A missing CFG_SFUNC section is NOT_FOUND.
+ *
+ * Wire name: `set_standardize_function` (group `functions_standardize`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link SetStandardizeFunctionOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function setStandardizeFunctionResult(config: string, options: SetStandardizeFunctionOptions): string {
+  return rt.callJson("set_standardize_function", config, {
     code: options.code,
     connect_str: options.connectStr,
     description: options.description,
@@ -3711,11 +4289,32 @@ export interface CloneGenericPlanOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link CloneGenericPlanOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link cloneGenericPlanResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND, ALREADY_EXISTS, INVALID_CONFIG; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function cloneGenericPlan(config: string, options: CloneGenericPlanOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("clone_generic_plan", config, {
+export function cloneGenericPlan(config: string, options: CloneGenericPlanOptions): string {
+  return rt.callConfig("clone_generic_plan", config, {
+    source_gplan_code: options.sourceGplanCode,
+    new_gplan_code: options.newGplanCode,
+    new_gplan_desc: options.newGplanDesc,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link cloneGenericPlan}: same options and operation, but returns the record instead of the configuration. Operation: Clone a generic plan, copying every CFG_GENERIC_THRESHOLD row of the source to the new plan.
+ *
+ * @remarks
+ * Returns (modified config, new GPLAN_ID); the record is the integer id. The new id is always max existing GPLAN_ID + 1 (no floor, no id arg). Cloned threshold rows are verbatim copies with GPLAN_ID rewritten, appended after existing rows; an absent CFG_GENERIC_THRESHOLD section is skipped silently. INVALID_CONFIG when the source row's GPLAN_ID is not an integer.
+ *
+ * Wire name: `clone_generic_plan` (group `generic_plans`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link CloneGenericPlanOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND, ALREADY_EXISTS, INVALID_CONFIG; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function cloneGenericPlanResult(config: string, options: CloneGenericPlanOptions): string {
+  return rt.callJson("clone_generic_plan", config, {
     source_gplan_code: options.sourceGplanCode,
     new_gplan_code: options.newGplanCode,
     new_gplan_desc: options.newGplanDesc,
@@ -3803,11 +4402,9 @@ export interface SetGenericPlanOptions {
 }
 
 /**
- * Named result of {@link setGenericPlan}.
+ * Named result of {@link setGenericPlanResult}.
  */
-export interface SetGenericPlanResult {
-  /** The modified configuration JSON text. */
-  readonly config: string;
+export interface SetGenericPlanRecord {
   /** JSON text of result member `plan_id`. */
   readonly planId: string;
   /** JSON text of result member `was_created`. */
@@ -3824,11 +4421,31 @@ export interface SetGenericPlanResult {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link SetGenericPlanOptions}.
- * @returns A record of the named result values (`config`, `planId`, `wasCreated`); each value is JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link setGenericPlanResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function setGenericPlan(config: string, options: SetGenericPlanOptions): SetGenericPlanResult {
-  return rt.callNamed<SetGenericPlanResult>("set_generic_plan", config, {
+export function setGenericPlan(config: string, options: SetGenericPlanOptions): string {
+  return rt.callConfig("set_generic_plan", config, {
+    gplan_code: options.gplanCode,
+    gplan_desc: options.gplanDesc,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link setGenericPlan}: same options and operation, but returns the record instead of the configuration. Operation: Create a generic plan, or update the description of an existing one (upsert).
+ *
+ * @remarks
+ * Returns (config, {plan_id, was_created}). Existing code: only GPLAN_DESC is replaced (other keys kept), was_created false. New code: a row with GPLAN_ID = max + 1 is appended, was_created true; an absent CFG_GPLAN section is MISSING_SECTION on this create path.
+ *
+ * Wire name: `set_generic_plan` (group `generic_plans`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link SetGenericPlanOptions}.
+ * @returns A record of the named result values (`planId`, `wasCreated`); each value is JSON text.
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_SECTION; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function setGenericPlanResult(config: string, options: SetGenericPlanOptions): SetGenericPlanRecord {
+  return rt.callNamed<SetGenericPlanRecord>("set_generic_plan", config, {
     gplan_code: options.gplanCode,
     gplan_desc: options.gplanDesc,
   }, [["plan_id", "planId"], ["was_created", "wasCreated"]]);
@@ -3862,11 +4479,31 @@ export interface AddRuleOptions {
  *
  * @param config - The configuration JSON text (opaque; never parsed by this binding).
  * @param options - Arguments; see {@link AddRuleOptions}.
- * @returns `config` = the modified configuration JSON text; `json` = the record as JSON text.
+ * @returns The modified configuration JSON text (opaque, byte-exact). {@link addRuleResult} (same options) returns the record this operation produces.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, NOT_FOUND, INVALID_INPUT, MISSING_SECTION; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function addRule(config: string, options: AddRuleOptions): rt.ConfigAndJson {
-  return rt.callConfigAndJson("add_rule", config, {
+export function addRule(config: string, options: AddRuleOptions): string {
+  return rt.callConfig("add_rule", config, {
+    id: options.id,
+    rule_config: options.ruleConfig,
+  });
+}
+
+/**
+ * The record (row / ids) of {@link addRule}: same options and operation, but returns the record instead of the configuration. Operation: Add an entity resolution rule (CFG_ERRULE row), returning the assigned ERRULE_ID.
+ *
+ * @remarks
+ * Record is the assigned ERRULE_ID (integer). The written row always carries every CFG_ERRULE key (ERRULE_ID, ERRULE_CODE, RESOLVE, RELATE, RTYPE_ID, QUAL_ERFRAG_CODE, DISQ_ERFRAG_CODE, ERRULE_TIER; optional ones as null). ERRULE_CODE is checked BEFORE the config is parsed, so a missing code is MISSING_FIELD even for invalid config JSON. A config without CFG_ERRULE is MISSING_SECTION (after validation). Validation order: fragment, disqualifier, duplicate code, RESOLVE, RELATE, exclusivity, tier, RTYPE_ID.
+ *
+ * Wire name: `add_rule` (group `rules`).
+ *
+ * @param config - The configuration JSON text (opaque; never parsed by this binding).
+ * @param options - Arguments; see {@link AddRuleOptions}.
+ * @returns The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`).
+ * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, MISSING_FIELD, ALREADY_EXISTS, NOT_FOUND, INVALID_INPUT, MISSING_SECTION; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
+ */
+export function addRuleResult(config: string, options: AddRuleOptions): string {
+  return rt.callJson("add_rule", config, {
     id: options.id,
     rule_config: options.ruleConfig,
   });
@@ -4886,7 +5523,7 @@ export interface VerifyCompatibilityVersionOptions {
 /**
  * Named result of {@link verifyCompatibilityVersion}.
  */
-export interface VerifyCompatibilityVersionResult {
+export interface VerifyCompatibilityVersionRecord {
   /** JSON text of result member `current_version`. */
   readonly currentVersion: string;
   /** JSON text of result member `matches`. */
@@ -4906,8 +5543,8 @@ export interface VerifyCompatibilityVersionResult {
  * @returns A record of the named result values (`currentVersion`, `matches`); each value is JSON text.
  * @throws {@link SzConfigToolError} `code` one of: JSON_PARSE, NOT_FOUND; plus the wire errors INVALID_INPUT, MISSING_FIELD, INTERNAL.
  */
-export function verifyCompatibilityVersion(config: string, options: VerifyCompatibilityVersionOptions): VerifyCompatibilityVersionResult {
-  return rt.callNamed<VerifyCompatibilityVersionResult>("verify_compatibility_version", config, {
+export function verifyCompatibilityVersion(config: string, options: VerifyCompatibilityVersionOptions): VerifyCompatibilityVersionRecord {
+  return rt.callNamed<VerifyCompatibilityVersionRecord>("verify_compatibility_version", config, {
     expected_version: options.expectedVersion,
   }, [["current_version", "currentVersion"], ["matches", "matches"]]);
 }

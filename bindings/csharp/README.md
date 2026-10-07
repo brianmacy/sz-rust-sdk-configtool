@@ -17,13 +17,17 @@ string sources = SzConfigTool.ListDataSources(config);   // JSON text
 
 * Namespace `Sz.ConfigTool`, static class `SzConfigTool`, `netstandard2.0`.
 * Every method takes the configuration JSON first and returns the result:
-  `config` functions return the new config string, `json` functions return JSON
-  text (parse it with any JSON library), `config_and_json` functions return a
-  `ConfigAndJson(Config, Json)` record. Configs are opaque and byte-exact.
-* Functions with named results return a `<Fn>Result` record whose fields are
-  each member's JSON text: `SetGenericPlanResult(Config, PlanId, WasCreated)`
-  (e.g. `"3"`, `"true"`), `VerifyCompatibilityVersionResult(CurrentVersion,
-  Matches)` (e.g. `"\"11\""` — quotes included, `"true"`).
+  every config-changing function (`config`, `config_and_json`) returns the new
+  config string, so calls chain; `json` functions return JSON text (parse it
+  with any JSON library). A `config_and_json` function also has a companion
+  `<Name>Result` (same arguments and overloads) that returns the record the
+  operation produces, as JSON text: `AddAttributeResult(...)` → the new
+  `CFG_ATTR` row. Configs are opaque and byte-exact.
+* Named results are a `<Name>Record` record whose fields are each member's
+  JSON text: `SetGenericPlanResult(...)` → `SetGenericPlanRecord(PlanId,
+  WasCreated)` (e.g. `"3"`, `"true"`), `VerifyCompatibilityVersion(...)` →
+  `VerifyCompatibilityVersionRecord(CurrentVersion, Matches)` (e.g.
+  `"\"11\""` — quotes included, `"true"`).
 * Call selectors (`int_or_str` args, e.g. `call`) have `long` and `string`
   overloads: `GetComparisonCall(config, 34L)` selects by call id,
   `GetComparisonCall(config, "TAX_ID")` by feature code.

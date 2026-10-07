@@ -3,7 +3,11 @@
 //! Emits, under `bindings/csharp/src/Sz.ConfigTool/Generated/`:
 //! * `SzConfigTool.g.cs` — the typed `SzConfigTool` static partial class (one
 //!   PascalCase method per implemented manifest function, camelCase args, XML
-//!   doc from the manifest) plus result records for `tuple_names` functions;
+//!   doc from the manifest) plus `<Name>Record` records for `tuple_names`
+//!   functions. Every config-changing method returns the config text; a
+//!   `config_and_json` function also gets a companion `<Name>Result` (same
+//!   parameters and overloads) returning the record JSON text (or the
+//!   `<Name>Record`);
 //! * `SzConfigToolErrorKind.g.cs` — the error-kind enum from `reason_codes`.
 //!
 //! Every method calls `SzConfigTool_invoke` through the hand-written
@@ -286,38 +290,85 @@ fn ordered_args(f: &Function) -> Vec<usize> {
 /// (`json` or `config_and_json`), if any.
 fn record_name(f: &Function) -> Option<String> {
     (matches!(f.returns, Returns::ConfigAndJson | Returns::Json) && !f.tuple_names.is_empty())
-        .then(|| format!("{}Result", pascal(&f.name)))
+        .then(|| format!("{}Record", pascal(&f.name)))
 }
 
-fn return_type(f: &Function) -> String {
-    if let Some(r) = record_name(f) {
+/// Which typed method of a manifest function is rendered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Role {
+    /// `<Name>`: the config for config-changing functions, else the result.
+    Primary,
+    /// `<Name>Result` of a `config_and_json` function: the record only.
+    Companion,
+}
+
+/// The typed methods of `f`: the primary, plus the companion when it has one.
+fn roles(f: &Function) -> &'static [Role] {
+    if f.companion().is_some() {
+        &[Role::Primary, Role::Companion]
+    } else {
+        &[Role::Primary]
+    }
+}
+
+/// The PascalCase method name of `f` in `role`.
+fn method_name(f: &Function, role: Role) -> String {
+    match role {
+        Role::Primary => pascal(&f.name),
+        Role::Companion => pascal(&f.companion().unwrap_or_default()),
+    }
+}
+
+/// The record the typed method in `role` returns, if any.
+fn returned_record(f: &Function, role: Role) -> Option<String> {
+    record_name(f).filter(|_| f.returns == Returns::Json || role == Role::Companion)
+}
+
+fn return_type(f: &Function, role: Role) -> String {
+    if let Some(r) = returned_record(f, role) {
         return r;
     }
     match f.returns {
-        Returns::Config | Returns::Json => "string".into(),
-        Returns::ConfigAndJson => "ConfigAndJson".into(),
+        Returns::Config | Returns::Json | Returns::ConfigAndJson => "string".into(),
         Returns::Int => "long".into(),
         Returns::Unit => "void".into(),
     }
 }
 
-fn returns_doc(f: &Function) -> Option<String> {
+fn returns_doc(f: &Function, role: Role) -> Option<String> {
     let fields: Vec<String> = f.tuple_names.iter().map(|n| pascal(n)).collect();
     let fields = fields.join(", ");
-    match f.returns {
-        Returns::Config => Some("The modified configuration JSON.".into()),
-        Returns::Json if f.tuple_names.is_empty() => Some("The result, as JSON text.".into()),
-        Returns::Json => Some(format!(
+    if returned_record(f, role).is_some() {
+        return Some(format!(
             "The named result fields {fields} (each as JSON text)."
+        ));
+    }
+    match (f.returns, role) {
+        (Returns::Config, _) => Some("The modified configuration JSON.".into()),
+        (Returns::ConfigAndJson, Role::Primary) => Some(format!(
+            "The modified configuration JSON. <see cref=\"{}\"/> (same arguments) returns the \
+             record this operation produces.",
+            method_name(f, Role::Companion)
         )),
-        Returns::ConfigAndJson if f.tuple_names.is_empty() => {
-            Some("The modified configuration and the record (JSON text).".into())
+        (Returns::ConfigAndJson, Role::Companion) => {
+            Some("The record (e.g. the created row or ids), as JSON text.".into())
         }
-        Returns::ConfigAndJson => Some(format!(
-            "The modified configuration and the named fields {fields} (each as JSON text)."
-        )),
-        Returns::Int => Some("The integer result.".into()),
-        Returns::Unit => None,
+        (Returns::Json, _) => Some("The result, as JSON text.".into()),
+        (Returns::Int, _) => Some("The integer result.".into()),
+        (Returns::Unit, _) => None,
+    }
+}
+
+/// The summary of `f`'s typed method in `role` (XML-escaped by `doc_tag`).
+fn summary(f: &Function, role: Role) -> String {
+    match role {
+        Role::Primary => f.doc.clone(),
+        Role::Companion => format!(
+            "The record (row / ids) of {}: same arguments and operation, but returns the \
+             record instead of the configuration. Operation: {}",
+            pascal(&f.name),
+            f.doc
+        ),
     }
 }
 
@@ -346,9 +397,9 @@ fn param_doc(a: &Arg, ty: ArgType) -> String {
     text.trim().to_string()
 }
 
-fn method_doc(out: &mut String, f: &Function, o: &[ArgType]) {
+fn method_doc(out: &mut String, f: &Function, o: &[ArgType], role: Role) {
     let ind = "        ";
-    doc_tag(out, ind, "<summary>", "</summary>", &f.doc);
+    doc_tag(out, ind, "<summary>", "</summary>", &summary(f, role));
     let _ = writeln!(
         out,
         "{ind}/// <param name=\"{CONFIG_PARAM}\">The configuration JSON (opaque; passed byte-exact).</param>"
@@ -361,8 +412,8 @@ fn method_doc(out: &mut String, f: &Function, o: &[ArgType]) {
         );
         doc_tag(out, ind, &open, "</param>", &param_doc(a, o[i]));
     }
-    if let Some(r) = returns_doc(f) {
-        doc_tag(out, ind, "<returns>", "</returns>", &r);
+    if let Some(r) = returns_doc(f, role) {
+        let _ = writeln!(out, "{ind}/// <returns>{r}</returns>");
     }
     let mut remarks = format!("Wire name: <c>{}</c>.", f.name);
     if let Some(n) = &f.notes {
@@ -384,20 +435,21 @@ fn method_doc(out: &mut String, f: &Function, o: &[ArgType]) {
     );
 }
 
-fn call_expr(f: &Function, args: &str) -> String {
-    let helper = match f.returns {
-        Returns::Config => "Config",
-        Returns::Json => "Json",
-        Returns::ConfigAndJson => "ConfigAndJson",
+fn call_expr(f: &Function, args: &str, role: Role) -> String {
+    let helper = match (f.returns, role) {
+        (Returns::Config, _) => "Config",
+        (Returns::Json, _) => "Json",
+        (Returns::ConfigAndJson, Role::Primary) => "ConfigAndJsonConfig",
+        (Returns::ConfigAndJson, Role::Companion) => "ConfigAndJsonResult",
         // Emitted inline: no runtime helper that only int functions would use.
-        Returns::Int => {
+        (Returns::Int, _) => {
             return format!(
                 "long.Parse(NativeCall.Require(NativeCall.Expect(\"int\", \"{name}\", {CONFIG_PARAM}, {args}).Result, \"{name}: envelope without result\"), \
                  System.Globalization.NumberStyles.AllowLeadingSign, System.Globalization.CultureInfo.InvariantCulture)",
                 name = f.name
             );
         }
-        Returns::Unit => "Unit",
+        (Returns::Unit, _) => "Unit",
     };
     format!(
         "NativeCall.{helper}(\"{}\", {CONFIG_PARAM}, {args})",
@@ -406,8 +458,8 @@ fn call_expr(f: &Function, args: &str) -> String {
 }
 
 /// The method body's return statement(s) for `call`.
-fn body(f: &Function, call: &str) -> String {
-    let Some(r) = record_name(f) else {
+fn body(f: &Function, call: &str, role: Role) -> String {
+    let Some(r) = returned_record(f, role) else {
         return match f.returns {
             Returns::Unit => format!("{call};"),
             _ => format!("return {call};"),
@@ -417,21 +469,16 @@ fn body(f: &Function, call: &str) -> String {
     let fields: Vec<String> = (0..f.tuple_names.len())
         .map(|i| format!("m[{i}]"))
         .collect();
-    let (record_json, config) = if f.returns == Returns::ConfigAndJson {
-        ("r.Json", "r.Config, ")
-    } else {
-        ("r", "")
-    };
     format!(
-        "var r = {call};\n            string[] m = NativeCall.Members({record_json}, {});\n            \
-         return new {r}({config}{});",
+        "var r = {call};\n            string[] m = NativeCall.Members(r, {});\n            \
+         return new {r}({});",
         names.join(", "),
         fields.join(", ")
     )
 }
 
-fn method(out: &mut String, f: &Function, o: &[ArgType]) {
-    method_doc(out, f, o);
+fn method(out: &mut String, f: &Function, o: &[ArgType], role: Role) {
+    method_doc(out, f, o, role);
     let mut params = vec![format!("string {CONFIG_PARAM}")];
     params.extend(
         ordered_args(f)
@@ -441,8 +488,8 @@ fn method(out: &mut String, f: &Function, o: &[ArgType]) {
     let _ = writeln!(
         out,
         "        public static {} {}({})\n        {{",
-        return_type(f),
-        pascal(&f.name),
+        return_type(f, role),
+        method_name(f, role),
         params.join(", ")
     );
     let args = if f.args.is_empty() {
@@ -457,7 +504,7 @@ fn method(out: &mut String, f: &Function, o: &[ArgType]) {
     let _ = writeln!(
         out,
         "            {}\n        }}",
-        body(f, &call_expr(f, &args))
+        body(f, &call_expr(f, &args, role), role)
     );
 }
 
@@ -465,16 +512,9 @@ fn record(out: &mut String, f: &Function, name: &str) {
     let _ = writeln!(
         out,
         "    /// <summary>Named result of <see cref=\"SzConfigTool.{}\"/>; each field is the record member's JSON text (e.g. <c>1001</c>, <c>true</c>, <c>\"4.0.0\"</c>).</summary>",
-        pascal(&f.name)
+        method_name(f, *roles(f).last().unwrap_or(&Role::Primary))
     );
     let mut fields = Vec::new();
-    if f.returns == Returns::ConfigAndJson {
-        let _ = writeln!(
-            out,
-            "    /// <param name=\"Config\">The modified configuration JSON (opaque, byte-exact).</param>"
-        );
-        fields.push("string Config".to_string());
-    }
     for field in &f.tuple_names {
         let p = pascal(field);
         let _ = writeln!(
@@ -509,12 +549,14 @@ pub fn api_file(functions: &[Function]) -> String {
     out.push_str("    public static partial class SzConfigTool\n    {\n");
     let mut first = true;
     for f in &typed {
-        for o in overloads(f) {
-            if !first {
-                out.push('\n');
+        for role in roles(f) {
+            for o in overloads(f) {
+                if !first {
+                    out.push('\n');
+                }
+                first = false;
+                method(&mut out, f, &o, *role);
             }
-            first = false;
-            method(&mut out, f, &o);
         }
     }
     out.push_str("    }\n");
@@ -714,17 +756,29 @@ mod tests {
         );
         f.tuple_names = vec!["plan_id".into(), "was_created".into()];
         let out = api_file(&[f]);
-        assert!(
-            out.contains("public static SetPlanResult SetPlan(string configJson, string code)")
-        );
-        assert!(
-            out.contains("string[] m = NativeCall.Members(r.Json, \"plan_id\", \"was_created\");")
-        );
-        assert!(out.contains("return new SetPlanResult(r.Config, m[0], m[1]);"));
+        assert!(out.contains("public static string SetPlan(string configJson, string code)"));
         assert!(out.contains(
-            "public sealed record SetPlanResult(string Config, string PlanId, string WasCreated);"
+            "return NativeCall.ConfigAndJsonConfig(\"set_plan\", configJson, args.ToJson());"
         ));
-        assert!(!out.contains(": ConfigAndJson"));
+        assert!(
+            out.contains(
+                "public static SetPlanRecord SetPlanResult(string configJson, string code)"
+            )
+        );
+        assert!(out.contains(
+            "var r = NativeCall.ConfigAndJsonResult(\"set_plan\", configJson, args.ToJson());"
+        ));
+        assert!(out.contains("string[] m = NativeCall.Members(r, \"plan_id\", \"was_created\");"));
+        assert!(out.contains("return new SetPlanRecord(m[0], m[1]);"));
+        assert!(
+            out.contains("public sealed record SetPlanRecord(string PlanId, string WasCreated);")
+        );
+        assert!(out.contains("Named result of <see cref=\"SzConfigTool.SetPlanResult\"/>"));
+        assert!(
+            out.contains("<see cref=\"SetPlanResult\"/> (same arguments)"),
+            "{out}"
+        );
+        assert!(out.contains("The record (row / ids) of SetPlan:"), "{out}");
     }
 
     #[test]
@@ -732,13 +786,14 @@ mod tests {
         let mut f = func("verify_it", vec![], Returns::Json);
         f.tuple_names = vec!["current_version".into(), "matches".into()];
         let out = api_file(&[f]);
-        assert!(out.contains("public static VerifyItResult VerifyIt(string configJson)"));
+        assert!(out.contains("public static VerifyItRecord VerifyIt(string configJson)"));
         assert!(out.contains("var r = NativeCall.Json(\"verify_it\", configJson, \"{}\");"));
         assert!(out.contains("NativeCall.Members(r, \"current_version\", \"matches\");"));
-        assert!(out.contains("return new VerifyItResult(m[0], m[1]);"));
+        assert!(out.contains("return new VerifyItRecord(m[0], m[1]);"));
         assert!(out.contains(
-            "public sealed record VerifyItResult(string CurrentVersion, string Matches);"
+            "public sealed record VerifyItRecord(string CurrentVersion, string Matches);"
         ));
+        assert!(!out.contains("VerifyItResult"));
     }
 
     #[test]
@@ -803,7 +858,11 @@ mod tests {
         ]);
         assert!(out.contains("public static void CheckIt(string configJson)"));
         assert!(out.contains("NativeCall.Unit(\"check_it\", configJson, \"{}\");"));
-        assert!(out.contains("public static ConfigAndJson AddIt(string configJson)"));
+        assert!(out.contains("public static string AddIt(string configJson)"));
+        assert!(out.contains("public static string AddItResult(string configJson)"));
+        assert!(
+            out.contains("return NativeCall.ConfigAndJsonResult(\"add_it\", configJson, \"{}\");")
+        );
     }
 
     #[test]

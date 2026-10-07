@@ -258,6 +258,16 @@ impl Function {
     pub fn arg(&self, name: &str) -> Option<&Arg> {
         self.args.iter().find(|a| a.name == name)
     }
+
+    /// Snake name of the typed COMPANION of a `config_and_json` function
+    /// (`<name>_result`), or `None`. Typed bindings split such a function in
+    /// two: the primary method returns only the new config text (so every
+    /// config-changing method chains the same way) and the companion, taking
+    /// the same arguments, returns the non-config part (the record JSON text,
+    /// or the `tuple_names` record). The `invoke` wire is unchanged.
+    pub fn companion(&self) -> Option<String> {
+        (self.returns == Returns::ConfigAndJson).then(|| format!("{}_result", self.name))
+    }
 }
 
 /// `api/manifest/excluded.yaml`.

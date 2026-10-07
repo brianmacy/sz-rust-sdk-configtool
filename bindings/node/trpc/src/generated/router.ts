@@ -1,8 +1,9 @@
 // GENERATED — do not edit. Source: api/manifest/*.yaml; regenerate with `cargo run -p sz-configtool-codegen`.
 //
 // One procedure per typed function. Functions returning a config are
-// mutations; read-only ones are queries (send them with POST: the config
-// is ~300KB, far too large for a GET URL).
+// mutations; the others (incl. the `<fn>Result` companions, which return
+// only the record) are queries (send them with POST: the config is
+// ~300KB, far too large for a GET URL).
 
 import * as api from "sz-configtool";
 
@@ -24,6 +25,17 @@ export const configToolRouter = t.router({
       szCall(() => {
         const { config, ...options } = input;
         return api.addAttribute(config, options);
+      }),
+    ),
+  /**
+   * The record (row / ids) of {@link addAttribute}: same options and operation, but returns the record instead of the configuration. Operation: Add an attribute (CFG_ATTR row) mapping an input attribute to a feature element.
+   */
+  addAttributeResult: t.procedure
+    .input(schemas.addAttributeInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.addAttributeResult(config, options);
       }),
     ),
   /**
@@ -128,6 +140,17 @@ export const configToolRouter = t.router({
       }),
     ),
   /**
+   * The record (row / ids) of {@link addComparisonCall}: same options and operation, but returns the record instead of the configuration. Operation: Add a comparison call (CFG_CFCALL row) binding a comparison function to a feature, with its element list (CFG_CFBOM rows).
+   */
+  addComparisonCallResult: t.procedure
+    .input(schemas.addComparisonCallInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.addComparisonCallResult(config, options);
+      }),
+    ),
+  /**
    * Delete a comparison call by CFCALL_ID, cascading to its CFG_CFBOM rows.
    */
   deleteComparisonCall: t.procedure
@@ -169,6 +192,17 @@ export const configToolRouter = t.router({
       }),
     ),
   /**
+   * The record (row / ids) of {@link addComparisonCallElement}: same options and operation, but returns the record instead of the configuration. Operation: Add one element (CFG_CFBOM row) to a comparison call, addressed by raw ids.
+   */
+  addComparisonCallElementResult: t.procedure
+    .input(schemas.addComparisonCallElementInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.addComparisonCallElementResult(config, options);
+      }),
+    ),
+  /**
    * Delete one element (CFG_CFBOM row) from a comparison call, addressed by call id or feature code plus element code.
    */
   deleteComparisonCallElement: t.procedure
@@ -188,6 +222,17 @@ export const configToolRouter = t.router({
       szCall(() => {
         const { config, ...options } = input;
         return api.addDistinctCall(config, options);
+      }),
+    ),
+  /**
+   * The record (row / ids) of {@link addDistinctCall}: same options and operation, but returns the record instead of the configuration. Operation: Add a distinct call (CFG_DFCALL row) binding a distinct function to a feature, with its element list (CFG_DFBOM rows).
+   */
+  addDistinctCallResult: t.procedure
+    .input(schemas.addDistinctCallInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.addDistinctCallResult(config, options);
       }),
     ),
   /**
@@ -232,6 +277,17 @@ export const configToolRouter = t.router({
       }),
     ),
   /**
+   * The record (row / ids) of {@link addDistinctCallElement}: same options and operation, but returns the record instead of the configuration. Operation: Add one element (CFG_DFBOM row) to a distinct call, addressed by raw ids.
+   */
+  addDistinctCallElementResult: t.procedure
+    .input(schemas.addDistinctCallElementInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.addDistinctCallElementResult(config, options);
+      }),
+    ),
+  /**
    * Delete one element (CFG_DFBOM row) from a distinct call, addressed by call id or feature code plus element code.
    */
   deleteDistinctCallElement: t.procedure
@@ -251,6 +307,17 @@ export const configToolRouter = t.router({
       szCall(() => {
         const { config, ...options } = input;
         return api.addExpressionCall(config, options);
+      }),
+    ),
+  /**
+   * The record (row / ids) of {@link addExpressionCall}: same options and operation, but returns the record instead of the configuration. Operation: Add an expression call (CFG_EFCALL row) plus its element list (CFG_EFBOM rows).
+   */
+  addExpressionCallResult: t.procedure
+    .input(schemas.addExpressionCallInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.addExpressionCallResult(config, options);
       }),
     ),
   /**
@@ -295,6 +362,17 @@ export const configToolRouter = t.router({
       }),
     ),
   /**
+   * The record (row / ids) of {@link addExpressionCallElement}: same options and operation, but returns the record instead of the configuration. Operation: Add one CFG_EFBOM row to an expression call, addressed by raw ids.
+   */
+  addExpressionCallElementResult: t.procedure
+    .input(schemas.addExpressionCallElementInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.addExpressionCallElementResult(config, options);
+      }),
+    ),
+  /**
    * Delete one CFG_EFBOM row from an expression call, addressed by call + element code.
    */
   deleteExpressionCallElement: t.procedure
@@ -314,6 +392,17 @@ export const configToolRouter = t.router({
       szCall(() => {
         const { config, ...options } = input;
         return api.addStandardizeCall(config, options);
+      }),
+    ),
+  /**
+   * The record (row / ids) of {@link addStandardizeCall}: same options and operation, but returns the record instead of the configuration. Operation: Add a standardize call (CFG_SFCALL row) binding a standardize function to a feature or an element.
+   */
+  addStandardizeCallResult: t.procedure
+    .input(schemas.addStandardizeCallInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.addStandardizeCallResult(config, options);
       }),
     ),
   /**
@@ -355,6 +444,17 @@ export const configToolRouter = t.router({
       szCall(() => {
         const { config, ...options } = input;
         return api.addStandardizeCallElement(config, options);
+      }),
+    ),
+  /**
+   * The record (row / ids) of {@link addStandardizeCallElement}: same options and operation, but returns the record instead of the configuration. Operation: Add a CFG_SFCALL row addressed by raw ids (FTYPE_ID, SFUNC_ID, FELEM_ID).
+   */
+  addStandardizeCallElementResult: t.procedure
+    .input(schemas.addStandardizeCallElementInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.addStandardizeCallElementResult(config, options);
       }),
     ),
   /**
@@ -432,6 +532,17 @@ export const configToolRouter = t.router({
       }),
     ),
   /**
+   * The record (row / ids) of {@link removeConfigSectionField}: same options and operation, but returns the record instead of the configuration. Operation: Remove a field from every item of an array section, returning how many items had it.
+   */
+  removeConfigSectionFieldResult: t.procedure
+    .input(schemas.removeConfigSectionFieldInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.removeConfigSectionFieldResult(config, options);
+      }),
+    ),
+  /**
    * Add a field to every item of an array section that lacks it, returning existed/updated counts.
    */
   addConfigSectionField: t.procedure
@@ -440,6 +551,17 @@ export const configToolRouter = t.router({
       szCall(() => {
         const { config, ...options } = input;
         return api.addConfigSectionField(config, options);
+      }),
+    ),
+  /**
+   * The record (row / ids) of {@link addConfigSectionField}: same options and operation, but returns the record instead of the configuration. Operation: Add a field to every item of an array section that lacks it, returning existed/updated counts.
+   */
+  addConfigSectionFieldResult: t.procedure
+    .input(schemas.addConfigSectionFieldInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.addConfigSectionFieldResult(config, options);
       }),
     ),
   /**
@@ -736,6 +858,17 @@ export const configToolRouter = t.router({
       }),
     ),
   /**
+   * The record (row / ids) of {@link addFragment}: same options and operation, but returns the record instead of the configuration. Operation: Add a rule fragment (CFG_ERFRAG row), returning the assigned ERFRAG_ID.
+   */
+  addFragmentResult: t.procedure
+    .input(schemas.addFragmentInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.addFragmentResult(config, options);
+      }),
+    ),
+  /**
    * Delete a fragment by code.
    */
   deleteFragment: t.procedure
@@ -788,6 +921,17 @@ export const configToolRouter = t.router({
       }),
     ),
   /**
+   * The record (row / ids) of {@link addComparisonFunction}: same options and operation, but returns the record instead of the configuration. Operation: Add a comparison function (CFG_CFUNC row).
+   */
+  addComparisonFunctionResult: t.procedure
+    .input(schemas.addComparisonFunctionInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.addComparisonFunctionResult(config, options);
+      }),
+    ),
+  /**
    * Delete a comparison function's CFG_CFUNC row only (no cascade).
    */
   deleteComparisonFunction: t.procedure
@@ -799,6 +943,17 @@ export const configToolRouter = t.router({
       }),
     ),
   /**
+   * The record (row / ids) of {@link deleteComparisonFunction}: same options and operation, but returns the record instead of the configuration. Operation: Delete a comparison function's CFG_CFUNC row only (no cascade).
+   */
+  deleteComparisonFunctionResult: t.procedure
+    .input(schemas.deleteComparisonFunctionInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.deleteComparisonFunctionResult(config, options);
+      }),
+    ),
+  /**
    * Delete a comparison function and its CFG_CFBOM / CFG_CFCALL / CFG_CFRTN rows.
    */
   deleteComparisonFunctionCascade: t.procedure
@@ -807,6 +962,17 @@ export const configToolRouter = t.router({
       szCall(() => {
         const { config, ...options } = input;
         return api.deleteComparisonFunctionCascade(config, options);
+      }),
+    ),
+  /**
+   * The record (row / ids) of {@link deleteComparisonFunctionCascade}: same options and operation, but returns the record instead of the configuration. Operation: Delete a comparison function and its CFG_CFBOM / CFG_CFCALL / CFG_CFRTN rows.
+   */
+  deleteComparisonFunctionCascadeResult: t.procedure
+    .input(schemas.deleteComparisonFunctionCascadeInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.deleteComparisonFunctionCascadeResult(config, options);
       }),
     ),
   /**
@@ -840,6 +1006,17 @@ export const configToolRouter = t.router({
       }),
     ),
   /**
+   * The record (row / ids) of {@link setComparisonFunction}: same options and operation, but returns the record instead of the configuration. Operation: Update a comparison function's connect string / description / language / anon support.
+   */
+  setComparisonFunctionResult: t.procedure
+    .input(schemas.setComparisonFunctionInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.setComparisonFunctionResult(config, options);
+      }),
+    ),
+  /**
    * Add a distinct function (CFG_DFUNC row) to the configuration.
    */
   addDistinctFunction: t.procedure
@@ -851,6 +1028,17 @@ export const configToolRouter = t.router({
       }),
     ),
   /**
+   * The record (row / ids) of {@link addDistinctFunction}: same options and operation, but returns the record instead of the configuration. Operation: Add a distinct function (CFG_DFUNC row) to the configuration.
+   */
+  addDistinctFunctionResult: t.procedure
+    .input(schemas.addDistinctFunctionInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.addDistinctFunctionResult(config, options);
+      }),
+    ),
+  /**
    * Delete a distinct function by code.
    */
   deleteDistinctFunction: t.procedure
@@ -859,6 +1047,17 @@ export const configToolRouter = t.router({
       szCall(() => {
         const { config, ...options } = input;
         return api.deleteDistinctFunction(config, options);
+      }),
+    ),
+  /**
+   * The record (row / ids) of {@link deleteDistinctFunction}: same options and operation, but returns the record instead of the configuration. Operation: Delete a distinct function by code.
+   */
+  deleteDistinctFunctionResult: t.procedure
+    .input(schemas.deleteDistinctFunctionInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.deleteDistinctFunctionResult(config, options);
       }),
     ),
   /**
@@ -892,6 +1091,17 @@ export const configToolRouter = t.router({
       }),
     ),
   /**
+   * The record (row / ids) of {@link setDistinctFunction}: same options and operation, but returns the record instead of the configuration. Operation: Update a distinct function's connect string, description, language or anon support.
+   */
+  setDistinctFunctionResult: t.procedure
+    .input(schemas.setDistinctFunctionInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.setDistinctFunctionResult(config, options);
+      }),
+    ),
+  /**
    * Add an expression function (CFG_EFUNC row).
    */
   addExpressionFunction: t.procedure
@@ -900,6 +1110,17 @@ export const configToolRouter = t.router({
       szCall(() => {
         const { config, ...options } = input;
         return api.addExpressionFunction(config, options);
+      }),
+    ),
+  /**
+   * The record (row / ids) of {@link addExpressionFunction}: same options and operation, but returns the record instead of the configuration. Operation: Add an expression function (CFG_EFUNC row).
+   */
+  addExpressionFunctionResult: t.procedure
+    .input(schemas.addExpressionFunctionInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.addExpressionFunctionResult(config, options);
       }),
     ),
   /**
@@ -914,6 +1135,17 @@ export const configToolRouter = t.router({
       }),
     ),
   /**
+   * The record (row / ids) of {@link deleteExpressionFunction}: same options and operation, but returns the record instead of the configuration. Operation: Delete an expression function's CFG_EFUNC row only (no cascade).
+   */
+  deleteExpressionFunctionResult: t.procedure
+    .input(schemas.deleteExpressionFunctionInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.deleteExpressionFunctionResult(config, options);
+      }),
+    ),
+  /**
    * Delete an expression function and its CFG_EFCALL / CFG_EFBOM rows.
    */
   deleteExpressionFunctionCascade: t.procedure
@@ -922,6 +1154,17 @@ export const configToolRouter = t.router({
       szCall(() => {
         const { config, ...options } = input;
         return api.deleteExpressionFunctionCascade(config, options);
+      }),
+    ),
+  /**
+   * The record (row / ids) of {@link deleteExpressionFunctionCascade}: same options and operation, but returns the record instead of the configuration. Operation: Delete an expression function and its CFG_EFCALL / CFG_EFBOM rows.
+   */
+  deleteExpressionFunctionCascadeResult: t.procedure
+    .input(schemas.deleteExpressionFunctionCascadeInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.deleteExpressionFunctionCascadeResult(config, options);
       }),
     ),
   /**
@@ -955,6 +1198,17 @@ export const configToolRouter = t.router({
       }),
     ),
   /**
+   * The record (row / ids) of {@link setExpressionFunction}: same options and operation, but returns the record instead of the configuration. Operation: Update an expression function's connect string / description / language.
+   */
+  setExpressionFunctionResult: t.procedure
+    .input(schemas.setExpressionFunctionInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.setExpressionFunctionResult(config, options);
+      }),
+    ),
+  /**
    * Add a standardize function (CFG_SFUNC row).
    */
   addStandardizeFunction: t.procedure
@@ -963,6 +1217,17 @@ export const configToolRouter = t.router({
       szCall(() => {
         const { config, ...options } = input;
         return api.addStandardizeFunction(config, options);
+      }),
+    ),
+  /**
+   * The record (row / ids) of {@link addStandardizeFunction}: same options and operation, but returns the record instead of the configuration. Operation: Add a standardize function (CFG_SFUNC row).
+   */
+  addStandardizeFunctionResult: t.procedure
+    .input(schemas.addStandardizeFunctionInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.addStandardizeFunctionResult(config, options);
       }),
     ),
   /**
@@ -977,6 +1242,17 @@ export const configToolRouter = t.router({
       }),
     ),
   /**
+   * The record (row / ids) of {@link deleteStandardizeFunction}: same options and operation, but returns the record instead of the configuration. Operation: Delete a standardize function's CFG_SFUNC row only (no cascade).
+   */
+  deleteStandardizeFunctionResult: t.procedure
+    .input(schemas.deleteStandardizeFunctionInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.deleteStandardizeFunctionResult(config, options);
+      }),
+    ),
+  /**
    * Delete a standardize function and its CFG_SFCALL rows.
    */
   deleteStandardizeFunctionCascade: t.procedure
@@ -985,6 +1261,17 @@ export const configToolRouter = t.router({
       szCall(() => {
         const { config, ...options } = input;
         return api.deleteStandardizeFunctionCascade(config, options);
+      }),
+    ),
+  /**
+   * The record (row / ids) of {@link deleteStandardizeFunctionCascade}: same options and operation, but returns the record instead of the configuration. Operation: Delete a standardize function and its CFG_SFCALL rows.
+   */
+  deleteStandardizeFunctionCascadeResult: t.procedure
+    .input(schemas.deleteStandardizeFunctionCascadeInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.deleteStandardizeFunctionCascadeResult(config, options);
       }),
     ),
   /**
@@ -1018,6 +1305,17 @@ export const configToolRouter = t.router({
       }),
     ),
   /**
+   * The record (row / ids) of {@link setStandardizeFunction}: same options and operation, but returns the record instead of the configuration. Operation: Update a standardize function's connect string / description / language.
+   */
+  setStandardizeFunctionResult: t.procedure
+    .input(schemas.setStandardizeFunctionInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.setStandardizeFunctionResult(config, options);
+      }),
+    ),
+  /**
    * Clone a generic plan, copying every CFG_GENERIC_THRESHOLD row of the source to the new plan.
    */
   cloneGenericPlan: t.procedure
@@ -1026,6 +1324,17 @@ export const configToolRouter = t.router({
       szCall(() => {
         const { config, ...options } = input;
         return api.cloneGenericPlan(config, options);
+      }),
+    ),
+  /**
+   * The record (row / ids) of {@link cloneGenericPlan}: same options and operation, but returns the record instead of the configuration. Operation: Clone a generic plan, copying every CFG_GENERIC_THRESHOLD row of the source to the new plan.
+   */
+  cloneGenericPlanResult: t.procedure
+    .input(schemas.cloneGenericPlanInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.cloneGenericPlanResult(config, options);
       }),
     ),
   /**
@@ -1062,6 +1371,17 @@ export const configToolRouter = t.router({
       }),
     ),
   /**
+   * The record (row / ids) of {@link setGenericPlan}: same options and operation, but returns the record instead of the configuration. Operation: Create a generic plan, or update the description of an existing one (upsert).
+   */
+  setGenericPlanResult: t.procedure
+    .input(schemas.setGenericPlanInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.setGenericPlanResult(config, options);
+      }),
+    ),
+  /**
    * Add an entity resolution rule (CFG_ERRULE row), returning the assigned ERRULE_ID.
    */
   addRule: t.procedure
@@ -1070,6 +1390,17 @@ export const configToolRouter = t.router({
       szCall(() => {
         const { config, ...options } = input;
         return api.addRule(config, options);
+      }),
+    ),
+  /**
+   * The record (row / ids) of {@link addRule}: same options and operation, but returns the record instead of the configuration. Operation: Add an entity resolution rule (CFG_ERRULE row), returning the assigned ERRULE_ID.
+   */
+  addRuleResult: t.procedure
+    .input(schemas.addRuleInput)
+    .query(({ input }) =>
+      szCall(() => {
+        const { config, ...options } = input;
+        return api.addRuleResult(config, options);
       }),
     ),
   /**

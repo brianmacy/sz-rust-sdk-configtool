@@ -70,10 +70,11 @@ java -cp target/sz-configtool-<version>.jar examples/Example.java ../../tests/fi
 ```java
 String config = Files.readString(Path.of("g2config.json"));
 config = SzConfigTool.addDataSource(config, "CUSTOMERS");
-ConfigAndJson added = SzConfigTool.addAttribute(config, "CUST_NAME", "NAME", "FULL_NAME", "NAME",
-        new SzConfigTool.AddAttributeOptions().internal("No").id(5000));
-config = added.config();                        // modified config (opaque string)
-String row = added.json();                      // the new CFG_ATTR row, JSON text
+var attr = new SzConfigTool.AddAttributeOptions().internal("No").id(5000);
+String row = SzConfigTool.addAttributeResult(config, "CUST_NAME", "NAME", "FULL_NAME", "NAME",
+        attr);                                  // the CFG_ATTR row it adds, JSON text
+config = SzConfigTool.addAttribute(config, "CUST_NAME", "NAME", "FULL_NAME", "NAME",
+        attr);                                  // modified config (opaque string)
 config = SzConfigTool.setFragment(config, "SNAME_SSTAB",       // clear ERFRAG_DESC
         new SzConfigTool.SetFragmentOptions().description(FieldUpdate.clear()));
 ```
@@ -91,11 +92,14 @@ API rules (see `bindings/CONTRACT.md`; generated from `api/manifest`):
   `addStandardizeCall`, `setFeature`). Unset = omitted, so the LIBRARY default
   applies.
 * Tri-state args take `FieldUpdate<T>`: `leave()` / `clear()` / `set(v)`.
-* Returns: `config` → `String`; `json` → JSON text `String`;
-  `config_and_json` → `ConfigAndJson(config, json)`; `tuple_names` →
-  a `*Result` record with one JSON-text component per name (e.g.
-  `SetGenericPlanResult(config, planId, wasCreated)` = `(…, "3", "true")`;
-  `VerifyCompatibilityVersionResult(currentVersion, matches)` =
+* Returns: every config-changing method (`config`, `config_and_json`) →
+  the modified config `String`, so calls chain. A `config_and_json` function
+  also has a companion `<name>Result` (same arguments and overloads) → the
+  record as JSON text (e.g. `addAttributeResult` → the new `CFG_ATTR` row).
+  `json` → JSON text `String`; `tuple_names` → a `*Record` record with one
+  JSON-text component per name (e.g. `setGenericPlanResult` →
+  `SetGenericPlanRecord(planId, wasCreated)` = `("3", "true")`;
+  `VerifyCompatibilityVersionRecord(currentVersion, matches)` =
   `("\"11\"", "true")`); `int` → `long`.
 * `json`-typed args are JSON text (validated before the call).
 * `int_or_str` args (call selectors) have two overloads: `long` = call id,

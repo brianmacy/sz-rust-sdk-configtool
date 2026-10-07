@@ -152,6 +152,16 @@ def test_name_that_is_not_a_str_is_invalid_input(template: str, name: object) ->
     assert e.value.kind == "INVALID_INPUT"
 
 
+def test_native_seam_rejects_a_non_str_name_itself(template: str) -> None:
+    # The Python layer checks ``name`` first; the native seam checks it too
+    # (without the config-specific hint).
+    from sz_configtool import _native
+
+    with pytest.raises(_native.NativeError) as e:
+        _native.invoke(1, template, "{}")  # type: ignore[arg-type]
+    assert e.value.args[:2] == ("INVALID_INPUT", "name must be a str, not int")
+
+
 def test_nul_passes_through_unchanged(template: str) -> None:
     # NUL is a valid str character and crosses unchanged (no C string here):
     # in an arg it reaches the library as \u0000; in name/config the library
@@ -186,4 +196,6 @@ def test_config_whose_type_has_no_readable_name_is_invalid_input() -> None:
     with pytest.raises(sct.SzConfigToolError) as e:
         sct.invoke("list_data_sources", nameless)  # type: ignore[arg-type]
     assert e.value.reason_code == "INVALID_INPUT"
-    assert e.value.message == "config must be a str, not ?"
+    assert e.value.message.startswith(
+        "config must be a str (the configuration JSON text), not ?;"
+    )

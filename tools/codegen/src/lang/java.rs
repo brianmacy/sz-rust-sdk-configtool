@@ -4,7 +4,11 @@
 //! * `SzConfigTool.java` — `final class SzConfigTool` with one static camelCase
 //!   method per implemented function (plus an overload taking a generated
 //!   `*Options` builder when the function has optional / tri-state args),
-//!   Javadoc from the manifest, and `*Result` records for `tuple_names`.
+//!   Javadoc from the manifest, and `*Record` records for `tuple_names`.
+//!   Every config-changing method returns the config text: a
+//!   `config_and_json` function also gets a companion `<fn>Result` (same
+//!   parameters and overloads) returning the record JSON text (or the
+//!   `*Record` for `tuple_names`).
 //!   An `int_or_str` arg (call selector) becomes Java overloads: one taking
 //!   `long` (sent as a JSON integer) and one taking `String` (a JSON string);
 //!   N such positional args yield the 2^N cartesian overloads.
@@ -281,7 +285,38 @@ fn arg_doc(a: &Arg) -> String {
 
 /// Generated record name for a `tuple_names` function.
 fn record_name(f: &Function) -> String {
-    format!("{}Result", pascal(&f.name))
+    format!("{}Record", pascal(&f.name))
+}
+
+/// Which typed method of a manifest function is rendered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Role {
+    /// `<fn>`: the config for config-changing functions, else the result.
+    Primary,
+    /// `<fn>Result` of a `config_and_json` function: the record only.
+    Companion,
+}
+
+/// The typed methods of `f`: the primary, plus the companion when it has one.
+fn roles(f: &Function) -> &'static [Role] {
+    if f.companion().is_some() {
+        &[Role::Primary, Role::Companion]
+    } else {
+        &[Role::Primary]
+    }
+}
+
+/// The camelCase Java name of `f`'s typed method in `role`.
+fn method_name(f: &Function, role: Role) -> String {
+    match role {
+        Role::Primary => camel(&f.name),
+        Role::Companion => camel(&f.companion().unwrap_or_default()),
+    }
+}
+
+/// Whether the typed method in `role` returns the named record.
+fn returns_record(f: &Function, role: Role) -> bool {
+    !f.tuple_names.is_empty() && (f.returns == Returns::Json || role == Role::Companion)
 }
 
 fn options_name(f: &Function) -> String {
@@ -292,36 +327,54 @@ fn has_options(f: &Function) -> bool {
     f.args.iter().any(|a| !is_positional(a))
 }
 
-/// Java return type of the typed method.
-fn return_type(f: &Function) -> String {
+/// Java return type of the typed method in `role`.
+fn return_type(f: &Function, role: Role) -> String {
+    if returns_record(f, role) {
+        return record_name(f);
+    }
     match f.returns {
-        _ if !f.tuple_names.is_empty() => record_name(f),
-        Returns::Config | Returns::Json => "String".to_string(),
-        Returns::ConfigAndJson => "ConfigAndJson".to_string(),
+        Returns::Config | Returns::Json | Returns::ConfigAndJson => "String".to_string(),
         Returns::Int => "long".to_string(),
         Returns::Unit => "void".to_string(),
     }
 }
 
-fn return_doc(f: &Function) -> &'static str {
-    match f.returns {
-        Returns::Config => "the modified configuration JSON document (opaque)",
-        Returns::Json if f.tuple_names.is_empty() => "the result as JSON text",
-        Returns::Json => "the named result values, each as JSON text",
-        Returns::ConfigAndJson if f.tuple_names.is_empty() => {
-            "the modified configuration and the returned record (JSON text)"
+fn return_doc(f: &Function, role: Role) -> String {
+    if returns_record(f, role) {
+        return "the named result values, each as JSON text".to_string();
+    }
+    match (f.returns, role) {
+        (Returns::Config, _) => "the modified configuration JSON document (opaque)".to_string(),
+        (Returns::ConfigAndJson, Role::Primary) => format!(
+            "the modified configuration JSON document (opaque); {{@link #{}}} (same \
+             arguments) returns the record this operation produces",
+            method_name(f, Role::Companion)
+        ),
+        (Returns::ConfigAndJson, Role::Companion) => {
+            "the record (e.g. the created row or ids) as JSON text".to_string()
         }
-        Returns::ConfigAndJson => {
-            "the modified configuration and the named result values (JSON text)"
-        }
-        Returns::Int => "the integer result",
-        Returns::Unit => "",
+        (Returns::Json, _) => "the result as JSON text".to_string(),
+        (Returns::Int, _) => "the integer result".to_string(),
+        (Returns::Unit, _) => String::new(),
     }
 }
 
-fn method_doc(out: &mut String, f: &Function, with_options: bool) {
+/// The summary paragraph of `f`'s typed method in `role`.
+fn summary(f: &Function, role: Role) -> String {
+    match role {
+        Role::Primary => f.doc.clone(),
+        Role::Companion => format!(
+            "The record (row / ids) of `{}`: same arguments and operation, but returns the \
+             record instead of the configuration. Operation: {}",
+            camel(&f.name),
+            f.doc
+        ),
+    }
+}
+
+fn method_doc(out: &mut String, f: &Function, with_options: bool, role: Role) {
     out.push_str("    /**\n");
-    doc_lines(out, "    ", &f.doc);
+    doc_lines(out, "    ", &summary(f, role));
     if let Some(notes) = &f.notes {
         out.push_str("     *\n     * <p>Notes:\n");
         doc_lines(out, "    ", notes);
@@ -349,7 +402,7 @@ fn method_doc(out: &mut String, f: &Function, with_options: bool) {
         );
     }
     if f.returns != Returns::Unit {
-        let _ = writeln!(out, "     * @return {}", return_doc(f));
+        let _ = writeln!(out, "     * @return {}", return_doc(f, role));
     }
     let _ = writeln!(
         out,
@@ -377,7 +430,7 @@ fn params(f: &Function, ov: &Overload, with_options: bool) -> String {
 }
 
 /// The `return ...;` statement(s) of the full method body.
-fn call_body(f: &Function) -> String {
+fn call_body(f: &Function, role: Role) -> String {
     let name = &f.name;
     let names: Vec<String> = f.tuple_names.iter().map(|n| format!("\"{n}\"")).collect();
     let names = names.join(", ");
@@ -385,27 +438,27 @@ fn call_body(f: &Function) -> String {
         .map(|i| format!("f[{i}]"))
         .collect();
     let fields = fields.join(", ");
-    match (f.returns, f.tuple_names.is_empty()) {
+    let wire_kind = f.returns.as_str();
+    if returns_record(f, role) {
+        return format!(
+            "        String[] f = Invoker.fields(Invoker.result(\"{name}\", \"{wire_kind}\", configJson, wire), {names});\n        \
+             return new {rec}({fields});\n",
+            rec = record_name(f),
+        );
+    }
+    match (f.returns, role) {
         (Returns::Config, _) => {
             format!("        return Invoker.config(\"{name}\", configJson, wire);\n")
         }
-        (Returns::Json, true) => {
+        (Returns::ConfigAndJson, Role::Primary) => format!(
+            "        return Invoker.call(\"{name}\", \"{wire_kind}\", configJson, wire)[1];\n"
+        ),
+        (Returns::ConfigAndJson, Role::Companion) => format!(
+            "        return Invoker.result(\"{name}\", \"{wire_kind}\", configJson, wire);\n"
+        ),
+        (Returns::Json, _) => {
             format!("        return Invoker.json(\"{name}\", configJson, wire);\n")
         }
-        (Returns::Json, false) => format!(
-            "        String[] f = Invoker.fields(Invoker.json(\"{name}\", configJson, wire), {names});\n        \
-             return new {rec}({fields});\n",
-            rec = record_name(f),
-        ),
-        (Returns::ConfigAndJson, true) => {
-            format!("        return Invoker.configAndJson(\"{name}\", configJson, wire);\n")
-        }
-        (Returns::ConfigAndJson, false) => format!(
-            "        ConfigAndJson r = Invoker.configAndJson(\"{name}\", configJson, wire);\n        \
-             String[] f = Invoker.fields(r.json(), {names});\n        \
-             return new {rec}(r.config(), {fields});\n",
-            rec = record_name(f),
-        ),
         (Returns::Int, _) => format!(
             "        return Long.parseLong(Invoker.call(\"{name}\", \"int\", configJson, wire)[2]);\n"
         ),
@@ -413,20 +466,22 @@ fn call_body(f: &Function) -> String {
     }
 }
 
-/// The typed method(s) of one function: every [`Overload`].
+/// The typed method(s) of one function: every [`Overload`] of every role.
 fn methods(out: &mut String, f: &Function) {
-    for ov in overloads(f) {
-        overload_methods(out, f, &ov);
+    for role in roles(f) {
+        for ov in overloads(f) {
+            overload_methods(out, f, &ov, *role);
+        }
     }
 }
 
 /// The typed method(s) of one overload (plus its options-less forwarder).
-fn overload_methods(out: &mut String, f: &Function, ov: &Overload) {
-    let ret = return_type(f);
-    let java = camel(&f.name);
+fn overload_methods(out: &mut String, f: &Function, ov: &Overload, role: Role) {
+    let ret = return_type(f, role);
+    let java = method_name(f, role);
     let opts = has_options(f);
     if opts && !f.requires_options {
-        method_doc(out, f, false);
+        method_doc(out, f, false, role);
         let forwarded: Vec<String> = std::iter::once("configJson".to_string())
             .chain(
                 f.args
@@ -449,7 +504,7 @@ fn overload_methods(out: &mut String, f: &Function, ov: &Overload) {
             forwarded.join(", ")
         );
     }
-    method_doc(out, f, opts);
+    method_doc(out, f, opts, role);
     let _ = writeln!(
         out,
         "    public static {ret} {java}({}) throws SzConfigToolException {{",
@@ -468,7 +523,7 @@ fn overload_methods(out: &mut String, f: &Function, ov: &Overload) {
             ident(&a.name)
         );
     }
-    out.push_str(&call_body(f));
+    out.push_str(&call_body(f, role));
     out.push_str("    }\n\n");
 }
 
@@ -504,21 +559,19 @@ fn options_class(out: &mut String, f: &Function) {
     out.push_str("    }\n\n");
 }
 
-/// The nested `*Result` record of a `tuple_names` function.
+/// The nested `*Record` record of a `tuple_names` function.
 fn result_record(out: &mut String, f: &Function) {
-    let mut comps = Vec::new();
-    if f.returns == Returns::ConfigAndJson {
-        comps.push("String config".to_string());
-    }
-    comps.extend(f.tuple_names.iter().map(|n| format!("String {}", ident(n))));
+    let comps: Vec<String> = f
+        .tuple_names
+        .iter()
+        .map(|n| format!("String {}", ident(n)))
+        .collect();
+    let role = *roles(f).last().unwrap_or(&Role::Primary);
     let _ = writeln!(
         out,
         "    /**\n     * Result of {{@link #{}}} (named by the manifest's {{@code tuple_names}}).\n     *",
-        camel(&f.name)
+        method_name(f, role)
     );
-    if f.returns == Returns::ConfigAndJson {
-        out.push_str("     * @param config the modified configuration JSON document (opaque)\n");
-    }
     for n in &f.tuple_names {
         let _ = writeln!(
             out,
@@ -547,8 +600,11 @@ fn sz_config_tool(inputs: &Inputs) -> String {
         "// {GENERATED_BANNER}\n\npackage {PACKAGE};\n\n\
          /**\n * Typed, stateless operations on Senzing configuration JSON documents\n \
          * (generated from {{@code api/manifest}}). Every method takes the configuration\n \
-         * as an opaque string and returns the modified configuration and/or JSON text;\n \
-         * failures throw {{@link SzConfigToolException}}.\n */\n\
+         * as an opaque string. A config-changing method returns the modified\n \
+         * configuration; when the operation also produces a record (e.g. the new row),\n \
+         * the companion {{@code <name>Result}} (same arguments) returns that record\n \
+         * instead. Other methods return JSON text; failures throw\n \
+         * {{@link SzConfigToolException}}.\n */\n\
          public final class SzConfigTool {{\n    private SzConfigTool() {{\n    }}\n\n"
     );
     for f in typed(inputs) {
@@ -602,7 +658,14 @@ fn conv(a: &Arg) -> &'static str {
 }
 
 /// Expression turning the typed method's return into `{kind, config, result}`.
+/// For a `config_and_json` function `call` is the primary's call; the
+/// companion (same arguments) is called too and both must agree on failure.
 fn normalize(f: &Function, call: &str) -> String {
+    let companion = call.replacen(
+        &format!("SzConfigTool.{}(", camel(&f.name)),
+        &format!("SzConfigTool.{}(", method_name(f, Role::Companion)),
+        1,
+    );
     let names: Vec<String> = f.tuple_names.iter().map(|n| format!("\"{n}\"")).collect();
     let getters: Vec<String> = f
         .tuple_names
@@ -617,12 +680,15 @@ fn normalize(f: &Function, call: &str) -> String {
     match (f.returns, f.tuple_names.is_empty()) {
         (Returns::Config, _) => format!("return Conv.config({call});"),
         (Returns::Json, true) => format!("return Conv.json({call});"),
-        (Returns::ConfigAndJson, true) => format!("return Conv.configAndJson({call});"),
+        (Returns::ConfigAndJson, true) => {
+            format!("return Conv.configAndJson(() -> {call},\n            () -> {companion});")
+        }
         (Returns::Json, false) => {
             format!("var r = {call};\n        return Conv.jsonResult({record});")
         }
         (Returns::ConfigAndJson, false) => format!(
-            "var r = {call};\n        return Conv.configAndJson(new ConfigAndJson(r.config(), {record}));"
+            "return Conv.configAndJson(() -> {call},\n            () -> {{\n                var r = {companion};\n                \
+             return {record};\n            }});"
         ),
         (Returns::Int, _) => format!("return Conv.integer({call});"),
         (Returns::Unit, _) => format!("{call};\n        return Conv.unit();"),
@@ -856,7 +922,10 @@ mod tests {
         let mut out = String::new();
         doc_lines(&mut out, "    ", "   ");
         assert_eq!(out, "");
-        assert_eq!(return_doc(&func("f", Returns::Unit, vec![])), "");
+        assert_eq!(
+            return_doc(&func("f", Returns::Unit, vec![]), Role::Primary),
+            ""
+        );
     }
 
     fn inputs(functions: Vec<Function>) -> Inputs {
@@ -941,13 +1010,41 @@ mod tests {
             vec![req, opt, tri, tri_int],
         );
         let out = sz_config_tool(&inputs(vec![f]));
+        assert!(
+            out.contains("public static String setX(String configJson, String feature) throws")
+        );
         assert!(out.contains(
-            "public static ConfigAndJson setX(String configJson, String feature) throws"
-        ));
-        assert!(out.contains(
-            "public static ConfigAndJson setX(String configJson, String feature, SetXOptions options)"
+            "public static String setX(String configJson, String feature, SetXOptions options)"
         ));
         assert!(out.contains("return setX(configJson, feature, null);"));
+        // The companion takes the same parameters (and Options type).
+        assert!(
+            out.contains(
+                "public static String setXResult(String configJson, String feature) throws"
+            )
+        );
+        assert!(out.contains(
+            "public static String setXResult(String configJson, String feature, SetXOptions options)"
+        ));
+        assert!(out.contains("return setXResult(configJson, feature, null);"));
+        assert!(out.contains(
+            "        return Invoker.call(\"set_x\", \"config_and_json\", configJson, wire)[1];\n"
+        ));
+        assert!(out.contains(
+            "        return Invoker.result(\"set_x\", \"config_and_json\", configJson, wire);\n"
+        ));
+        assert!(
+            out.contains("{@link #setXResult} (same arguments)"),
+            "{out}"
+        );
+        assert!(
+            out.contains("The record (row / ids) of <code>setX</code>"),
+            "{out}"
+        );
+        assert_eq!(
+            out.matches("public static final class SetXOptions").count(),
+            1
+        );
         assert!(out.contains("public SetXOptions id(long id)"));
         assert!(out.contains("public SetXOptions description(FieldUpdate<String> description)"));
         assert!(out.contains("wire.strUpdate(\"description\", description);"));
@@ -970,13 +1067,18 @@ mod tests {
             func("list_x", Returns::Json, vec![]),
         ];
         let out = sz_config_tool(&inputs(fns.clone()));
+        assert!(out.contains("public record SetPlanRecord(String planId, String wasCreated)"));
+        assert!(out.contains("Result of {@link #setPlanResult}"));
+        assert!(out.contains("public static String setPlan(String configJson)"));
+        assert!(out.contains("public static SetPlanRecord setPlanResult(String configJson)"));
         assert!(out.contains(
-            "public record SetPlanResult(String config, String planId, String wasCreated)"
+            "Invoker.fields(Invoker.result(\"set_plan\", \"config_and_json\", configJson, wire), \"plan_id\", \"was_created\");"
         ));
-        assert!(out.contains("return new SetPlanResult(r.config(), f[0], f[1]);"));
+        assert!(out.contains("return new SetPlanRecord(f[0], f[1]);"));
         assert!(
-            out.contains("public record CheckVerResult(String currentVersion, String matches)")
+            out.contains("public record CheckVerRecord(String currentVersion, String matches)")
         );
+        assert!(out.contains("Result of {@link #checkVer}"));
         assert!(out.contains("public static long getN(String configJson)"));
         assert!(out.contains(
             "        return Long.parseLong(Invoker.call(\"get_n\", \"int\", configJson, wire)[2]);"
@@ -1042,10 +1144,12 @@ mod tests {
         assert!(dispatch.contains(
             "        if (!in.containsKey(\"tag\")) {\n            \
              if ((in.get(\"call\") instanceof Long)) {\n                \
-             var r = SzConfigTool.make(config, Conv.lng(in.get(\"call\")));\n                \
-             return Conv.configAndJson(new ConfigAndJson(r.config(), Conv.record(new String[] {\"id\"}, r.id())));\n            }\n            \
-             var r = SzConfigTool.make(config, Conv.str(in.get(\"call\")));\n            \
-             return Conv.configAndJson(new ConfigAndJson(r.config(), Conv.record(new String[] {\"id\"}, r.id())));\n        }\n"
+             return Conv.configAndJson(() -> SzConfigTool.make(config, Conv.lng(in.get(\"call\"))),\n                    \
+             () -> {\n                        var r = SzConfigTool.makeResult(config, Conv.lng(in.get(\"call\")));\n                        \
+             return Conv.record(new String[] {\"id\"}, r.id());\n                    });\n            }\n            \
+             return Conv.configAndJson(() -> SzConfigTool.make(config, Conv.str(in.get(\"call\"))),\n                \
+             () -> {\n                    var r = SzConfigTool.makeResult(config, Conv.str(in.get(\"call\")));\n                    \
+             return Conv.record(new String[] {\"id\"}, r.id());\n                });\n        }\n"
         ));
         // A function without optional args has no Options branch at all.
         let plain = typed_dispatch(&inputs(vec![func(

@@ -62,14 +62,13 @@ namespace Sz.ConfigTool.Native
         public static string Json(string name, string config, string argsJson) =>
             Require(Expect("json", name, config, argsJson).Result, $"{name}: envelope without result");
 
-        /// <summary>A <c>config_and_json</c> function's configuration and record.</summary>
-        public static ConfigAndJson ConfigAndJson(string name, string config, string argsJson)
-        {
-            InvokeResult r = Expect("config_and_json", name, config, argsJson);
-            return new ConfigAndJson(
-                Require(r.Config, $"{name}: envelope without config"),
-                Require(r.Result, $"{name}: envelope without result"));
-        }
+        /// <summary>A <c>config_and_json</c> function's modified configuration (its primary method).</summary>
+        public static string ConfigAndJsonConfig(string name, string config, string argsJson) =>
+            Require(Expect("config_and_json", name, config, argsJson).Config, $"{name}: envelope without config");
+
+        /// <summary>A <c>config_and_json</c> function's record, as JSON text (its <c>&lt;Name&gt;Result</c> companion).</summary>
+        public static string ConfigAndJsonResult(string name, string config, string argsJson) =>
+            Require(Expect("config_and_json", name, config, argsJson).Result, $"{name}: envelope without result");
 
         /// <summary>A <c>unit</c> function (success has no value).</summary>
         public static void Unit(string name, string config, string argsJson) => Expect("unit", name, config, argsJson);

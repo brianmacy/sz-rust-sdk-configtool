@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 
 import {
   addAttribute,
+  addAttributeResult,
   addDataSource,
   listDataSources,
   SzConfigToolError,
@@ -20,14 +21,16 @@ if (!path) {
 
 let config = readFileSync(path, "utf8");
 config = addDataSource(config, { code: "CUSTOMERS" });
-const attr = addAttribute(config, {
+const attribute = {
   attribute: "CUSTOMER_NAME",
   feature: "NAME",
   element: "FULL_NAME",
   class: "NAME",
-});
-config = attr.config;
-console.log("new attribute:", attr.json);
+};
+// Config-changing functions return the new config; the companion
+// `<name>Result` (same options) returns the row the operation creates.
+console.log("new attribute:", addAttributeResult(config, attribute));
+config = addAttribute(config, attribute);
 console.log("data sources:", listDataSources(config));
 
 try {

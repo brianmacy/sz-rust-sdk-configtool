@@ -33,8 +33,15 @@ class NoOptionsOverloadTest {
         assertEquals(SzConfigTool.setStandardizeFunction(T, "PARSE_NAME",
                 new SzConfigTool.SetStandardizeFunctionOptions()),
                 SzConfigTool.setStandardizeFunction(T, "PARSE_NAME"));
+        // The <name>Result companions have the same options-less overloads.
         assertEquals("STR_COMP", ((java.util.Map<?, ?>) Json.parse(
-                SzConfigTool.setComparisonFunction(T, "STR_COMP").json())).get("CFUNC_CODE"));
+                SzConfigTool.setComparisonFunctionResult(T, "STR_COMP"))).get("CFUNC_CODE"));
+        assertEquals(SzConfigTool.setExpressionFunctionResult(T, "NAME_HASHER",
+                new SzConfigTool.SetExpressionFunctionOptions()),
+                SzConfigTool.setExpressionFunctionResult(T, "NAME_HASHER"));
+        assertEquals(SzConfigTool.setStandardizeFunctionResult(T, "PARSE_NAME",
+                new SzConfigTool.SetStandardizeFunctionOptions()),
+                SzConfigTool.setStandardizeFunctionResult(T, "PARSE_NAME"));
     }
 
     @Test
@@ -53,7 +60,8 @@ class NoOptionsOverloadTest {
      */
     @Test
     void functionsThatNeedAnOptionalArgumentHaveNoOverloadWithoutOptions() {
-        for (String name : new String[] {"addExpressionCall", "addStandardizeCall", "setFeature"}) {
+        for (String name : new String[] {"addExpressionCall", "addStandardizeCall", "setFeature",
+                "addExpressionCallResult", "addStandardizeCallResult"}) {
             long withoutOptions = java.util.Arrays.stream(SzConfigTool.class.getMethods())
                     .filter(m -> m.getName().equals(name))
                     .filter(m -> !m.getParameterTypes()[m.getParameterCount() - 1].getSimpleName()
@@ -76,6 +84,9 @@ class NoOptionsOverloadTest {
         invalidInput(either, () -> SzConfigTool.addExpressionCall(T, "EXPRESS_BOM",
                 "[{\"element\":\"PHONE_NUM\",\"required\":\"Yes\",\"feature\":\"PHONE\"}]", "No", null));
         invalidInput(either, () -> SzConfigTool.addStandardizeCall(T, "PARSE_ID", null));
+        invalidInput(either, () -> SzConfigTool.addExpressionCallResult(T, "EXPRESS_BOM",
+                "[{\"element\":\"PHONE_NUM\",\"required\":\"Yes\",\"feature\":\"PHONE\"}]", "No", null));
+        invalidInput(either, () -> SzConfigTool.addStandardizeCallResult(T, "PARSE_ID", null));
         invalidInput("Invalid input: No changes detected", () -> SzConfigTool.setFeature(T, "EMAIL", null));
     }
 }

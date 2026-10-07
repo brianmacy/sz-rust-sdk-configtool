@@ -35,8 +35,8 @@ come from the manifest). Contract: [`bindings/CONTRACT.md`](../CONTRACT.md).
 | `str` / `json` / `int` / `bool` / `str_list` | `std::string_view` / JSON text `std::string_view` / `std::int64_t` / `bool` / `std::vector<std::string>` |
 | `int_or_str` (call selector) | two overloads: `std::int64_t` (id) / `std::string_view` (feature code), e.g. `GetComparisonCall(cfg, 34)` or `GetComparisonCall(cfg, "TAX_ID")`; an option field is `std::variant<std::int64_t, std::string>` |
 | returns `config` / `json` | `std::string` (config / JSON text) |
-| returns `config_and_json` | `ConfigAndJson{config, json}` |
-| `tuple_names` (`json` or `config_and_json`) | `struct <Name>Result` with `config` (for `config_and_json`) and one `std::string` per name holding that member's JSON text (`3`, `true`, `"11"` with quotes): `auto [config, plan_id, was_created] = SetGenericPlan(...)` |
+| returns `config_and_json` | `<Name>(...)` → `std::string` (the modified config, so calls chain); companion `<Name>Result(...)` (same arguments and overloads) → the record JSON text, e.g. `AddAttributeResult(...)` → the new `CFG_ATTR` row |
+| `tuple_names` (`json` or `config_and_json`) | `struct <Name>Record` with one `std::string` per name holding that member's JSON text (`3`, `true`, `"11"` with quotes), returned by the `json` function or by the `config_and_json` companion: `auto [plan_id, was_created] = SetGenericPlanResult(...)` |
 | returns `int` / `unit` | `std::int64_t` / `void` |
 | `status: not_implemented` | not generated; reachable via `szconfigtool::Invoke(name, config, args_json)` |
 

@@ -21,9 +21,11 @@
 //! tri-state→`name?: T | null` (undefined = leave, null = clear, value = set);
 //! `required: true`→ a required property even though Rust takes `Option`.
 //!
-//! Results (CONTRACT table): `json` → JSON text; `config_and_json` →
-//! `ConfigAndJson { config, json }`; `tuple_names` → `<Fn>Result` whose
-//! camelCase fields are each member's JSON TEXT (plus `config`).
+//! Results (CONTRACT table): `json` → JSON text; every config-changing
+//! function → the config text; a `config_and_json` function also gets a
+//! companion `<fn>Result` (same options) → the record JSON text, or for
+//! `tuple_names` a `<Fn>Record` whose camelCase fields are each member's JSON
+//! TEXT. The companion's tRPC procedure is a query (it returns no config).
 
 use std::fmt::Write as _;
 use std::path::{Component, Path, PathBuf};
@@ -129,36 +131,88 @@ fn arg_doc(a: &Arg) -> Vec<String> {
     paras
 }
 
-fn returns_doc(f: &Function) -> String {
-    let text = match (f.returns, f.tuple_names.is_empty()) {
-        (Returns::Config, _) => "The modified configuration JSON text (opaque, byte-exact).",
-        (Returns::Json, true) => "The result as JSON text (not parsed; use `JSON.parse`).",
-        (Returns::ConfigAndJson, true) => {
-            "`config` = the modified configuration JSON text; `json` = the record as JSON text."
+/// Which typed function of a manifest function is rendered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Role {
+    /// `<fn>`: the config for config-changing functions, else the result.
+    Primary,
+    /// `<fn>Result` of a `config_and_json` function: the record only.
+    Companion,
+}
+
+/// The typed functions of `f`: the primary, plus the companion when it has one.
+fn roles(f: &Function) -> &'static [Role] {
+    if f.companion().is_some() {
+        &[Role::Primary, Role::Companion]
+    } else {
+        &[Role::Primary]
+    }
+}
+
+/// The camelCase TS name of `f`'s typed function in `role`.
+fn typed_name(f: &Function, role: Role) -> String {
+    match role {
+        Role::Primary => camel(&f.name),
+        Role::Companion => camel(&f.companion().unwrap_or_default()),
+    }
+}
+
+/// Whether the typed function in `role` returns the named record.
+fn returns_record(f: &Function, role: Role) -> bool {
+    !f.tuple_names.is_empty() && (f.returns == Returns::Json || role == Role::Companion)
+}
+
+fn returns_doc(f: &Function, role: Role) -> String {
+    if returns_record(f, role) {
+        return format!(
+            "@returns A record of the named result values ({}); each value is JSON text.",
+            tuple_field_list(f)
+        );
+    }
+    let text = match (f.returns, role) {
+        (Returns::Config, _) => {
+            "The modified configuration JSON text (opaque, byte-exact).".to_string()
         }
-        (Returns::Int, _) => "The integer result.",
-        (Returns::Unit, _) => "Nothing; throws on failure.",
-        (Returns::Json | Returns::ConfigAndJson, false) => {
-            return format!(
-                "@returns A record of the named result values ({}); each value is JSON text.",
-                tuple_field_list(f)
-            );
+        (Returns::ConfigAndJson, Role::Primary) => format!(
+            "The modified configuration JSON text (opaque, byte-exact). {{@link {}}} (same \
+             options) returns the record this operation produces.",
+            typed_name(f, Role::Companion)
+        ),
+        (Returns::ConfigAndJson, Role::Companion) => {
+            "The record (e.g. the created row or ids) as JSON text (not parsed; use `JSON.parse`)."
+                .to_string()
         }
+        (Returns::Json, _) => "The result as JSON text (not parsed; use `JSON.parse`).".to_string(),
+        (Returns::Int, _) => "The integer result.".to_string(),
+        (Returns::Unit, _) => "Nothing; throws on failure.".to_string(),
     };
     format!("@returns {text}")
 }
 
 fn tuple_field_list(f: &Function) -> String {
-    let mut names: Vec<String> = Vec::new();
-    if f.returns == Returns::ConfigAndJson {
-        names.push("`config`".to_string());
-    }
-    names.extend(f.tuple_names.iter().map(|n| format!("`{}`", camel(n))));
+    let names: Vec<String> = f
+        .tuple_names
+        .iter()
+        .map(|n| format!("`{}`", camel(n)))
+        .collect();
     names.join(", ")
 }
 
-fn function_doc(f: &Function) -> String {
-    let mut paras = vec![f.doc.clone()];
+/// The summary paragraph of `f`'s typed function in `role`.
+fn summary(f: &Function, role: Role) -> String {
+    match role {
+        Role::Primary => f.doc.clone(),
+        Role::Companion => format!(
+            "The record (row / ids) of {{@link {}}}: same options and operation, but returns \
+             the record instead of the configuration. Operation: {}",
+            camel(&f.name),
+            f.doc
+        ),
+    }
+}
+
+fn function_doc(f: &Function, role: Role) -> String {
+    let mut paras = vec![summary(f, role)];
     if let Some(n) = &f.notes {
         paras.push(format!("@remarks\n{n}"));
     }
@@ -173,7 +227,7 @@ fn function_doc(f: &Function) -> String {
             options_name(f)
         ));
     }
-    tags.push(returns_doc(f));
+    tags.push(returns_doc(f, role));
     let codes = if f.errors.is_empty() {
         "none from the library".to_string()
     } else {
@@ -193,7 +247,7 @@ fn options_name(f: &Function) -> String {
 }
 
 fn result_name(f: &Function) -> String {
-    format!("{}Result", pascal(&f.name))
+    format!("{}Record", pascal(&f.name))
 }
 
 fn ts_type(ty: ArgType) -> &'static str {
@@ -230,16 +284,15 @@ fn options_interface(f: &Function) -> String {
 }
 
 fn result_interface(f: &Function) -> String {
+    let role = *roles(f).last().unwrap_or(&Role::Primary);
     let mut out = doc_block(
-        &[format!("Named result of {{@link {}}}.", camel(&f.name))],
+        &[format!(
+            "Named result of {{@link {}}}.",
+            typed_name(f, role)
+        )],
         "",
     );
     let _ = writeln!(out, "export interface {} {{", result_name(f));
-    if f.returns == Returns::ConfigAndJson {
-        out.push_str(
-            "  /** The modified configuration JSON text. */\n  readonly config: string;\n",
-        );
-    }
     for n in &f.tuple_names {
         let _ = writeln!(
             out,
@@ -252,17 +305,16 @@ fn result_interface(f: &Function) -> String {
 }
 
 /// `(TS return type, runtime call prefix)`.
-fn return_shape(f: &Function) -> (String, String) {
-    if !f.tuple_names.is_empty() {
+fn return_shape(f: &Function, role: Role) -> (String, String) {
+    if returns_record(f, role) {
         let r = result_name(f);
         return (r.clone(), format!("rt.callNamed<{r}>"));
     }
-    let (ty, helper) = match f.returns {
-        Returns::Config => ("string", "callConfig"),
-        Returns::Json => ("string", "callJson"),
-        Returns::ConfigAndJson => ("rt.ConfigAndJson", "callConfigAndJson"),
-        Returns::Int => ("number", "callInt"),
-        Returns::Unit => ("void", "callUnit"),
+    let (ty, helper) = match (f.returns, role) {
+        (Returns::Config, _) | (Returns::ConfigAndJson, Role::Primary) => ("string", "callConfig"),
+        (Returns::Json, _) | (Returns::ConfigAndJson, Role::Companion) => ("string", "callJson"),
+        (Returns::Int, _) => ("number", "callInt"),
+        (Returns::Unit, _) => ("void", "callUnit"),
     };
     (ty.to_string(), format!("rt.{helper}"))
 }
@@ -306,22 +358,30 @@ fn typed_function(f: &Function) -> String {
     if !f.tuple_names.is_empty() {
         out.push_str(&result_interface(f));
     }
-    let (ret, call) = return_shape(f);
-    let tail = if f.tuple_names.is_empty() {
-        String::new()
-    } else {
+    for role in roles(f) {
+        out.push_str(&typed_fn(f, *role));
+    }
+    out
+}
+
+/// One exported function: `f`'s typed function in `role`.
+fn typed_fn(f: &Function, role: Role) -> String {
+    let (ret, call) = return_shape(f, role);
+    let tail = if returns_record(f, role) {
         format!(", {}", tuple_pairs(f))
+    } else {
+        String::new()
     };
     let keyword = if f.returns == Returns::Unit {
         ""
     } else {
         "return "
     };
-    out.push_str(&function_doc(f));
+    let mut out = function_doc(f, role);
     let _ = write!(
         out,
         "export function {name}(config: string{opts}): {ret} {{\n  {keyword}{call}(\"{wire}\", config, {args}{tail});\n}}\n\n",
-        name = camel(&f.name),
+        name = typed_name(f, role),
         opts = options_param(f),
         wire = f.name,
         args = wire_args(f, "  "),
@@ -403,16 +463,17 @@ fn schemas_ts(typed: &[&Function]) -> String {
     out
 }
 
-/// Read-only results are queries; config-changing ones are mutations.
-fn procedure_kind(f: &Function) -> &'static str {
-    match f.returns {
-        Returns::Config | Returns::ConfigAndJson => "mutation",
-        Returns::Json | Returns::Int | Returns::Unit => "query",
+/// Procedures returning a config are mutations; the rest (incl. companions,
+/// which return only the record) are queries.
+fn procedure_kind(f: &Function, role: Role) -> &'static str {
+    match (f.returns, role) {
+        (Returns::Config, _) | (Returns::ConfigAndJson, Role::Primary) => "mutation",
+        _ => "query",
     }
 }
 
-fn procedure(f: &Function) -> String {
-    let name = camel(&f.name);
+fn procedure(f: &Function, role: Role) -> String {
+    let name = typed_name(f, role);
     let body = if f.args.is_empty() {
         format!("szCall(() => api.{name}(input.config))")
     } else {
@@ -423,17 +484,18 @@ fn procedure(f: &Function) -> String {
     };
     format!(
         "{doc}  {name}: t.procedure\n    .input(schemas.{schema})\n    .{kind}(({{ input }}) =>\n      {body},\n    ),\n",
-        doc = doc_block(std::slice::from_ref(&f.doc), "  "),
+        doc = doc_block(&[summary(f, role)], "  "),
         schema = schema_name(f),
-        kind = procedure_kind(f),
+        kind = procedure_kind(f, role),
     )
 }
 
 fn router_ts(typed: &[&Function]) -> String {
     let mut out = format!(
         "// {GENERATED_BANNER}\n//\n// One procedure per typed function. Functions returning a config are\n\
-         // mutations; read-only ones are queries (send them with POST: the config\n\
-         // is ~300KB, far too large for a GET URL).\n\n\
+         // mutations; the others (incl. the `<fn>Result` companions, which return\n\
+         // only the record) are queries (send them with POST: the config is\n\
+         // ~300KB, far too large for a GET URL).\n\n\
          import * as api from \"sz-configtool\";\n\n\
          import {{ szCall }} from \"../sz-call.js\";\n\
          import {{ t }} from \"../trpc.js\";\n\
@@ -444,7 +506,9 @@ fn router_ts(typed: &[&Function]) -> String {
          export const configToolRouter = t.router({{\n"
     );
     for f in typed {
-        out.push_str(&procedure(f));
+        for role in roles(f) {
+            out.push_str(&procedure(f, *role));
+        }
     }
     // Ends with emitted JS: see reason_codes_ts (source-mapped coverage).
     out.push_str("});\n");
@@ -656,12 +720,35 @@ mod tests {
 
     #[test]
     fn test_return_shapes() {
-        let shape = |r| return_shape(&func("f", vec![], r));
+        let shape = |r| return_shape(&func("f", vec![], r), Role::Primary);
         assert_eq!(shape(Returns::Config).0, "string");
         assert_eq!(shape(Returns::Json).0, "string");
         assert_eq!(
             shape(Returns::ConfigAndJson),
-            ("rt.ConfigAndJson".into(), "rt.callConfigAndJson".into())
+            ("string".into(), "rt.callConfig".into())
+        );
+        assert_eq!(
+            return_shape(&func("f", vec![], Returns::ConfigAndJson), Role::Companion),
+            ("string".into(), "rt.callJson".into())
+        );
+        let pair = typed_function(&func("add_it", vec![], Returns::ConfigAndJson));
+        assert!(
+            pair.contains(
+                "export function addIt(config: string): string {\n  return rt.callConfig(\"add_it\""
+            ),
+            "{pair}"
+        );
+        assert!(
+            pair.contains("export function addItResult(config: string): string {\n  return rt.callJson(\"add_it\""),
+            "{pair}"
+        );
+        assert!(
+            pair.contains("{@link addItResult} (same options)"),
+            "{pair}"
+        );
+        assert!(
+            pair.contains("The record (row / ids) of {@link addIt}"),
+            "{pair}"
         );
         assert_eq!(shape(Returns::Int).0, "number");
         assert_eq!(shape(Returns::Unit).0, "void");
@@ -677,17 +764,26 @@ mod tests {
         let mut f = func("set_plan", vec![], Returns::ConfigAndJson);
         f.tuple_names = vec!["plan_id".into(), "was_created".into()];
         let ts = typed_function(&f);
-        assert!(ts.contains("export interface SetPlanResult {"), "{ts}");
-        assert!(ts.contains("readonly config: string;"), "{ts}");
+        assert!(
+            ts.contains("Named result of {@link setPlanResult}."),
+            "{ts}"
+        );
+        assert!(ts.contains("export interface SetPlanRecord {"), "{ts}");
+        assert!(!ts.contains("readonly config: string;"), "{ts}");
         assert!(ts.contains("readonly wasCreated: string;"), "{ts}");
         assert!(ts.contains("each value is JSON text"), "{ts}");
         assert!(
-            ts.contains("rt.callNamed<SetPlanResult>(\"set_plan\", config, {}, [[\"plan_id\", \"planId\"], [\"was_created\", \"wasCreated\"]]);"),
+            ts.contains("export function setPlan(config: string): string {\n  return rt.callConfig(\"set_plan\", config, {});"),
+            "{ts}"
+        );
+        assert!(
+            ts.contains("export function setPlanResult(config: string): SetPlanRecord {\n  return rt.callNamed<SetPlanRecord>(\"set_plan\", config, {}, [[\"plan_id\", \"planId\"], [\"was_created\", \"wasCreated\"]]);"),
             "{ts}"
         );
         let mut j = func("verify", vec![], Returns::Json);
         j.tuple_names = vec!["current_version".into(), "matches".into()];
         assert!(!result_interface(&j).contains("config"));
+        assert!(result_interface(&j).contains("Named result of {@link verify}."));
     }
 
     #[test]
@@ -717,7 +813,16 @@ mod tests {
         code.optional = true;
         let add = func("add_x", vec![code], Returns::Config);
         let list = func("list_x", vec![], Returns::Json);
-        let r = router_ts(&[&add, &list]);
+        let pair = func("add_y", vec![], Returns::ConfigAndJson);
+        let r = router_ts(&[&add, &list, &pair]);
+        assert!(
+            r.contains("  addY: t.procedure\n    .input(schemas.addYInput)\n    .mutation("),
+            "{r}"
+        );
+        assert!(
+            r.contains("  addYResult: t.procedure\n    .input(schemas.addYInput)\n    .query(({ input }) =>\n      szCall(() => api.addYResult(input.config)),"),
+            "{r}"
+        );
         assert!(
             r.contains("  addX: t.procedure\n    .input(schemas.addXInput)\n    .mutation("),
             "{r}"

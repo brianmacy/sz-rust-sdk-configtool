@@ -30,7 +30,12 @@ namespace Sz.ConfigTool.Tests
         [Fact]
         public void Every_implemented_function_and_nothing_else_is_generated()
         {
-            var expected = Repo.Functions.Where(f => f.Implemented).Select(f => Repo.Pascal(f.Name)).ToHashSet();
+            // Plus the <Name>Result companion of every config_and_json function.
+            var expected = Repo.Functions.Where(f => f.Implemented)
+                .SelectMany(f => f.Returns == "config_and_json"
+                    ? new[] { Repo.Pascal(f.Name), Repo.Pascal(f.Name) + "Result" }
+                    : new[] { Repo.Pascal(f.Name) })
+                .ToHashSet();
             var actual = typeof(SzConfigTool).GetMethods(BindingFlags.Public | BindingFlags.Static)
                 .Where(m => !m.IsSpecialName && !HandWritten.Contains(m.Name))
                 .Select(m => m.Name)
@@ -79,8 +84,7 @@ namespace Sz.ConfigTool.Tests
                 Type rt = TypedRunner.Methods(f).Select(m => m.ReturnType).Distinct().Single();
                 Type expected = f.Returns switch
                 {
-                    "config" or "json" => typeof(string),
-                    "config_and_json" => typeof(ConfigAndJson),
+                    "config" or "json" or "config_and_json" => typeof(string),
                     "int" => typeof(long),
                     "unit" => typeof(void),
                     _ => throw new InvalidOperationException(f.Returns),
@@ -124,15 +128,12 @@ namespace Sz.ConfigTool.Tests
             Assert.Contains(fs, f => f.Returns == "json");
             foreach (ManifestFunction f in fs)
             {
-                Type rt = TypedRunner.Methods(f).Single().ReturnType;
-                Assert.Equal(Repo.Pascal(f.Name) + "Result", rt.Name);
-                Assert.False(typeof(ConfigAndJson).IsAssignableFrom(rt), f.Name);
+                MethodInfo m = TypedRunner.Methods(f).Single();
+                Type rt = f.Returns == "config_and_json" ? TypedRunner.Companion(f, m).ReturnType : m.ReturnType;
+                Assert.Equal(Repo.Pascal(f.Name) + "Record", rt.Name);
                 Assert.Null(rt.GetProperty("Json"));
+                Assert.Null(rt.GetProperty("Config"));
                 var expected = f.TupleNames.Select(Repo.Pascal).ToList();
-                if (f.Returns == "config_and_json")
-                {
-                    expected.Insert(0, "Config");
-                }
 
                 Assert.Equal(expected, rt.GetProperties().Where(p => p.Name != "EqualityContract").Select(p => p.Name).OrderBy(n => expected.IndexOf(n)).ToList());
                 Assert.All(rt.GetProperties().Where(p => p.Name != "EqualityContract"), p => Assert.Equal(typeof(string), p.PropertyType));

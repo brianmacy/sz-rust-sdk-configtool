@@ -37,9 +37,9 @@ namespace Sz.ConfigTool.Tests
             string expected = JsonDocument.Parse(RawEnvelope("add_config_section_field", Repo.Fixture, args))
                 .RootElement.GetProperty("config").GetString()!;
 
-            ConfigAndJson typed = SzConfigTool.AddConfigSectionField(Repo.Fixture, "CFG_DSRC", "X_NOTE", Value);
-            Assert.Equal(expected, typed.Config);
-            Assert.Equal(Encoding.UTF8.GetBytes(expected), Encoding.UTF8.GetBytes(typed.Config));
+            string typed = SzConfigTool.AddConfigSectionField(Repo.Fixture, "CFG_DSRC", "X_NOTE", Value);
+            Assert.Equal(expected, typed);
+            Assert.Equal(Encoding.UTF8.GetBytes(expected), Encoding.UTF8.GetBytes(typed));
             Assert.Equal(expected, SzConfigTool.Invoke("add_config_section_field", Repo.Fixture, args).Config);
         }
 
@@ -48,8 +48,8 @@ namespace Sz.ConfigTool.Tests
         {
             const string Tricky = "é 😀 \u0001 \" \\ / \n \t \u2028 end";
             string raw = JsonSerializer.Serialize(Tricky);
-            ConfigAndJson r = SzConfigTool.AddConfigSectionField(Repo.Fixture, "CFG_DSRC", "X_NOTE", raw);
-            JsonElement rows = JsonDocument.Parse(SzConfigTool.GetConfigSection(r.Config, "CFG_DSRC")).RootElement;
+            string config = SzConfigTool.AddConfigSectionField(Repo.Fixture, "CFG_DSRC", "X_NOTE", raw);
+            JsonElement rows = JsonDocument.Parse(SzConfigTool.GetConfigSection(config, "CFG_DSRC")).RootElement;
             Assert.All(rows.EnumerateArray(), row => Assert.Equal(Tricky, row.GetProperty("X_NOTE").GetString()));
 
             string code = "dé_😀\"";

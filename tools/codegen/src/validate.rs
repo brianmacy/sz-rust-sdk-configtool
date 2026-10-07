@@ -196,6 +196,14 @@ fn check_functions(inputs: &Inputs, errs: &mut Vec<String>) {
             }
         }
     }
+    for f in &inputs.functions {
+        if let Some(c) = f.companion().filter(|c| names.contains(c.as_str())) {
+            errs.push(format!(
+                "{c}: collides with the typed companion of {}",
+                f.name
+            ));
+        }
+    }
 }
 
 fn check_excluded(ex: &Excluded, errs: &mut Vec<String>) {
