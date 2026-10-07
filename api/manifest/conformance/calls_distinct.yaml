@@ -1,0 +1,341 @@
+# Conformance cases for the `calls_distinct` group. Every case starts from the
+# REAL template config (project.yaml paths.fixture). Template facts used below:
+# 14 CFG_DFCALL rows (max DFCALL_ID 37, none carry EXEC_ORDER); LOGIN_ID
+# (FTYPE_ID 13) has call 13 (FELEM_STRICT_SUBSET, DFUNC_ID 1) with elements
+# LOGIN_ID (FELEM_ID 56), LOGIN_DOMAIN; GENDER (FTYPE_ID 4) has no distinct call;
+# FULL_NAME is FELEM_ID 2, in the CFG_FBOM of NAME (1) and EMAIL (14); CULTURE is in
+# NAME's CFG_FBOM but not on NAME's distinct call 1.
+group: calls_distinct
+
+cases:
+  # ---- add_distinct_call --------------------------------------------------
+  - name: add_returns_config_and_record
+    steps:
+      - fn: add_distinct_call
+        args: {ftype_code: gender, dfunc_code: felem_strict_subset, element_list: [gender, full_name]}
+        expect:
+          kind: config_and_json
+          result: {DFCALL_ID: 1000, FTYPE_ID: 4, DFUNC_ID: 1}
+      - fn: get_distinct_call
+        args: {call: 1000}
+        expect:
+          kind: json
+          result: {DFCALL_ID: 1000, FTYPE_ID: 4, DFUNC_ID: 1}
+      - fn: get_distinct_call
+        args: {call: GENDER}
+        expect:
+          result: {DFCALL_ID: 1000}
+      - fn: list_distinct_calls
+        expect:
+          len: 15
+          contains:
+            - {id: 1000, feature: GENDER, function: FELEM_STRICT_SUBSET, execOrder: 1, elementList: [GENDER, FULL_NAME]}
+
+  - name: add_second_call_auto_allocates_next_id
+    steps:
+      - fn: add_distinct_call
+        args: {ftype_code: GENDER, dfunc_code: FELEM_STRICT_SUBSET, element_list: [GENDER]}
+      - fn: add_distinct_call
+        args: {ftype_code: SSN, dfunc_code: FELEM_STRICT_SUBSET, element_list: [ID_NUM]}
+        expect:
+          result: {DFCALL_ID: 1001, FTYPE_ID: 7}
+
+  - name: add_second_call_for_feature_is_already_present
+    fn: add_distinct_call
+    args: {ftype_code: login_id, dfunc_code: FELEM_STRICT_SUBSET, element_list: [LOGIN_ID]}
+    expect: {error: ALREADY_PRESENT}
+
+  - name: add_unknown_feature_is_not_found
+    fn: add_distinct_call
+    args: {ftype_code: NO_SUCH_FEATURE, dfunc_code: FELEM_STRICT_SUBSET, element_list: [GENDER]}
+    expect: {error: NOT_FOUND}
+
+  - name: add_unknown_function_is_not_found
+    fn: add_distinct_call
+    args: {ftype_code: GENDER, dfunc_code: NO_SUCH_FUNC, element_list: [GENDER]}
+    expect: {error: NOT_FOUND}
+
+  - name: add_empty_element_list_is_invalid_input
+    fn: add_distinct_call
+    args: {ftype_code: GENDER, dfunc_code: FELEM_STRICT_SUBSET, element_list: []}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_blank_element_is_invalid_input
+    fn: add_distinct_call
+    args: {ftype_code: GENDER, dfunc_code: FELEM_STRICT_SUBSET, element_list: [GENDER, ""]}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_empty_list_checked_before_sections
+    config_literal: '{"G2_CONFIG": {}}'
+    fn: add_distinct_call
+    args: {ftype_code: GENDER, dfunc_code: FELEM_STRICT_SUBSET, element_list: []}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_unknown_element_is_not_found
+    fn: add_distinct_call
+    args: {ftype_code: GENDER, dfunc_code: FELEM_STRICT_SUBSET, element_list: [NO_SUCH_ELEMENT]}
+    expect: {error: NOT_FOUND}
+
+  - name: add_missing_section
+    config_literal: '{"G2_CONFIG": {}}'
+    fn: add_distinct_call
+    args: {ftype_code: GENDER, dfunc_code: FELEM_STRICT_SUBSET, element_list: [GENDER]}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_invalid_config_is_json_parse
+    config_literal: 'not json'
+    fn: add_distinct_call
+    args: {ftype_code: GENDER, dfunc_code: FELEM_STRICT_SUBSET, element_list: [GENDER]}
+    expect: {error: JSON_PARSE}
+
+  # ---- delete_distinct_call -----------------------------------------------
+  - name: delete_cascades_and_get_is_not_found
+    steps:
+      - fn: delete_distinct_call
+        args: {dfcall_id: 13}
+        expect: {kind: config}
+      - fn: get_distinct_call
+        args: {call: 13}
+        expect: {error: NOT_FOUND}
+      - fn: get_distinct_call
+        args: {call: LOGIN_ID}
+        expect: {error: NOT_FOUND}
+      - fn: list_distinct_calls
+        expect:
+          len: 13
+          excludes:
+            - {id: 13}
+      # BOM rows were cascaded: a new LOGIN_ID call has only its own elements.
+      - fn: add_distinct_call
+        args: {ftype_code: LOGIN_ID, dfunc_code: FELEM_STRICT_SUBSET, element_list: [LOGIN_ID]}
+        expect:
+          result: {DFCALL_ID: 1000}
+      - fn: list_distinct_calls
+        expect:
+          contains:
+            - {id: 1000, feature: LOGIN_ID, elementList: [LOGIN_ID]}
+
+  - name: delete_missing_is_not_found
+    fn: delete_distinct_call
+    args: {dfcall_id: 9999}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_invalid_config_is_json_parse
+    config_literal: 'not json'
+    fn: delete_distinct_call
+    args: {dfcall_id: 13}
+    expect: {error: JSON_PARSE}
+
+  # ---- get_distinct_call --------------------------------------------------
+  - name: get_by_id_and_by_feature_agree
+    steps:
+      - fn: get_distinct_call
+        args: {call: 13}
+        expect:
+          result: {DFCALL_ID: 13, FTYPE_ID: 13, DFUNC_ID: 1}
+      - fn: get_distinct_call
+        args: {call: login_id}
+        expect:
+          result: {DFCALL_ID: 13, FTYPE_ID: 13, DFUNC_ID: 1}
+
+  - name: get_unknown_feature_is_not_found
+    fn: get_distinct_call
+    args: {call: NO_SUCH_FEATURE}
+    expect: {error: NOT_FOUND}
+
+  - name: get_feature_without_call_is_not_found
+    fn: get_distinct_call
+    args: {call: GENDER}
+    expect: {error: NOT_FOUND}
+
+  - name: get_missing_id_is_not_found
+    fn: get_distinct_call
+    args: {call: 9999}
+    expect: {error: NOT_FOUND}
+
+  - name: get_ambiguous_feature_is_invalid_input
+    config_literal: '{"G2_CONFIG": {"CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}], "CFG_DFCALL": [{"DFCALL_ID": 7, "FTYPE_ID": 3, "DFUNC_ID": 1}, {"DFCALL_ID": 8, "FTYPE_ID": 3, "DFUNC_ID": 1}]}}'
+    fn: get_distinct_call
+    args: {call: NAME}
+    expect: {error: INVALID_INPUT}
+
+  - name: get_invalid_config_is_json_parse
+    config_literal: 'not json'
+    fn: get_distinct_call
+    args: {call: 1}
+    expect: {error: JSON_PARSE}
+
+  # ---- list_distinct_calls ------------------------------------------------
+  - name: list_template_sorted_by_feature
+    fn: list_distinct_calls
+    expect:
+      kind: json
+      len: 14
+      contains:
+        - {id: 13, feature: LOGIN_ID, function: FELEM_STRICT_SUBSET, execOrder: 1, elementList: [LOGIN_ID, LOGIN_DOMAIN]}
+
+  - name: list_missing_sections_is_empty
+    config_literal: '{"G2_CONFIG": {}}'
+    fn: list_distinct_calls
+    expect:
+      len: 0
+
+  - name: list_invalid_config_is_json_parse
+    config_literal: 'not json'
+    fn: list_distinct_calls
+    expect: {error: JSON_PARSE}
+
+  # ---- add_distinct_call_element ------------------------------------------
+  - name: add_element_auto_allocates_exec_order_per_call
+    steps:
+      - fn: add_distinct_call_element
+        args: {dfcall_id: 13, ftype_id: 13, felem_id: 2}
+        expect:
+          kind: config_and_json
+          result: {DFCALL_ID: 13, FTYPE_ID: 13, FELEM_ID: 2, EXEC_ORDER: 3}
+      - fn: list_distinct_calls
+        expect:
+          contains:
+            - {id: 13, elementList: [LOGIN_ID, LOGIN_DOMAIN, FULL_NAME]}
+
+  - name: add_element_explicit_order_then_auto
+    steps:
+      - fn: add_distinct_call_element
+        args: {dfcall_id: 13, ftype_id: 13, felem_id: 2, exec_order: 7}
+        expect:
+          result: {EXEC_ORDER: 7}
+      - fn: add_distinct_call_element
+        args: {dfcall_id: 13, ftype_id: 13, felem_id: 13}
+        expect:
+          result: {EXEC_ORDER: 8}
+      - fn: list_distinct_calls
+        expect:
+          contains:
+            - {id: 13, elementList: [LOGIN_ID, LOGIN_DOMAIN, FULL_NAME, GENDER]}
+
+  - name: add_element_non_positive_order_auto_allocates
+    fn: add_distinct_call_element
+    args: {dfcall_id: 13, ftype_id: 13, felem_id: 2, exec_order: 0}
+    expect:
+      result: {EXEC_ORDER: 3}
+
+  - name: add_element_taken_order_is_already_exists
+    fn: add_distinct_call_element
+    args: {dfcall_id: 13, ftype_id: 13, felem_id: 2, exec_order: 2}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_element_duplicate_is_already_present
+    fn: add_distinct_call_element
+    args: {dfcall_id: 13, ftype_id: 13, felem_id: 56, exec_order: 9}
+    expect: {error: ALREADY_PRESENT}
+
+  - name: add_element_negative_ftype_is_accepted
+    fn: add_distinct_call_element
+    args: {dfcall_id: 13, ftype_id: -1, felem_id: 2}
+    expect:
+      result: {DFCALL_ID: 13, FTYPE_ID: -1, FELEM_ID: 2, EXEC_ORDER: 3}
+
+  - name: add_element_does_not_validate_ids
+    fn: add_distinct_call_element
+    args: {dfcall_id: 9999, ftype_id: 9999, felem_id: 9999}
+    expect:
+      result: {DFCALL_ID: 9999, FTYPE_ID: 9999, FELEM_ID: 9999, EXEC_ORDER: 1}
+
+  - name: add_element_missing_section
+    config_literal: '{"G2_CONFIG": {}}'
+    fn: add_distinct_call_element
+    args: {dfcall_id: 13, ftype_id: 13, felem_id: 2}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_element_invalid_config_is_json_parse
+    config_literal: 'not json'
+    fn: add_distinct_call_element
+    args: {dfcall_id: 13, ftype_id: 13, felem_id: 2}
+    expect: {error: JSON_PARSE}
+
+  # ---- delete_distinct_call_element ---------------------------------------
+  - name: delete_element_by_feature_and_by_id
+    steps:
+      - fn: delete_distinct_call_element
+        args: {call: login_id, element_code: login_domain}
+        expect: {kind: config}
+      - fn: list_distinct_calls
+        expect:
+          contains:
+            - {id: 13, elementList: [LOGIN_ID]}
+      - fn: delete_distinct_call_element
+        args: {call: 13, element_code: LOGIN_ID}
+      - fn: list_distinct_calls
+        expect:
+          contains:
+            - {id: 13, elementList: []}
+
+  - name: delete_element_ambiguous_then_disambiguated_by_feature
+    steps:
+      # FULL_NAME on call 13 under two element-features (EMAIL order 3, NAME order 4).
+      - fn: add_distinct_call_element
+        args: {dfcall_id: 13, ftype_id: 14, felem_id: 2}
+      - fn: add_distinct_call_element
+        args: {dfcall_id: 13, ftype_id: 1, felem_id: 2}
+      - fn: delete_distinct_call_element
+        args: {call: 13, element_code: FULL_NAME}
+        expect: {error: INVALID_INPUT}
+      - fn: delete_distinct_call_element
+        args: {call: 13, element_code: FULL_NAME, element_feature: email}
+      - fn: list_distinct_calls
+        expect:
+          contains:
+            - {id: 13, elementList: [LOGIN_ID, LOGIN_DOMAIN, FULL_NAME]}
+      - fn: delete_distinct_call_element
+        args: {call: 13, element_code: FULL_NAME}
+      - fn: list_distinct_calls
+        expect:
+          contains:
+            - {id: 13, elementList: [LOGIN_ID, LOGIN_DOMAIN]}
+
+  - name: delete_element_not_on_call
+    fn: delete_distinct_call_element
+    args: {call: LOGIN_ID, element_code: FULL_NAME}
+    expect: {error: NOT_ON_CALL}
+
+  - name: delete_element_in_feature_but_not_on_call
+    fn: delete_distinct_call_element
+    args: {call: NAME, element_code: CULTURE, element_feature: NAME}
+    expect: {error: NOT_ON_CALL}
+
+  - name: delete_element_not_in_feature
+    fn: delete_distinct_call_element
+    args: {call: NAME, element_code: ADDR1, element_feature: NAME}
+    expect: {error: NOT_IN_FEATURE}
+
+  - name: delete_element_missing_call_id_is_not_found
+    fn: delete_distinct_call_element
+    args: {call: 9999, element_code: LOGIN_ID}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_element_feature_without_call_is_not_found
+    fn: delete_distinct_call_element
+    args: {call: GENDER, element_code: GENDER}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_element_unknown_element_is_not_found
+    fn: delete_distinct_call_element
+    args: {call: 13, element_code: NO_SUCH_ELEMENT}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_element_unknown_element_feature_is_not_found
+    fn: delete_distinct_call_element
+    args: {call: 13, element_code: LOGIN_ID, element_feature: NO_SUCH_FEATURE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_element_ambiguous_call_is_invalid_input
+    config_literal: '{"G2_CONFIG": {"CFG_FTYPE": [{"FTYPE_ID": 3, "FTYPE_CODE": "NAME"}], "CFG_FELEM": [{"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"}], "CFG_DFCALL": [{"DFCALL_ID": 7, "FTYPE_ID": 3, "DFUNC_ID": 1}, {"DFCALL_ID": 8, "FTYPE_ID": 3, "DFUNC_ID": 1}], "CFG_DFBOM": []}}'
+    fn: delete_distinct_call_element
+    args: {call: NAME, element_code: FIRST_NAME}
+    expect: {error: INVALID_INPUT}
+
+  - name: delete_element_invalid_config_is_json_parse
+    config_literal: 'not json'
+    fn: delete_distinct_call_element
+    args: {call: 13, element_code: LOGIN_ID}
+    expect: {error: JSON_PARSE}

@@ -69,39 +69,6 @@ pub struct AddDistinctCallElementParams {
     pub exec_order: Option<i64>,
 }
 
-/// Parameters for setting (updating) a distinct call
-#[derive(Debug, Clone, Default)]
-pub struct SetDistinctCallParams {
-    pub dfcall_id: i64,
-    pub exec_order: Option<i64>,
-}
-
-impl TryFrom<&Value> for SetDistinctCallParams {
-    type Error = SzConfigError;
-
-    fn try_from(json: &Value) -> Result<Self> {
-        let dfcall_id = json
-            .get("dfcallId")
-            .and_then(|v| v.as_i64())
-            .ok_or_else(|| SzConfigError::MissingField("dfcallId".to_string()))?;
-
-        Ok(Self {
-            dfcall_id,
-            exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
-        })
-    }
-}
-
-/// Parameters for setting a distinct call element
-#[derive(Debug, Clone)]
-pub struct SetDistinctCallElementParams {
-    pub dfcall_id: i64,
-    pub ftype_id: i64,
-    pub felem_id: i64,
-    pub exec_order: i64,
-    pub updates: Value,
-}
-
 /// Add a new distinct call with element list
 ///
 /// Creates a new distinct call linking a function to a feature
@@ -168,14 +135,6 @@ pub fn add_distinct_call(config: &str, params: AddDistinctCallParams) -> Result<
     let mut dfbom_records = Vec::new();
 
     for (idx, element_code) in params.element_list.iter().enumerate() {
-        // Validate element is not blank (already checked in add_distinct_call, defensive)
-        if element_code.trim().is_empty() {
-            return Err(SzConfigError::InvalidInput(format!(
-                "Element cannot be blank in item {} on the element list",
-                idx + 1
-            )));
-        }
-
         // Lookup element ID (global lookup - Python allows any element in call)
         let bom_felem_id = lookup_element_id(config, element_code)?;
 
@@ -187,7 +146,7 @@ pub fn add_distinct_call(config: &str, params: AddDistinctCallParams) -> Result<
             felem_id: bom_felem_id,
             exec_order: idx as i64 + 1,
         };
-        dfbom_records.push(serde_json::to_value(&bom_row)?);
+        dfbom_records.push(crate::helpers::row_value(&bom_row));
     }
 
     // Create new CFG_DFCALL record via DfcallRow. CFG_DFCALL is exactly
@@ -198,7 +157,7 @@ pub fn add_distinct_call(config: &str, params: AddDistinctCallParams) -> Result<
         ftype_id,
         dfunc_id,
     };
-    let new_record = serde_json::to_value(&dfcall_row)?;
+    let new_record = crate::helpers::row_value(&dfcall_row);
 
     // Add to config
     if let Some(dfcall_array) = config_data["G2_CONFIG"]["CFG_DFCALL"].as_array_mut() {
@@ -213,8 +172,7 @@ pub fn add_distinct_call(config: &str, params: AddDistinctCallParams) -> Result<
         return Err(SzConfigError::MissingSection("CFG_DFBOM".to_string()));
     }
 
-    let modified_config =
-        serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let modified_config = config_data.to_string();
 
     Ok((modified_config, new_record))
 }
@@ -252,16 +210,15 @@ pub fn delete_distinct_call(config: &str, dfcall_id: i64) -> Result<String> {
     }
 
     // Delete the distinct call
-    if let Some(dfcall_array) = config_data["G2_CONFIG"]["CFG_DFCALL"].as_array_mut() {
-        dfcall_array.retain(|record| record["DFCALL_ID"].as_i64() != Some(dfcall_id));
-    }
+    let dfcall_array = crate::helpers::verified_section_mut(&mut config_data, "CFG_DFCALL");
+    dfcall_array.retain(|record| record["DFCALL_ID"].as_i64() != Some(dfcall_id));
 
     // Delete associated DFBOM records
     if let Some(dfbom_array) = config_data["G2_CONFIG"]["CFG_DFBOM"].as_array_mut() {
         dfbom_array.retain(|record| record["DFCALL_ID"].as_i64() != Some(dfcall_id));
     }
 
-    serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config_data.to_string())
 }
 
 /// Get a single distinct call, addressed by id or by feature code.
@@ -454,19 +411,6 @@ pub fn list_distinct_calls(config: &str) -> Result<Vec<Value>> {
     Ok(items)
 }
 
-/// Update a distinct call (stub - not implemented in Python)
-///
-/// # Arguments
-/// * `config` - Configuration JSON string
-/// * `params` - Distinct call parameters (dfcall_id required, others optional to update)
-///
-/// # Returns
-/// Modified configuration JSON string
-pub fn set_distinct_call(config: &str, _params: SetDistinctCallParams) -> Result<String> {
-    // This is a stub - the Python version doesn't implement this
-    Ok(config.to_string())
-}
-
 /// Add a distinct call element (DBOM record)
 ///
 /// Creates a new distinct bill of materials entry.
@@ -528,7 +472,7 @@ pub fn add_distinct_call_element(
         felem_id: params.felem_id,
         exec_order,
     };
-    let new_record = serde_json::to_value(&row)?;
+    let new_record = crate::helpers::row_value(&row);
 
     // Add to CFG_DFBOM
     if let Some(dbom_array) = config_data["G2_CONFIG"]["CFG_DFBOM"].as_array_mut() {
@@ -537,8 +481,7 @@ pub fn add_distinct_call_element(
         return Err(SzConfigError::MissingSection("CFG_DFBOM".to_string()));
     }
 
-    let modified_config =
-        serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let modified_config = config_data.to_string();
 
     Ok((modified_config, new_record))
 }
@@ -624,36 +567,19 @@ pub fn delete_distinct_call_element(
         "Distinct",
     )?;
 
-    if let Some(dbom_array) = config_data["G2_CONFIG"]["CFG_DFBOM"].as_array_mut() {
-        // Mirror the derive predicate: when a feature disambiguated the target
-        // row, constrain the retain by FTYPE too. Otherwise a sibling row sharing
-        // (call, felem, exec) under another feature would be over-deleted.
-        dbom_array.retain(|item| {
-            !(item.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(dfcall_id)
-                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
-                && element_ftype_id
-                    .is_none_or(|ft| item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ft)))
-        });
-    }
+    let dbom_array = crate::helpers::verified_section_mut(&mut config_data, "CFG_DFBOM");
+    // Mirror the derive predicate: when a feature disambiguated the target
+    // row, constrain the retain by FTYPE too. Otherwise a sibling row sharing
+    // (call, felem, exec) under another feature would be over-deleted.
+    dbom_array.retain(|item| {
+        !(item.get("DFCALL_ID").and_then(|v| v.as_i64()) == Some(dfcall_id)
+            && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
+            && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
+            && element_ftype_id
+                .is_none_or(|ft| item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ft)))
+    });
 
-    serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))
-}
-
-/// Update a distinct call element (stub - not typically used)
-///
-/// # Arguments
-/// * `config` - Configuration JSON string
-/// * `params` - Element parameters including updates
-///
-/// # Returns
-/// Modified configuration JSON string
-pub fn set_distinct_call_element(
-    config: &str,
-    _params: SetDistinctCallElementParams,
-) -> Result<String> {
-    // This is a stub - not commonly used
-    Ok(config.to_string())
+    Ok(config_data.to_string())
 }
 
 #[cfg(test)]

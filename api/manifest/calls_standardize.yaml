@@ -1,0 +1,159 @@
+# CFG_SFCALL — standardize calls. Root module: src/calls/standardize.rs
+# (8 pub fns: 6 here, 2 no-op stubs excluded). Standardize calls have no BOM
+# table: a CFG_SFCALL row is both the call and its "element".
+group: calls_standardize
+
+functions:
+  - name: add_standardize_call
+    doc: Add a standardize call (CFG_SFCALL row) binding a standardize function to a feature or an element.
+    rust: calls::standardize::add_standardize_call
+    rust_params_struct: calls::standardize::AddStandardizeCallParams
+    requires_options: true
+    c_symbol: SzConfigTool_addStandardizeCall
+    args:
+      - name: sfunc_code
+        type: str
+        semantics: Standardize function code (CFG_SFUNC, case-insensitive) or NOT_FOUND. Looked up before the feature/element.
+      - name: ftype_code
+        type: str
+        optional: true
+        semantics: >-
+          Feature code (case-insensitive) or NOT_FOUND. "ALL" (case-insensitive) is
+          treated as absent. Stored as FTYPE_ID; absent stores FTYPE_ID -1.
+      - name: felem_code
+        type: str
+        optional: true
+        semantics: >-
+          Element code (case-insensitive) or NOT_FOUND. "N/A" (case-insensitive) is
+          treated as absent. Stored as FELEM_ID; absent stores FELEM_ID -1. Exactly
+          one of ftype_code / felem_code must resolve, else INVALID_INPUT.
+      - name: exec_order
+        type: int
+        optional: true
+        semantics: >-
+          EXEC_ORDER scoped per (FTYPE_ID, FELEM_ID) of the new row (the -1 sentinel
+          is part of the scope). Absent or <= 0 = auto-allocate (max in scope + 1,
+          1 for an empty scope); > 0 and free = used verbatim; > 0 and taken =
+          ALREADY_EXISTS.
+    returns: config_and_json
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS]
+    notes: >-
+      Returns (modified config, the new CFG_SFCALL row {SFCALL_ID, FTYPE_ID, FELEM_ID,
+      SFUNC_ID, EXEC_ORDER}). SFCALL_ID is always auto-allocated (max + 1, floor 1000).
+      MISSING_SECTION when CFG_SFCALL is absent. Check order: SFCALL_ID allocation,
+      sfunc, feature, element, exactly-one rule, exec order. TRAP: the exec-order scope
+      does not include SFUNC_ID, so a second call on the same feature continues that
+      feature's order sequence.
+    c_notes: >-
+      C export deltas (SzConfigTool_addStandardizeCall): DROPS the new row; empty
+      ftype_code / felem_code = None; negative exec_order = None; library errors return
+      returnCode -5 with no reason code recorded (set_error, not set_error_from).
+
+  - name: delete_standardize_call
+    doc: Delete a standardize call by SFCALL_ID.
+    rust: calls::standardize::delete_standardize_call
+    c_symbol: SzConfigTool_deleteStandardizeCall
+    args:
+      - name: sfcall_id
+        type: int
+        semantics: Must match an existing SFCALL_ID, else NOT_FOUND (also NOT_FOUND when CFG_SFCALL is absent).
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: Removes every CFG_SFCALL row with that id; no dependency checks (there is no standardize BOM).
+
+  - name: get_standardize_call
+    doc: Get one standardize call's raw CFG_SFCALL row, by SFCALL_ID or by feature code.
+    rust: calls::standardize::get_standardize_call
+    c_symbol: SzConfigTool_getStandardizeCall
+    c_aliases: [SzConfigTool_getStandardizeCallByFeature]
+    args:
+      - name: call
+        type: int_or_str
+        rust_convert: call_selector
+        semantics: >-
+          Call selector: an integer = SFCALL_ID (NOT_FOUND if absent); a string =
+          feature code (case-insensitive; unknown feature = NOT_FOUND, no call on the
+          feature = NOT_FOUND, more than one call on the feature = INVALID_INPUT —
+          address such calls by id). Any other JSON type = INVALID_INPUT.
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND, INVALID_INPUT]
+    notes: >-
+      Result uses on-disk keys (SFCALL_ID, FTYPE_ID, FELEM_ID, SFUNC_ID, EXEC_ORDER).
+      Element-bound calls (FTYPE_ID -1) are never found by feature. In the template NAME
+      has two standardize calls (PARSE_NAME, TOKENIZE_NAME), so by-feature NAME is
+      ambiguous.
+    c_notes: >-
+      C export deltas: SzConfigTool_getStandardizeCall takes only an id and returns -5
+      (no reason code) on library errors; SzConfigTool_getStandardizeCallByFeature takes
+      only a feature code and returns -2 with no reason code (set_error).
+
+  - name: list_standardize_calls
+    doc: List all standardize calls with resolved codes.
+    rust: calls::standardize::list_standardize_calls
+    c_symbol: SzConfigTool_listStandardizeCalls
+    args: []
+    returns: json
+    errors: [JSON_PARSE]
+    notes: >-
+      Array of {id, feature, element, execOrder, function}, stably sorted by (FTYPE_ID,
+      EXEC_ORDER). feature is "all" when FTYPE_ID <= 0 or unresolved; element is "n/a"
+      when FELEM_ID <= 0 or unresolved; function is "unknown" when unresolved. No
+      elementList key. Missing sections yield [] (no MISSING_SECTION).
+    c_notes: >-
+      C export returns -5 (no reason code) on library errors.
+
+  - name: add_standardize_call_element
+    doc: Add a CFG_SFCALL row addressed by raw ids (FTYPE_ID, SFUNC_ID, FELEM_ID).
+    rust: calls::standardize::add_standardize_call_element
+    rust_params_struct: calls::standardize::AddStandardizeCallElementParams
+    c_symbol: null
+    args:
+      - name: ftype_id
+        type: int
+        semantics: Stored verbatim as FTYPE_ID. NOT validated against CFG_FTYPE (use -1 for an element-bound row).
+      - name: sfunc_id
+        type: int
+        semantics: Stored verbatim as SFUNC_ID. NOT validated against CFG_SFUNC.
+      - name: felem_id
+        type: int
+        optional: true
+        semantics: Stored as FELEM_ID; absent = -1. NOT validated against CFG_FELEM.
+      - name: exec_order
+        type: int
+        optional: true
+        semantics: >-
+          EXEC_ORDER scoped per (FTYPE_ID, FELEM_ID). Absent or <= 0 = auto-allocate
+          (max in scope + 1); > 0 and free = verbatim; > 0 and taken = ALREADY_EXISTS.
+    returns: config_and_json
+    errors: [JSON_PARSE, MISSING_SECTION, ALREADY_PRESENT, ALREADY_EXISTS]
+    notes: >-
+      Returns (modified config, the new CFG_SFCALL row). ALREADY_PRESENT when a row with
+      the same (FTYPE_ID, SFUNC_ID, FELEM_ID) exists (checked first). SFCALL_ID
+      auto-allocated (max + 1, floor 1000); MISSING_SECTION when CFG_SFCALL is absent.
+      Unlike add_standardize_call there is no feature-xor-element rule and no id
+      validation.
+    c_notes: >-
+      No C export.
+
+  - name: delete_standardize_call_element
+    doc: Delete CFG_SFCALL rows matching raw ids (FTYPE_ID, SFUNC_ID, FELEM_ID).
+    rust: calls::standardize::delete_standardize_call_element
+    rust_params_struct: calls::standardize::DeleteStandardizeCallElementParams
+    c_symbol: null
+    args:
+      - name: ftype_id
+        type: int
+        semantics: Matched against FTYPE_ID.
+      - name: sfunc_id
+        type: int
+        semantics: Matched against SFUNC_ID.
+      - name: felem_id
+        type: int
+        optional: true
+        semantics: Matched against FELEM_ID; absent = -1.
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      NOT_FOUND (not NOT_ON_CALL) when no row matches. Removes EVERY matching row.
+    c_notes: >-
+      No C export.

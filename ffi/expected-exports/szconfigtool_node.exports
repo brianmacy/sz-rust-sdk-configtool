@@ -1,0 +1,2 @@
+# napi-rs .node: module registration only (no SzConfigTool_*).
+napi_register_module_v1

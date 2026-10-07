@@ -59,12 +59,13 @@ pub fn clone_generic_plan(
     let new_code = new_gplan_code.to_uppercase();
     let new_desc = new_gplan_desc.unwrap_or(&new_code);
 
+    let mut config: Value = serde_json::from_str(config_json)?;
+
     // Find source plan
-    let source_plan =
-        helpers::find_in_config_array(config_json, "CFG_GPLAN", "GPLAN_CODE", &source_code)?
-            .ok_or_else(|| {
-                SzConfigError::NotFound(format!("Source generic plan not found: {source_code}"))
-            })?;
+    let source_plan = helpers::find_in_section(&config, "CFG_GPLAN", "GPLAN_CODE", &source_code)
+        .ok_or_else(|| {
+            SzConfigError::NotFound(format!("Source generic plan not found: {source_code}"))
+        })?;
 
     let source_gplan_id = source_plan
         .get("GPLAN_ID")
@@ -74,27 +75,15 @@ pub fn clone_generic_plan(
         })?;
 
     // Check if new plan already exists
-    if helpers::find_in_config_array(config_json, "CFG_GPLAN", "GPLAN_CODE", &new_code)?.is_some() {
+    if helpers::find_in_section(&config, "CFG_GPLAN", "GPLAN_CODE", &new_code).is_some() {
         return Err(SzConfigError::AlreadyExists(format!(
             "Generic plan already exists: {new_code}"
         )));
     }
 
-    // Get next GPLAN_ID
-    let config_data: Value = serde_json::from_str(config_json)?;
-    let max_gplan_id = config_data
-        .get("G2_CONFIG")
-        .and_then(|g| g.get("CFG_GPLAN"))
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|item| item.get("GPLAN_ID").and_then(|v| v.as_i64()))
-                .max()
-                .unwrap_or(0)
-        })
-        .unwrap_or(0);
-
-    let new_gplan_id = max_gplan_id + 1;
+    // Get next GPLAN_ID (CFG_GPLAN holds the source plan, so it is an array)
+    let plans = helpers::verified_section_mut(&mut config, "CFG_GPLAN");
+    let new_gplan_id = helpers::next_id_after_max(plans, "GPLAN_ID");
 
     // Build a complete row via GplanRow so every CFG_GPLAN key is present.
     let row = GplanRow {
@@ -102,36 +91,27 @@ pub fn clone_generic_plan(
         gplan_code: new_code.clone(),
         gplan_desc: new_desc.to_string(),
     };
-    let new_plan = serde_json::to_value(&row)?;
+    plans.push(crate::helpers::row_value(&row));
 
-    let mut modified_json = helpers::add_to_config_array(config_json, "CFG_GPLAN", new_plan)?;
-
-    // Clone all thresholds from source plan to new plan
-    let config_data: Value = serde_json::from_str(&modified_json)?;
-    if let Some(gthresh_array) = config_data
-        .get("G2_CONFIG")
-        .and_then(|g| g.get("CFG_GENERIC_THRESHOLD"))
-        .and_then(|v| v.as_array())
+    // Clone all thresholds from source plan to new plan (when the section exists)
+    if let Some(gthresh_array) = config
+        .pointer_mut("/G2_CONFIG/CFG_GENERIC_THRESHOLD")
+        .and_then(Value::as_array_mut)
     {
-        let mut cloned_thresholds = Vec::new();
-        for item in gthresh_array {
-            if item.get("GPLAN_ID").and_then(|v| v.as_i64()) == Some(source_gplan_id) {
+        let cloned_thresholds: Vec<Value> = gthresh_array
+            .iter()
+            .filter_map(Value::as_object)
+            .filter(|item| item.get("GPLAN_ID").and_then(|v| v.as_i64()) == Some(source_gplan_id))
+            .map(|item| {
                 let mut cloned = item.clone();
-                if let Some(obj) = cloned.as_object_mut() {
-                    obj.insert("GPLAN_ID".to_string(), json!(new_gplan_id));
-                }
-                cloned_thresholds.push(cloned);
-            }
-        }
-
-        // Add cloned thresholds
-        for threshold in cloned_thresholds {
-            modified_json =
-                helpers::add_to_config_array(&modified_json, "CFG_GENERIC_THRESHOLD", threshold)?;
-        }
+                cloned.insert("GPLAN_ID".to_string(), json!(new_gplan_id));
+                Value::Object(cloned)
+            })
+            .collect();
+        gthresh_array.extend(cloned_thresholds);
     }
 
-    Ok((modified_json, new_gplan_id))
+    Ok((config.to_string(), new_gplan_id))
 }
 
 /// Delete a generic plan and all its thresholds
@@ -157,8 +137,10 @@ pub fn clone_generic_plan(
 pub fn delete_generic_plan(config_json: &str, gplan_code: &str) -> Result<String> {
     let gplan_code = gplan_code.to_uppercase();
 
+    let mut config_data: Value = serde_json::from_str(config_json)?;
+
     // Find the plan
-    let plan = helpers::find_in_config_array(config_json, "CFG_GPLAN", "GPLAN_CODE", &gplan_code)?
+    let plan = helpers::find_in_section(&config_data, "CFG_GPLAN", "GPLAN_CODE", &gplan_code)
         .ok_or_else(|| SzConfigError::NotFound(format!("Generic plan not found: {gplan_code}")))?;
 
     let gplan_id = plan
@@ -173,30 +155,20 @@ pub fn delete_generic_plan(config_json: &str, gplan_code: &str) -> Result<String
         )));
     }
 
-    // Parse and modify config
-    let mut config_data: Value = serde_json::from_str(config_json)?;
+    // Delete the plan (found in CFG_GPLAN above)
+    helpers::verified_section_mut(&mut config_data, "CFG_GPLAN")
+        .retain(|item| item.get("GPLAN_ID").and_then(|v| v.as_i64()) != Some(gplan_id));
 
-    // Delete the plan
-    if let Some(g2_config) = config_data.get_mut("G2_CONFIG") {
-        if let Some(gplan_array) = g2_config
-            .get_mut("CFG_GPLAN")
-            .and_then(|v| v.as_array_mut())
-        {
-            gplan_array
-                .retain(|item| item.get("GPLAN_ID").and_then(|v| v.as_i64()) != Some(gplan_id));
-        }
-
-        // Delete all associated thresholds
-        if let Some(gthresh_array) = g2_config
-            .get_mut("CFG_GENERIC_THRESHOLD")
-            .and_then(|v| v.as_array_mut())
-        {
-            gthresh_array
-                .retain(|item| item.get("GPLAN_ID").and_then(|v| v.as_i64()) != Some(gplan_id));
-        }
+    // Delete all associated thresholds
+    if let Some(gthresh_array) = config_data
+        .pointer_mut("/G2_CONFIG/CFG_GENERIC_THRESHOLD")
+        .and_then(|v| v.as_array_mut())
+    {
+        gthresh_array
+            .retain(|item| item.get("GPLAN_ID").and_then(|v| v.as_i64()) != Some(gplan_id));
     }
 
-    Ok(serde_json::to_string(&config_data)?)
+    Ok(config_data.to_string())
 }
 
 /// List all generic plans in the configuration
@@ -278,58 +250,46 @@ pub fn set_generic_plan(
 ) -> Result<(String, i64, bool)> {
     let code = gplan_code.to_uppercase();
 
-    // Check if plan already exists
-    if let Some(existing) =
-        helpers::find_in_config_array(config_json, "CFG_GPLAN", "GPLAN_CODE", &code)?
+    let mut config: Value = serde_json::from_str(config_json)?;
+
+    // Check if plan already exists (a row matched by a field is an object)
+    if let Some(mut updated) = helpers::find_in_section(&config, "CFG_GPLAN", "GPLAN_CODE", &code)
+        .and_then(Value::as_object)
+        .cloned()
     {
         // Update existing plan
-        let plan_id = existing
+        let plan_id = updated
             .get("GPLAN_ID")
             .and_then(|v| v.as_i64())
             .unwrap_or(0);
         // In-place update of a complete existing row; all keys preserved.
         // Clones the full existing record and overwrites only GPLAN_DESC, so no
-        // key is dropped. Left as-is rather than routed through GplanRow to stay
-        // behavior-identical (a struct with a fixed field set could drop any
-        // extra key an existing record happens to carry).
-        let mut updated = existing.clone();
-        if let Some(obj) = updated.as_object_mut() {
-            obj.insert("GPLAN_DESC".to_string(), json!(gplan_desc));
-        }
-        let modified = helpers::update_in_config_array(
-            config_json,
-            "CFG_GPLAN",
-            "GPLAN_CODE",
-            &code,
-            updated,
-        )?;
-        Ok((modified, plan_id, false))
+        // key is dropped (a struct with a fixed field set could drop any extra
+        // key an existing record happens to carry).
+        updated.insert("GPLAN_DESC".to_string(), json!(gplan_desc));
+        // Replace the first row whose GPLAN_CODE is the code as a string (a
+        // code stored as a number matched above only numerically).
+        let row = helpers::verified_section_mut(&mut config, "CFG_GPLAN")
+            .iter_mut()
+            .find(|r| r.get("GPLAN_CODE").and_then(|v| v.as_str()) == Some(code.as_str()))
+            .ok_or_else(|| SzConfigError::NotFound(format!("CFG_GPLAN '{code}' not found")))?;
+        *row = Value::Object(updated);
+        Ok((config.to_string(), plan_id, false))
     } else {
         // Create new plan
-        let config_data: Value = serde_json::from_str(config_json)?;
-        let max_id = config_data
-            .get("G2_CONFIG")
-            .and_then(|g| g.get("CFG_GPLAN"))
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|item| item.get("GPLAN_ID").and_then(|v| v.as_i64()))
-                    .max()
-                    .unwrap_or(0)
-            })
-            .unwrap_or(0);
-
-        let new_id = max_id + 1;
+        let plans = config
+            .pointer_mut("/G2_CONFIG/CFG_GPLAN")
+            .and_then(|v| v.as_array_mut())
+            .ok_or_else(|| SzConfigError::MissingSection("CFG_GPLAN".to_string()))?;
+        let new_id = helpers::next_id_after_max(plans, "GPLAN_ID");
         // Build a complete row via GplanRow so every CFG_GPLAN key is present.
         let row = GplanRow {
             gplan_id: new_id,
             gplan_code: code.clone(),
             gplan_desc: gplan_desc.to_string(),
         };
-        let new_plan = serde_json::to_value(&row)?;
-
-        let modified = helpers::add_to_config_array(config_json, "CFG_GPLAN", new_plan)?;
-        Ok((modified, new_id, true))
+        plans.push(crate::helpers::row_value(&row));
+        Ok((config.to_string(), new_id, true))
     }
 }
 
@@ -338,6 +298,18 @@ mod tests {
     use super::*;
 
     const GPLAN_KEYS: [&str; 3] = ["GPLAN_ID", "GPLAN_CODE", "GPLAN_DESC"];
+
+    /// A GPLAN_CODE stored as a number is found by its numeric text but is
+    /// not a string code the update can replace: NotFound, config untouched.
+    #[test]
+    fn test_set_generic_plan_numeric_code_is_not_found() {
+        let config = r#"{"G2_CONFIG":{"CFG_GPLAN":[{"GPLAN_ID":7,"GPLAN_CODE":123}]}}"#;
+        let err = set_generic_plan(config, "123", "desc").unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            SzConfigError::NotFound("CFG_GPLAN '123' not found".into()).to_string()
+        );
+    }
 
     fn assert_all_keys(plan: &Value) {
         let obj = plan.as_object().unwrap();

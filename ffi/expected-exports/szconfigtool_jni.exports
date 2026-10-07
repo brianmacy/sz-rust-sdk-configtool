@@ -1,0 +1,5 @@
+# JNI library: the native methods of NativeBridge (invoke + the version
+# accessors behind SzConfigToolVersion); no SzConfigTool_*.
+Java_io_github_brianmacy_szconfigtool_NativeBridge_abiVersion
+Java_io_github_brianmacy_szconfigtool_NativeBridge_invoke
+Java_io_github_brianmacy_szconfigtool_NativeBridge_libraryVersion

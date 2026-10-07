@@ -1,0 +1,25 @@
+# Behavior-code domain utilities. Root module: src/behavior_domain.rs (3 pub fns,
+# all excluded: none takes a config).
+group: behavior_domain
+
+functions: []
+
+excluded:
+  - rust: behavior_domain::parse_behavior_code
+    reason: >-
+      generator-gap: not config-first (fn(behavior: &str) ->
+      Result<(&str, &str, &str)>). Pure parser of a behavior code into
+      (FTYPE_FREQ, FTYPE_EXCL, FTYPE_STAB); its validation is already surfaced
+      through the config ops that take a behavior (add_behavior_override,
+      feature behavior setters). Exposing it needs a "no config" function shape
+      (shape: args only, returns json [freq, excl, stab]).
+  - rust: behavior_domain::compute_behavior
+    reason: >-
+      Non-config utility, not Result-returning (fn(&Value) -> String): composes a
+      behavior code from a CFG_FTYPE/CFG_FBOVR row; the composed code is already
+      reported by list_behavior_overrides_resolved and the feature list/get ops.
+  - rust: behavior_domain::behavior_position
+    reason: >-
+      Non-config utility, not Result-returning (fn(&str) -> Option<usize>): sort
+      key into the BEHAVIOR_CODES display order, used internally by
+      behavior-ordered listings.

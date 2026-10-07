@@ -1,0 +1,162 @@
+# Conformance cases for the `behavior_overrides` group. Every case starts from
+# the REAL template config (project.yaml paths.fixture).
+group: behavior_overrides
+
+cases:
+  - name: add_then_get_and_list
+    steps:
+      - fn: add_behavior_override
+        args: {feature: name, usage_type: home, behavior: f1se}
+        expect: {kind: config}
+      - fn: get_behavior_override
+        args: {feature: NAME, usage_type: Home}
+        expect:
+          kind: json
+          result: {FTYPE_ID: 1, UTYPE_CODE: HOME, FTYPE_FREQ: F1, FTYPE_EXCL: "Yes", FTYPE_STAB: "Yes"}
+      - fn: list_behavior_overrides_resolved
+        expect:
+          len: 5
+          contains:
+            - {feature: NAME, usageType: HOME, behavior: F1ES}
+
+  - name: add_bare_name_behavior
+    steps:
+      - fn: add_behavior_override
+        args: {feature: DOB, usage_type: X, behavior: name}
+      - fn: get_behavior_override
+        args: {feature: DOB, usage_type: X}
+        expect:
+          result: {FTYPE_ID: 2, FTYPE_FREQ: NAME, FTYPE_EXCL: "No", FTYPE_STAB: "No"}
+
+  - name: add_duplicate_is_already_exists
+    fn: add_behavior_override
+    args: {feature: address, usage_type: business, behavior: FF}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_unknown_feature_is_not_found
+    fn: add_behavior_override
+    args: {feature: NO_SUCH_FEATURE, usage_type: HOME, behavior: FF}
+    expect: {error: NOT_FOUND}
+
+  - name: add_bad_behavior_is_invalid_input
+    fn: add_behavior_override
+    args: {feature: NAME, usage_type: HOME, behavior: FE}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_without_section_is_missing_section
+    fn: add_behavior_override
+    config_literal: '{"G2_CONFIG": {"CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}]}}'
+    args: {feature: NAME, usage_type: HOME, behavior: FF}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_invalid_json_is_json_parse
+    fn: add_behavior_override
+    config_literal: "not json"
+    args: {feature: NAME, usage_type: HOME, behavior: FF}
+    expect: {error: JSON_PARSE}
+
+  - name: delete_then_list
+    steps:
+      - fn: delete_behavior_override
+        args: {feature: address, usage_type: business}
+        expect: {kind: config}
+      - fn: list_behavior_overrides
+        expect:
+          len: 3
+          excludes:
+            - {FTYPE_ID: 5}
+      - fn: get_behavior_override
+        args: {feature: ADDRESS, usage_type: BUSINESS}
+        expect: {error: NOT_FOUND}
+
+  - name: delete_missing_pair_is_not_found
+    fn: delete_behavior_override
+    args: {feature: PHONE, usage_type: BUSINESS}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_unknown_feature_is_not_found
+    fn: delete_behavior_override
+    args: {feature: NO_SUCH_FEATURE, usage_type: BUSINESS}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_without_section_is_missing_section
+    fn: delete_behavior_override
+    config_literal: '{"G2_CONFIG": {"CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}]}}'
+    args: {feature: NAME, usage_type: HOME}
+    expect: {error: MISSING_SECTION}
+
+  - name: delete_invalid_json_is_json_parse
+    fn: delete_behavior_override
+    config_literal: "not json"
+    args: {feature: NAME, usage_type: HOME}
+    expect: {error: JSON_PARSE}
+
+  - name: get_template_row
+    fn: get_behavior_override
+    args: {feature: placekey, usage_type: business}
+    expect:
+      result: {FTYPE_ID: 93, UTYPE_CODE: BUSINESS, FTYPE_FREQ: F1, FTYPE_EXCL: "Yes", FTYPE_STAB: "No"}
+
+  - name: get_missing_pair_is_not_found
+    fn: get_behavior_override
+    args: {feature: PHONE, usage_type: BUSINESS}
+    expect: {error: NOT_FOUND}
+
+  - name: get_without_section_is_missing_section
+    fn: get_behavior_override
+    config_literal: '{"G2_CONFIG": {"CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}]}}'
+    args: {feature: NAME, usage_type: HOME}
+    expect: {error: MISSING_SECTION}
+
+  - name: get_invalid_json_is_json_parse
+    fn: get_behavior_override
+    config_literal: "not json"
+    args: {feature: NAME, usage_type: HOME}
+    expect: {error: JSON_PARSE}
+
+  - name: list_template_sorted_by_ftype_id
+    fn: list_behavior_overrides
+    expect:
+      kind: json
+      result:
+        - {FTYPE_ID: 5, UTYPE_CODE: BUSINESS}
+        - {FTYPE_ID: 6, UTYPE_CODE: MOBILE}
+        - {FTYPE_ID: 24, UTYPE_CODE: BUSINESS}
+        - {FTYPE_ID: 93, UTYPE_CODE: BUSINESS}
+
+  - name: list_without_section_is_missing_section
+    fn: list_behavior_overrides
+    config_literal: '{"G2_CONFIG": {}}'
+    expect: {error: MISSING_SECTION}
+
+  - name: list_invalid_json_is_json_parse
+    fn: list_behavior_overrides
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}
+
+  - name: list_resolved_template
+    fn: list_behavior_overrides_resolved
+    expect:
+      kind: json
+      result:
+        - {feature: ADDRESS, usageType: BUSINESS, behavior: FFE}
+        - {feature: PHONE, usageType: MOBILE, behavior: F1}
+        - {feature: GEO_LOC, usageType: BUSINESS, behavior: FFE}
+        - {feature: PLACEKEY, usageType: BUSINESS, behavior: F1E}
+
+  - name: list_resolved_unknown_feature_falls_back_to_id
+    fn: list_behavior_overrides_resolved
+    config_literal: '{"G2_CONFIG": {"CFG_FBOVR": [{"FTYPE_ID": 77, "UTYPE_CODE": "U", "FTYPE_FREQ": "FM", "FTYPE_EXCL": "N", "FTYPE_STAB": "y"}]}}'
+    expect:
+      result:
+        - {feature: "77", usageType: U, behavior: FMS}
+
+  - name: list_resolved_without_section_is_missing_section
+    fn: list_behavior_overrides_resolved
+    config_literal: '{"G2_CONFIG": {}}'
+    expect: {error: MISSING_SECTION}
+
+  - name: list_resolved_invalid_json_is_json_parse
+    fn: list_behavior_overrides_resolved
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}

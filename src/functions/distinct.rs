@@ -100,8 +100,13 @@ pub fn add_distinct_function(
 ) -> Result<(String, Value), SzConfigError> {
     let dfunc_code = dfunc_code.to_uppercase();
 
+    let config_data: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+
     // Check if function already exists
-    if find_in_config_array(config_json, "CFG_DFUNC", "DFUNC_CODE", &dfunc_code)?.is_some() {
+    if crate::helpers::find_in_section(&config_data, "CFG_DFUNC", "DFUNC_CODE", &dfunc_code)
+        .is_some()
+    {
         return Err(SzConfigError::validation(format!(
             "Distinct function already exists: {dfunc_code}"
         )));
@@ -125,8 +130,6 @@ pub fn add_distinct_function(
     };
 
     // Get next DFUNC_ID
-    let config_data: Value =
-        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
     let dfunc_id = get_next_id(&config_data, "G2_CONFIG.CFG_DFUNC", "DFUNC_ID", 1)?;
 
     // Build a complete row via DfuncRow so every CFG_DFUNC key is present
@@ -139,7 +142,7 @@ pub fn add_distinct_function(
         anon_support: anon_support.to_string(),
         language: params.language.map(str::to_string),
     };
-    let new_record = serde_json::to_value(&row)?;
+    let new_record = crate::helpers::row_value(&row);
 
     // Add to CFG_DFUNC
     let modified_json = add_to_config_array(config_json, "CFG_DFUNC", new_record.clone())?;
@@ -254,40 +257,33 @@ pub fn set_distinct_function(
 ) -> Result<(String, Value), SzConfigError> {
     let dfunc_code = dfunc_code.to_uppercase();
 
-    // Find existing function
-    let mut function = find_in_config_array(config_json, "CFG_DFUNC", "DFUNC_CODE", &dfunc_code)?
-        .ok_or_else(|| {
-        SzConfigError::not_found(format!("Distinct function not found: {dfunc_code}"))
-    })?;
-
-    // In-place update of a complete existing row; all keys preserved.
-    // Update fields if provided
-    if let Some(obj) = function.as_object_mut() {
-        match params.connect_str {
-            FieldUpdate::Leave => {}
-            FieldUpdate::Clear => {
-                obj.insert("CONNECT_STR".to_string(), Value::Null);
+    super::replace_row_at_end(
+        config_json,
+        "CFG_DFUNC",
+        "DFUNC_CODE",
+        &dfunc_code,
+        || SzConfigError::not_found(format!("Distinct function not found: {dfunc_code}")),
+        |obj| {
+            match params.connect_str {
+                FieldUpdate::Leave => {}
+                FieldUpdate::Clear => {
+                    obj.insert("CONNECT_STR".to_string(), Value::Null);
+                }
+                FieldUpdate::Set(conn) => {
+                    obj.insert("CONNECT_STR".to_string(), json!(conn));
+                }
             }
-            FieldUpdate::Set(conn) => {
-                obj.insert("CONNECT_STR".to_string(), json!(conn));
+            if let Some(desc) = params.description {
+                obj.insert("DFUNC_DESC".to_string(), json!(desc));
             }
-        }
-        if let Some(desc) = params.description {
-            obj.insert("DFUNC_DESC".to_string(), json!(desc));
-        }
-        if let Some(lang) = params.language {
-            obj.insert("LANGUAGE".to_string(), json!(lang));
-        }
-        if let Some(anon) = params.anon_support {
-            obj.insert("ANON_SUPPORT".to_string(), json!(anon));
-        }
-    }
-
-    // Delete old and add updated
-    let temp_json = delete_from_config_array(config_json, "CFG_DFUNC", "DFUNC_CODE", &dfunc_code)?;
-    let modified_json = add_to_config_array(&temp_json, "CFG_DFUNC", function.clone())?;
-
-    Ok((modified_json, function))
+            if let Some(lang) = params.language {
+                obj.insert("LANGUAGE".to_string(), json!(lang));
+            }
+            if let Some(anon) = params.anon_support {
+                obj.insert("ANON_SUPPORT".to_string(), json!(anon));
+            }
+        },
+    )
 }
 
 #[cfg(test)]

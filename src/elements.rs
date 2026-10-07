@@ -323,7 +323,7 @@ pub fn add_element(config_json: &str, params: AddElementParams) -> Result<String
             .map(str::to_string)
             .unwrap_or_else(|| code_upper.clone()),
     };
-    let new_record = serde_json::to_value(&row)?;
+    let new_record = crate::helpers::row_value(&row);
 
     helpers::add_to_config_array(config_json, "CFG_FELEM", new_record)
 }
@@ -385,26 +385,11 @@ pub fn delete_element(config_json: &str, felem_code: &str) -> Result<String> {
         )));
     }
 
-    // Safe to delete - get mutable array
-    let felem_array_mut = config["G2_CONFIG"]["CFG_FELEM"]
-        .as_array_mut()
-        .ok_or_else(|| SzConfigError::MissingSection("CFG_FELEM".to_string()))?;
+    // Safe to delete: the element row was found in CFG_FELEM above.
+    helpers::verified_section_mut(&mut config, "CFG_FELEM")
+        .retain(|e| e["FELEM_CODE"].as_str() != Some(code_upper.as_str()));
 
-    if !felem_array_mut
-        .iter()
-        .any(|e| e["FELEM_CODE"].as_str() == Some(code_upper.as_str()))
-    {
-        return Err(SzConfigError::NotFound(format!(
-            "Element not found: {code_upper}"
-        )));
-    }
-
-    // Remove from array
-    if let Some(array) = config["G2_CONFIG"]["CFG_FELEM"].as_array_mut() {
-        array.retain(|e| e["FELEM_CODE"].as_str() != Some(code_upper.as_str()));
-    }
-
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 /// Get a specific element by code
@@ -489,23 +474,22 @@ pub fn set_element(config_json: &str, params: SetElementParams) -> Result<String
         .as_array_mut()
         .ok_or_else(|| SzConfigError::MissingSection("CFG_FELEM".to_string()))?;
 
-    // Find and update the element
-    let felem = felem_array
+    // Find and update the element (only an object row can carry FELEM_CODE)
+    let dest_obj = felem_array
         .iter_mut()
-        .find(|e| e["FELEM_CODE"].as_str() == Some(code_upper.as_str()))
+        .filter_map(Value::as_object_mut)
+        .find(|e| e.get("FELEM_CODE").and_then(Value::as_str) == Some(code_upper.as_str()))
         .ok_or_else(|| SzConfigError::NotFound(format!("Element: {}", code_upper.clone())))?;
 
     // Update fields from params
-    if let Some(dest_obj) = felem.as_object_mut() {
-        if let Some(desc) = params.description {
-            dest_obj.insert("FELEM_DESC".to_string(), json!(desc));
-        }
-        if let Some(dt) = params.data_type {
-            dest_obj.insert("DATA_TYPE".to_string(), json!(dt));
-        }
+    if let Some(desc) = params.description {
+        dest_obj.insert("FELEM_DESC".to_string(), json!(desc));
+    }
+    if let Some(dt) = params.data_type {
+        dest_obj.insert("DATA_TYPE".to_string(), json!(dt));
     }
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 /// Set feature element (update FBOM record)
@@ -539,11 +523,11 @@ pub fn set_feature_element(config_json: &str, params: SetFeatureElementParams) -
         .element_code
         .ok_or_else(|| SzConfigError::MissingField("element_code".to_string()))?;
 
-    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
-    let felem_id = helpers::lookup_element_id(config_json, element_code)?;
-
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
+    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
+    let felem_id = helpers::lookup_element_id(config_json, element_code)?;
 
     let fbom_array = config["G2_CONFIG"]["CFG_FBOM"]
         .as_array_mut()
@@ -577,7 +561,7 @@ pub fn set_feature_element(config_json: &str, params: SetFeatureElementParams) -
         fbom["DERIVED"] = json!(validate_derived(der)?);
     }
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 /// Set feature element display level
@@ -679,15 +663,15 @@ pub fn add_element_to_feature(
     config_json: &str,
     params: AddElementToFeatureParams,
 ) -> Result<String> {
+    let mut config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
     let ftype_id = helpers::lookup_feature_id(config_json, params.feature_code)?;
     let felem_id = helpers::lookup_element_id(config_json, params.element_code)?;
 
     // Validate the display/derived inputs before mutating anything.
     let display_level = validate_display_level(params.display_level.unwrap_or(1))?;
     let derived = validate_derived(params.derived.unwrap_or("No"))?;
-
-    let mut config: Value =
-        serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
 
     let fbom_array = config["G2_CONFIG"]["CFG_FBOM"]
         .as_array_mut()
@@ -703,7 +687,7 @@ pub fn add_element_to_feature(
     }
 
     // Whole-table EXEC_ORDER allocation (max over the entire CFG_FBOM + 1).
-    let exec_order = helpers::get_next_id_from_array(fbom_array, "EXEC_ORDER")?;
+    let exec_order = crate::helpers::next_id_after_max(fbom_array, "EXEC_ORDER");
 
     let row = FbomRow {
         ftype_id,
@@ -713,9 +697,9 @@ pub fn add_element_to_feature(
         display_delim: params.display_delim.map(str::to_string),
         derived: Some(derived.to_string()),
     };
-    fbom_array.push(serde_json::to_value(&row)?);
+    fbom_array.push(crate::helpers::row_value(&row));
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 /// Delete a single feature-element mapping (one CFG_FBOM row).
@@ -749,11 +733,11 @@ pub fn delete_element_from_feature(
     feature_code: &str,
     element_code: &str,
 ) -> Result<String> {
-    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
-    let felem_id = helpers::lookup_element_id(config_json, element_code)?;
-
     let mut config: Value =
         serde_json::from_str(config_json).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+
+    let ftype_id = helpers::lookup_feature_id(config_json, feature_code)?;
+    let felem_id = helpers::lookup_element_id(config_json, element_code)?;
 
     let fbom_array = config["G2_CONFIG"]["CFG_FBOM"]
         .as_array_mut()
@@ -771,7 +755,7 @@ pub fn delete_element_from_feature(
         )));
     }
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 #[cfg(test)]

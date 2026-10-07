@@ -125,6 +125,7 @@ pub fn validate_config(config_json: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::SzErrorKind;
 
     #[test]
     fn test_accepts_well_formed_config() {
@@ -142,26 +143,26 @@ mod tests {
     #[test]
     fn test_rejects_g2_config_not_object() {
         let err = validate_config(r#"{"G2_CONFIG":42}"#).unwrap_err();
-        assert!(matches!(err, SzConfigError::InvalidStructure(_)));
+        assert_eq!(err.kind(), SzErrorKind::InvalidStructure);
     }
 
     #[test]
     fn test_rejects_missing_g2_config() {
         let err = validate_config(r#"{"SOMETHING_ELSE":{}}"#).unwrap_err();
-        assert!(matches!(err, SzConfigError::MissingSection(_)));
+        assert_eq!(err.kind(), SzErrorKind::MissingSection);
     }
 
     #[test]
     fn test_rejects_non_array_cfg_section() {
         let err = validate_config(r#"{"G2_CONFIG":{"CFG_DSRC":{}}}"#).unwrap_err();
-        assert!(matches!(err, SzConfigError::InvalidStructure(_)));
+        assert_eq!(err.kind(), SzErrorKind::InvalidStructure);
         assert!(err.to_string().contains("CFG_DSRC"));
     }
 
     #[test]
     fn test_rejects_invalid_json() {
         let err = validate_config("{not json").unwrap_err();
-        assert!(matches!(err, SzConfigError::JsonParse(_)));
+        assert_eq!(err.kind(), SzErrorKind::JsonParse);
     }
 
     #[test]

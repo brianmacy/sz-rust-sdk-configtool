@@ -1,0 +1,112 @@
+# CFG_SPROFILE — search profiles. Root module: src/search_profiles.rs (4 pub fns, all here).
+group: search_profiles
+
+functions:
+  - name: add_search_profile
+    doc: Add a search profile (CFG_SPROFILE row) tying a generic plan and feature candidate overrides to a code.
+    rust: search_profiles::add_search_profile
+    rust_params_struct: search_profiles::AddSearchProfileParams
+    c_symbol: null
+    args:
+      - name: code
+        type: str
+        semantics: >-
+          SPROFILE_CODE; trimmed and uppercased. Empty after trimming is
+          INVALID_INPUT; an existing code (case-insensitive) is ALREADY_EXISTS.
+      - name: generic_plan
+        type: str
+        semantics: GPLAN_CODE, matched case-insensitively against CFG_GPLAN (NOT_FOUND); stored as GPLAN_ID.
+      - name: candidates
+        type: str
+        optional: true
+        default: Normal
+        semantics: >-
+          DEFAULT_USED_FOR_CAND; trimmed, case-insensitive, normalized to Normal or
+          Off. Absent or blank = Normal. Anything else is VALIDATION_ERRORS (field
+          "candidates", OUT_OF_DOMAIN).
+      - name: description
+        type: str
+        optional: true
+        default: ""
+        semantics: SPROFILE_DESC, stored verbatim; absent = "".
+      - name: elements
+        type: json
+        optional: true
+        rust_convert: search_profile_elements
+        semantics: >-
+          Feature candidate overrides: an array of {"feature": FTYPE_CODE,
+          "flag": Yes|No|Y|N} objects (only those two keys, both strings, else
+          INVALID_INPUT; a missing key = MISSING_FIELD); absent = none. Each feature is resolved
+          case-insensitively against CFG_FTYPE (NOT_FOUND); a feature listed twice
+          is VALIDATION_ERRORS (field "overrides", DUPLICATE); a flag other than
+          Yes/Y/No/N (trimmed, case-insensitive) is VALIDATION_ERRORS (field
+          "overrides", OUT_OF_DOMAIN). Stored in FTYPE_OVERRIDES as
+          "[{<ftypeId>,<Y|N>},...]" sorted by FTYPE_ID, or "[]".
+    returns: config
+    errors: [JSON_PARSE, INVALID_INPUT, VALIDATION_ERRORS, NOT_FOUND, ALREADY_EXISTS, INVALID_STRUCTURE, MISSING_FIELD]
+    notes: >-
+      SPROFILE_ID is always auto-allocated (max + 1, floor 1; 3 on the template, whose
+      only profile is SEARCH = 2); no explicit id can be requested. CFG_SPROFILE is
+      created when absent. Validation order: code, candidates, generic plan, overrides
+      (per element: feature, duplicate, flag), duplicate code. A config without
+      G2_CONFIG fails the generic-plan lookup (NOT_FOUND), so the library's
+      MISSING_SECTION branch is unreachable; a non-array CFG_SPROFILE is
+      INVALID_STRUCTURE.
+    c_notes: >-
+      No typed C export; use SzConfigTool_invoke.
+
+  - name: get_search_profile
+    doc: Get one search profile's raw CFG_SPROFILE row by code.
+    rust: search_profiles::get_search_profile
+    c_symbol: null
+    args:
+      - name: code
+        type: str
+        semantics: Case-insensitive match against SPROFILE_CODE. Not an id.
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Result is the stored row (SPROFILE_ID, SPROFILE_CODE, SPROFILE_DESC, GPLAN_ID,
+      DEFAULT_USED_FOR_CAND, FTYPE_OVERRIDES). A missing section is NOT_FOUND.
+    c_notes: >-
+      No typed C export; use SzConfigTool_invoke.
+
+  - name: list_search_profiles
+    doc: List search profiles as display records with ids resolved to codes, sorted by id.
+    rust: search_profiles::list_search_profiles
+    c_symbol: null
+    args:
+      - name: filter
+        type: str
+        optional: true
+        semantics: >-
+          Absent returns all. Otherwise keeps rows whose COMPACT raw-row JSON
+          (serde_json::to_string, no spaces, on-disk keys and ids, e.g.
+          "GPLAN_ID":2) contains the filter case-insensitively; it is applied to
+          the raw row, not the projected record.
+    returns: json
+    errors: [JSON_PARSE]
+    notes: >-
+      Result is an array of {id, profile, description, genericPlan, candidates,
+      overrides: [{feature, flag: Yes|No}], overridesRaw} sorted by id. genericPlan /
+      feature fall back to the numeric id as a string when unresolvable. A missing
+      CFG_SPROFILE yields [].
+    c_notes: >-
+      No typed C export; use SzConfigTool_invoke.
+
+  - name: delete_search_profile
+    doc: Delete a search profile by code or SPROFILE_ID.
+    rust: search_profiles::delete_search_profile
+    c_symbol: null
+    args:
+      - name: search_value
+        type: str
+        semantics: Matched case-insensitively against SPROFILE_CODE, or (when it parses as an integer after trimming) against SPROFILE_ID.
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND, INVALID_INPUT]
+    notes: >-
+      The shipped profiles INGEST and SEARCH are protected: deleting one that exists is
+      INVALID_INPUT. Existence is checked FIRST, so an absent reserved code (INGEST is
+      not in the template) is NOT_FOUND.
+    c_notes: >-
+      No typed C export; use SzConfigTool_invoke.

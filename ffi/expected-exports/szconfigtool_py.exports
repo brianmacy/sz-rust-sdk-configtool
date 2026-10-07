@@ -1,0 +1,2 @@
+# pyo3 extension sz_configtool._native: module init only (no SzConfigTool_*).
+PyInit__native

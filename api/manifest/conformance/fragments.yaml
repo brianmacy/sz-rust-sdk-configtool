@@ -1,0 +1,204 @@
+# Conformance cases for the `fragments` group. Every case starts from the REAL
+# template config (project.yaml paths.fixture).
+group: fragments
+
+cases:
+  - name: add_with_references_computes_depends
+    steps:
+      - fn: add_fragment
+        args:
+          fragment_config: {ERFRAG_CODE: my_frag, ERFRAG_DESC: ignored, ERFRAG_SOURCE: "./FRAGMENT[./SAME_STAB>0 and ./SAME_NAME>0]"}
+        expect: {kind: config_and_json, result: 1000}
+      - fn: get_fragment
+        args: {code_or_id: my_frag}
+        expect:
+          kind: json
+          result: {id: 1000, fragment: MY_FRAG, source: "./FRAGMENT[./SAME_STAB>0 and ./SAME_NAME>0]", depends: "11,61"}
+      - fn: get_config_section
+        args: {section_name: CFG_ERFRAG, filter: '"ERFRAG_ID": 1000'}
+        expect:
+          result:
+            - {ERFRAG_DESC: MY_FRAG}
+
+  - name: add_explicit_id_without_references
+    steps:
+      - fn: add_fragment
+        args:
+          fragment_config: {ERFRAG_CODE: PLAIN, ERFRAG_SOURCE: "", ERFRAG_ID: 5000}
+        expect: {result: 5000}
+      - fn: get_fragment
+        args: {code_or_id: "5000"}
+        expect:
+          result: {id: 5000, fragment: PLAIN, source: "", depends: null}
+
+  - name: add_non_positive_id_auto_allocates
+    fn: add_fragment
+    args:
+      fragment_config: {ERFRAG_CODE: ZERO_ID, ERFRAG_SOURCE: x, ERFRAG_ID: 0}
+    expect: {result: 1000}
+
+  - name: add_taken_id_is_already_exists
+    fn: add_fragment
+    args:
+      fragment_config: {ERFRAG_CODE: NEW_FRAG, ERFRAG_SOURCE: x, ERFRAG_ID: 11}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_duplicate_code_is_already_exists
+    fn: add_fragment
+    args:
+      fragment_config: {ERFRAG_CODE: same_name, ERFRAG_SOURCE: x}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_reference_is_case_sensitive
+    fn: add_fragment
+    args:
+      fragment_config: {ERFRAG_CODE: NEW_FRAG, ERFRAG_SOURCE: "./FRAGMENT[./same_name>0]"}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_missing_code_is_missing_field
+    fn: add_fragment
+    args:
+      fragment_config: {ERFRAG_SOURCE: x}
+    expect: {error: MISSING_FIELD}
+
+  - name: add_missing_source_is_missing_field
+    fn: add_fragment
+    args:
+      fragment_config: {ERFRAG_CODE: NEW_FRAG}
+    expect: {error: MISSING_FIELD}
+
+  - name: add_without_g2_config_is_invalid_config
+    fn: add_fragment
+    config_literal: '{}'
+    args:
+      fragment_config: {ERFRAG_CODE: NEW_FRAG, ERFRAG_SOURCE: x}
+    expect: {error: INVALID_CONFIG}
+
+  - name: add_without_section_is_missing_section
+    fn: add_fragment
+    config_literal: '{"G2_CONFIG": {}}'
+    args:
+      fragment_config: {ERFRAG_CODE: NEW_FRAG, ERFRAG_SOURCE: x}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_invalid_json_is_json_parse
+    fn: add_fragment
+    config_literal: "not json"
+    args:
+      fragment_config: {ERFRAG_CODE: NEW_FRAG, ERFRAG_SOURCE: x}
+    expect: {error: JSON_PARSE}
+
+  - name: delete_is_unchecked_for_dependents
+    steps:
+      - fn: delete_fragment
+        args: {code: same_name}
+        expect: {kind: config}
+      - fn: list_fragments
+        expect:
+          len: 95
+          excludes:
+            - {fragment: SAME_NAME}
+      - fn: get_fragment
+        args: {code_or_id: SNAME_SSTAB}
+        expect:
+          result: {depends: "11,61"}
+
+  - name: delete_missing_is_not_found
+    fn: delete_fragment
+    args: {code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_invalid_json_is_json_parse
+    fn: delete_fragment
+    config_literal: "not json"
+    args: {code: SAME_NAME}
+    expect: {error: JSON_PARSE}
+
+  - name: get_by_id
+    fn: get_fragment
+    args: {code_or_id: "11"}
+    expect:
+      result: {id: 11, fragment: SAME_NAME, source: "./FRAGMENT[./GNR_SAME_NAME>0]", depends: "301"}
+
+  - name: get_missing_is_not_found
+    fn: get_fragment
+    args: {code_or_id: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: get_invalid_json_is_json_parse
+    fn: get_fragment
+    config_literal: "not json"
+    args: {code_or_id: SAME_NAME}
+    expect: {error: JSON_PARSE}
+
+  - name: list_template
+    fn: list_fragments
+    expect:
+      kind: json
+      len: 96
+      contains:
+        - {id: 180, fragment: SNAME_SSTAB, source: "./FRAGMENT[./SAME_NAME>0 and ./SAME_STAB>0]", depends: "11,61"}
+
+  - name: list_without_section_is_empty
+    fn: list_fragments
+    config_literal: '{"G2_CONFIG": {}}'
+    expect: {len: 0}
+
+  - name: list_invalid_json_is_json_parse
+    fn: list_fragments
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}
+
+  - name: set_source_recomputes_depends_and_sets_description
+    steps:
+      - fn: set_fragment
+        args: {code: sname_sstab, source: "./FRAGMENT[./SAME_STAB>0]", description: new desc}
+        expect: {kind: config}
+      - fn: get_fragment
+        args: {code_or_id: SNAME_SSTAB}
+        expect:
+          result: {id: 180, source: "./FRAGMENT[./SAME_STAB>0]", depends: "61"}
+      - fn: get_config_section
+        args: {section_name: CFG_ERFRAG, filter: '"ERFRAG_ID": 180'}
+        expect:
+          result:
+            - {ERFRAG_DESC: new desc}
+
+  - name: set_clear_source_clears_depends
+    steps:
+      - fn: set_fragment
+        args: {code: SNAME_SSTAB, source: null, description: null}
+      - fn: get_fragment
+        args: {code_or_id: SNAME_SSTAB}
+        expect:
+          result: {id: 180, source: null, depends: null}
+      - fn: get_config_section
+        args: {section_name: CFG_ERFRAG, filter: '"ERFRAG_ID": 180'}
+        expect:
+          result:
+            - {ERFRAG_DESC: null}
+
+  - name: set_without_updates_leaves_row
+    steps:
+      - fn: set_fragment
+        args: {code: SNAME_SSTAB}
+      - fn: get_fragment
+        args: {code_or_id: SNAME_SSTAB}
+        expect:
+          result: {source: "./FRAGMENT[./SAME_NAME>0 and ./SAME_STAB>0]", depends: "11,61"}
+
+  - name: set_bad_reference_is_invalid_input
+    fn: set_fragment
+    args: {code: SNAME_SSTAB, source: "./FRAGMENT[./NO_SUCH_FRAG>0]"}
+    expect: {error: INVALID_INPUT}
+
+  - name: set_missing_is_not_found
+    fn: set_fragment
+    args: {code: NOPE, description: x}
+    expect: {error: NOT_FOUND}
+
+  - name: set_invalid_json_is_json_parse
+    fn: set_fragment
+    config_literal: "not json"
+    args: {code: SNAME_SSTAB}
+    expect: {error: JSON_PARSE}

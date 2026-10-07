@@ -95,16 +95,19 @@ pub fn add_expression_function(
 ) -> Result<(String, Value), SzConfigError> {
     let efunc_code = efunc_code.to_uppercase();
 
+    let config_data: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+
     // Check if function already exists
-    if find_in_config_array(config_json, "CFG_EFUNC", "EFUNC_CODE", &efunc_code)?.is_some() {
+    if crate::helpers::find_in_section(&config_data, "CFG_EFUNC", "EFUNC_CODE", &efunc_code)
+        .is_some()
+    {
         return Err(SzConfigError::validation(format!(
             "Expression function already exists: {efunc_code}"
         )));
     }
 
     // Get next EFUNC_ID
-    let config_data: Value =
-        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
     let efunc_id = get_next_id(&config_data, "G2_CONFIG.CFG_EFUNC", "EFUNC_ID", 1)?;
 
     // Build a complete row via EfuncRow so every CFG_EFUNC key is present
@@ -116,7 +119,7 @@ pub fn add_expression_function(
         efunc_desc: params.description.map(str::to_string),
         language: params.language.map(str::to_string),
     };
-    let new_record = serde_json::to_value(&row)?;
+    let new_record = crate::helpers::row_value(&row);
 
     // Add to CFG_EFUNC
     let modified_json = add_to_config_array(config_json, "CFG_EFUNC", new_record.clone())?;
@@ -189,7 +192,10 @@ pub fn delete_expression_function_cascade(
 ) -> Result<(String, Value), SzConfigError> {
     let efunc_code = efunc_code.to_uppercase();
 
-    let function = find_in_config_array(config_json, "CFG_EFUNC", "EFUNC_CODE", &efunc_code)?
+    let mut config: Value =
+        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+    let function = crate::helpers::find_in_section(&config, "CFG_EFUNC", "EFUNC_CODE", &efunc_code)
+        .cloned()
         .ok_or_else(|| {
             SzConfigError::not_found(format!("Expression function not found: {efunc_code}"))
         })?;
@@ -197,9 +203,6 @@ pub fn delete_expression_function_cascade(
         .get("EFUNC_ID")
         .and_then(|v| v.as_i64())
         .ok_or_else(|| SzConfigError::MissingField("EFUNC_ID".to_string()))?;
-
-    let mut config: Value =
-        serde_json::from_str(config_json).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
 
     let efcall_ids: Vec<i64> = config["G2_CONFIG"]["CFG_EFCALL"]
         .as_array()
@@ -220,8 +223,7 @@ pub fn delete_expression_function_cascade(
     if let Some(efcall) = config["G2_CONFIG"]["CFG_EFCALL"].as_array_mut() {
         efcall.retain(|r| r["EFUNC_ID"].as_i64() != Some(efunc_id));
     }
-    let cur =
-        serde_json::to_string(&config).map_err(|e| SzConfigError::json_parse(e.to_string()))?;
+    let cur = config.to_string();
 
     let (final_json, _) = delete_expression_function(&cur, &efunc_code)?;
 
@@ -307,37 +309,30 @@ pub fn set_expression_function(
 ) -> Result<(String, Value), SzConfigError> {
     let efunc_code = efunc_code.to_uppercase();
 
-    // Find existing function
-    let mut function = find_in_config_array(config_json, "CFG_EFUNC", "EFUNC_CODE", &efunc_code)?
-        .ok_or_else(|| {
-        SzConfigError::not_found(format!("Expression function not found: {efunc_code}"))
-    })?;
-
-    // In-place update of a complete existing row; all keys preserved.
-    // Update fields if provided
-    if let Some(obj) = function.as_object_mut() {
-        match params.connect_str {
-            FieldUpdate::Leave => {}
-            FieldUpdate::Clear => {
-                obj.insert("CONNECT_STR".to_string(), Value::Null);
+    super::replace_row_at_end(
+        config_json,
+        "CFG_EFUNC",
+        "EFUNC_CODE",
+        &efunc_code,
+        || SzConfigError::not_found(format!("Expression function not found: {efunc_code}")),
+        |obj| {
+            match params.connect_str {
+                FieldUpdate::Leave => {}
+                FieldUpdate::Clear => {
+                    obj.insert("CONNECT_STR".to_string(), Value::Null);
+                }
+                FieldUpdate::Set(conn) => {
+                    obj.insert("CONNECT_STR".to_string(), json!(conn));
+                }
             }
-            FieldUpdate::Set(conn) => {
-                obj.insert("CONNECT_STR".to_string(), json!(conn));
+            if let Some(desc) = params.description {
+                obj.insert("EFUNC_DESC".to_string(), json!(desc));
             }
-        }
-        if let Some(desc) = params.description {
-            obj.insert("EFUNC_DESC".to_string(), json!(desc));
-        }
-        if let Some(lang) = params.language {
-            obj.insert("LANGUAGE".to_string(), json!(lang));
-        }
-    }
-
-    // Delete old and add updated
-    let temp_json = delete_from_config_array(config_json, "CFG_EFUNC", "EFUNC_CODE", &efunc_code)?;
-    let modified_json = add_to_config_array(&temp_json, "CFG_EFUNC", function.clone())?;
-
-    Ok((modified_json, function))
+            if let Some(lang) = params.language {
+                obj.insert("LANGUAGE".to_string(), json!(lang));
+            }
+        },
+    )
 }
 
 #[cfg(test)]

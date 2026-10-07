@@ -1,0 +1,95 @@
+# CFG_GPLAN — generic threshold plans. Root module: src/generic_plans.rs
+# (4 pub fns, all here).
+group: generic_plans
+
+functions:
+  - name: clone_generic_plan
+    doc: Clone a generic plan, copying every CFG_GENERIC_THRESHOLD row of the source to the new plan.
+    rust: generic_plans::clone_generic_plan
+    c_symbol: SzConfigTool_cloneGenericPlan
+    args:
+      - name: source_gplan_code
+        type: str
+        semantics: Uppercased, then matched exactly against GPLAN_CODE; unknown = NOT_FOUND.
+      - name: new_gplan_code
+        type: str
+        semantics: Uppercased before the duplicate check and storage; an existing code = ALREADY_EXISTS.
+      - name: new_gplan_desc
+        type: str
+        optional: true
+        semantics: Stored verbatim in GPLAN_DESC; absent = the uppercased new code.
+    returns: config_and_json
+    errors: [JSON_PARSE, NOT_FOUND, ALREADY_EXISTS, INVALID_CONFIG]
+    notes: >-
+      Returns (modified config, new GPLAN_ID); the record is the integer id. The new id
+      is always max existing GPLAN_ID + 1 (no floor, no id arg). Cloned threshold rows
+      are verbatim copies with GPLAN_ID rewritten, appended after existing rows; an
+      absent CFG_GENERIC_THRESHOLD section is skipped silently. INVALID_CONFIG when the
+      source row's GPLAN_ID is not an integer.
+    c_notes: >-
+      C-EXPORT DELTA: SzConfigTool_cloneGenericPlan DROPS the new id (returns only the
+      config) and reports library errors with returnCode -5 and NO reason code
+      (set_error, not set_error_from).
+
+  - name: delete_generic_plan
+    doc: Delete a generic plan and all of its generic thresholds.
+    rust: generic_plans::delete_generic_plan
+    c_symbol: null
+    args:
+      - name: gplan_code
+        type: str
+        semantics: Uppercased, then matched exactly against GPLAN_CODE; unknown = NOT_FOUND.
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND, INVALID_INPUT, INVALID_CONFIG]
+    notes: >-
+      System plans (GPLAN_ID <= 2, i.e. INGEST and SEARCH in the template) are
+      protected: INVALID_INPUT. Removes the CFG_GPLAN row and every
+      CFG_GENERIC_THRESHOLD row with that GPLAN_ID. An absent CFG_GPLAN section is
+      NOT_FOUND (not MISSING_SECTION).
+    c_notes: >-
+      No typed C export exists; use SzConfigTool_invoke.
+
+  - name: list_generic_plans
+    doc: List generic plans as {id, plan, description}, optionally filtered.
+    rust: generic_plans::list_generic_plans
+    c_symbol: SzConfigTool_listGenericPlans
+    args:
+      - name: filter
+        type: str
+        optional: true
+        semantics: >-
+          Case-insensitive SUBSTRING match against the raw row serialized as JSON
+          text — keys and numbers included (so e.g. "gplan" matches every row).
+          Absent = no filtering.
+    returns: json
+    errors: [JSON_PARSE]
+    notes: >-
+      Array of {id (GPLAN_ID), plan (GPLAN_CODE), description (GPLAN_DESC)} sorted by
+      id; missing values become 0 / "". An absent CFG_GPLAN (or G2_CONFIG) yields an
+      empty array, never MISSING_SECTION.
+    c_notes: >-
+      C typed export (filter NULL = None) reports library errors with returnCode -5 and
+      no reason code.
+
+  - name: set_generic_plan
+    doc: Create a generic plan, or update the description of an existing one (upsert).
+    rust: generic_plans::set_generic_plan
+    c_symbol: SzConfigTool_setGenericPlan
+    args:
+      - name: gplan_code
+        type: str
+        semantics: Uppercased, then matched exactly against GPLAN_CODE.
+      - name: gplan_desc
+        type: str
+        semantics: Written verbatim to GPLAN_DESC.
+    returns: config_and_json
+    tuple_names: [plan_id, was_created]
+    errors: [JSON_PARSE, MISSING_SECTION]
+    notes: >-
+      Returns (config, {plan_id, was_created}). Existing code: only GPLAN_DESC is
+      replaced (other keys kept), was_created false. New code: a row with GPLAN_ID = max
+      + 1 is appended, was_created true; an absent CFG_GPLAN section is MISSING_SECTION
+      on this create path.
+    c_notes: >-
+      C-EXPORT DELTA: SzConfigTool_setGenericPlan DROPS plan_id and was_created and
+      reports library errors with returnCode -5 and no reason code.

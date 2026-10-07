@@ -1,0 +1,174 @@
+# CFG_DFCALL / CFG_DFBOM — distinct calls. Root module: src/calls/distinct.rs
+# (8 pub fns: 6 mapped here, 2 no-op stubs excluded below).
+group: calls_distinct
+
+functions:
+  - name: add_distinct_call
+    doc: Add a distinct call (CFG_DFCALL row) binding a distinct function to a feature, with its element list (CFG_DFBOM rows).
+    rust: calls::distinct::add_distinct_call
+    rust_params_struct: calls::distinct::AddDistinctCallParams
+    c_symbol: SzConfigTool_addDistinctCall
+    args:
+      - name: ftype_code
+        type: str
+        rust_convert: owned_str
+        semantics: >-
+          Feature code; case-insensitive lookup in CFG_FTYPE, else NOT_FOUND. Only one
+          distinct call per feature: if any CFG_DFCALL row already has this FTYPE_ID the
+          call fails with ALREADY_PRESENT.
+      - name: dfunc_code
+        type: str
+        rust_convert: owned_str
+        semantics: Distinct function code; case-insensitive lookup in CFG_DFUNC, else NOT_FOUND.
+      - name: element_list
+        type: str_list
+        semantics: >-
+          Element codes, each a case-insensitive GLOBAL CFG_FELEM lookup (the element
+          need NOT be in the feature's CFG_FBOM), else NOT_FOUND. Empty list or a
+          blank/whitespace-only item is INVALID_INPUT (checked before anything else). One
+          CFG_DFBOM row is written per item with FTYPE_ID = the call's feature and
+          EXEC_ORDER = 1-based list position. Duplicate items are not rejected.
+    returns: config_and_json
+    errors: [JSON_PARSE, INVALID_INPUT, MISSING_SECTION, NOT_FOUND, ALREADY_PRESENT]
+    notes: >-
+      Returns (modified config, the new CFG_DFCALL row {DFCALL_ID, FTYPE_ID, DFUNC_ID} —
+      no EXEC_ORDER). DFCALL_ID is ALWAYS auto-allocated (max existing + 1, floor 1000):
+      unlike add_comparison_call there is no `id` parameter. Validation order: empty
+      list / blank item, id (MISSING_SECTION if G2_CONFIG.CFG_DFCALL is absent),
+      feature, one-call-per-feature (ALREADY_PRESENT), function, element lookups;
+      MISSING_SECTION if CFG_DFCALL is not an array or CFG_DFBOM is absent.
+    c_notes: >-
+      C typed export SzConfigTool_addDistinctCall DROPS the new row, takes the element
+      list as a JSON-array string (non-string items silently skipped; non-array is
+      returnCode -3), and reports library errors with returnCode -5 and NO reason code.
+
+  - name: delete_distinct_call
+    doc: Delete a distinct call by DFCALL_ID, cascading to its CFG_DFBOM rows.
+    rust: calls::distinct::delete_distinct_call
+    c_symbol: SzConfigTool_deleteDistinctCall
+    args:
+      - name: dfcall_id
+        type: int
+        semantics: DFCALL_ID; must exist in CFG_DFCALL else NOT_FOUND (an absent section is also NOT_FOUND).
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Removes the CFG_DFCALL row and every CFG_DFBOM row with that DFCALL_ID. No
+      dependency or system-call protection.
+    c_notes: >-
+      LEGACY TRAP: the C typed export reports library errors with returnCode -5 and NO
+      reason code.
+
+  - name: get_distinct_call
+    doc: Get one distinct call's raw CFG_DFCALL row, addressed by call id or by feature code.
+    rust: calls::distinct::get_distinct_call
+    c_symbol: SzConfigTool_getDistinctCall
+    c_aliases: [SzConfigTool_getDistinctCallByFeature]
+    args:
+      - name: call
+        type: int_or_str
+        rust_convert: call_selector
+        semantics: >-
+          A JSON integer selects by DFCALL_ID; a JSON string selects the call bound to
+          that feature code (case-insensitive CFG_FTYPE lookup, then a CFG_DFCALL scan by
+          FTYPE_ID). Unknown id, unknown feature, or a feature with no distinct call is
+          NOT_FOUND; a feature matching 2+ calls (malformed config) is INVALID_INPUT.
+          Any other JSON type (or null) is INVALID_INPUT.
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND, INVALID_INPUT]
+    notes: >-
+      Result is the stored row with on-disk keys (DFCALL_ID, FTYPE_ID, DFUNC_ID); it
+      does not include the DFBOM elements (codes: list_distinct_calls; raw rows:
+      get_config_section("CFG_DFBOM")).
+    c_notes: >-
+      C typed exports are split: SzConfigTool_getDistinctCall takes only an id,
+      SzConfigTool_getDistinctCallByFeature only a feature code. LEGACY TRAP: the by-id
+      export reports library errors with returnCode -5 and NO reason code; the
+      by-feature export with -2 and NO reason code.
+
+  - name: list_distinct_calls
+    doc: List all distinct calls with feature/function codes resolved and their ordered element lists.
+    rust: calls::distinct::list_distinct_calls
+    c_symbol: SzConfigTool_listDistinctCalls
+    args: []
+    returns: json
+    errors: [JSON_PARSE]
+    notes: >-
+      Result is an array of {id, feature, function, execOrder, elementList} sorted by
+      (FTYPE_ID, DFCALL_ID) — not config order. execOrder is the CFG_DFCALL row's
+      EXEC_ORDER, which the v4 schema (and every template / add_distinct_call row)
+      lacks, so it is 1. elementList is the call's CFG_DFBOM element codes ordered by
+      EXEC_ORDER. Unresolvable ids render as "unknown". Missing sections are treated as
+      empty. LIMITATION: elementList omits the stored CFG_DFBOM columns (FTYPE_ID,
+      EXEC_ORDER); read the raw rows with get_config_section("CFG_DFBOM").
+    c_notes: >-
+      C typed export reports library errors with returnCode -5 and NO reason code.
+
+  - name: add_distinct_call_element
+    doc: Add one element (CFG_DFBOM row) to a distinct call, addressed by raw ids.
+    rust: calls::distinct::add_distinct_call_element
+    rust_params_struct: calls::distinct::AddDistinctCallElementParams
+    c_symbol: null
+    args:
+      - name: dfcall_id
+        type: int
+        semantics: DFCALL_ID written verbatim. NOT validated — the call need not exist.
+      - name: ftype_id
+        type: int
+        semantics: >-
+          The ELEMENT's feature id written to the BOM row's FTYPE_ID. NOT validated at
+          all — unlike add_comparison_call_element, a negative id is accepted and stored.
+      - name: felem_id
+        type: int
+        semantics: FELEM_ID written verbatim. NOT validated against CFG_FELEM or CFG_FBOM.
+      - name: exec_order
+        type: int
+        optional: true
+        semantics: >-
+          Allocated per DFCALL_ID. Absent OR <= 0 means auto-allocate (max EXEC_ORDER on
+          this call + 1, seed 0). A taken order > 0 on the same call is ALREADY_EXISTS.
+    returns: config_and_json
+    errors: [JSON_PARSE, ALREADY_PRESENT, ALREADY_EXISTS, MISSING_SECTION]
+    notes: >-
+      Returns (modified config, the new CFG_DFBOM row {DFCALL_ID, FTYPE_ID, FELEM_ID,
+      EXEC_ORDER}). Duplicate identity is (DFCALL_ID, FTYPE_ID, FELEM_ID) regardless of
+      EXEC_ORDER -> ALREADY_PRESENT. Order of checks: duplicate, exec_order, then
+      MISSING_SECTION if CFG_DFBOM is absent.
+    c_notes: >-
+      No C typed export.
+
+  - name: delete_distinct_call_element
+    doc: Delete one element (CFG_DFBOM row) from a distinct call, addressed by call id or feature code plus element code.
+    rust: calls::distinct::delete_distinct_call_element
+    c_symbol: SzConfigTool_deleteDistinctCallElement
+    args:
+      - name: call
+        type: int_or_str
+        rust_convert: call_selector
+        semantics: >-
+          A JSON integer selects by DFCALL_ID (must exist, else NOT_FOUND); a JSON string
+          selects the call bound to that feature code (unknown feature or no call is
+          NOT_FOUND; 2+ calls is INVALID_INPUT). Any other JSON type is INVALID_INPUT.
+      - name: element_code
+        type: str
+        semantics: >-
+          Element code, case-insensitive. Without element_feature: global CFG_FELEM
+          lookup (unknown is NOT_FOUND). With element_feature: an unknown code or one not
+          in that feature's CFG_FBOM is NOT_IN_FEATURE.
+      - name: element_feature
+        type: str
+        optional: true
+        semantics: >-
+          The element's feature code (case-insensitive; unknown is NOT_FOUND). Narrows
+          the BOM row match by FTYPE_ID and requires CFG_FBOM membership.
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND, INVALID_INPUT, NOT_IN_FEATURE, NOT_ON_CALL]
+    notes: >-
+      EXEC_ORDER is derived from the matched BOM row (not supplied). Element not on an
+      existing call is the benign NOT_ON_CALL; an element matching 2+ BOM rows on the
+      call without element_feature is INVALID_INPUT (ambiguous). Only the matched row is
+      removed; no renumbering.
+    c_notes: >-
+      C typed export SzConfigTool_deleteDistinctCallElement addresses the call by
+      FEATURE CODE only (no id form); element_feature NULL = None but an empty string is
+      passed through (NOT_FOUND); errors are returnCode -2 with the reason code.

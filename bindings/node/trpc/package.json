@@ -1,0 +1,46 @@
+{
+  "name": "sz-configtool-trpc",
+  "version": "4.4.0-1",
+  "description": "tRPC router over the sz-configtool Node binding (unofficial)",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brianmacy/sz-rust-sdk-configtool",
+    "directory": "bindings/node/trpc"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "test": "node --test --experimental-strip-types test/*.test.ts"
+  },
+  "dependencies": {
+    "@trpc/server": "^11.19.0",
+    "superjson": "^2.2.6",
+    "zod": "^4.6.5"
+  },
+  "peerDependencies": {
+    "sz-configtool": "4.4.0-1"
+  },
+  "devDependencies": {
+    "@trpc/client": "^11.19.0",
+    "@types/node": "^26.6.0",
+    "sz-configtool": "file:..",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,0 +1,41 @@
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[project]
+name = "sz-configtool"
+description = "Typed Python functions for editing Senzing configuration JSON (unofficial)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "Brian Macy" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Typing :: Typed",
+]
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/brianmacy/sz-rust-sdk-configtool"
+
+[project.optional-dependencies]
+test = ["pytest>=8", "ruff>=0.6"]
+
+[tool.maturin]
+python-source = "python"
+module-name = "sz_configtool._native"
+features = ["pyo3/extension-module"]
+include = [{ path = "python/sz_configtool/py.typed", format = ["sdist", "wheel"] }]
+
+# No maturin-generated SBOM in the wheel (maturin >= 1.10 embeds one whose
+# bom-refs carry absolute `path+file://<workspace>` URLs). The crate's CycloneDX
+# SBOM is generated separately by packaging/build-native.sh.
+[tool.maturin.sbom]
+rust = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py310"

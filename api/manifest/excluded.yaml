@@ -1,0 +1,13 @@
+# Root-library `pub fn`s deliberately NOT exposed through the binding manifest.
+# Every entry needs a reason. See schema.md ("excluded.yaml") and README.md.
+#
+# Each entry is EITHER `rust: <module path>::<fn>` (one function) OR
+# `module: <module path>` (every pub fn defined in that module file).
+
+# Flip to `true` once every root pub fn is in a group file or listed below
+# (end of A2). While `false`, the coverage drift test only REPORTS unmapped
+# functions; stale/unknown names, duplicates and mapped+excluded overlaps are
+# hard failures regardless.
+enforce_complete: true
+
+entries: []

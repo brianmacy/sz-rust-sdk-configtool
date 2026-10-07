@@ -36,10 +36,22 @@ Testing/
 *.dylib
 *.dll
 test_basic
-tests/c/test_basic
+ffi/tests/c/test_basic
+
+# Python bytecode
+__pycache__/
+*.pyc
 
 # Shell scripts (generated)
 create_senzing_lib.sh
 
 # Implementation notes (temporary)
 FFI_IMPLEMENTATION.md
+
+# Coverage artifacts (packaging/coverage.sh writes reports to target/coverage)
+*.profraw
+*.profdata
+.coverage
+.coverage.*
+lcov.info
+coverage.info

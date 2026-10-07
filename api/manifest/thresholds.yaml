@@ -1,0 +1,377 @@
+# CFG_CFRTN (comparison thresholds) and CFG_GENERIC_THRESHOLD (generic
+# thresholds). Root module: src/thresholds.rs (14 pub fns: 9 mapped here, 5
+# excluded below).
+#
+# NOTE on "required" args below: the root params structs type EVERY field as
+# Option<T>, and the library itself rejects an absent required field with
+# MISSING_FIELD. The manifest mirrors the Rust signature (`optional: true`) and
+# marks those args `required: true` so typed bindings make them required
+# parameters; invoke still passes absent as None (-> MISSING_FIELD), covered by
+# wire_only conformance steps.
+group: thresholds
+
+functions:
+  - name: add_comparison_threshold
+    doc: Add a comparison threshold (CFG_CFRTN row) for a comparison function, feature and return value.
+    rust: thresholds::add_comparison_threshold
+    rust_params_struct: thresholds::AddComparisonThresholdParams
+    c_symbol: SzConfigTool_addComparisonThreshold
+    args:
+      - name: cfunc_code
+        type: str
+        optional: true
+        required: true
+        semantics: >-
+          REQUIRED by the library (absent = MISSING_FIELD). Comparison function code
+          (CFG_CFUNC), matched case-insensitively; unknown = NOT_FOUND.
+      - name: ftype_code
+        type: str
+        optional: true
+        required: true
+        semantics: >-
+          REQUIRED by the library (absent = MISSING_FIELD). Feature code matched
+          case-insensitively (unknown = NOT_FOUND), or "all" (any case) for the
+          all-features FTYPE_ID 0 sentinel.
+      - name: cfunc_rtnval
+        type: str
+        optional: true
+        required: true
+        semantics: >-
+          REQUIRED by the library (absent = MISSING_FIELD). Return value / score
+          name; uppercased before storage and duplicate check.
+      - name: exec_order
+        type: int
+        optional: true
+        semantics: >-
+          Resolved in three steps: (1) if an all-features (FTYPE_ID 0) row already
+          exists for this (cfunc, rtnval), its EXEC_ORDER is REUSED and this arg is
+          ignored; (2) else a value > 0 is honoured, or ALREADY_EXISTS if taken
+          within (CFUNC_ID, FTYPE_ID 0); (3) else (absent or <= 0) the next order
+          within (CFUNC_ID, FTYPE_ID 0) is auto-allocated (max + 1). Never null.
+      - name: same_score
+        type: int
+        optional: true
+        semantics: Stored verbatim (no range check); absent stores SAME_SCORE null.
+      - name: close_score
+        type: int
+        optional: true
+        semantics: Stored verbatim; absent stores CLOSE_SCORE null.
+      - name: likely_score
+        type: int
+        optional: true
+        semantics: Stored verbatim; absent stores LIKELY_SCORE null.
+      - name: plausible_score
+        type: int
+        optional: true
+        semantics: Stored verbatim; absent stores PLAUSIBLE_SCORE null.
+      - name: un_likely_score
+        type: int
+        optional: true
+        semantics: Stored verbatim; absent stores UN_LIKELY_SCORE null.
+    returns: config
+    errors: [JSON_PARSE, MISSING_FIELD, NOT_FOUND, MISSING_SECTION, ALREADY_EXISTS]
+    notes: >-
+      CFRTN_ID is always auto-allocated (max existing + 1, no floor); there is no id
+      arg. Duplicate key is (CFUNC_ID, FTYPE_ID, uppercased rtnval) = ALREADY_EXISTS.
+      Order: missing fields, cfunc lookup, feature lookup, then CFG_CFRTN section,
+      duplicate, exec order.
+    c_notes: >-
+      C-EXPORT DELTA: SzConfigTool_addComparisonThreshold is ID-based (calls the
+      doc-hidden add_comparison_threshold_by_id): takes CFUNC_ID / FTYPE_ID integers,
+      never validates they exist, and maps a NEGATIVE value of ftype_id (-> 0 = all),
+      exec_order and every score to None, so a negative score cannot be stored through
+      C; invoke takes codes and stores any integer.
+
+  - name: delete_comparison_threshold
+    doc: Delete a comparison threshold identified by (comparison function, feature, return value).
+    rust: thresholds::delete_comparison_threshold
+    c_symbol: SzConfigTool_deleteComparisonThreshold
+    args:
+      - name: cfunc_code
+        type: str
+        semantics: Comparison function code, case-insensitive; unknown = NOT_FOUND.
+      - name: ftype_code
+        type: str
+        semantics: Feature code (case-insensitive) or "all" for FTYPE_ID 0; unknown = NOT_FOUND.
+      - name: cfunc_rtnval
+        type: str
+        semantics: Return value, matched case-insensitively.
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND, MISSING_SECTION]
+    notes: >-
+      No matching row = NOT_FOUND. No tier/dependency protection: deleting the
+      all-features tier row leaves per-feature rows in place.
+    c_notes: >-
+      C-EXPORT DELTA: SzConfigTool_deleteComparisonThreshold takes a CFRTN_ID instead
+      (doc-hidden delete_comparison_threshold_by_id); a missing CFG_CFRTN section there
+      is NOT_FOUND, not MISSING_SECTION.
+
+  - name: set_comparison_threshold
+    doc: Update the exec order and/or scores of an existing comparison threshold.
+    rust: thresholds::set_comparison_threshold
+    rust_params_struct: thresholds::SetComparisonThresholdParams
+    c_symbol: SzConfigTool_setComparisonThreshold
+    args:
+      - name: cfunc_code
+        type: str
+        optional: true
+        required: true
+        semantics: REQUIRED by the library (absent = MISSING_FIELD). Case-insensitive lookup; unknown = NOT_FOUND.
+      - name: ftype_code
+        type: str
+        optional: true
+        required: true
+        semantics: REQUIRED (absent = MISSING_FIELD). Feature code (case-insensitive) or "all" for FTYPE_ID 0.
+      - name: cfunc_rtnval
+        type: str
+        optional: true
+        required: true
+        semantics: REQUIRED (absent = MISSING_FIELD). Matched case-insensitively; no row = NOT_FOUND.
+      - name: exec_order
+        type: int
+        optional: true
+        semantics: >-
+          Absent leaves EXEC_ORDER unchanged; a value is written VERBATIM (no
+          uniqueness / tier check, any integer incl. <= 0).
+      - name: same_score
+        type: int
+        optional: true
+        semantics: Absent leaves unchanged; else written verbatim.
+      - name: close_score
+        type: int
+        optional: true
+        semantics: Absent leaves unchanged; else written verbatim.
+      - name: likely_score
+        type: int
+        optional: true
+        semantics: Absent leaves unchanged; else written verbatim.
+      - name: plausible_score
+        type: int
+        optional: true
+        semantics: Absent leaves unchanged; else written verbatim.
+      - name: un_likely_score
+        type: int
+        optional: true
+        semantics: Absent leaves unchanged; else written verbatim.
+    returns: config
+    errors: [JSON_PARSE, MISSING_FIELD, NOT_FOUND, MISSING_SECTION]
+    notes: >-
+      NOT tri-state: a score cannot be cleared back to null.
+    c_notes: >-
+      C-EXPORT DELTA: SzConfigTool_setComparisonThreshold is keyed by CFRTN_ID
+      (doc-hidden set_comparison_threshold_by_id) and takes an updates JSON object with
+      camelCase keys sameScore, closeScore, likelyScore, plausibleScore, unlikelyScore;
+      it CANNOT change EXEC_ORDER, and a non-integer value there is silently ignored.
+      Invalid updates JSON returns returnCode -3 (boundary error, no reason code).
+
+  - name: list_comparison_thresholds
+    doc: List all comparison thresholds with resolved function and feature names.
+    rust: thresholds::list_comparison_thresholds
+    c_symbol: SzConfigTool_listComparisonThresholds
+    args: []
+    returns: json
+    errors: [JSON_PARSE, MISSING_SECTION]
+    notes: >-
+      Array of {id (CFRTN_ID), function (CFUNC_CODE or "unknown"), returnOrder
+      (EXEC_ORDER), scoreName, feature ("all" for FTYPE_ID 0, else FTYPE_CODE or
+      "unknown"), sameScore, closeScore, likelyScore, plausibleScore,
+      unlikelyScore}, sorted by (CFUNC_ID, CFRTN_ID). TRAP: null/absent
+      EXEC_ORDER and scores are reported as 0, not null. Requires CFG_CFRTN,
+      CFG_CFUNC and CFG_FTYPE (else MISSING_SECTION).
+
+  - name: add_generic_threshold
+    doc: Add a generic threshold (CFG_GENERIC_THRESHOLD row) for a plan, behavior and optional feature.
+    rust: thresholds::add_generic_threshold
+    rust_params_struct: thresholds::AddGenericThresholdParams
+    c_symbol: SzConfigTool_addGenericThreshold
+    args:
+      - name: plan
+        type: str
+        optional: true
+        required: true
+        semantics: >-
+          REQUIRED (absent = MISSING_FIELD). Uppercased, then matched EXACTLY against
+          GPLAN_CODE (so effectively case-insensitive for upper-case stored codes);
+          unknown = NOT_FOUND.
+      - name: behavior
+        type: str
+        optional: true
+        required: true
+        semantics: >-
+          REQUIRED (absent = MISSING_FIELD). Uppercased; must be a canonical
+          behavior code (behavior_domain, e.g. NAME, F1, FM, A1) else
+          VALIDATION_ERRORS (field "behavior", UnknownReferenceCode).
+      - name: scoring_cap
+        type: int
+        optional: true
+        required: true
+        semantics: REQUIRED (absent = MISSING_FIELD). Stored verbatim (e.g. -1).
+      - name: candidate_cap
+        type: int
+        optional: true
+        required: true
+        semantics: REQUIRED (absent = MISSING_FIELD). Stored verbatim.
+      - name: send_to_redo
+        type: str
+        optional: true
+        required: true
+        semantics: >-
+          REQUIRED (absent = MISSING_FIELD). Case-insensitive Yes/No, stored
+          canonical "Yes"/"No"; else VALIDATION_ERRORS (field "sendToRedo",
+          OutOfDomain).
+      - name: feature
+        type: str
+        optional: true
+        default: ALL
+        semantics: >-
+          Absent or "all" (any case) = FTYPE_ID 0. Else uppercased and matched
+          EXACTLY against FTYPE_CODE; unknown = NOT_FOUND.
+    returns: config
+    errors: [JSON_PARSE, MISSING_FIELD, MISSING_SECTION, NOT_FOUND, ALREADY_EXISTS, VALIDATION_ERRORS]
+    notes: >-
+      All absent required fields are reported in ONE MISSING_FIELD (order plan,
+      behavior, scoring_cap, candidate_cap, send_to_redo), checked before the config is
+      parsed. Then: plan lookup, feature lookup, duplicate (plan, behavior, feature) =
+      ALREADY_EXISTS (Python treats it as a warning-success; the root library does not),
+      then behavior + sendToRedo are validated TOGETHER into one VALIDATION_ERRORS
+      (details schema sz-configtool.validation-errors/v1, order [behavior, sendToRedo]).
+    c_notes: >-
+      C typed export SzConfigTool_addGenericThreshold takes every arg (feature NULL =
+      ALL) with no coercions.
+
+  - name: delete_generic_threshold
+    doc: Delete a generic threshold identified by (plan, behavior, feature).
+    rust: thresholds::delete_generic_threshold
+    rust_params_struct: thresholds::DeleteGenericThresholdParams
+    c_symbol: SzConfigTool_deleteGenericThreshold
+    args:
+      - name: plan
+        type: str
+        optional: true
+        required: true
+        semantics: REQUIRED (absent = MISSING_FIELD). Case-insensitive GPLAN_CODE lookup; unknown = NOT_FOUND.
+      - name: behavior
+        type: str
+        optional: true
+        required: true
+        semantics: >-
+          REQUIRED (absent = MISSING_FIELD). Uppercased and matched exactly; NOT
+          validated against the behavior domain (no row = NOT_FOUND).
+      - name: feature
+        type: str
+        optional: true
+        default: ALL
+        semantics: Absent or "all" = FTYPE_ID 0; else uppercased exact FTYPE_CODE match, unknown = NOT_FOUND.
+    returns: config
+    errors: [JSON_PARSE, MISSING_FIELD, NOT_FOUND, MISSING_SECTION]
+    notes: >-
+      No matching row = NOT_FOUND (also when CFG_GENERIC_THRESHOLD is absent). (Before
+      the Unreleased fix it ignored `plan` and always deleted from INGEST.)
+    c_notes: >-
+      C typed export SzConfigTool_deleteGenericThreshold takes every arg (feature NULL =
+      ALL) with no coercions.
+
+  - name: set_generic_threshold
+    doc: Update the caps and/or send-to-redo flag of an existing generic threshold.
+    rust: thresholds::set_generic_threshold
+    rust_params_struct: thresholds::SetGenericThresholdParams
+    c_symbol: SzConfigTool_setGenericThreshold
+    args:
+      - name: plan
+        type: str
+        optional: true
+        required: true
+        semantics: REQUIRED (absent = MISSING_FIELD). Case-insensitive GPLAN_CODE lookup; unknown = NOT_FOUND.
+      - name: behavior
+        type: str
+        optional: true
+        required: true
+        semantics: >-
+          REQUIRED (absent = MISSING_FIELD). Lookup KEY only: uppercased and matched
+          exactly, never validated against the domain (no row = NOT_FOUND).
+      - name: feature
+        type: str
+        optional: true
+        default: ALL
+        semantics: >-
+          Lookup KEY selecting the per-feature row (never written). Absent or "all"
+          = FTYPE_ID 0; else case-insensitive feature lookup, unknown = NOT_FOUND.
+      - name: candidate_cap
+        type: int
+        optional: true
+        semantics: Absent leaves CANDIDATE_CAP unchanged; else written verbatim.
+      - name: scoring_cap
+        type: int
+        optional: true
+        semantics: Absent leaves SCORING_CAP unchanged; else written verbatim.
+      - name: send_to_redo
+        type: str
+        optional: true
+        semantics: >-
+          Absent leaves unchanged; else case-insensitive Yes/No stored canonical,
+          otherwise VALIDATION_ERRORS (field "sendToRedo", OutOfDomain) — checked
+          AFTER the row lookup, so a missing row wins.
+    returns: config
+    errors: [JSON_PARSE, MISSING_FIELD, NOT_FOUND, MISSING_SECTION, VALIDATION_ERRORS]
+    c_notes: >-
+      C-EXPORT DELTA: SzConfigTool_setGenericThreshold takes a GPLAN_ID integer (unknown
+      id = returnCode -4 with no reason code) plus behavior, and an updates JSON with
+      camelCase keys candidateCap, scoringCap, sendToRedo, feature; a non-integer cap
+      there is INVALID_INPUT, a non-string sendToRedo/feature is silently ignored;
+      invalid updates JSON = returnCode -3.
+
+  - name: list_generic_thresholds
+    doc: List all generic thresholds with resolved plan and feature names.
+    rust: thresholds::list_generic_thresholds
+    c_symbol: SzConfigTool_listGenericThresholds
+    args: []
+    returns: json
+    errors: [JSON_PARSE, MISSING_SECTION]
+    notes: >-
+      Array of {id (GPLAN_ID), plan, behavior, feature ("all" for FTYPE_ID 0),
+      candidateCap, scoringCap, sendToRedo}, sorted by (GPLAN_ID, canonical
+      behavior position; unknown behaviors last), stable within ties. Requires
+      CFG_GENERIC_THRESHOLD, CFG_GPLAN and CFG_FTYPE (else MISSING_SECTION).
+
+  - name: validate_generic_threshold
+    doc: Stage the checks of a generic-threshold add without mutating the config, returning the outcome as data.
+    rust: thresholds::validate_generic_threshold
+    c_symbol: SzConfigTool_validateGenericThreshold
+    args:
+      - name: plan
+        type: str
+        semantics: Uppercased, matched exactly against GPLAN_CODE; unknown = result notFound/plan (data, not an error).
+      - name: behavior
+        type: str
+        semantics: Uppercased; checked against the canonical behavior codes only in the last stage.
+      - name: send_to_redo
+        type: str
+        semantics: Case-insensitive Yes/No; checked only in the last stage.
+      - name: feature
+        type: str
+        optional: true
+        default: ALL
+        semantics: >-
+          Absent or "all" (any case) = FTYPE_ID 0. Else uppercased exact FTYPE_CODE
+          match; unknown = result notFound/feature.
+    returns: json
+    errors: [JSON_PARSE]
+    notes: >-
+      Result is the versioned object (schema sz-configtool.generic-threshold-check/v1,
+      root-library Serialize for GenericThresholdCheck): {"schema", "result": "ok" |
+      "duplicate" | "notFound" (+ "which": "plan"|"feature", "value": uppercased code)
+      | "invalid" (+ "failures": [{"field", "reasonCode", "offendingValue"}], order
+      [behavior, sendToRedo])}. Stages stop at the first hit: plan, feature, duplicate
+      (plan, behavior, feature), then field validation. Missing sections are NOT errors
+      (a missing CFG_GPLAN is notFound/plan). Caps are not taken.
+    c_notes: >-
+      The C export returns the identical payload. C typed export takes every arg
+      (feature NULL = ALL).
+
+excluded:
+  - rust: thresholds::add_comparison_threshold_by_id
+    reason: Doc-hidden ID-based twin of add_comparison_threshold, public only for the ffi crate (SzConfigTool_addComparisonThreshold).
+  - rust: thresholds::set_comparison_threshold_by_id
+    reason: Doc-hidden ID-based twin of set_comparison_threshold, public only for the ffi crate (SzConfigTool_setComparisonThreshold).
+  - rust: thresholds::delete_comparison_threshold_by_id
+    reason: Doc-hidden ID-based twin of delete_comparison_threshold, public only for the ffi crate (SzConfigTool_deleteComparisonThreshold).

@@ -1,0 +1,10 @@
+# Pinned Rust toolchain (identical to G2 rust-toolchain.toml) for every cargo invocation in this repository (CI,
+# release packaging, local rustup users). Bump deliberately, in its own commit.
+#
+# The MSRV stays declared separately in Cargo.toml ([workspace.package]
+# rust-version = "1.88"); CI checks it with an explicit `cargo +1.88.0 check`.
+# Release targets are added by packaging/install-tools.sh (`rustup target add`).
+[toolchain]
+channel = "1.97.0"
+components = ["rustfmt", "clippy"]
+profile = "minimal"

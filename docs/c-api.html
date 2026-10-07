@@ -125,13 +125,13 @@
     <div class="nav">
         <a href="index.html">← Back to Docs Home</a>
         <a href="https://github.com/brianmacy/sz-rust-sdk-configtool/blob/main/FFI_IMPLEMENTATION.md">Full FFI Details</a>
-        <a href="https://github.com/brianmacy/sz-rust-sdk-configtool/blob/main/include/libSzConfigTool.h">Header File</a>
+        <a href="https://github.com/brianmacy/sz-rust-sdk-configtool/blob/main/ffi/include/libSzConfigTool.h">Header File</a>
     </div>
 
     <div class="container">
         <div class="content">
             <h2>Overview</h2>
-            <p>The <code>libSzConfigTool</code> C shared library provides 121 C-compatible functions for manipulating Senzing configuration JSON documents. All operations are in-memory JSON transformations with proper memory management.</p>
+            <p>The <code>libSzConfigTool</code> C shared library provides 150 C-compatible functions for manipulating Senzing configuration JSON documents. All operations are in-memory JSON transformations with proper memory management.</p>
 
             <div class="note">
                 <strong>⚠️ Important:</strong> All strings returned by this library must be freed using <code>SzConfigTool_free()</code>. Failure to do so will cause memory leaks.
@@ -247,21 +247,27 @@ target_link_libraries(your_app PRIVATE ${SZCONFIGTOOL_LIB})</code></pre>
 
             <h2>Function Categories</h2>
             <ul style="line-height: 2; padding-left: 20px;">
-                <li><strong>Infrastructure:</strong> 4 functions (free, getLastError, etc.)</li>
-                <li><strong>Data Sources:</strong> 5 functions (add, delete, list, get, set)</li>
-                <li><strong>Attributes:</strong> 5 functions (add, delete, list, get, set)</li>
-                <li><strong>Elements:</strong> 5 functions (add, delete, list, get, set)</li>
-                <li><strong>Features:</strong> 3 functions (add, delete, set, list, get)</li>
+                <li><strong>Infrastructure:</strong> 9 functions (free, last-error accessors, versions, invoke)</li>
+                <li><strong>Data Sources:</strong> 5 functions</li>
+                <li><strong>Attributes:</strong> 5 functions</li>
+                <li><strong>Elements:</strong> 7 functions</li>
+                <li><strong>Features:</strong> 6 functions</li>
+                <li><strong>Behavior Overrides:</strong> 4 functions</li>
                 <li><strong>Thresholds:</strong> 9 functions</li>
-                <li><strong>And 85+ more functions...</strong> for config sections, fragments, rules, calls, etc.</li>
+                <li><strong>Functions</strong> (standardize, expression, comparison, distinct): 27 functions</li>
+                <li><strong>Calls</strong> (standardize, expression, comparison, distinct): 23 functions</li>
+                <li><strong>Config sections, rules, fragments, generic plans, system parameters, versioning, settings, export, validation:</strong> 29 functions</li>
             </ul>
 
+            <h2>Return Codes</h2>
+            <p><code>SzConfigTool_invoke</code> returns 0, -1 (NULL or invalid UTF-8 argument) or -2 (failure; library errors always carry a reason code from <code>SzConfigTool_getLastErrorReasonCode()</code>). The typed functions do not share one numbering (-1 to -5); the per-function lists are in the "Return codes" section of <code>libSzConfigTool.h</code>. Treat any non-zero code as failure.</p>
+
             <h2>Complete Documentation</h2>
-            <p>For the complete list of all 121 functions with detailed signatures and examples, see:</p>
+            <p>For the complete list of all 124 functions with their declarations, see:</p>
             <ul style="padding-left: 20px; line-height: 2;">
-                <li><a href="https://github.com/brianmacy/sz-rust-sdk-configtool/blob/main/FFI_IMPLEMENTATION.md">FFI_IMPLEMENTATION.md</a> - Complete implementation details</li>
-                <li><a href="https://github.com/brianmacy/sz-rust-sdk-configtool/blob/main/include/libSzConfigTool.h">libSzConfigTool.h</a> - Full header file</li>
-                <li><a href="https://github.com/brianmacy/sz-rust-sdk-configtool/tree/main/tests/c">tests/c/</a> - C test examples</li>
+                <li><a href="https://github.com/brianmacy/sz-rust-sdk-configtool/blob/main/docs/FFI_GUIDE.md">FFI_GUIDE.md</a> - C FFI guide</li>
+                <li><a href="https://github.com/brianmacy/sz-rust-sdk-configtool/blob/main/ffi/include/libSzConfigTool.h">libSzConfigTool.h</a> - Full header file</li>
+                <li><a href="https://github.com/brianmacy/sz-rust-sdk-configtool/tree/main/ffi/tests/c">ffi/tests/c/</a> - C test examples</li>
             </ul>
         </div>
     </div>

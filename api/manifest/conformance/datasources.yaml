@@ -1,0 +1,131 @@
+# Conformance cases for the `datasources` group. Every case starts from the
+# REAL template config (project.yaml paths.fixture). See schema.md
+# ("Conformance files") for the step/expect semantics.
+group: datasources
+
+cases:
+  - name: add_defaults_then_get
+    steps:
+      - fn: add_data_source
+        args: {code: crm}
+        expect: {kind: config}
+      - fn: get_data_source
+        args: {code: CRM}
+        expect:
+          kind: json
+          result: {DSRC_ID: 1000, DSRC_CODE: CRM, DSRC_DESC: CRM, RETENTION_LEVEL: Remember}
+
+  - name: add_with_retention_and_id
+    steps:
+      - fn: add_data_source
+        args: {code: WATCHLIST, retention_level: forget, id: 1500}
+        expect: {kind: config}
+      - fn: get_data_source
+        args: {code: watchlist}
+        expect:
+          result: {DSRC_ID: 1500, DSRC_CODE: WATCHLIST, RETENTION_LEVEL: Forget}
+
+  - name: add_non_positive_id_auto_allocates
+    steps:
+      - fn: add_data_source
+        args: {code: ZERO_ID, id: 0}
+      - fn: add_data_source
+        args: {code: NEG_ID, id: -5}
+      - fn: list_data_sources
+        expect:
+          contains:
+            - {id: 1000, dataSource: ZERO_ID}
+            - {id: 1001, dataSource: NEG_ID}
+
+  - name: add_duplicate_code_is_already_exists
+    fn: add_data_source
+    args: {code: test}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_taken_id_is_already_exists
+    fn: add_data_source
+    args: {code: NEW_ONE, id: 1}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_bad_retention_is_invalid_input
+    fn: add_data_source
+    args: {code: NEW_ONE, retention_level: Sometimes}
+    expect: {error: INVALID_INPUT}
+
+  - name: list_template
+    fn: list_data_sources
+    expect:
+      kind: json
+      len: 2
+      result:
+        - {id: 1, dataSource: TEST}
+        - {id: 2, dataSource: SEARCH}
+
+  - name: get_is_case_insensitive
+    fn: get_data_source
+    args: {code: search}
+    expect:
+      result: {DSRC_ID: 2, DSRC_CODE: SEARCH, DSRC_DESC: Search, RETENTION_LEVEL: Forget}
+
+  - name: get_missing_is_not_found
+    fn: get_data_source
+    args: {code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: add_then_delete
+    steps:
+      - fn: add_data_source
+        args: {code: TEMP}
+      - fn: delete_data_source
+        args: {code: temp}
+        expect: {kind: config}
+      - fn: list_data_sources
+        expect:
+          len: 2
+          excludes:
+            - {dataSource: TEMP}
+
+  - name: delete_system_source_is_invalid_input
+    fn: delete_data_source
+    args: {code: TEST}
+    expect: {error: INVALID_INPUT}
+
+  - name: delete_missing_is_not_found
+    fn: delete_data_source
+    args: {code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: set_retention_is_written_verbatim
+    steps:
+      - fn: set_data_source
+        args: {code: test, retention_level: forget}
+        expect: {kind: config}
+      - fn: get_data_source
+        args: {code: TEST}
+        expect:
+          result: {RETENTION_LEVEL: forget}
+
+  - name: set_without_updates_leaves_row
+    steps:
+      - fn: set_data_source
+        args: {code: SEARCH}
+      - fn: get_data_source
+        args: {code: SEARCH}
+        expect:
+          result: {RETENTION_LEVEL: Forget}
+
+  - name: set_missing_is_not_found
+    fn: set_data_source
+    args: {code: NOPE, retention_level: Remember}
+    expect: {error: NOT_FOUND}
+
+  - name: invalid_config_json_is_json_parse
+    fn: list_data_sources
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}
+
+  - name: missing_section_is_missing_section
+    fn: add_data_source
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {code: X}
+    expect: {error: MISSING_SECTION}

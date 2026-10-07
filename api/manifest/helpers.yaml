@@ -1,0 +1,143 @@
+# Core helpers. Root module: src/helpers.rs (28 column-0 pub fns, all excluded:
+# internal plumbing, not config operations).
+group: helpers
+
+functions: []
+
+excluded:
+  - rust: helpers::field_update_str
+    reason: >-
+      Internal tri-state marshalling for the C FFI crate (#[doc(hidden)]); not
+      config-first, not Result-returning (fn(&Value, &[&str]) -> FieldUpdate).
+      invoke handles tri-state natively via the wire null convention.
+  - rust: helpers::field_update_i64
+    reason: >-
+      Internal tri-state marshalling for the C FFI crate (#[doc(hidden)]); not
+      config-first, not Result-returning (fn(&Value, &[&str]) -> FieldUpdate).
+      invoke handles tri-state natively via the wire null convention.
+  - rust: helpers::get_next_id_from_array
+    reason: >-
+      Internal id allocator over an already-parsed array/Value; not config-first
+      (takes &[Value] / &Value, not the config string). Every add_* op allocates
+      ids itself and reports the semantics in its manifest entry.
+  - rust: helpers::get_next_id
+    reason: >-
+      Internal id allocator over an already-parsed array/Value; not config-first
+      (takes &[Value] / &Value, not the config string). Every add_* op allocates
+      ids itself and reports the semantics in its manifest entry.
+  - rust: helpers::get_next_id_with_min
+    reason: >-
+      Internal id allocator over an already-parsed array/Value; not config-first
+      (takes &[Value] / &Value, not the config string). Every add_* op allocates
+      ids itself and reports the semantics in its manifest entry.
+  - rust: helpers::get_desired_or_next_id
+    reason: >-
+      Internal id allocator over an already-parsed array/Value; not config-first
+      (takes &[Value] / &Value, not the config string). Every add_* op allocates
+      ids itself and reports the semantics in its manifest entry.
+  - rust: helpers::get_desired_or_next_id_from_section
+    reason: >-
+      Internal id allocator over an already-parsed array/Value; not config-first
+      (takes &[Value] / &Value, not the config string). Every add_* op allocates
+      ids itself and reports the semantics in its manifest entry.
+  - rust: helpers::is_id_taken
+    reason: >-
+      Internal array utility; not config-first and not Result-returning (takes
+      &[Value]).
+  - rust: helpers::find_in_array
+    reason: >-
+      Internal array utility; not config-first and not Result-returning (takes
+      &[Value]).
+  - rust: helpers::find_in_array_mut
+    reason: >-
+      Internal array utility; not config-first and not Result-returning (takes
+      &[Value]).
+  - rust: helpers::add_to_config_array
+    reason: >-
+      Generic raw-section mutator (config-first, Result<String>) that bypasses
+      every per-section validation, normalization and complete-row guarantee;
+      exposing it would let bindings write partial rows the engine rejects
+      (SENZ9117). Use the typed per-section ops.
+  - rust: helpers::delete_from_config_array
+    reason: >-
+      Generic raw-section mutator (config-first, Result<String>) that bypasses
+      every per-section validation, normalization and complete-row guarantee;
+      exposing it would let bindings write partial rows the engine rejects
+      (SENZ9117). Use the typed per-section ops.
+  - rust: helpers::remove_from_config_array
+    reason: >-
+      Generic raw-section mutator (config-first, Result<String>) that bypasses
+      every per-section validation, normalization and complete-row guarantee;
+      exposing it would let bindings write partial rows the engine rejects
+      (SENZ9117). Use the typed per-section ops.
+  - rust: helpers::update_in_config_array
+    reason: >-
+      Generic raw-section mutator (config-first, Result<String>) that bypasses
+      every per-section validation, normalization and complete-row guarantee;
+      exposing it would let bindings write partial rows the engine rejects
+      (SENZ9117). Use the typed per-section ops.
+  - rust: helpers::find_in_config_array
+    reason: >-
+      Generic raw-section reader (case-sensitive exact match, no projection);
+      superseded for bindings by get_config_section and the typed per-section
+      get/list ops.
+  - rust: helpers::list_from_config_array
+    reason: >-
+      Generic raw-section reader (case-sensitive exact match, no projection);
+      superseded for bindings by get_config_section and the typed per-section
+      get/list ops.
+  - rust: helpers::lookup_feature_id
+    reason: >-
+      Internal code -> id lookup. The public API is code-based (CLAUDE.md:
+      codes, not ids); every op resolves codes itself, so bindings never need
+      raw ids.
+  - rust: helpers::lookup_element_id
+    reason: >-
+      Internal code -> id lookup. The public API is code-based (CLAUDE.md:
+      codes, not ids); every op resolves codes itself, so bindings never need
+      raw ids.
+  - rust: helpers::lookup_sfunc_id
+    reason: >-
+      Internal code -> id lookup. The public API is code-based (CLAUDE.md:
+      codes, not ids); every op resolves codes itself, so bindings never need
+      raw ids.
+  - rust: helpers::lookup_efunc_id
+    reason: >-
+      Internal code -> id lookup. The public API is code-based (CLAUDE.md:
+      codes, not ids); every op resolves codes itself, so bindings never need
+      raw ids.
+  - rust: helpers::lookup_cfunc_id
+    reason: >-
+      Internal code -> id lookup. The public API is code-based (CLAUDE.md:
+      codes, not ids); every op resolves codes itself, so bindings never need
+      raw ids.
+  - rust: helpers::lookup_dfunc_id
+    reason: >-
+      Internal code -> id lookup. The public API is code-based (CLAUDE.md:
+      codes, not ids); every op resolves codes itself, so bindings never need
+      raw ids.
+  - rust: helpers::lookup_gplan_id
+    reason: >-
+      Internal code -> id lookup. The public API is code-based (CLAUDE.md:
+      codes, not ids); every op resolves codes itself, so bindings never need
+      raw ids.
+  - rust: helpers::lookup_gplan_code
+    reason: >-
+      Internal id -> code lookup used by the C FFI crate (#[doc(hidden)]); the
+      public API is code-based.
+  - rust: helpers::resolve_cfcall_id_for_feature
+    reason: >-
+      Internal by-feature call-id resolver over an already-parsed &Value (not
+      config-first); used by the call/function ops, which take feature codes.
+  - rust: helpers::resolve_dfcall_id_for_feature
+    reason: >-
+      Internal by-feature call-id resolver over an already-parsed &Value (not
+      config-first); used by the call/function ops, which take feature codes.
+  - rust: helpers::resolve_sfcall_id_for_feature
+    reason: >-
+      Internal by-feature call-id resolver over an already-parsed &Value (not
+      config-first); used by the call/function ops, which take feature codes.
+  - rust: helpers::resolve_efcall_id_for_feature
+    reason: >-
+      Internal by-feature call-id resolver over an already-parsed &Value (not
+      config-first); used by the call/function ops, which take feature codes.

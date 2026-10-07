@@ -1,0 +1,29 @@
+[package]
+name = "sz-configtool-ffi"
+description = "C ABI (libSzConfigTool) for sz_configtool_lib"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+# Senzing-style output names: libSzConfigTool.{so,dylib,a}, SzConfigTool.dll.
+name = "SzConfigTool"
+# MSVC: rustc names the staticlib SzConfigTool.lib and the DLL import library
+# SzConfigTool.dll.lib; release packaging (packaging/build-native.sh) ships them
+# as SzConfigTool_static.lib and SzConfigTool.lib respectively, so consumers
+# linking SzConfigTool.lib get the DLL. SONAME / install_name: build.rs.
+crate-type = ["cdylib", "staticlib"]
+path = "src/lib.rs"
+
+[dependencies]
+# The C library version (SzConfigTool_getLibraryVersion) is this
+# crate's CARGO_PKG_VERSION, which comes from [workspace.package] and so always
+# equals the root library's version.
+sz_configtool_lib = { path = ".." }
+sz-configtool-api = { path = "../api" }
+serde = "1.0"
+serde_json = { version = "1.0", features = ["preserve_order"] }

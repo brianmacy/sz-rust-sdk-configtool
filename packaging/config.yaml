@@ -1,0 +1,112 @@
+# Release packaging configuration: pinned tools and the target matrix.
+# Read by packaging/lib/cfg.py (block-style maps of scalars only: no lists,
+# no flow style, no multi-line strings). The Rust toolchain is pinned in
+# rust-toolchain.toml; the release version comes from the Cargo workspace.
+
+tools:
+  # Every pin matches G2 (~/dev/v4/G2) where G2 pins the tool; see the
+  # "Toolchain alignment" table in packaging/README.md for G2 file:line.
+  # Hosts are <arch>-<os> as printed by packaging/lib/common.sh host_arch/host_os.
+  zig:
+    version: "0.16.0"
+    # sha256 of zig-<host>-<version>.tar.xz (https://ziglang.org/download/index.json;
+    # linux values identical to G2 build_anylinux_{amd,arm}.yml ZIG_SHA256).
+    sha256:
+      x86_64-linux: "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00"
+      aarch64-linux: "ea4b09bfb22ec6f6c6ceac57ab63efb6b46e17ab08d21f69f3a48b38e1534f17"
+      aarch64-macos: "b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489"
+  # Installed with `cargo install --locked` (crates.io checksums are verified by cargo).
+  cargo_zigbuild: "0.22.3"
+  cargo_cyclonedx: "0.5.9"
+  # Coverage only (install-tools.sh component `coverage`, packaging/coverage.sh); G2 pins none.
+  cargo_llvm_cov: "0.9.1"
+  # Installed with `pip install --require-hashes -r packaging/requirements-build.txt`.
+  maturin: "1.9.0"
+  python: "3.12"
+  dotnet: "8.0.x"
+  jdk:
+    # Eclipse Temurin, the exact build G2 pins on macOS (build_macos.yml JDK_VERSION);
+    # sha256 from https://api.adoptium.net (aarch64-macos identical to G2's JDK_SHA256).
+    version: "21.0.12.1+1"
+    url:
+      x86_64-linux: "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jdk_x64_linux_hotspot_21.0.12.1_1.tar.gz"
+      aarch64-linux: "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jdk_aarch64_linux_hotspot_21.0.12.1_1.tar.gz"
+      aarch64-macos: "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.12.1_1.tar.gz"
+      x86_64-windows: "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jdk_x64_windows_hotspot_21.0.12.1_1.zip"
+    sha256:
+      x86_64-linux: "ce79869e1307ed8ee1e2baa86a412b1eb5b75d10a01006d788a6f968bcfaee94"
+      aarch64-linux: "23e37e026f12f3e706f18938ff611db3032d075b09d0879a25d06718c773e223"
+      aarch64-macos: "3623232f33a9c3baadf304480b2535f9a3cba8a58d42ecbb438ba267315d9998"
+      x86_64-windows: "f9d6e191ab098c0d416e7d588a24420a8621cd2f4720dab2459b8b7b2d2d8b4e"
+  maven:
+    # G2 build_anylinux_amd.yml MVN_VERSION / MVN_SHA512 (bin.tar.gz); zip sha512 from archive.apache.org.
+    version: "3.9.16"
+    sha512:
+      tar_gz: "831a8591fe20c8243b1dbe7d71e3244f31d1665b0804b2e825e38cbbe5ce0cafb8338851f90780735568773e0a6cd07bbec107cda0b896b008b861075358b6f6"
+      zip: "ed41650d42485cfc243fad22158caf9cbb5dc408ce7a09ddb94dd42a019de929ca43065bfa450612cf12bf78b5cafa3884b96c090de326ff590448c933454af3"
+  node:
+    # G2 pins no Node; lowest version the binding tests support (type stripping, bindings/node/README.md).
+    version: "22.18.0"
+    # https://nodejs.org/dist/v22.18.0/SHASUMS256.txt
+    sha256:
+      x86_64-linux: "c1bfeecf1d7404fa74728f9db72e697decbd8119ccc6f5a294d795756dfcfca7"
+      aarch64-linux: "04fca1b9afecf375f26b41d65d52aa1703a621abea5a8948c7d1e351e85edade"
+      aarch64-macos: "6616f388e127c858989fc7fa92879cdb20d2a5d446adbfdca6ee4feb385bfa8a"
+      x86_64-windows: "c95d8a7e1c99e669cc08c9f1176e068c1f50847c37908fcb8c35b62482366511"
+
+policy:
+  # Highest GLIBC_x.y symbol version any shipped Linux ELF may reference.
+  # Raising it is a breaking change for consumers (AL2023 = 2.34).
+  glibc_ceiling: "2.34"
+  macos_deployment_target: "15.0"
+  # Path prefix that --remap-path-prefix maps the source tree to.
+  remap_source_prefix: "/sz-configtool"
+
+# One entry per release leg. `build_target` is what cargo is invoked with
+# (cargo-zigbuild accepts the .<glibc> suffix); `rust_target` is the bare
+# triple (target/<triple>/ output directory, rustup target).
+targets:
+  linux-x64:
+    os: linux
+    arch: x64
+    builder: zigbuild
+    rust_target: x86_64-unknown-linux-gnu
+    build_target: x86_64-unknown-linux-gnu.2.34
+    archive: tar.gz
+    python_compat: manylinux_2_34
+    java_platform: linux-x86_64
+    dotnet_rid: linux-x64
+    napi_tag: linux-x64-gnu
+  linux-arm64:
+    os: linux
+    arch: arm64
+    builder: zigbuild
+    rust_target: aarch64-unknown-linux-gnu
+    build_target: aarch64-unknown-linux-gnu.2.34
+    archive: tar.gz
+    python_compat: manylinux_2_34
+    java_platform: linux-aarch64
+    dotnet_rid: linux-arm64
+    napi_tag: linux-arm64-gnu
+  macos-arm64:
+    os: macos
+    arch: arm64
+    builder: cargo
+    rust_target: aarch64-apple-darwin
+    build_target: aarch64-apple-darwin
+    archive: tar.gz
+    python_compat: ""
+    java_platform: macos-aarch64
+    dotnet_rid: osx-arm64
+    napi_tag: darwin-arm64
+  windows-x64:
+    os: windows
+    arch: x64
+    builder: cargo
+    rust_target: x86_64-pc-windows-msvc
+    build_target: x86_64-pc-windows-msvc
+    archive: zip
+    python_compat: ""
+    java_platform: windows-x86_64
+    dotnet_rid: win-x64
+    napi_tag: win32-x64-msvc

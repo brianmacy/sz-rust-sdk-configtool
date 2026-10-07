@@ -1,0 +1,22 @@
+[package]
+name = "sz-configtool-jni"
+description = "JNI seam (one native method) over sz-configtool-api for the Java binding"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "szconfigtool_jni"
+crate-type = ["cdylib"]
+
+[dependencies]
+# The dynamic seam only; never the C ABI crate (no SzConfigTool_* exports).
+sz-configtool-api = { path = "../../api" }
+jni = "0.22"
+
+[dev-dependencies]
+serde_json = { version = "1.0", features = ["preserve_order"] }

@@ -1,0 +1,18 @@
+[package]
+name = "sz-configtool-codegen"
+description = "Generates the binding dispatcher and JSON manifests from api/manifest/*.yaml"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", features = ["preserve_order"] }
+# YAML parsing lives ONLY in this dev tool. serde_yaml_ng, not the deprecated
+# serde_yaml or the advisory-flagged serde_yml.
+serde_yaml_ng = "0.10"
+anyhow = "1.0"

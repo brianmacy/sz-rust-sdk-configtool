@@ -52,27 +52,31 @@ pub fn set_setting(config_json: &str, name: &str, value: impl Into<Value>) -> Re
 
     // Create SETTINGS as an object if absent (or if a non-object placeholder is
     // present, replace it with a fresh object).
-    let settings_is_object = g2_config
-        .get("SETTINGS")
-        .map(|v| v.is_object())
-        .unwrap_or(false);
-    if !settings_is_object {
-        g2_config.insert("SETTINGS".to_string(), json!({}));
+    let settings = g2_config.entry("SETTINGS").or_insert_with(|| json!({}));
+    if !settings.is_object() {
+        *settings = json!({});
     }
+    // An object now, so indexing inserts the key.
+    settings[name.to_uppercase()] = value;
 
-    let settings = g2_config
-        .get_mut("SETTINGS")
-        .and_then(|v| v.as_object_mut())
-        .expect("SETTINGS object was just ensured");
-
-    settings.insert(name.to_uppercase(), value);
-
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A non-object SETTINGS placeholder (e.g. null or a string) is replaced
+    /// by an object rather than hitting a panic path.
+    #[test]
+    fn test_set_setting_replaces_non_object_placeholder() {
+        for placeholder in ["null", "\"oops\"", "[1, 2]"] {
+            let config = format!(r#"{{"G2_CONFIG": {{"SETTINGS": {placeholder}}}}}"#);
+            let modified = set_setting(&config, "foo", 1).unwrap();
+            let value: Value = serde_json::from_str(&modified).unwrap();
+            assert_eq!(value["G2_CONFIG"]["SETTINGS"], json!({"FOO": 1}));
+        }
+    }
 
     #[test]
     fn test_set_setting_creates_section() {

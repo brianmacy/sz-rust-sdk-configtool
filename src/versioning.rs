@@ -117,7 +117,7 @@ pub fn update_compatibility_version(config_json: &str, new_version: &str) -> Res
         }
     }
 
-    Ok(serde_json::to_string(&config_data)?)
+    Ok(config_data.to_string())
 }
 
 /// Verify the compatibility version matches expected value

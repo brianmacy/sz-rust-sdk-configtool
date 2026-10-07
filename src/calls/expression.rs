@@ -70,29 +70,6 @@ impl ExpressionCallElementParams {
     }
 }
 
-/// Parameters for setting (updating) an expression call
-#[derive(Debug, Clone, Default)]
-pub struct SetExpressionCallParams {
-    pub efcall_id: i64,
-    pub exec_order: Option<i64>,
-}
-
-impl TryFrom<&Value> for SetExpressionCallParams {
-    type Error = SzConfigError;
-
-    fn try_from(json: &Value) -> Result<Self> {
-        let efcall_id = json
-            .get("efcallId")
-            .and_then(|v| v.as_i64())
-            .ok_or_else(|| SzConfigError::MissingField("efcallId".to_string()))?;
-
-        Ok(Self {
-            efcall_id,
-            exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
-        })
-    }
-}
-
 /// Add a new expression call with element list
 ///
 /// Creates a new expression call linking a function to a feature or element
@@ -175,20 +152,13 @@ pub fn add_expression_call(
         // EXEC_ORDER is 1-based over the element list.
         let bom_exec_order = idx as i64 + 1;
 
-        // Keep feature name for error messages (clone before consuming)
-        let _bom_feature_name_for_errors = feature_opt.clone();
-
-        // Determine BOM FTYPE_ID
-        let bom_ftype_id =
-            if let Some(bom_feature) = feature_opt.filter(|f| !f.eq_ignore_ascii_case("PARENT")) {
-                if bom_feature.eq_ignore_ascii_case("parent") {
-                    0 // Special value for parent feature link
-                } else {
-                    lookup_feature_id(config, &bom_feature)?
-                }
-            } else {
-                -1
-            };
+        // Determine BOM FTYPE_ID (G2 EFBomConfig.cpp: 0 = PARENT_FEATURE_LINKED_FTYPE,
+        // -1 = WILDCARDED_FTYPE). "PARENT" (any case) is the parent feature link.
+        let bom_ftype_id = match feature_opt.as_deref() {
+            Some(f) if f.eq_ignore_ascii_case("PARENT") => 0,
+            Some(f) => lookup_feature_id(config, f)?,
+            None => -1,
+        };
 
         // Lookup element ID (always global lookup - feature field is just metadata for EFBOM)
         let bom_felem_id = lookup_element_id(config, &element_code)?;
@@ -201,7 +171,7 @@ pub fn add_expression_call(
             exec_order: bom_exec_order,
             felem_req: required,
         };
-        efbom_records.push(serde_json::to_value(&bom_row)?);
+        efbom_records.push(crate::helpers::row_value(&bom_row));
     }
 
     // Create new CFG_EFCALL record via EfcallRow so every key is always present.
@@ -214,7 +184,7 @@ pub fn add_expression_call(
         efeat_ftype_id,
         is_virtual: params.is_virtual.to_string(),
     };
-    let new_record = serde_json::to_value(&efcall_row)?;
+    let new_record = crate::helpers::row_value(&efcall_row);
 
     // Add to config
     if let Some(efcall_array) = config_data["G2_CONFIG"]["CFG_EFCALL"].as_array_mut() {
@@ -229,8 +199,7 @@ pub fn add_expression_call(
         return Err(SzConfigError::MissingSection("CFG_EFBOM".to_string()));
     }
 
-    let modified_config =
-        serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let modified_config = config_data.to_string();
 
     Ok((modified_config, new_record))
 }
@@ -268,16 +237,15 @@ pub fn delete_expression_call(config: &str, efcall_id: i64) -> Result<String> {
     }
 
     // Delete the expression call
-    if let Some(efcall_array) = config_data["G2_CONFIG"]["CFG_EFCALL"].as_array_mut() {
-        efcall_array.retain(|record| record["EFCALL_ID"].as_i64() != Some(efcall_id));
-    }
+    let efcall_array = crate::helpers::verified_section_mut(&mut config_data, "CFG_EFCALL");
+    efcall_array.retain(|record| record["EFCALL_ID"].as_i64() != Some(efcall_id));
 
     // Delete associated EFBOM records
     if let Some(efbom_array) = config_data["G2_CONFIG"]["CFG_EFBOM"].as_array_mut() {
         efbom_array.retain(|record| record["EFCALL_ID"].as_i64() != Some(efcall_id));
     }
 
-    serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config_data.to_string())
 }
 
 /// Get a single expression call, addressed by id or by feature code.
@@ -467,19 +435,6 @@ pub fn list_expression_calls(config: &str) -> Result<Vec<Value>> {
     Ok(items)
 }
 
-/// Update an expression call (stub - not implemented in Python)
-///
-/// # Arguments
-/// * `config` - Configuration JSON string
-/// * `params` - Expression call parameters (efcall_id required, others optional to update)
-///
-/// # Returns
-/// Modified configuration JSON string
-pub fn set_expression_call(config: &str, _params: SetExpressionCallParams) -> Result<String> {
-    // This is a stub - the Python version doesn't implement this
-    Ok(config.to_string())
-}
-
 /// Add an expression call element (EBOM record)
 ///
 /// Creates a new expression bill of materials entry.
@@ -554,7 +509,7 @@ pub fn add_expression_call_element(
         exec_order,
         felem_req: params.felem_req,
     };
-    let new_record = serde_json::to_value(&row)?;
+    let new_record = crate::helpers::row_value(&row);
 
     // Add to CFG_EFBOM
     if let Some(ebom_array) = config_data["G2_CONFIG"]["CFG_EFBOM"].as_array_mut() {
@@ -563,8 +518,7 @@ pub fn add_expression_call_element(
         return Err(SzConfigError::MissingSection("CFG_EFBOM".to_string()));
     }
 
-    let modified_config =
-        serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let modified_config = config_data.to_string();
 
     Ok((modified_config, new_record))
 }
@@ -653,36 +607,19 @@ pub fn delete_expression_call_element(
         "Expression",
     )?;
 
-    if let Some(ebom_array) = config_data["G2_CONFIG"]["CFG_EFBOM"].as_array_mut() {
-        // Mirror the derive predicate: when a feature disambiguated the target
-        // row, constrain the retain by FTYPE too. Otherwise a sibling row sharing
-        // (call, felem, exec) under another feature would be over-deleted.
-        ebom_array.retain(|item| {
-            !(item.get("EFCALL_ID").and_then(|v| v.as_i64()) == Some(efcall_id)
-                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
-                && element_ftype_id
-                    .is_none_or(|ft| item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ft)))
-        });
-    }
+    let ebom_array = crate::helpers::verified_section_mut(&mut config_data, "CFG_EFBOM");
+    // Mirror the derive predicate: when a feature disambiguated the target
+    // row, constrain the retain by FTYPE too. Otherwise a sibling row sharing
+    // (call, felem, exec) under another feature would be over-deleted.
+    ebom_array.retain(|item| {
+        !(item.get("EFCALL_ID").and_then(|v| v.as_i64()) == Some(efcall_id)
+            && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
+            && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
+            && element_ftype_id
+                .is_none_or(|ft| item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ft)))
+    });
 
-    serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))
-}
-
-/// Update an expression call element (stub - not typically used)
-///
-/// # Arguments
-/// * `config` - Configuration JSON string
-/// * `params` - Expression call element parameters (efcall_id, ftype_id, felem_id, exec_order, updates)
-///
-/// # Returns
-/// Modified configuration JSON string
-pub fn set_expression_call_element(
-    config: &str,
-    _params: ExpressionCallElementParams,
-) -> Result<String> {
-    // This is a stub - not commonly used
-    Ok(config.to_string())
+    Ok(config_data.to_string())
 }
 
 #[cfg(test)]
@@ -755,6 +692,66 @@ mod tests {
         assert_eq!(efbom["FELEM_ID"], json!(11));
         assert_eq!(efbom["FELEM_REQ"], json!("No"));
         assert_eq!(efbom["EXEC_ORDER"], json!(1));
+    }
+
+    /// BOM feature "PARENT" (any case) is the G2 parent feature link, stored as
+    /// FTYPE_ID 0 (EFBomConfig::PARENT_FEATURE_LINKED_FTYPE); an absent feature
+    /// stays FTYPE_ID -1 (WILDCARDED_FTYPE); a real code stores its FTYPE_ID.
+    #[test]
+    fn test_add_expression_call_bom_parent_feature_link() {
+        let config = r#"{"G2_CONFIG": {
+            "CFG_EFCALL": [],
+            "CFG_EFBOM": [],
+            "CFG_FTYPE": [{"FTYPE_ID": 5, "FTYPE_CODE": "NAME"}],
+            "CFG_EFUNC": [{"EFUNC_ID": 7, "EFUNC_CODE": "EXPRESS_BOM"}],
+            "CFG_FELEM": [
+                {"FELEM_ID": 11, "FELEM_CODE": "FIRST_NAME"},
+                {"FELEM_ID": 12, "FELEM_CODE": "LAST_NAME"},
+                {"FELEM_ID": 13, "FELEM_CODE": "MIDDLE_NAME"},
+                {"FELEM_ID": 14, "FELEM_CODE": "FULL_NAME"},
+                {"FELEM_ID": 15, "FELEM_CODE": "SUR_NAME"}
+            ]
+        }}"#;
+        let element_list = vec![
+            (
+                "FIRST_NAME".to_string(),
+                "Yes".to_string(),
+                Some("PARENT".to_string()),
+            ),
+            (
+                "LAST_NAME".to_string(),
+                "Yes".to_string(),
+                Some("parent".to_string()),
+            ),
+            (
+                "MIDDLE_NAME".to_string(),
+                "No".to_string(),
+                Some("PaReNt".to_string()),
+            ),
+            ("FULL_NAME".to_string(), "No".to_string(), None),
+            (
+                "SUR_NAME".to_string(),
+                "No".to_string(),
+                Some("name".to_string()),
+            ),
+        ];
+        let params = AddExpressionCallParams {
+            ftype_code: Some("NAME"),
+            ..AddExpressionCallParams::new("EXPRESS_BOM", element_list)
+        };
+
+        let (modified, _) = add_expression_call(config, params).unwrap();
+        let value: Value = serde_json::from_str(&modified).unwrap();
+        let ftypes: Vec<Value> = value["G2_CONFIG"]["CFG_EFBOM"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["FTYPE_ID"].clone())
+            .collect();
+        assert_eq!(
+            ftypes,
+            vec![json!(0), json!(0), json!(0), json!(-1), json!(5)]
+        );
     }
 
     #[test]

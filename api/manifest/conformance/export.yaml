@@ -1,0 +1,35 @@
+# Conformance cases for the `export` group. Every case starts from the REAL
+# template config (project.yaml paths.fixture).
+group: export
+
+cases:
+  - name: render_sorts_keys_recursively_at_indent_2
+    fn: render_config
+    config_literal: '{"b":1,"a":{"y":2,"x":[3,{"d":1,"c":2}]}}'
+    args: {indent: 2}
+    expect:
+      kind: json
+      result: "{\n  \"a\": {\n    \"x\": [\n      3,\n      {\n        \"c\": 2,\n        \"d\": 1\n      }\n    ],\n    \"y\": 2\n  },\n  \"b\": 1\n}"
+
+  - name: render_indent_0
+    fn: render_config
+    config_literal: '{"b":1,"a":2}'
+    args: {indent: 0}
+    expect:
+      result: "{\n\"a\": 2,\n\"b\": 1\n}"
+
+  - name: render_template_round_trips_as_config
+    fn: render_config
+    args: {indent: 4}
+    expect: {kind: json}
+
+  - name: render_negative_indent_is_invalid_input
+    fn: render_config
+    args: {indent: -1}
+    expect: {error: INVALID_INPUT}
+
+  - name: render_invalid_json_is_json_parse
+    fn: render_config
+    config_literal: "not json"
+    args: {indent: 2}
+    expect: {error: JSON_PARSE}

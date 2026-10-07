@@ -1,0 +1,24 @@
+# Canonical config rendering. Root module: src/export.rs (1 pub fn, here).
+group: export
+
+functions:
+  - name: render_config
+    doc: Render a config document in canonical export form (recursively key-sorted, pretty-printed).
+    rust: export::render_config
+    c_symbol: SzConfigTool_renderConfig
+    args:
+      - name: indent
+        type: int
+        rust_convert: req_usize
+        semantics: Spaces per indentation level, applied verbatim (2 = CLI on-disk form, 4 = Python parity; 0 allowed). Negative is INVALID_INPUT (raised by the req_usize converter, before the library is called).
+    returns: json
+    errors: [JSON_PARSE, INVALID_INPUT]
+    notes: >-
+      Result is a JSON STRING holding the rendered text (not the working config
+      envelope): every object's keys sorted recursively (Python
+      json.dumps(sort_keys=True)), array order kept, no trailing newline. The text is
+      itself a valid config and may be passed back in. Any JSON document is accepted (no
+      G2_CONFIG check).
+    c_notes: >-
+      C typed export deltas: a negative indent is coerced to 0 instead of rejected, and
+      the rendered text is returned as the bare response.

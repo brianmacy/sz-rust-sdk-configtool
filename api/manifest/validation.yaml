@@ -1,0 +1,19 @@
+# Structural config validation. Root module: src/validation.rs (1 pub fn, here).
+group: validation
+
+functions:
+  - name: validate_config
+    doc: Check that a document has the top-level shape of a config (structure only).
+    rust: validation::validate_config
+    c_symbol: SzConfigTool_validateConfig
+    args: []
+    returns: unit
+    errors: [JSON_PARSE, MISSING_SECTION, INVALID_STRUCTURE]
+    notes: >-
+      Checks, in order: valid JSON (JSON_PARSE); a G2_CONFIG key (MISSING_SECTION) that
+      is an object (INVALID_STRUCTURE); every recognised CFG_* section
+      (validation::EXPECTED_SECTIONS, 27 names) that is PRESENT is an array
+      (INVALID_STRUCTURE). Absent sections, other keys and cross-references are not
+      checked.
+    c_notes: >-
+      C typed export returns the text "OK" on success.

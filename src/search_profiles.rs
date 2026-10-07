@@ -204,10 +204,12 @@ pub fn add_search_profile(config_json: &str, params: AddSearchProfileParams) -> 
     }
 
     // --- Mutation phase: create the section if absent, then push the row. ---
+    // resolve_gplan_id found the plan in G2_CONFIG.CFG_GPLAN, so G2_CONFIG is
+    // an object.
     let g2 = config
         .get_mut("G2_CONFIG")
         .and_then(|v| v.as_object_mut())
-        .ok_or_else(|| SzConfigError::MissingSection("G2_CONFIG".to_string()))?;
+        .expect("resolve_gplan_id proved G2_CONFIG is an object");
     let sprofiles = g2
         .entry("CFG_SPROFILE")
         .or_insert_with(|| Value::Array(Vec::new()))
@@ -219,7 +221,7 @@ pub fn add_search_profile(config_json: &str, params: AddSearchProfileParams) -> 
     // Shipped profiles use low ids (INGEST=1, SEARCH=2); user profiles continue
     // the sequence (seed 1 -> next is max+1), so the first added profile on the
     // stock template gets id 3.
-    let next_id = crate::helpers::get_desired_or_next_id(sprofiles, "SPROFILE_ID", None, 1)?;
+    let next_id = crate::helpers::next_id(sprofiles, "SPROFILE_ID", 1);
 
     let row = SprofileRow {
         sprofile_id: next_id,
@@ -229,9 +231,9 @@ pub fn add_search_profile(config_json: &str, params: AddSearchProfileParams) -> 
         default_used_for_cand: candidates,
         ftype_overrides,
     };
-    sprofiles.push(serde_json::to_value(&row)?);
+    sprofiles.push(crate::helpers::row_value(&row));
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 /// Get a single search profile by code (case-insensitive).
@@ -384,15 +386,11 @@ pub fn delete_search_profile(config_json: &str, search_value: &str) -> Result<St
         )));
     }
 
-    // Remove the row by its (unique) id.
-    if let Some(arr) = config
-        .pointer_mut("/G2_CONFIG/CFG_SPROFILE")
-        .and_then(|v| v.as_array_mut())
-    {
-        arr.retain(|r| r.get("SPROFILE_ID").and_then(|v| v.as_i64()) != Some(id));
-    }
+    // Remove the row by its (unique) id (it was matched in CFG_SPROFILE above).
+    crate::helpers::verified_section_mut(&mut config, "CFG_SPROFILE")
+        .retain(|r| r.get("SPROFILE_ID").and_then(|v| v.as_i64()) != Some(id));
 
-    serde_json::to_string(&config).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config.to_string())
 }
 
 // ============================================================================
@@ -560,10 +558,13 @@ fn parse_overrides(raw: &str) -> Vec<(i64, char)> {
     // malformed value is dropped by the length-guarded `get`s.
     tokens
         .chunks(2)
-        .filter_map(|pair| {
-            let id = pair.first()?.parse::<i64>().ok()?;
-            let yn = pair.get(1)?.chars().next()?.to_ascii_uppercase();
-            Some((id, yn))
+        .filter_map(|pair| match pair {
+            // Tokens are non-empty (filtered above), so a flag has a first char.
+            [id, flag] => id
+                .parse::<i64>()
+                .ok()
+                .and_then(|id| flag.chars().next().map(|yn| (id, yn.to_ascii_uppercase()))),
+            _ => None,
         })
         .collect()
 }

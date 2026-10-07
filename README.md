@@ -3,17 +3,21 @@
 [![CI](https://github.com/brianmacy/sz-rust-sdk-configtool/actions/workflows/ci.yml/badge.svg)](https://github.com/brianmacy/sz-rust-sdk-configtool/actions/workflows/ci.yml)
 [![Security Audit](https://github.com/brianmacy/sz-rust-sdk-configtool/actions/workflows/security.yml/badge.svg)](https://github.com/brianmacy/sz-rust-sdk-configtool/actions/workflows/security.yml)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Rust Version](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust Version](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org)
 
 Pure Rust library for manipulating Senzing configuration JSON documents.
 
 ## Overview
 
-`sz_configtool_lib` provides 150 functions across 31 modules for programmatic manipulation of Senzing configuration documents (g2config.json). The library contains only pure business logic with no display formatting, making it ideal for automation scripts, migration tools, and external integrations.
+`sz_configtool_lib` provides 169 public functions across 31 modules (126 configuration functions in the binding manifest) for programmatic manipulation of Senzing configuration documents (g2config.json). The library contains only pure business logic with no display formatting, making it ideal for automation scripts, migration tools, and external integrations.
 
 ### ⚠️ Important Note on Usage
 
-**This is an unofficial SDK.** Outside of basic operations like adding data sources, Senzing does not publicly document the meaning and proper usage of most configuration functions and parameters without specific education and guidance. This library enables you to programmatically accomplish configuration tasks once you've received proper guidance on their recommended use for your particular situation.
+> **Unofficial.** This is an unofficial library: Senzing does not publicly
+> document most configuration functions and parameters. Use it only with
+> Senzing-provided guidance on what to change and when.
+
+Outside of basic operations like adding data sources, the meaning and proper usage of most configuration functions and parameters require specific education and guidance from Senzing. This library enables you to programmatically accomplish configuration tasks once you've received proper guidance on their recommended use for your particular situation.
 
 **Recommendation:** Work with Senzing support or documentation to understand:
 
@@ -76,13 +80,62 @@ and the whole table for feature comparisons. Comparison thresholds additionally
 per-feature overrides stay on the same scoring tier as the base row. See the
 `calls` module docs for the full table.
 
+## Pre-built packages
+
+Binaries for the C ABI and every language binding are attached to each
+[GitHub Release](https://github.com/brianmacy/sz-rust-sdk-configtool/releases)
+— and only there (nothing is published to crates.io, PyPI, Maven Central,
+NuGet or npm). Full asset list and contents:
+[`packaging/README.md`](packaging/README.md).
+
+**Supported platforms** (pre-built binaries):
+
+| Platform | Requirement |
+|---|---|
+| Linux x86_64 / arm64 (`linux-x64`, `linux-arm64`) | glibc >= 2.34: RHEL 9+, Amazon Linux 2023, Ubuntu 22.04+, Debian 12+ |
+| macOS arm64 (`macos-arm64`) | macOS 15+ |
+| Windows x64 (`windows-x64`) | MSVC build, static VC++ runtime (no VC++ Redistributable needed) |
+
+RHEL 8 (glibc 2.28) is **not** supported by these binaries (the floor matches
+Senzing's own anylinux builds). RHEL 8 users need to build from source with
+the Rust library (`cargo build -p sz-configtool-ffi --release` on the target
+system, or depend on `sz_configtool_lib` directly).
+
+| Language | Asset (`<v>` = version, `<os>-<arch>` = platform) |
+|---|---|
+| C (header + shared/static library) | `sz-configtool-<v>-<os>-<arch>.tar.gz` (`.zip` on Windows) |
+| C++ (header-only + CMake package) | `sz-configtool-cpp-<v>-<os>-<arch>.tar.gz` / `.zip` |
+| Python | `sz_configtool-<v>-cp310-abi3-<platform>.whl` (`pip install` it; PEP 440 version, e.g. `4.4.0.post1` for `4.4.0-1`) |
+| Java | `sz-configtool-<v>.jar` (natives for all platforms inside) |
+| .NET | `Sz.ConfigTool.<v>.nupkg` (natives for all platforms inside) |
+| Node.js | `sz-configtool-node-<v>-<os>-<arch>.tgz` (`npm install` it); tRPC router `sz-configtool-trpc-<v>.tgz` |
+| SBOMs (CycloneDX) | `sz-configtool[-jni\|-node\|-python]-<v>-<os>-<arch>.cdx.json` |
+
+Verify a download against the release's `SHA256SUMS` and its GitHub build
+provenance attestation:
+
+```bash
+sha256sum -c --ignore-missing SHA256SUMS            # macOS: shasum -a 256 -c --ignore-missing SHA256SUMS
+gh attestation verify sz-configtool-<v>-linux-x64.tar.gz --repo brianmacy/sz-rust-sdk-configtool
+# offline, with the bundle attached to the release:
+gh attestation verify sz-configtool-<v>-linux-x64.tar.gz --repo brianmacy/sz-rust-sdk-configtool \
+  --bundle sz-configtool-<v>.intoto.jsonl
+```
+
+The binaries are **not code-signed** (no Authenticode on Windows, no macOS
+codesign/notarization); verify them as above. On macOS, a file downloaded with
+a browser carries the quarantine attribute and Gatekeeper may refuse to load
+the library: remove it after verifying, e.g.
+`xattr -d com.apple.quarantine libSzConfigTool.dylib` (or `xattr -dr
+com.apple.quarantine <extracted-dir>`).
+
 ## Installation
 
 Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sz_configtool_lib = { git = "https://github.com/brianmacy/sz-rust-sdk-configtool", tag = "v0.1.0" }
+sz_configtool_lib = { git = "https://github.com/brianmacy/sz-rust-sdk-configtool", tag = "v4.4.0-1" }
 ```
 
 Or from a specific commit:
@@ -92,12 +145,8 @@ Or from a specific commit:
 sz_configtool_lib = { git = "https://github.com/brianmacy/sz-rust-sdk-configtool", rev = "abc123" }
 ```
 
-Once published to crates.io:
-
-```toml
-[dependencies]
-sz_configtool_lib = "0.1.0"
-```
+The crate is not published to crates.io; use a git dependency with a release
+tag (above). See [Versioning](#versioning) for what the version means.
 
 ## Quick Start
 
@@ -174,58 +223,54 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Module Organization
 
+Counts are public free functions (`pub fn`) per module; the crate has
+169 in 31 public modules (23 top-level, 4 under `calls`, 4 under
+`functions`). The binding manifest (`api/manifest/`) covers the configuration
+functions among them: 126 functions in 24 groups.
+
 ### Core Infrastructure
 
-- **`error`** - Custom error types (`SzConfigError`)
-- **`helpers`** - Shared utilities (ID generation, array operations, lookups)
+- **`error`** - Error types (`SzConfigError`, `SzErrorKind`, validation failures)
+- **`helpers`** (28) - Shared utilities (ID generation, array operations, lookups)
+- **`filter`** (4), **`behavior_domain`** (3) - List filtering and behavior-code helpers
+- **`command_processor`** - Replays `sz_configtool` command scripts (`CommandProcessor` methods)
 
-### Core Entities (91 functions)
+### Core Entities
 
-#### Data Management
+- **`datasources`** (5) - Data sources (CFG_DSRC)
+- **`attributes`** (5) - Attributes (CFG_ATTR)
+- **`features`** (16) - Features (CFG_FTYPE, CFG_FBOM) with elements, comparisons, distinct calls
+- **`elements`** (10) - Elements (CFG_FELEM)
+- **`behavior_overrides`** (5) - Per-usage-type behavior overrides (CFG_FBOVR)
 
-- **`datasources`** (7 functions) - Add, delete, get, list, set data sources (CFG_DSRC)
-- **`attributes`** (8 functions) - Attribute management (CFG_ATTR)
+### Configuration
 
-#### Feature Management
+- **`thresholds`** (12) - Comparison and generic thresholds (CFG_CFRTN, CFG_GENERIC_THRESHOLD)
+- **`rules`** (5) - Entity resolution rules (CFG_ERRULE)
+- **`fragments`** (5) - Rule fragments (CFG_ERFRAG)
+- **`generic_plans`** (4) - Generic plans (CFG_GPLAN)
+- **`search_profiles`** (4) - Search profile add/get/list/delete (CFG_SPROFILE); `INGEST`/`SEARCH` are delete-protected
+- **`settings`** (1), **`validation`** (1), **`export`** (1) - Settings, config validation, export
 
-- **`features`** (24 functions) - Features with elements, comparisons, distinct calls
-- **`feature_types`** (5 functions) - Feature type operations (CFG_FTYPE)
-- **`elements`** (8 functions) - Element operations (CFG_FELEM)
+### System Management
 
-#### Configuration
+- **`config_sections`** (7) - G2_CONFIG section manipulation
+- **`system_params`** (2) - System parameters
+- **`versioning`** (4) - Version management
 
-- **`thresholds`** (8 functions) - Comparison and generic thresholds
-- **`rules`** (5 functions) - Entity resolution rules (CFG_ERRULE)
-- **`fragments`** (5 functions) - Rule fragments (CFG_ERFRAG)
-- **`generic_plans`** (4 functions) - Generic plan management (CFG_GPLAN)
-- **`search_profiles`** (4 functions) - Search profile add/get/list/delete (CFG_SPROFILE); `INGEST`/`SEARCH` are delete-protected
-- **`hashes`** (4 functions) - Name and SSN hash management
-
-#### System Management
-
-- **`config_sections`** (6 functions) - G2_CONFIG section manipulation
-- **`system_params`** (2 functions) - System parameter operations
-- **`versioning`** (4 functions) - Version management
-
-### Functions & Calls (59 functions)
-
-#### Function Modules (27 functions)
+### Function Modules
 
 - **`functions/standardize`** (6) - Standardization functions (CFG_SFUNC)
 - **`functions/expression`** (6) - Expression functions (CFG_EFUNC)
 - **`functions/comparison`** (6) - Comparison functions (CFG_CFUNC)
-- **`functions/distinct`** (6) - Distinct functions (CFG_DFUNC)
-- **`functions/matching`** (1) - Matching functions (CFG_RTYPE)
-- **`functions/scoring`** (0) - Scoring functions (stubs)
-- **`functions/candidate`** (0) - Candidate functions (stubs)
-- **`functions/validation`** (0) - Validation functions (stubs)
+- **`functions/distinct`** (5) - Distinct functions (CFG_DFUNC)
 
-#### Call Modules (32 functions)
+### Call Modules
 
-- **`calls/standardize`** (8) - Standardize calls with BOM (CFG_SFCALL, CFG_SBOM)
-- **`calls/expression`** (8) - Expression calls with BOM (CFG_EFCALL, CFG_EFBOM)
-- **`calls/comparison`** (8) - Comparison calls with BOM (CFG_CFCALL, CFG_CFBOM)
-- **`calls/distinct`** (8) - Distinct calls with BOM (CFG_DFCALL, CFG_DFBOM)
+- **`calls/standardize`** (6) - Standardize calls with BOM (CFG_SFCALL, CFG_SBOM)
+- **`calls/expression`** (6) - Expression calls with BOM (CFG_EFCALL, CFG_EFBOM)
+- **`calls/comparison`** (6) - Comparison calls with BOM (CFG_CFCALL, CFG_CFBOM)
+- **`calls/distinct`** (6) - Distinct calls with BOM (CFG_DFCALL, CFG_DFBOM)
 
 ## API Examples
 
@@ -524,9 +569,11 @@ fn list_data_sources(config_json: &str) -> Result<Vec<Value>, SzConfigError>
 ## Testing
 
 ```bash
-# Run all library tests
-cd sz_configtool_lib
+# Run the Rust library tests (default workspace member)
 cargo test
+
+# Run everything, including the C FFI crate and the C ABI tests
+cargo test --workspace
 
 # Run with output
 cargo test -- --nocapture
@@ -534,9 +581,13 @@ cargo test -- --nocapture
 # Run specific test
 cargo test test_add_data_source
 
-# Check code coverage (with tarpaulin)
-cargo tarpaulin --out Html
+# Coverage of every component (Rust + all bindings) with the 100% gate
+packaging/install-tools.sh <target> && packaging/install-tools.sh <target> coverage
+packaging/coverage.sh
 ```
+
+Coverage policy, tools and the reviewed exclusions: `coverage/policy.yaml` and
+[`packaging/README.md`](packaging/README.md#coverage).
 
 ## Documentation
 
@@ -584,120 +635,157 @@ Example: Processing 1000 data source additions takes ~50ms on modern hardware.
 
 ## C FFI Interface
 
-The library provides a C-compatible Foreign Function Interface (FFI) for use from C, C++, Python (ctypes), and other languages.
+The C ABI lives in a separate workspace crate, [`ffi/`](ffi/) (package
+`sz-configtool-ffi`), so the Rust library `sz_configtool_lib` stays a plain
+`lib` crate whose dependents never inherit C symbols. It is usable from C, C++,
+Python (ctypes) and anything else that can call C.
 
-### Building the Shared Library
+### Building the Library
 
 ```bash
-# Build shared library (.so on Linux, .dylib on macOS, .dll on Windows)
-cargo build --lib --release
+cargo build -p sz-configtool-ffi --release
 
-# Library location
-target/release/libsz_configtool_lib.so    # Linux
-target/release/libsz_configtool_lib.dylib # macOS
-target/release/sz_configtool_lib.dll      # Windows
+# Outputs (Senzing-style names)
+target/release/libSzConfigTool.so      # Linux shared
+target/release/libSzConfigTool.dylib   # macOS shared
+target/release/SzConfigTool.dll        # Windows shared (+ SzConfigTool.dll.lib import lib)
+target/release/libSzConfigTool.a       # static archive (Linux/macOS)
 ```
 
-### C Header File
-
-The C header file is located at `include/libSzConfigTool.h` and contains declarations for 98 FFI functions.
+Only `SzConfigTool_*` symbols are exported (124 functions). The header is
+[`ffi/include/libSzConfigTool.h`](ffi/include/libSzConfigTool.h); define
+`SZCONFIGTOOL_STATIC` before including it when linking the static archive.
 
 ### C Example
+
+A complete, tested example is [`ffi/examples/c_ffi_example.c`](ffi/examples/c_ffi_example.c):
 
 ```c
 #include "libSzConfigTool.h"
 #include <stdio.h>
-#include <stdlib.h>
 
-int main() {
-    // Load config from file
-    char *config = /* read config file */;
-
-    // Add a data source
-    SzConfigTool_result result = SzConfigTool_addDataSource(config, "MY_SOURCE", NULL, NULL, NULL);
-
-    if (result.return_code == 0) {
-        printf("Data source added successfully\n");
-        // Use result.response (modified config JSON)
-
-        // Always free the response string
-        SzConfigTool_free(result.response);
-    } else {
-        const char *error = SzConfigTool_getLastError();
-        fprintf(stderr, "Error: %s\n", error);
+int main(void) {
+    const char *config = "{\"G2_CONFIG\":{\"CFG_DSRC\":[]}}";
+    SzConfigTool_result result = SzConfigTool_addDataSource(config, "MY_SOURCE");
+    if (result.returnCode != 0) {
+        fprintf(stderr, "Error: %s\n", SzConfigTool_getLastError());
+        return 1;
     }
-
+    printf("%s\n", result.response);   /* modified config JSON */
+    SzConfigTool_free(result.response);  /* never free() */
     return 0;
 }
 ```
 
-### Building C Applications
-
 ```bash
-# Compile C program
-gcc -o myapp myapp.c -L./target/release -lsz_configtool_lib -I./include
-
-# Run (Linux/macOS)
-LD_LIBRARY_PATH=./target/release ./myapp
-
-# Run (macOS alternative)
-DYLD_LIBRARY_PATH=./target/release ./myapp
+cc -o myapp myapp.c -Iffi/include -Ltarget/release -lSzConfigTool \
+   -Wl,-rpath,"$PWD/target/release"
+./myapp
 ```
 
 ### Memory Management
 
-**Critical**: All strings returned by FFI functions are owned by Rust and must be freed using `SzConfigTool_free()`:
-
-```c
-SzConfigTool_result result = SzConfigTool_listDataSources(config, "JSON");
-if (result.return_code == 0) {
-    // Use result.response
-    printf("%s\n", result.response);
-
-    // REQUIRED: Free the string
-    SzConfigTool_free(result.response);
-}
-```
+Every non-NULL `response` is allocated by the library and must be released with
+`SzConfigTool_free()`. Strings returned by `SzConfigTool_getLastError*` and
+`SzConfigTool_getLibraryVersion` are owned by the library and must not be freed.
 
 ### Error Handling
 
-Errors are stored in thread-local storage and retrieved with `SzConfigTool_getLastError()`:
+Each call records its outcome in a **per-thread** last-error slot (cleared on
+success). `SzConfigTool_getLastError()`, `SzConfigTool_getLastErrorCode()`,
+`SzConfigTool_getLastErrorReasonCode()` and `SzConfigTool_getLastErrorDetails()`
+return NUL-terminated strings that stay valid until the next `SzConfigTool_*`
+call on the same thread; other threads never see or clobber them.
+
+Return codes: `0` success, `-1` null/invalid argument, `-2` library error,
+`-3` and below argument-JSON parse/serialization failures. A Rust panic never
+crosses the C boundary: it is caught and reported as `-2` with an
+`internal panic in <function>: ...` message.
 
 ```c
-if (result.return_code != 0) {
-    const char *error = SzConfigTool_getLastError();
-    fprintf(stderr, "Operation failed: %s\n", error);
+if (result.returnCode != 0) {
+    fprintf(stderr, "failed (%lld): %s\n",
+            (long long)SzConfigTool_getLastErrorCode(), SzConfigTool_getLastError());
 }
 ```
 
+### Versioning
+
+`SzConfigTool_getLibraryVersion()` returns the crate version (e.g. `"4.4.0-1"`).
+`SzConfigTool_getAbiVersion()` returns an integer to compare with the header's
+`SZCONFIGTOOL_ABI_VERSION`; it changes only for incompatible changes to existing
+declarations. Every language binding exposes the same two values (Python
+`library_version()` / `abi_version()`, Java `SzConfigToolVersion`, C#
+`SzConfigTool.LibraryVersion` / `AbiVersion`, C++ `LibraryVersion()` / `AbiVersion()`,
+TS `libraryVersion()` / `abiVersion()`; see `bindings/CONTRACT.md`).
+
 ### JSON Parameter Marshalling
 
-Complex parameters are passed as JSON strings:
+Complex parameters are passed as JSON strings. The `*WithJson` setters are
+tri-state per field where noted: an absent key leaves the value, JSON `null`
+clears it, a value sets it.
 
 ```c
-// Updating a function with multiple fields
-const char *updates = "{\"CONNECT_STR\": \"new_value\", \"SFUNC_DESC\": \"Updated description\"}";
-SzConfigTool_result result = SzConfigTool_setStandardizeFunctionWithJson(
-    config,
-    "PARSE",
-    updates
-);
+const char *updates = "{\"CONNECT_STR\": null, \"SFUNC_DESC\": \"Updated\"}";
+SzConfigTool_result result =
+    SzConfigTool_setStandardizeFunctionWithJson(config, "PARSE", updates);
 ```
 
-### Available FFI Functions
+### Testing the C ABI
 
-The FFI provides 98 functions covering:
+```bash
+cargo test -p sz-configtool-ffi   # unit tests, header/export sync, and C programs
+```
 
-- Data source operations (7 functions)
-- Attribute management (8 functions)
-- Feature operations (24 functions)
-- Element management (8 functions)
-- Threshold configuration (6 functions)
-- Function management (28 functions)
-- Call management (32 functions)
-- System configuration (multiple functions)
+`ffi/tests/c_abi.rs` builds the library, compiles `ffi/tests/c/test_basic.c` and
+the C example with `$CC` (default `cc`), and runs them (Unix). The
+`ffi/tests/c/Makefile` / `CMakeLists.txt` build the same test by hand against
+`target/release`. `ffi/tests/header_sync.rs` fails if the header and the
+exported functions drift apart (names, parameter or return types).
 
-See `include/libSzConfigTool.h` for the complete function list and documentation.
+## Workspace and Language Bindings
+
+| Path | Crate / project | Role |
+|---|---|---|
+| `src/` | `sz_configtool_lib` | the pure Rust library (default workspace member) |
+| `ffi/` | `sz-configtool-ffi` | C ABI `libSzConfigTool` (typed exports + `SzConfigTool_invoke`) |
+| `api/` | `sz-configtool-api` | `invoke(name, config, args_json)` dispatcher + the manifest (`api/manifest/*.yaml`) |
+| `tools/codegen/` | `sz-configtool-codegen` | generates the dispatcher, JSON manifests and every binding's typed wrappers |
+| `bindings/python` | pyo3 seam + package | distribution `sz-configtool`, import `sz_configtool` |
+| `bindings/jni`, `bindings/java` | JNI seam + Maven project | `io.github.brianmacy.szconfigtool` |
+| `bindings/csharp` | .NET (P/Invoke over `SzConfigTool_invoke`) | `Sz.ConfigTool` |
+| `bindings/cpp` | header-only C++20 over `SzConfigTool_invoke` | `szconfigtool.hpp` |
+| `bindings/node` (+ `trpc/`) | napi-rs seam + TypeScript, tRPC router | npm package |
+
+**Architecture.** Generated typed wrappers (one stateless function per manifest
+function) call ONE native seam, `invoke(name, config, args_json)`: the Rust
+seams (pyo3, JNI, napi) depend on `sz-configtool-api` directly; C# and C++ call
+`SzConfigTool_invoke` in `libSzConfigTool`. Configs are opaque strings; `json`
+results are JSON text; errors carry the reason code as their `kind`. The
+shared contract is [`bindings/CONTRACT.md`](bindings/CONTRACT.md).
+
+**Manifest workflow.** Edit `api/manifest/<group>.yaml` (and
+`api/manifest/conformance/<group>.yaml`), then:
+
+```bash
+cargo run -p sz-configtool-codegen            # regenerate dispatcher + all bindings
+cargo run -p sz-configtool-codegen -- --check # CI: fail when generated files are stale
+cargo test -p sz-configtool-api -p sz-configtool-codegen
+```
+
+Field reference: [`api/manifest/schema.md`](api/manifest/schema.md). Output
+locations live in `api/manifest/project.yaml` (`paths`, `bindings`).
+
+**Build and test each binding** (details in each binding's README):
+
+| Binding | Commands |
+|---|---|
+| Rust (all crates) | `cargo test --workspace` |
+| Python | `cd bindings/python && python3 -m venv .venv && .venv/bin/pip install maturin pytest ruff && .venv/bin/maturin build --release && .venv/bin/pip install ../../target/wheels/sz_configtool-*.whl && .venv/bin/pytest` |
+| Java | `cargo build -p sz-configtool-jni --release && (cd bindings/java && mvn test)` |
+| C# | `cargo build -p sz-configtool-ffi --release && dotnet test bindings/csharp/Sz.ConfigTool.sln` |
+| C++ | `cargo build -p sz-configtool-ffi --release && cmake -S bindings/cpp -B bindings/cpp/build -G Ninja && cmake --build bindings/cpp/build && ctest --test-dir bindings/cpp/build` (ASan/UBSan: add `-DSZCONFIGTOOL_ENABLE_SANITIZERS=ON`) |
+| Node | `cd bindings/node && npm ci && npm run build && npm test`; tRPC: `cd trpc && npm ci && npm run build && npm test` |
 
 ## Contributing
 
@@ -713,14 +801,27 @@ Apache 2.0 License - See LICENSE file for details.
 - **Python Version:** [sz_configtool](https://github.com/senzing-garage/sz-python-tools) - Original Python implementation
 - **Senzing SDK:** [sz-rust-sdk](https://github.com/brianmacy/sz-rust-sdk) - Full Senzing SDK for Rust
 
-## Version History
+## Versioning
 
-### v0.1.0 (2025-10-02)
+Release versions are `X.Y.Z-N` (first release: `4.4.0-1`, tag `v4.4.0-1`),
+mirroring Senzing's own package versions (e.g. `4.4.2-26272`):
 
-- Initial release
-- 147 functions across 30 modules
-- Complete coverage of Senzing config operations
-- Comprehensive documentation and tests
+- `X.Y` (major.minor) is the Senzing line whose configuration template this
+  release is tested against (`4.4` = Senzing 4.4).
+- `Z` (patch) and `-N` (a release counter on that line) are this project's.
+- Within `4.x` the Rust API is additive only (no removals or signature
+  changes); the C ABI has its own `SZCONFIGTOOL_ABI_VERSION`.
+- Release candidates use `X.Y.Z-rc.N` (also `-alpha.N` / `-beta.N`); no other
+  forms are accepted (`packaging/gates/check-versions.sh`).
+
+**Ordering caveat.** SemVer ecosystems (Cargo, npm, NuGet) treat `-1` as a
+prerelease that sorts BEFORE `4.4.0`; Python (`4.4.0.post1`, PEP 440
+post-release) and Maven sort it AFTER `4.4.0`. Releases are distributed only
+through GitHub Releases and consumed with exact pins (git tag, file path,
+exact version), so this matters only to range resolvers (e.g. `^4.4.0` in npm
+does not match `4.4.0-1`): pin the exact version.
+
+Release history: [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

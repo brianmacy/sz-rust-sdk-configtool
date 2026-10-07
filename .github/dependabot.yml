@@ -15,3 +15,59 @@ updates:
     cooldown:
       default-days: 21
 
+  # Language bindings and packaging tools. Weekly + one grouped PR per
+  # ecosystem keeps PR (and therefore CI) volume low; the 21-day cooldown
+  # applies to version updates exactly as above (security updates bypass it).
+  - package-ecosystem: "npm"
+    directory: "/bindings/node"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 21
+    groups:
+      node-binding:
+        patterns: ["*"]
+  - package-ecosystem: "npm"
+    directory: "/bindings/node/trpc"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 21
+    groups:
+      node-trpc:
+        patterns: ["*"]
+  - package-ecosystem: "maven"
+    directory: "/bindings/java"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 21
+    groups:
+      java-binding:
+        patterns: ["*"]
+  - package-ecosystem: "pip"
+    directory: "/packaging"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 21
+    groups:
+      packaging-python-tools:
+        patterns: ["*"]
+  - package-ecosystem: "nuget"
+    directories:
+      - "/bindings/csharp/src/Sz.ConfigTool"
+      - "/bindings/csharp/tests/Sz.ConfigTool.Tests"
+      - "/bindings/csharp/examples/Sz.ConfigTool.Example"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 21
+    groups:
+      csharp-binding:
+        patterns: ["*"]

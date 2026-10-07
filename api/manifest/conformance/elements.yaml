@@ -1,0 +1,360 @@
+# Conformance cases for the `elements` group. Every case starts from the
+# REAL template config (project.yaml paths.fixture). See schema.md
+# ("Conformance files") for the step/expect semantics.
+group: elements
+
+cases:
+  # ---------------------------------------------------------------- add_element
+  - name: add_defaults
+    steps:
+      - fn: add_element
+        args: {code: my_elem}
+        expect: {kind: config}
+      - fn: get_element
+        args: {code: MY_ELEM}
+        expect:
+          kind: json
+          result: {id: 1000, element: MY_ELEM, datatype: string}
+      - fn: list_elements
+        expect:
+          len: 119
+          contains:
+            - {id: 1000, element: MY_ELEM, datatype: string}
+
+  - name: add_explicit_id_and_normalized_type
+    steps:
+      - fn: add_element
+        args: {code: E2, description: Desc, data_type: DateTime, id: 5000}
+      - fn: get_element
+        args: {code: e2}
+        expect:
+          result: {id: 5000, element: E2, datatype: datetime}
+
+  - name: add_non_positive_id_auto_allocates
+    steps:
+      - fn: add_element
+        args: {code: E3, id: 0}
+      - fn: get_element
+        args: {code: E3}
+        expect:
+          result: {id: 1000}
+
+  - name: add_duplicate_is_already_exists
+    fn: add_element
+    args: {code: full_name}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_taken_id_is_already_exists
+    fn: add_element
+    args: {code: E4, id: 2}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_bad_data_type_is_invalid_input
+    fn: add_element
+    args: {code: E4, data_type: integer}
+    expect: {error: INVALID_INPUT}
+
+  # The template itself carries DATA_TYPE "embedding" (EMBEDDING), but
+  # add_element's domain does not include it.
+  - name: add_embedding_data_type_is_invalid_input
+    fn: add_element
+    args: {code: E4, data_type: embedding}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_without_section_is_missing_section
+    fn: add_element
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {code: E4}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_invalid_config_is_json_parse
+    fn: add_element
+    config_literal: "not json"
+    args: {code: E4}
+    expect: {error: JSON_PARSE}
+
+  # ------------------------------------------------------------- delete_element
+  - name: delete_unused_then_get_is_not_found
+    steps:
+      - fn: delete_element
+        args: {code: make}
+        expect: {kind: config}
+      - fn: get_element
+        args: {code: MAKE}
+        expect: {error: NOT_FOUND}
+      - fn: list_elements
+        expect:
+          len: 117
+          excludes:
+            - {element: MAKE}
+
+  - name: delete_leaves_attribute_dangling
+    steps:
+      - fn: add_attribute
+        args: {attribute: MY_MAKE, feature: EMAIL, element: MAKE, class: OTHER}
+      - fn: delete_element
+        args: {code: MAKE}
+      - fn: get_attribute
+        args: {code: MY_MAKE}
+        expect:
+          result: {FELEM_CODE: MAKE}
+
+  - name: delete_linked_is_invalid_input
+    fn: delete_element
+    args: {code: FULL_NAME}
+    expect: {error: INVALID_INPUT}
+
+  - name: delete_missing_is_not_found
+    fn: delete_element
+    args: {code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_without_fbom_is_missing_section
+    fn: delete_element
+    config_literal: '{"G2_CONFIG": {"CFG_FELEM": [{"FELEM_ID": 2, "FELEM_CODE": "FULL_NAME"}]}}'
+    args: {code: FULL_NAME}
+    expect: {error: MISSING_SECTION}
+
+  - name: delete_non_integer_felem_id_is_missing_field
+    fn: delete_element
+    config_literal: '{"G2_CONFIG": {"CFG_FELEM": [{"FELEM_ID": "2", "FELEM_CODE": "FULL_NAME"}], "CFG_FBOM": []}}'
+    args: {code: FULL_NAME}
+    expect: {error: MISSING_FIELD}
+
+  - name: delete_invalid_config_is_json_parse
+    fn: delete_element
+    config_literal: "not json"
+    args: {code: MAKE}
+    expect: {error: JSON_PARSE}
+
+  # ---------------------------------------------------------------- get / list
+  - name: get_is_case_insensitive
+    fn: get_element
+    args: {code: full_name}
+    expect:
+      result: {id: 2, element: FULL_NAME, datatype: string}
+
+  - name: get_missing_is_not_found
+    fn: get_element
+    args: {code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: get_without_section_is_missing_section
+    fn: get_element
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {code: FULL_NAME}
+    expect: {error: MISSING_SECTION}
+
+  - name: get_invalid_config_is_json_parse
+    fn: get_element
+    config_literal: "not json"
+    args: {code: FULL_NAME}
+    expect: {error: JSON_PARSE}
+
+  - name: list_template
+    fn: list_elements
+    expect:
+      kind: json
+      len: 118
+      contains:
+        - {id: 2, element: FULL_NAME, datatype: string}
+        - {id: 127, element: EMBEDDING, datatype: embedding}
+
+  - name: list_without_section_is_missing_section
+    fn: list_elements
+    config_literal: '{"G2_CONFIG": {}}'
+    expect: {error: MISSING_SECTION}
+
+  - name: list_invalid_config_is_json_parse
+    fn: list_elements
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}
+
+  # ---------------------------------------------------------------- set_element
+  - name: set_data_type_is_stored_verbatim
+    steps:
+      - fn: set_element
+        args: {code: make, description: New desc, data_type: NotAType}
+        expect: {kind: config}
+      - fn: get_element
+        args: {code: MAKE}
+        expect:
+          result: {id: 14, element: MAKE, datatype: NotAType}
+
+  - name: set_without_updates_succeeds
+    steps:
+      - fn: set_element
+        args: {code: MAKE}
+      - fn: get_element
+        args: {code: MAKE}
+        expect:
+          result: {datatype: string}
+
+  - name: set_missing_is_not_found
+    fn: set_element
+    args: {code: NOPE, description: x}
+    expect: {error: NOT_FOUND}
+
+  - name: set_without_section_is_missing_section
+    fn: set_element
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {code: MAKE}
+    expect: {error: MISSING_SECTION}
+
+  - name: set_invalid_config_is_json_parse
+    fn: set_element
+    config_literal: "not json"
+    args: {code: MAKE}
+    expect: {error: JSON_PARSE}
+
+  # -------------------------------------------------------- set_feature_element
+  - name: set_feature_element_updates_row
+    steps:
+      - fn: set_feature_element
+        args: {feature_code: name, element_code: full_name, exec_order: -4, display_level: 0, display_delim: ";", derived: "YES"}
+        expect: {kind: config}
+      - fn: get_feature_comparison
+        args: {feature_code: NAME, element_code: FULL_NAME}
+        expect:
+          result: {EXEC_ORDER: -4, DISPLAY_LEVEL: 0, DISPLAY_DELIM: ";", DERIVED: "Yes"}
+
+  - name: set_feature_element_without_updates_succeeds
+    steps:
+      - fn: set_feature_element
+        args: {feature_code: NAME, element_code: FULL_NAME}
+      - fn: get_feature_comparison
+        args: {feature_code: NAME, element_code: FULL_NAME}
+        expect:
+          result: {EXEC_ORDER: 1, DISPLAY_LEVEL: 1, DERIVED: "No"}
+
+  - name: set_feature_element_negative_display_level_is_invalid_input
+    fn: set_feature_element
+    args: {feature_code: NAME, element_code: FULL_NAME, display_level: -1}
+    expect: {error: INVALID_INPUT}
+
+  - name: set_feature_element_bad_derived_is_invalid_input
+    fn: set_feature_element
+    args: {feature_code: NAME, element_code: FULL_NAME, derived: maybe}
+    expect: {error: INVALID_INPUT}
+
+  - name: set_feature_element_absent_mapping_is_not_found
+    fn: set_feature_element
+    args: {feature_code: NAME, element_code: MAKE, display_level: 1}
+    expect: {error: NOT_FOUND}
+
+  - name: set_feature_element_unknown_feature_is_not_found
+    fn: set_feature_element
+    args: {feature_code: NOPE, element_code: FULL_NAME, display_level: 1}
+    expect: {error: NOT_FOUND}
+
+  - name: set_feature_element_without_fbom_is_missing_section
+    fn: set_feature_element
+    config_literal: '{"G2_CONFIG": {"CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}], "CFG_FELEM": [{"FELEM_ID": 2, "FELEM_CODE": "FULL_NAME"}]}}'
+    args: {feature_code: NAME, element_code: FULL_NAME}
+    expect: {error: MISSING_SECTION}
+
+  - name: set_feature_element_invalid_config_is_json_parse
+    fn: set_feature_element
+    config_literal: "not json"
+    args: {feature_code: NAME, element_code: FULL_NAME}
+    expect: {error: JSON_PARSE}
+
+  # ----------------------------------------------------- add_element_to_feature
+  - name: add_to_feature_defaults_and_whole_table_order
+    steps:
+      - fn: add_element_to_feature
+        args: {feature_code: email, element_code: make}
+        expect: {kind: config}
+      - fn: get_feature_comparison
+        args: {feature_code: EMAIL, element_code: MAKE}
+        expect:
+          result: {FTYPE_ID: 14, FELEM_ID: 14, EXEC_ORDER: 27, DISPLAY_LEVEL: 1, DISPLAY_DELIM: null, DERIVED: "No"}
+
+  - name: add_to_feature_with_options
+    steps:
+      - fn: add_element_to_feature
+        args: {feature_code: EMAIL, element_code: MAKE, display_level: 0, display_delim: "|", derived: "yes"}
+      - fn: get_feature
+        args: {feature: EMAIL}
+        expect:
+          result:
+            elementList:
+              - {element: ADDR}
+              - {element: USER_NAME}
+              - {}
+              - {element: FULL_NAME}
+              - {}
+              - {element: MAKE, derived: "Yes", display: "No"}
+
+  - name: add_to_feature_duplicate_is_already_exists
+    fn: add_element_to_feature
+    args: {feature_code: NAME, element_code: FULL_NAME}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_to_feature_unknown_element_is_not_found
+    fn: add_element_to_feature
+    args: {feature_code: EMAIL, element_code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: add_to_feature_unknown_feature_is_not_found
+    fn: add_element_to_feature
+    args: {feature_code: NOPE, element_code: MAKE}
+    expect: {error: NOT_FOUND}
+
+  - name: add_to_feature_negative_display_level_is_invalid_input
+    fn: add_element_to_feature
+    args: {feature_code: EMAIL, element_code: MAKE, display_level: -1}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_to_feature_bad_derived_is_invalid_input
+    fn: add_element_to_feature
+    args: {feature_code: EMAIL, element_code: MAKE, derived: maybe}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_to_feature_without_fbom_is_missing_section
+    fn: add_element_to_feature
+    config_literal: '{"G2_CONFIG": {"CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}], "CFG_FELEM": [{"FELEM_ID": 2, "FELEM_CODE": "FULL_NAME"}]}}'
+    args: {feature_code: NAME, element_code: FULL_NAME}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_to_feature_invalid_config_is_json_parse
+    fn: add_element_to_feature
+    config_literal: "not json"
+    args: {feature_code: NAME, element_code: FULL_NAME}
+    expect: {error: JSON_PARSE}
+
+  # ------------------------------------------------ delete_element_from_feature
+  - name: delete_from_feature_then_get_is_not_found
+    steps:
+      - fn: delete_element_from_feature
+        args: {feature_code: email, element_code: addr}
+        expect: {kind: config}
+      - fn: get_feature_comparison
+        args: {feature_code: EMAIL, element_code: ADDR}
+        expect: {error: NOT_FOUND}
+      - fn: get_element
+        args: {code: ADDR}
+        expect:
+          result: {id: 35}
+
+  - name: delete_from_feature_absent_mapping_is_not_found
+    fn: delete_element_from_feature
+    args: {feature_code: NAME, element_code: MAKE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_from_feature_unknown_element_is_not_found
+    fn: delete_element_from_feature
+    args: {feature_code: NAME, element_code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_from_feature_without_fbom_is_missing_section
+    fn: delete_element_from_feature
+    config_literal: '{"G2_CONFIG": {"CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}], "CFG_FELEM": [{"FELEM_ID": 2, "FELEM_CODE": "FULL_NAME"}]}}'
+    args: {feature_code: NAME, element_code: FULL_NAME}
+    expect: {error: MISSING_SECTION}
+
+  - name: delete_from_feature_invalid_config_is_json_parse
+    fn: delete_element_from_feature
+    config_literal: "not json"
+    args: {feature_code: NAME, element_code: FULL_NAME}
+    expect: {error: JSON_PARSE}

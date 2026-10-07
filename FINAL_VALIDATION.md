@@ -64,7 +64,6 @@
 ✅ Config Sections (6 functions)
 ✅ Fragments (5 functions)
 ✅ Generic Plans (4 functions)
-✅ Hashes (4 functions)
 ✅ Rules (5 functions)
 ✅ System Parameters (2 functions)
 ✅ Versioning (4 functions)

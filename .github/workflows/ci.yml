@@ -1,127 +1,109 @@
 name: CI
 
+# Per-PR cost is deliberately small: ONE Linux leg runs everything (lint,
+# codegen check, Rust tests + coverage gate, MSRV, the release pipeline for
+# linux-x64 incl. every binding's tests, and the C++ ASan+UBSan suite), plus a
+# minimal `cargo test` on macOS and Windows. The full 4-platform release matrix runs
+# only in release.yml (tags / manual dispatch).
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+  # Manual run on any branch (e.g. to get CI results before opening the PR).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
-permissions:
-  contents: read
-
 jobs:
-  test:
-    name: Test
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable, beta]
+  linux:
+    name: Linux (lint, tests, release pipeline, bindings, sanitizers)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: ${{ matrix.rust }}
-
-      - name: Cache cargo registry
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        id: python
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo index
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+          python-version: "3.12"
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v5
+          dotnet-version: "8.0.x"
+      # The key carries the exact Python (patch level): target/sz-tools/venv links
+      # to that interpreter. install-tools.sh also recreates a venv whose python
+      # no longer runs, so a stale restore cannot break the build.
+      - name: Cache cargo registry and pinned tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Run tests
-        run: cargo test --verbose
-
-      - name: Run doc tests
-        run: cargo test --doc --verbose
-
-  fmt:
-    name: Rustfmt
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
-        with:
-          toolchain: stable
-          components: rustfmt
-
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
-        with:
-          toolchain: stable
-          components: clippy
-
-      - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-  build:
-    name: Build
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
-        with:
-          toolchain: stable
-
-      - name: Build debug
-        run: cargo build --lib --verbose
-
-      - name: Build release
-        run: cargo build --lib --release --verbose
-
-      - name: Build examples
-        run: cargo build --examples --verbose
-
-  doc:
-    name: Documentation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
-        with:
-          toolchain: stable
-
-      - name: Build documentation
-        run: cargo doc --no-deps --verbose
-
-      - name: Check for broken links
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target/sz-tools
+          key: ci-linux-py${{ steps.python.outputs.python-version }}-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml', 'packaging/config.yaml', 'packaging/requirements-*.txt') }}
+      - name: Install pinned tools (sha256/sha512-verified)
         run: |
-          cargo install cargo-deadlinks || true
-          cargo doc --no-deps
-          cargo deadlinks --check-http || true
+          packaging/install-tools.sh linux-x64
+          packaging/install-tools.sh linux-x64 coverage
+      - name: Rustfmt
+        run: cargo fmt --all -- --check
+      - name: Shellcheck packaging scripts
+        run: shellcheck -x packaging/*.sh packaging/gates/*.sh packaging/lib/*.sh
+      - name: Version policy (spellings self-test + workspace/binding/lockfile versions)
+        run: |
+          packaging/gates/test-version-spellings.sh
+          packaging/gates/check-versions.sh
+      - name: Generated bindings are up to date
+        run: cargo run -p sz-configtool-codegen -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      # ONE instrumented pass is the test run: `cargo test --workspace` (incl. the
+      # C ABI test via ffi/tests/c_abi.rs) under cargo-llvm-cov, every binding's
+      # suite against instrumented natives with its language's coverage tool, and
+      # the C++ suite under ASan + UBSan + clang coverage; then the 100% gate
+      # (coverage/policy.yaml). Reports: target/coverage (not uploaded).
+      - name: Tests with coverage (Rust workspace, bindings, C++ ASan+UBSan) + coverage gate
+        run: packaging/coverage.sh
+      - name: Doc tests
+        run: cargo test --doc
+      - name: MSRV (rust-version 1.88) still compiles
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal --no-self-update
+          CARGO_TARGET_DIR=target/msrv cargo +1.88.0 check --workspace --all-targets
+      - name: Release pipeline for linux-x64 (zig, glibc 2.34) + all gates + binding tests
+        run: packaging/release-target.sh linux-x64 all
+      - name: tRPC router tests (vs the staged linux-x64 .node)
+        run: packaging/package-node.sh --trpc linux-x64
+
+  cross-os:
+    name: cargo test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-26, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install pinned Rust (rust-toolchain.toml)
+        run: rustup toolchain install --no-self-update
+      - name: Rust tests (workspace)
+        run: cargo test --workspace

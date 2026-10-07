@@ -1,0 +1,162 @@
+# CFG_CFUNC — comparison functions. Root module: src/functions/comparison.rs
+# (6 pub fns, all here).
+group: functions_comparison
+
+functions:
+  - name: add_comparison_function
+    doc: Add a comparison function (CFG_CFUNC row).
+    rust: functions::comparison::add_comparison_function
+    rust_params_struct: functions::comparison::AddComparisonFunctionParams
+    c_symbol: SzConfigTool_addComparisonFunction
+    args:
+      - name: code
+        type: str
+        positional: true
+        semantics: Uppercased before the duplicate check and storage (CFUNC_CODE).
+      - name: connect_str
+        type: str
+        optional: true
+        semantics: Absent stores CONNECT_STR null; any string (including "") is stored verbatim.
+      - name: description
+        type: str
+        optional: true
+        semantics: Absent stores CFUNC_DESC null; any string is stored verbatim.
+      - name: language
+        type: str
+        optional: true
+        semantics: Absent stores LANGUAGE null; any string is stored verbatim.
+      - name: anon_support
+        type: str
+        optional: true
+        default: "No"
+        semantics: Case-insensitive; normalized to Yes or No, else INVALID_INPUT.
+    returns: config_and_json
+    errors: [JSON_PARSE, MISSING_SECTION, INVALID_INPUT]
+    notes: >-
+      Returns (modified config, the new complete CFG_CFUNC row: CFUNC_ID, CFUNC_CODE,
+      CONNECT_STR, ANON_SUPPORT, CFUNC_DESC, LANGUAGE). CFUNC_ID is always
+      auto-allocated (max existing + 1, floor 1); no id can be requested. TRAP: a
+      duplicate code is INVALID_INPUT (SzConfigError::validation), NOT ALREADY_EXISTS.
+      Validation order: duplicate code, anon_support, then section. MISSING_SECTION only
+      when CFG_CFUNC is absent.
+    c_notes: >-
+      C typed export SzConfigTool_addComparisonFunction DROPS the new row; a NULL
+      connect_str = None but "" is stored as ""; an EMPTY cfunc_desc / language /
+      anon_support is coerced to None (null); library errors return non-standard
+      returnCode -5 (CString failure -4) via set_error, so no reason code is recorded.
+
+  - name: delete_comparison_function
+    doc: Delete a comparison function's CFG_CFUNC row only (no cascade).
+    rust: functions::comparison::delete_comparison_function
+    c_symbol: SzConfigTool_deleteComparisonFunction
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup.
+    returns: config_and_json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Returns (modified config, the deleted CFG_CFUNC row). Removes ONLY the CFG_CFUNC
+      row; CFG_CFCALL rows referencing it are left dangling (use
+      delete_comparison_function_cascade). A missing CFG_CFUNC section is NOT_FOUND (not
+      MISSING_SECTION).
+    c_notes: >-
+      C typed export drops the deleted row and returns non-standard returnCode -5 on
+      library errors (no reason code).
+
+  - name: delete_comparison_function_cascade
+    doc: Delete a comparison function and its CFG_CFBOM / CFG_CFCALL / CFG_CFRTN rows.
+    rust: functions::comparison::delete_comparison_function_cascade
+    c_symbol: SzConfigTool_deleteComparisonFunctionCascade
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup.
+    returns: config_and_json
+    errors: [JSON_PARSE, NOT_FOUND, MISSING_FIELD]
+    notes: >-
+      Returns (modified config, the deleted CFG_CFUNC row). Order: CFG_CFBOM rows whose
+      CFCALL_ID belongs to one of the function's CFG_CFCALL rows; every CFG_CFCALL row
+      with that CFUNC_ID; every CFG_CFRTN row with that CFUNC_ID (well-formed rows via
+      thresholds::delete_comparison_threshold, then a sweep of the rest); finally the
+      CFG_CFUNC row. Absent CFBOM/CFCALL/CFRTN sections are skipped. MISSING_FIELD when
+      the found row has no integer CFUNC_ID. A missing CFG_CFUNC section is NOT_FOUND.
+    c_notes: >-
+      C export (handle_result, standard -2) drops the deleted row.
+
+  - name: get_comparison_function
+    doc: Get one comparison function's raw CFG_CFUNC row by code.
+    rust: functions::comparison::get_comparison_function
+    c_symbol: SzConfigTool_getComparisonFunction
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup.
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Result uses on-disk keys (CFUNC_ID, CFUNC_CODE, CFUNC_DESC, CONNECT_STR,
+      ANON_SUPPORT, LANGUAGE). A missing CFG_CFUNC section is NOT_FOUND (not
+      MISSING_SECTION).
+    c_notes: >-
+      C typed export returns non-standard returnCode -5 on library errors.
+
+  - name: list_comparison_functions
+    doc: List all comparison functions as camelCase summaries.
+    rust: functions::comparison::list_comparison_functions
+    c_symbol: SzConfigTool_listComparisonFunctions
+    args: []
+    returns: json
+    errors: [JSON_PARSE]
+    notes: >-
+      Result is an array of {id, function, description, connectStr, anonSupport,
+      language} in config order; all but function are null-preserving. A missing
+      CFG_CFUNC section yields [] (no error).
+    c_notes: >-
+      C typed export returns non-standard returnCode -5 on library errors.
+
+  - name: set_comparison_function
+    doc: Update a comparison function's connect string / description / language / anon support.
+    rust: functions::comparison::set_comparison_function
+    rust_params_struct: functions::comparison::SetComparisonFunctionParams
+    c_symbol: SzConfigTool_setComparisonFunction
+    c_aliases: [SzConfigTool_setComparisonFunctionWithJson]
+    args:
+      - name: code
+        type: str
+        positional: true
+        semantics: Uppercased before lookup.
+      - name: connect_str
+        type: str
+        tristate: true
+        semantics: Absent leaves CONNECT_STR; null clears it to null; a string (including "") sets it.
+      - name: description
+        type: str
+        optional: true
+        semantics: Absent leaves CFUNC_DESC; a string is stored verbatim. Cannot be cleared to null.
+      - name: language
+        type: str
+        optional: true
+        semantics: Absent leaves LANGUAGE; a string is stored verbatim. Cannot be cleared to null.
+      - name: anon_support
+        type: str
+        optional: true
+        semantics: >-
+          Absent leaves ANON_SUPPORT. TRAP: unlike add, NOT validated or
+          normalized; any string is stored verbatim.
+    returns: config_and_json
+    errors: [JSON_PARSE, NOT_FOUND]
+    notes: >-
+      Returns (modified config, the updated CFG_CFUNC row). No value validation. The row
+      is deleted and re-appended, so it moves to the END of CFG_CFUNC. A missing
+      CFG_CFUNC section is NOT_FOUND.
+    c_notes: >-
+      C deltas: both exports drop the updated row. SzConfigTool_setComparisonFunction
+      (direct args) cannot Clear: NULL connect_str = Leave, "" = Set(""); an EMPTY
+      cfunc_desc / language / anon_support = None (leave); library errors return
+      non-standard -5. SzConfigTool_setComparisonFunctionWithJson takes an updates
+      object with keys CONNECT_STR|connectStr (tri-state: null clears),
+      CFUNC_DESC|description, LANGUAGE|language, ANON_SUPPORT|anonSupport
+      (one spelling per field; null = leave); a non-object, an unknown key, a
+      non-string value, or both spellings of a field is INVALID_INPUT; unparsable
+      JSON is returnCode -3.

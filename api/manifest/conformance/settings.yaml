@@ -1,0 +1,51 @@
+# Conformance cases for the `settings` group. Every case starts from the REAL
+# template config (project.yaml paths.fixture).
+group: settings
+
+cases:
+  - name: overwrite_and_add_typed_values
+    steps:
+      - fn: set_setting
+        args: {name: metaphone_version, value: 4}
+        expect: {kind: config}
+      - fn: set_setting
+        args: {name: new_one, value: x}
+      - fn: get_config_section
+        args: {section_name: SETTINGS}
+        expect:
+          result:
+            - {METAPHONE_VERSION: 4, NEW_ONE: x}
+
+  - name: creates_settings_when_absent
+    steps:
+      - fn: set_setting
+        config_literal: '{"G2_CONFIG": {}}'
+        args: {name: foo, value: {nested: [1]}}
+      - fn: get_config_section
+        args: {section_name: SETTINGS}
+        expect:
+          result:
+            - {FOO: {nested: [1]}}
+
+  - name: non_object_settings_is_replaced
+    steps:
+      - fn: set_setting
+        config_literal: '{"G2_CONFIG": {"SETTINGS": "oops"}}'
+        args: {name: foo, value: 1}
+      - fn: get_config_section
+        args: {section_name: SETTINGS}
+        expect:
+          result:
+            - {FOO: 1}
+
+  - name: without_g2_config_is_missing_section
+    fn: set_setting
+    config_literal: '{}'
+    args: {name: foo, value: 1}
+    expect: {error: MISSING_SECTION}
+
+  - name: invalid_json_is_json_parse
+    fn: set_setting
+    config_literal: "not json"
+    args: {name: foo, value: 1}
+    expect: {error: JSON_PARSE}

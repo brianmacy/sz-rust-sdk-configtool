@@ -85,10 +85,11 @@ pub fn render_config(config_json: &str, indent: usize) -> Result<String> {
     let formatter = serde_json::ser::PrettyFormatter::with_indent(&indent_bytes);
     let mut buf = Vec::new();
     let mut serializer = serde_json::Serializer::with_formatter(&mut buf, formatter);
+    // Writing a Value (string keys, finite numbers) into a Vec cannot fail,
+    // and serde_json only writes UTF-8.
     serde::Serialize::serialize(&sorted, &mut serializer)
-        .map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
-
-    String::from_utf8(buf).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+        .expect("serializing a Value into memory cannot fail");
+    Ok(String::from_utf8(buf).expect("serde_json writes UTF-8"))
 }
 
 #[cfg(test)]

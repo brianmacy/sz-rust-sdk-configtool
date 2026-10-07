@@ -1,0 +1,644 @@
+# Conformance cases for the `features` group. Every case starts from the
+# REAL template config (project.yaml paths.fixture). See schema.md
+# ("Conformance files") for the step/expect semantics.
+group: features
+
+cases:
+  # ---------------------------------------------------------------- add_feature
+  - name: add_existing_element_with_non_integer_id_is_invalid_structure
+    fn: add_feature
+    config_literal: '{"G2_CONFIG": {"CFG_FTYPE": [], "CFG_FCLASS": [{"FCLASS_ID": 7, "FCLASS_CODE": "OTHER"}], "CFG_FELEM": [{"FELEM_ID": "x", "FELEM_CODE": "E1"}], "CFG_FBOM": []}}'
+    args: {feature: F1, element_list: [E1]}
+    expect: {error: INVALID_STRUCTURE}
+
+  - name: add_defaults_auto_create_element_and_fbom_order
+    steps:
+      - fn: add_feature
+        args:
+          feature: my_feat
+          element_list:
+            - my_new_elem
+            - {element: full_name, display_level: 0, derived: "yes", displaydelim: "|"}
+        expect: {kind: config}
+      - fn: get_feature
+        args: {feature: MY_FEAT}
+        expect:
+          kind: json
+          result:
+            id: 1000
+            feature: MY_FEAT
+            class: OTHER
+            behavior: FM
+            anonymize: "No"
+            candidates: "No"
+            standardize: ""
+            expression: ""
+            comparison: ""
+            matchKey: "No"
+            version: 1
+            elementList:
+              - {element: MY_NEW_ELEM, expressed: "No", compared: "No", derived: "No", display: "Yes"}
+              - {element: FULL_NAME, expressed: "No", compared: "No", derived: "Yes", display: "No"}
+      - fn: get_element
+        args: {code: MY_NEW_ELEM}
+        expect:
+          result: {id: 1000, element: MY_NEW_ELEM, datatype: string}
+      - fn: get_feature_comparison
+        args: {feature_code: MY_FEAT, element_code: FULL_NAME}
+        expect:
+          result: {FTYPE_ID: 1000, FELEM_ID: 2, EXEC_ORDER: 2, DISPLAY_LEVEL: 0, DISPLAY_DELIM: "|", DERIVED: "Yes"}
+
+  - name: add_full_with_functions_and_explicit_id
+    steps:
+      - fn: add_feature
+        args:
+          feature: F_FULL
+          element_list:
+            - {element: FULL_NAME, expressed: "Yes", compared: "yes"}
+          class: name
+          behavior: f1es
+          candidates: "yes"
+          anonymize: "NO"
+          derived: "no"
+          history: "no"
+          standardize: parse_name
+          expression: name_hasher
+          comparison: str_comp
+          version: 3
+          rtype_id: 0
+          id: 5000
+      - fn: get_feature
+        args: {feature: "5000"}
+        expect:
+          result:
+            id: 5000
+            feature: F_FULL
+            class: NAME
+            behavior: F1ES
+            anonymize: "No"
+            candidates: "Yes"
+            standardize: PARSE_NAME
+            expression: NAME_HASHER
+            comparison: STR_COMP
+            matchKey: "Yes"
+            version: 3
+            elementList:
+              - {element: FULL_NAME, expressed: "Yes", compared: "Yes"}
+
+  - name: add_explicit_matchkey_overrides_default
+    steps:
+      - fn: add_feature
+        args: {feature: F_MK, element_list: [FULL_NAME], matchkey: denial}
+      - fn: get_feature
+        args: {feature: F_MK}
+        expect:
+          result: {matchKey: Denial}
+
+  - name: add_non_positive_id_auto_allocates
+    steps:
+      - fn: add_feature
+        args: {feature: F_NEG, element_list: [FULL_NAME], id: -5}
+      - fn: get_feature
+        args: {feature: F_NEG}
+        expect:
+          result: {id: 1000}
+
+  - name: add_duplicate_is_already_exists
+    fn: add_feature
+    args: {feature: name, element_list: [FULL_NAME]}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_taken_id_is_already_exists
+    fn: add_feature
+    args: {feature: F_X, element_list: [FULL_NAME], id: 1}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_empty_element_list_is_invalid_input
+    fn: add_feature
+    args: {feature: F_X, element_list: []}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_non_array_element_list_is_invalid_input
+    fn: add_feature
+    args: {feature: F_X, element_list: FULL_NAME}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_element_object_without_code_is_invalid_input
+    fn: add_feature
+    args: {feature: F_X, element_list: [{expressed: "Yes"}]}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_negative_display_level_is_invalid_input
+    fn: add_feature
+    args: {feature: F_X, element_list: [{element: FULL_NAME, display_level: -1}]}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_bad_element_derived_is_invalid_input
+    fn: add_feature
+    args: {feature: F_X, element_list: [{element: FULL_NAME, derived: maybe}]}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_bad_candidates_is_invalid_input
+    fn: add_feature
+    args: {feature: F_X, element_list: [FULL_NAME], candidates: maybe}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_bad_history_is_invalid_input
+    fn: add_feature
+    args: {feature: F_X, element_list: [FULL_NAME], history: maybe}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_bad_matchkey_is_invalid_input
+    fn: add_feature
+    args: {feature: F_X, element_list: [FULL_NAME], matchkey: sometimes}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_bad_behavior_is_invalid_input
+    fn: add_feature
+    args: {feature: F_X, element_list: [FULL_NAME], behavior: BOGUS}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_unknown_class_is_not_found
+    fn: add_feature
+    args: {feature: F_X, element_list: [FULL_NAME], class: NO_SUCH_CLASS}
+    expect: {error: NOT_FOUND}
+
+  - name: add_empty_standardize_is_not_found
+    fn: add_feature
+    args: {feature: F_X, element_list: [FULL_NAME], standardize: ""}
+    expect: {error: NOT_FOUND}
+
+  - name: add_comparison_without_compared_element_is_invalid_input
+    fn: add_feature
+    args: {feature: F_X, element_list: [FULL_NAME], comparison: STR_COMP}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_expression_without_expressed_element_is_invalid_input
+    fn: add_feature
+    args: {feature: F_X, element_list: [FULL_NAME], expression: NAME_HASHER}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_invalid_config_is_json_parse
+    fn: add_feature
+    config_literal: "not json"
+    args: {feature: F_X, element_list: [FULL_NAME]}
+    expect: {error: JSON_PARSE}
+
+  - name: add_missing_ftype_section
+    fn: add_feature
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {feature: F_X, element_list: [FULL_NAME]}
+    expect: {error: MISSING_SECTION}
+
+  # ------------------------------------------------------------- delete_feature
+  - name: delete_cascades_fbom_and_attributes_keeps_elements
+    steps:
+      - fn: delete_feature
+        args: {feature: email}
+        expect: {kind: config}
+      - fn: get_feature
+        args: {feature: EMAIL}
+        expect: {error: NOT_FOUND}
+      - fn: get_attribute
+        args: {code: EMAIL_ADDRESS}
+        expect: {error: NOT_FOUND}
+      - fn: list_feature_comparisons
+        expect:
+          len: 218
+          excludes:
+            - {FTYPE_ID: 14}
+      - fn: list_elements
+        expect: {len: 118}
+
+  - name: delete_by_numeric_id
+    steps:
+      - fn: delete_feature
+        args: {feature: " 14 "}
+      - fn: get_feature
+        args: {feature: EMAIL}
+        expect: {error: NOT_FOUND}
+
+  - name: delete_locked_is_invalid_input
+    fn: delete_feature
+    args: {feature: name}
+    expect: {error: INVALID_INPUT}
+
+  - name: delete_missing_code_is_not_found
+    fn: delete_feature
+    args: {feature: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_missing_id_is_not_found
+    fn: delete_feature
+    args: {feature: "9999"}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_id_without_section_is_missing_section
+    fn: delete_feature
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {feature: "14"}
+    expect: {error: MISSING_SECTION}
+
+  - name: delete_invalid_config_is_json_parse
+    fn: delete_feature
+    config_literal: "not json"
+    args: {feature: EMAIL}
+    expect: {error: JSON_PARSE}
+
+  # ---------------------------------------------------------------- get / list
+  - name: get_by_trimmed_id
+    fn: get_feature
+    args: {feature: " 1 "}
+    expect:
+      result: {id: 1, feature: NAME, class: NAME, behavior: NAME, matchKey: "Yes", version: 2}
+
+  - name: get_missing_is_not_found
+    fn: get_feature
+    args: {feature: nope}
+    expect: {error: NOT_FOUND}
+
+  - name: get_without_section_is_not_found
+    fn: get_feature
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {feature: NAME}
+    expect: {error: NOT_FOUND}
+
+  - name: get_invalid_config_is_json_parse
+    fn: get_feature
+    config_literal: "not json"
+    args: {feature: NAME}
+    expect: {error: JSON_PARSE}
+
+  - name: list_template
+    fn: list_features
+    expect:
+      kind: json
+      len: 72
+      contains:
+        - {id: 1, feature: NAME, class: NAME, behavior: NAME}
+        - {id: 14, feature: EMAIL, behavior: F1}
+
+  - name: list_without_section_is_missing_section
+    fn: list_features
+    config_literal: '{"G2_CONFIG": {}}'
+    expect: {error: MISSING_SECTION}
+
+  - name: list_invalid_config_is_json_parse
+    fn: list_features
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}
+
+  # ---------------------------------------------------------------- set_feature
+  - name: set_normalizes_and_writes
+    steps:
+      - fn: set_feature
+        args: {feature: email, candidates: "yes", matchkey: confirm, behavior: f1e, class: other, version: 9}
+        expect: {kind: config}
+      - fn: get_feature
+        args: {feature: EMAIL}
+        expect:
+          result: {candidates: "Yes", matchKey: Confirm, behavior: F1E, class: OTHER, version: 9}
+
+  - name: set_anonymize_is_stored_verbatim
+    steps:
+      - fn: set_feature
+        args: {feature: "14", anonymize: maybe, derived: "yes", history: "no", rtype_id: 7}
+      - fn: get_feature
+        args: {feature: EMAIL}
+        expect:
+          result: {anonymize: maybe}
+
+  - name: set_without_updates_is_invalid_input
+    fn: set_feature
+    args: {feature: EMAIL}
+    expect: {error: INVALID_INPUT}
+
+  - name: set_same_value_is_invalid_input
+    fn: set_feature
+    args: {feature: EMAIL, candidates: "no"}
+    expect: {error: INVALID_INPUT}
+
+  - name: set_bad_candidates_is_invalid_input
+    fn: set_feature
+    args: {feature: EMAIL, candidates: maybe}
+    expect: {error: INVALID_INPUT}
+
+  - name: set_bad_matchkey_is_invalid_input
+    fn: set_feature
+    args: {feature: EMAIL, matchkey: sometimes}
+    expect: {error: INVALID_INPUT}
+
+  - name: set_bad_behavior_is_invalid_input
+    fn: set_feature
+    args: {feature: EMAIL, behavior: BOGUS}
+    expect: {error: INVALID_INPUT}
+
+  - name: set_unknown_class_is_not_found
+    fn: set_feature
+    args: {feature: EMAIL, class: NO_SUCH_CLASS}
+    expect: {error: NOT_FOUND}
+
+  - name: set_missing_code_is_not_found
+    fn: set_feature
+    args: {feature: NOPE, version: 2}
+    expect: {error: NOT_FOUND}
+
+  - name: set_missing_id_is_not_found
+    fn: set_feature
+    args: {feature: "9999", version: 2}
+    expect: {error: NOT_FOUND}
+
+  - name: set_id_without_section_is_missing_section
+    fn: set_feature
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {feature: "1", version: 2}
+    expect: {error: MISSING_SECTION}
+
+  - name: set_invalid_config_is_json_parse
+    fn: set_feature
+    config_literal: "not json"
+    args: {feature: EMAIL, version: 2}
+    expect: {error: JSON_PARSE}
+
+  # -------------------------------------------------------- feature comparisons
+  - name: add_comparison_auto_order_and_null_defaults
+    steps:
+      - fn: add_feature_comparison
+        args: {feature_code: email, element_code: make, display_delim: "|"}
+        expect: {kind: config}
+      - fn: get_feature_comparison
+        args: {feature_code: EMAIL, element_code: MAKE}
+        expect:
+          result: {FTYPE_ID: 14, FELEM_ID: 14, EXEC_ORDER: 27, DISPLAY_LEVEL: null, DISPLAY_DELIM: "|", DERIVED: null}
+
+  - name: add_comparison_values_stored_verbatim
+    steps:
+      - fn: add_feature_comparison
+        args: {feature_code: EMAIL, element_code: MAKE, exec_order: 100, display_level: -3, derived: whatever}
+      - fn: get_feature_comparison
+        args: {feature_code: EMAIL, element_code: MAKE}
+        expect:
+          result: {EXEC_ORDER: 100, DISPLAY_LEVEL: -3, DERIVED: whatever}
+
+  - name: add_comparison_zero_order_auto_allocates
+    steps:
+      - fn: add_feature_comparison
+        args: {feature_code: EMAIL, element_code: MAKE, exec_order: 0}
+      - fn: get_feature_comparison
+        args: {feature_code: EMAIL, element_code: MAKE}
+        expect:
+          result: {EXEC_ORDER: 27}
+
+  - name: add_comparison_taken_order_is_already_exists
+    fn: add_feature_comparison
+    args: {feature_code: EMAIL, element_code: MAKE, exec_order: 1}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_comparison_duplicate_is_already_exists
+    fn: add_feature_comparison
+    args: {feature_code: EMAIL, element_code: ADDR}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_comparison_unknown_feature_is_not_found
+    fn: add_feature_comparison
+    args: {feature_code: NOPE, element_code: MAKE}
+    expect: {error: NOT_FOUND}
+
+  - name: add_comparison_unknown_element_is_not_found
+    fn: add_feature_comparison
+    args: {feature_code: EMAIL, element_code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: add_comparison_without_fbom_is_missing_section
+    fn: add_feature_comparison
+    config_literal: '{"G2_CONFIG": {"CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}], "CFG_FELEM": [{"FELEM_ID": 2, "FELEM_CODE": "FULL_NAME"}]}}'
+    args: {feature_code: NAME, element_code: FULL_NAME}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_comparison_invalid_config_is_json_parse
+    fn: add_feature_comparison
+    config_literal: "not json"
+    args: {feature_code: NAME, element_code: FULL_NAME}
+    expect: {error: JSON_PARSE}
+
+  - name: delete_comparison_then_get_is_not_found
+    steps:
+      - fn: delete_feature_comparison
+        args: {feature_code: email, element_code: addr}
+        expect: {kind: config}
+      - fn: get_feature_comparison
+        args: {feature_code: EMAIL, element_code: ADDR}
+        expect: {error: NOT_FOUND}
+      - fn: list_feature_comparisons
+        expect: {len: 222}
+
+  - name: delete_comparison_absent_mapping_is_not_found
+    fn: delete_feature_comparison
+    args: {feature_code: NAME, element_code: MAKE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_comparison_unknown_feature_is_not_found
+    fn: delete_feature_comparison
+    args: {feature_code: NOPE, element_code: MAKE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_comparison_without_fbom_is_not_found
+    fn: delete_feature_comparison
+    config_literal: '{"G2_CONFIG": {"CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}], "CFG_FELEM": [{"FELEM_ID": 2, "FELEM_CODE": "FULL_NAME"}]}}'
+    args: {feature_code: NAME, element_code: FULL_NAME}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_comparison_invalid_config_is_json_parse
+    fn: delete_feature_comparison
+    config_literal: "not json"
+    args: {feature_code: NAME, element_code: FULL_NAME}
+    expect: {error: JSON_PARSE}
+
+  - name: get_comparison_raw_row
+    fn: get_feature_comparison
+    args: {feature_code: name, element_code: full_name}
+    expect:
+      kind: json
+      result: {FTYPE_ID: 1, FELEM_ID: 2, EXEC_ORDER: 1, DISPLAY_LEVEL: 1, DISPLAY_DELIM: null, DERIVED: "No"}
+
+  - name: get_comparison_absent_mapping_is_not_found
+    fn: get_feature_comparison
+    args: {feature_code: NAME, element_code: MAKE}
+    expect: {error: NOT_FOUND}
+
+  - name: get_comparison_without_fbom_is_missing_section
+    fn: get_feature_comparison
+    config_literal: '{"G2_CONFIG": {"CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}], "CFG_FELEM": [{"FELEM_ID": 2, "FELEM_CODE": "FULL_NAME"}]}}'
+    args: {feature_code: NAME, element_code: FULL_NAME}
+    expect: {error: MISSING_SECTION}
+
+  - name: get_comparison_invalid_config_is_json_parse
+    fn: get_feature_comparison
+    config_literal: "not json"
+    args: {feature_code: NAME, element_code: FULL_NAME}
+    expect: {error: JSON_PARSE}
+
+  - name: list_comparisons_template
+    fn: list_feature_comparisons
+    expect:
+      kind: json
+      len: 223
+      contains:
+        - {FTYPE_ID: 1, FELEM_ID: 2, EXEC_ORDER: 1}
+
+  - name: list_comparisons_without_fbom_is_missing_section
+    fn: list_feature_comparisons
+    config_literal: '{"G2_CONFIG": {}}'
+    expect: {error: MISSING_SECTION}
+
+  - name: list_comparisons_invalid_config_is_json_parse
+    fn: list_feature_comparisons
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}
+
+  # ----------------------------------------------------- distinct call element
+  - name: add_distinct_call_then_duplicate
+    steps:
+      - fn: add_feature_distinct_call_element
+        args: {feature_code: email, distinct_func_code: felem_strict_subset, element_code: make, exec_order: 5}
+        expect: {kind: config}
+      - fn: add_feature_distinct_call_element
+        args: {feature_code: EMAIL, distinct_func_code: FELEM_STRICT_SUBSET}
+        expect: {error: ALREADY_EXISTS}
+
+  # Template: 14 CFG_DFCALL rows, max DFCALL_ID 37; EMAIL = FTYPE 14 (no
+  # distinct call); FELEM_STRICT_SUBSET = DFUNC 1.
+  - name: add_distinct_call_traps_element_and_exec_order_ignored_id_floor
+    steps:
+      - fn: add_feature_distinct_call_element
+        args: {feature_code: email, distinct_func_code: felem_strict_subset, element_code: make, exec_order: 5}
+      # Id floor 1000 (max 37 + 1 < 1000); the row is exactly {id, feature, function}.
+      - fn: get_distinct_call
+        args: {call: 1000}
+        expect:
+          result: {DFCALL_ID: 1000, FTYPE_ID: 14, DFUNC_ID: 1}
+      # element_code is NOT stored (no CFG_DFBOM row) and exec_order 5 is
+      # ignored (execOrder renders the schema default 1).
+      - fn: list_distinct_calls
+        expect:
+          len: 15
+          contains:
+            - {id: 1000, feature: EMAIL, function: FELEM_STRICT_SUBSET, execOrder: 1, elementList: []}
+      # Next id is max + 1 once above the floor.
+      - fn: add_feature_distinct_call_element
+        args: {feature_code: WEBSITE, distinct_func_code: FELEM_STRICT_SUBSET}
+      - fn: get_distinct_call
+        args: {call: WEBSITE}
+        expect:
+          result: {DFCALL_ID: 1001, DFUNC_ID: 1}
+
+  - name: add_distinct_call_existing_pair_is_already_exists
+    fn: add_feature_distinct_call_element
+    args: {feature_code: NAME, distinct_func_code: PARTIAL_NAMES}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_distinct_call_unknown_function_is_not_found
+    fn: add_feature_distinct_call_element
+    args: {feature_code: EMAIL, distinct_func_code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: add_distinct_call_unknown_element_is_not_found
+    fn: add_feature_distinct_call_element
+    args: {feature_code: EMAIL, distinct_func_code: FELEM_STRICT_SUBSET, element_code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: add_distinct_call_unknown_feature_is_not_found
+    fn: add_feature_distinct_call_element
+    args: {feature_code: NOPE, distinct_func_code: FELEM_STRICT_SUBSET}
+    expect: {error: NOT_FOUND}
+
+  - name: add_distinct_call_without_dfcall_is_missing_section
+    fn: add_feature_distinct_call_element
+    config_literal: '{"G2_CONFIG": {"CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "NAME"}], "CFG_DFUNC": [{"DFUNC_ID": 1, "DFUNC_CODE": "X"}]}}'
+    args: {feature_code: NAME, distinct_func_code: X}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_distinct_call_invalid_config_is_json_parse
+    fn: add_feature_distinct_call_element
+    config_literal: "not json"
+    args: {feature_code: NAME, distinct_func_code: X}
+    expect: {error: JSON_PARSE}
+
+  # ------------------------------------------------------------ feature classes
+  - name: list_classes_template
+    fn: list_feature_classes
+    expect:
+      kind: json
+      len: 12
+      contains:
+        - {FCLASS_ID: 9, FCLASS_CODE: OTHER, FCLASS_DESC: Other}
+
+  - name: list_classes_without_section_is_missing_section
+    fn: list_feature_classes
+    config_literal: '{"G2_CONFIG": {}}'
+    expect: {error: MISSING_SECTION}
+
+  - name: list_classes_invalid_config_is_json_parse
+    fn: list_feature_classes
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}
+
+  - name: get_class_by_code_case_insensitive
+    fn: get_feature_class
+    args: {feature_class: other}
+    expect:
+      result: {FCLASS_ID: 9, FCLASS_CODE: OTHER, FCLASS_DESC: Other}
+
+  - name: get_class_by_id
+    fn: get_feature_class
+    args: {feature_class: "12"}
+    expect:
+      result: {FCLASS_ID: 12, FCLASS_CODE: RELATIONSHIP}
+
+  - name: get_class_missing_is_not_found
+    fn: get_feature_class
+    args: {feature_class: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: get_class_without_section_is_missing_section
+    fn: get_feature_class
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {feature_class: OTHER}
+    expect: {error: MISSING_SECTION}
+
+  - name: get_class_invalid_config_is_json_parse
+    fn: get_feature_class
+    config_literal: "not json"
+    args: {feature_class: OTHER}
+    expect: {error: JSON_PARSE}
+
+  # ----------------------------------------------------- update_feature_version
+  # No manifest function reads FEATURE_VERSION back; success is checked by kind
+  # and by the config still being usable afterwards.
+  - name: update_feature_version_succeeds
+    steps:
+      - fn: update_feature_version
+        args: {version: "11"}
+        expect: {kind: config}
+      - fn: get_feature
+        args: {feature: NAME}
+        expect:
+          result: {id: 1}
+
+  - name: update_feature_version_without_compat_is_missing_section
+    fn: update_feature_version
+    config_literal: '{"G2_CONFIG": {"CONFIG_BASE_VERSION": {}}}'
+    args: {version: "11"}
+    expect: {error: MISSING_SECTION}
+
+  - name: update_feature_version_on_array_config_is_missing_section
+    fn: update_feature_version
+    config_literal: '[]'
+    args: {version: "11"}
+    expect: {error: MISSING_SECTION}
+
+  - name: update_feature_version_invalid_config_is_json_parse
+    fn: update_feature_version
+    config_literal: "not json"
+    args: {version: "11"}
+    expect: {error: JSON_PARSE}

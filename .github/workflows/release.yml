@@ -1,94 +1,212 @@
 name: Release
 
+# Full cross-platform matrix: only on a version tag push (publishes a GitHub
+# Release) or a manual dispatch (DRY RUN, from any branch or tag: builds,
+# gates, assembles every release asset + SHA256SUMS exactly as a release
+# would and uploads them as the `release-assets` workflow artifact; it never
+# attests or publishes). Publishing is gated on the EVENT, not the ref:
+# `github.ref_type == 'tag'` alone is also true for a dispatch on a tag.
+# Nothing is pushed to any package registry. Every step is a packaging/
+# script; see packaging/README.md.
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
 
-# The release step creates the GitHub Release and attaches the built libs. That needs write access;
-# the default GITHUB_TOKEN is read-only, so without this every release 403'd ("Resource not accessible
-# by integration") at the upload step — it had failed on every tag since v0.1.0.
-permissions:
-  contents: write
-
 jobs:
-  build-and-release:
-    name: Build and Release
-    runs-on: ${{ matrix.os }}
+  preflight:
+    name: Version gate
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned Rust (rust-toolchain.toml)
+        run: rustup toolchain install --no-self-update
+      - name: Workspace / binding / tag versions agree
+        env:
+          TAG: ${{ github.event_name == 'push' && github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          packaging/gates/test-version-spellings.sh
+          packaging/gates/check-versions.sh "${TAG}"
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: preflight
     strategy:
-      # Don't cancel the other platform builds if one leg hiccups (e.g. a transient release-create race).
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact_name: libsz_configtool_lib.so
-            artifact_path: target/release/libsz_configtool_lib.so
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            artifact_name: libsz_configtool_lib.dylib
-            artifact_path: target/release/libsz_configtool_lib.dylib
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            artifact_name: sz_configtool_lib.dll
-            artifact_path: target/release/sz_configtool_lib.dll
+          # Runner images = GitHub-hosted equivalents of G2's build legs
+          # (packaging/README.md "Toolchain alignment").
+          - target: linux-x64
+            runner: ubuntu-24.04
+          - target: linux-arm64
+            runner: ubuntu-24.04-arm
+          - target: macos-arm64
+            runner: macos-26
+          - target: windows-x64
+            runner: windows-2025
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          toolchain: stable
-          targets: ${{ matrix.target }}
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "8.0.x"
+      - name: Install pinned tools (sha256/sha512-verified)
+        run: packaging/install-tools.sh "${{ matrix.target }}"
+      - name: Build natives
+        run: packaging/release-target.sh "${{ matrix.target }}" build
+      - name: Gates (exports, linkage, glibc, build paths, C tests)
+        run: packaging/release-target.sh "${{ matrix.target }}" gates
+      - name: Package (C archive, wheel, npm tarball, C++ package + ctest, SBOMs)
+        run: packaging/release-target.sh "${{ matrix.target }}" package
+      - name: Gates on packaged artifacts
+        run: packaging/release-target.sh "${{ matrix.target }}" gates
+      - name: Binding smoke tests against the staged natives
+        run: packaging/release-target.sh "${{ matrix.target }}" smoke
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            target/dist/${{ matrix.target }}/out
+            target/dist/${{ matrix.target }}/native
+            target/dist/${{ matrix.target }}/sbom
+          if-no-files-found: error
+          retention-days: 14
 
-      - name: Build release
-        run: cargo build --lib --release --target ${{ matrix.target }}
+  universal:
+    name: Java jar, NuGet package, tRPC tarball
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "8.0.x"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: target/dist
+      - name: Install pinned tools
+        run: packaging/install-tools.sh linux-x64 rust python jdk maven node
+      - name: Java jar (all natives bundled; tests vs linux-x64)
+        run: packaging/package-java.sh linux-x64
+      - name: NuGet package (all RIDs required)
+        run: packaging/package-dotnet.sh
+      - name: tRPC tarball (tests vs linux-x64 .node)
+        run: packaging/package-node.sh --trpc linux-x64
+      - name: No build paths in universal artifacts
+        run: packaging/gates/check-no-build-paths.sh target/dist/universal/out
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: universal
+          path: target/dist/universal/out
+          if-no-files-found: error
+          retention-days: 14
 
-      - name: Create tarball (Unix)
-        if: runner.os != 'Windows'
+  assemble:
+    name: Release assets + SHA256SUMS (also the dry run)
+    needs: [build, universal]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: artifacts
+      # out/ of every target already holds its per-artifact SBOMs
+      # (packaging/package-sboms.sh), so they are release assets, in
+      # SHA256SUMS and covered by the attestation.
+      - name: Collect release assets + SHA256SUMS
         run: |
-          cd target/${{ matrix.target }}/release
-          tar czf ${{ matrix.artifact_name }}.tar.gz ${{ matrix.artifact_name }}
-          mv ${{ matrix.artifact_name }}.tar.gz ../../..
+          mkdir -p release
+          cp artifacts/universal/* release/
+          for t in linux-x64 linux-arm64 macos-arm64 windows-x64; do
+            cp "artifacts/${t}/out/"* release/
+          done
+          packaging/make-sums.sh release
+          ls -la release
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets
+          path: release
+          if-no-files-found: error
+          retention-days: 14
 
-      - name: Create zip (Windows)
-        if: runner.os == 'Windows'
+  release:
+    name: GitHub Release
+    # Only a tag PUSH publishes; a workflow_dispatch (even on a tag) stops at
+    # `assemble`.
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: assemble
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+          path: release
+      - name: Verify SHA256SUMS
+        working-directory: release
+        run: sha256sum -c --strict SHA256SUMS
+      - name: Build provenance attestation (every asset in SHA256SUMS)
+        id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: release/SHA256SUMS
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
         run: |
-          cd target/${{ matrix.target }}/release
-          7z a ${{ matrix.artifact_name }}.zip ${{ matrix.artifact_name }}
-          move ${{ matrix.artifact_name }}.zip ..\..\..
-
-      - name: Upload Release Asset (Unix)
-        if: runner.os != 'Windows'
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
-        with:
-          files: ${{ matrix.artifact_name }}.tar.gz
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Release Asset (Windows)
-        if: runner.os == 'Windows'
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
-        with:
-          files: ${{ matrix.artifact_name }}.zip
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # Future: Publish to crates.io
-  # publish-crates-io:
-  #   name: Publish to crates.io
-  #   needs: build-and-release
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
-  #     - name: Install Rust
-  #       uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # stable
-  #     - name: Publish
-  #       run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
+          cp "${BUNDLE}" "release/sz-configtool-${TAG#v}.intoto.jsonl"
+          # vX.Y.Z-N (release counter) is a full release; only -rc.N /
+          # -alpha.N / -beta.N are GitHub prereleases (check-versions.sh
+          # already rejected every other form).
+          prerelease=()
+          if [[ "${TAG}" =~ -(rc|alpha|beta)\.[0-9]+$ ]]; then prerelease=(--prerelease); fi
+          gh release create "${TAG}" release/* --repo "${GITHUB_REPOSITORY}" \
+            --verify-tag --title "${TAG}" --generate-notes "${prerelease[@]}"

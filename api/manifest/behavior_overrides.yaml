@@ -1,0 +1,91 @@
+# CFG_FBOVR — per-usage-type feature behavior overrides. Root module:
+# src/behavior_overrides.rs (5 pub fns, all here).
+group: behavior_overrides
+
+functions:
+  - name: add_behavior_override
+    doc: Add a behavior override (CFG_FBOVR row) for a feature and usage type.
+    rust: behavior_overrides::add_behavior_override
+    rust_params_struct: behavior_overrides::AddBehaviorOverrideParams
+    c_symbol: SzConfigTool_addBehaviorOverride
+    args:
+      - name: feature
+        type: str
+        field: feature_code
+        semantics: Feature code, matched case-insensitively against CFG_FTYPE (NOT_FOUND); stored as its FTYPE_ID.
+      - name: usage_type
+        type: str
+        semantics: Uppercased; stored as UTYPE_CODE. Any string is accepted (no domain check).
+      - name: behavior
+        type: str
+        semantics: >-
+          Behavior code, case-insensitive: a frequency A1, F1, FF, FM, FVM (with
+          optional E = exclusive and/or S = stable letters in any order) or the
+          bare NAME / NONE; anything else is INVALID_INPUT. Split into FTYPE_FREQ,
+          FTYPE_EXCL (Yes/No), FTYPE_STAB (Yes/No).
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND, INVALID_INPUT, MISSING_SECTION, ALREADY_EXISTS]
+    notes: >-
+      Validation order: feature, behavior, CFG_FBOVR present (MISSING_SECTION),
+      duplicate (same FTYPE_ID + uppercased UTYPE_CODE, ALREADY_EXISTS). The row
+      always carries FTYPE_ID, UTYPE_CODE, FTYPE_FREQ, FTYPE_EXCL, FTYPE_STAB.
+
+  - name: delete_behavior_override
+    doc: Delete the behavior override for a feature and usage type.
+    rust: behavior_overrides::delete_behavior_override
+    c_symbol: SzConfigTool_deleteBehaviorOverride
+    args:
+      - name: feature
+        type: str
+        semantics: Feature code, case-insensitive; unknown is NOT_FOUND.
+      - name: usage_type
+        type: str
+        semantics: Uppercased, then matched exactly against UTYPE_CODE (a stored lowercase UTYPE_CODE cannot be matched).
+    returns: config
+    errors: [JSON_PARSE, NOT_FOUND, MISSING_SECTION]
+    notes: No override for the pair is NOT_FOUND; a config without CFG_FBOVR is MISSING_SECTION.
+
+  - name: get_behavior_override
+    doc: Get the raw CFG_FBOVR row for a feature and usage type.
+    rust: behavior_overrides::get_behavior_override
+    c_symbol: null
+    args:
+      - name: feature
+        type: str
+        semantics: Feature code, case-insensitive; unknown is NOT_FOUND.
+      - name: usage_type
+        type: str
+        semantics: Uppercased, then matched exactly against UTYPE_CODE.
+    returns: json
+    errors: [JSON_PARSE, NOT_FOUND, MISSING_SECTION]
+    notes: >-
+      Result is the stored row with on-disk keys (FTYPE_ID, UTYPE_CODE, FTYPE_FREQ,
+      FTYPE_EXCL, FTYPE_STAB).
+    c_notes: >-
+      No typed C export; use SzConfigTool_invoke.
+
+  - name: list_behavior_overrides
+    doc: List the raw CFG_FBOVR rows sorted by FTYPE_ID.
+    rust: behavior_overrides::list_behavior_overrides
+    c_symbol: SzConfigTool_listBehaviorOverrides
+    args: []
+    returns: json
+    errors: [JSON_PARSE, MISSING_SECTION]
+    notes: >-
+      Result is an array of stored rows (on-disk keys), stable-sorted by FTYPE_ID
+      only (rows sharing a FTYPE_ID keep config order). A config without
+      CFG_FBOVR is MISSING_SECTION (not []).
+
+  - name: list_behavior_overrides_resolved
+    doc: List behavior overrides as {feature, usageType, behavior} display records.
+    rust: behavior_overrides::list_behavior_overrides_resolved
+    c_symbol: SzConfigTool_listBehaviorOverridesResolved
+    args: []
+    returns: json
+    errors: [JSON_PARSE, MISSING_SECTION]
+    notes: >-
+      Result is an array of {feature, usageType, behavior} sorted by (FTYPE_ID,
+      UTYPE_CODE). feature is the FTYPE_CODE resolved from FTYPE_ID, or the id
+      as a string when no CFG_FTYPE row matches; behavior is FTYPE_FREQ plus E
+      when FTYPE_EXCL and S when FTYPE_STAB is Y/YES/1 (case-insensitive). A
+      missing G2_CONFIG or CFG_FBOVR is MISSING_SECTION.

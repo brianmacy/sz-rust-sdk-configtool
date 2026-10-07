@@ -1,0 +1,441 @@
+# Conformance cases for the `calls_expression` group. Every case starts from
+# the REAL template config (project.yaml paths.fixture). Template facts used:
+# 28 CFG_EFCALL rows (max id 99); PHONE (FTYPE 6) has one call, EFCALL 1
+# (PHONE_HASHER, order 1, BOM [PHONE_LAST_10 FELEM 60 @1]); NAME has 7 calls
+# (EFCALL 7 at order 2); DOB has none; EFCALL 97 carries TOKENIZED_NM under
+# both GROUP_ASSOCIATION and EMPLOYER (BOM orders 13, 14).
+group: calls_expression
+
+cases:
+  # ---- add_expression_call ----
+  - name: add_then_get_and_list
+    steps:
+      - fn: add_expression_call
+        args:
+          efunc_code: express_bom
+          ftype_code: phone
+          expression_feature: email
+          is_virtual: "No"
+          element_list:
+            - {element: phone_num, required: "Yes"}
+            - {element: PHONE_LAST_5, required: "No", feature: phone}
+        expect:
+          kind: config_and_json
+          result:
+            EFCALL_ID: 1000
+            FTYPE_ID: 6
+            FELEM_ID: -1
+            EFUNC_ID: 1
+            EXEC_ORDER: 2
+            EFEAT_FTYPE_ID: 14
+            IS_VIRTUAL: "No"
+      - fn: get_expression_call
+        args: {call: 1000}
+        expect:
+          result: {EFCALL_ID: 1000, FTYPE_ID: 6, EXEC_ORDER: 2, EFEAT_FTYPE_ID: 14}
+      - fn: list_expression_calls
+        expect:
+          len: 29
+          contains:
+            - id: 1000
+              feature: PHONE
+              element: n/a
+              execOrder: 2
+              function: EXPRESS_BOM
+              isVirtual: "No"
+              expressionFeature: EMAIL
+              elementList: [PHONE_NUM, PHONE_LAST_5]
+      # The BOM row for PHONE_LAST_5 was stored under FTYPE PHONE.
+      - fn: delete_expression_call_element
+        args: {call: 1000, element_code: PHONE_LAST_5, element_feature: PHONE}
+      - fn: list_expression_calls
+        expect:
+          contains:
+            - {id: 1000, elementList: [PHONE_NUM]}
+
+  - name: add_element_list_item_missing_key_is_missing_field
+    fn: add_expression_call
+    args:
+      efunc_code: EXPRESS_BOM
+      ftype_code: phone
+      is_virtual: "No"
+      element_list:
+        - {required: "Yes"}
+    expect: {error: MISSING_FIELD}
+
+  # BOM feature "parent" (any case) = G2 parent feature link, FTYPE_ID 0
+  # (EFBomConfig::PARENT_FEATURE_LINKED_FTYPE); absent = -1 (WILDCARDED_FTYPE);
+  # a feature code = its FTYPE_ID.
+  - name: add_parent_bom_feature_is_stored_as_zero
+    steps:
+      - fn: add_expression_call
+        args:
+          efunc_code: EXPRESS_BOM
+          felem_code: COUNTRY
+          ftype_code: ALL
+          is_virtual: maybe
+          element_list:
+            - {element: PHONE_NUM, required: "Yes", feature: parent}
+            - {element: PHONE_LAST_5, required: "No"}
+            - {element: PHONE_LAST_10, required: "No", feature: phone}
+        expect:
+          result: {EFCALL_ID: 1000, FTYPE_ID: -1, FELEM_ID: 28, EXEC_ORDER: 1, EFEAT_FTYPE_ID: -1, IS_VIRTUAL: maybe}
+      - fn: get_config_section
+        args: {section_name: CFG_EFBOM, filter: '"EFCALL_ID": 1000,'}
+        expect:
+          result:
+            - {EFCALL_ID: 1000, FTYPE_ID: 0, FELEM_ID: 33, EXEC_ORDER: 1, FELEM_REQ: "Yes"}
+            - {EFCALL_ID: 1000, FTYPE_ID: -1, FELEM_ID: 61, EXEC_ORDER: 2, FELEM_REQ: "No"}
+            - {EFCALL_ID: 1000, FTYPE_ID: 6, FELEM_ID: 60, EXEC_ORDER: 3, FELEM_REQ: "No"}
+      # Stored as FTYPE 0: adding (1000, 0, PHONE_NUM) again is a duplicate.
+      - fn: add_expression_call_element
+        args: {efcall_id: 1000, ftype_id: 0, felem_id: 33, felem_req: "No"}
+        expect: {error: ALREADY_PRESENT}
+      - fn: get_expression_call
+        args: {call: 1000}
+        expect:
+          result: {EFCALL_ID: 1000, FTYPE_ID: -1, FELEM_ID: 28, EFUNC_ID: 1}
+      - fn: list_expression_calls
+        expect:
+          contains:
+            - {id: 1000, feature: all, element: COUNTRY, elementList: [PHONE_NUM, PHONE_LAST_5, PHONE_LAST_10]}
+
+  - name: add_parent_bom_feature_is_case_insensitive
+    steps:
+      - fn: add_expression_call
+        args:
+          efunc_code: EXPRESS_BOM
+          ftype_code: DOB
+          is_virtual: "No"
+          element_list:
+            - {element: PHONE_NUM, required: "Yes", feature: PARENT}
+            - {element: PHONE_LAST_5, required: "Yes", feature: PaReNt}
+      - fn: get_config_section
+        args: {section_name: CFG_EFBOM, filter: '"EFCALL_ID": 1000,'}
+        expect:
+          len: 2
+          excludes:
+            - {FTYPE_ID: -1}
+          contains:
+            - {FTYPE_ID: 0, FELEM_ID: 33}
+            - {FTYPE_ID: 0, FELEM_ID: 61}
+
+  - name: add_empty_element_list_and_na_expression_feature
+    steps:
+      - fn: add_expression_call
+        args: {efunc_code: EXPRESS_ID, ftype_code: DOB, expression_feature: N/A, is_virtual: "Yes", element_list: []}
+        expect:
+          result: {FTYPE_ID: 2, EXEC_ORDER: 1, EFEAT_FTYPE_ID: -1, IS_VIRTUAL: "Yes"}
+      - fn: get_expression_call
+        args: {call: DOB}
+        expect:
+          result: {EFCALL_ID: 1000}
+
+  - name: add_explicit_free_order_is_honoured
+    fn: add_expression_call
+    args: {efunc_code: EXPRESS_ID, ftype_code: NAME, exec_order: 3, is_virtual: "No", element_list: []}
+    expect:
+      result: {EXEC_ORDER: 3}
+
+  - name: add_non_positive_order_auto_allocates
+    fn: add_expression_call
+    args: {efunc_code: EXPRESS_ID, ftype_code: NAME, exec_order: -5, is_virtual: "No", element_list: []}
+    expect:
+      result: {EXEC_ORDER: 99}
+
+  - name: add_taken_order_is_already_exists
+    fn: add_expression_call
+    args: {efunc_code: EXPRESS_ID, ftype_code: NAME, exec_order: 2, is_virtual: "No", element_list: []}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_feature_and_element_is_invalid_input
+    fn: add_expression_call
+    args: {efunc_code: EXPRESS_ID, ftype_code: NAME, felem_code: COUNTRY, is_virtual: "No", element_list: []}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_neither_is_invalid_input
+    fn: add_expression_call
+    args: {efunc_code: EXPRESS_ID, felem_code: N/A, is_virtual: "No", element_list: []}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_unknown_function_is_not_found
+    fn: add_expression_call
+    args: {efunc_code: NO_SUCH_EFUNC, ftype_code: NAME, is_virtual: "No", element_list: []}
+    expect: {error: NOT_FOUND}
+
+  - name: add_unknown_feature_is_not_found
+    fn: add_expression_call
+    args: {efunc_code: EXPRESS_ID, ftype_code: NO_SUCH_FEATURE, is_virtual: "No", element_list: []}
+    expect: {error: NOT_FOUND}
+
+  - name: add_unknown_element_is_not_found
+    fn: add_expression_call
+    args: {efunc_code: EXPRESS_ID, felem_code: NO_SUCH_ELEMENT, is_virtual: "No", element_list: []}
+    expect: {error: NOT_FOUND}
+
+  - name: add_unknown_expression_feature_is_not_found
+    fn: add_expression_call
+    args: {efunc_code: EXPRESS_ID, ftype_code: DOB, expression_feature: NO_SUCH_FEATURE, is_virtual: "No", element_list: []}
+    expect: {error: NOT_FOUND}
+
+  - name: add_unknown_list_element_is_not_found
+    fn: add_expression_call
+    args:
+      efunc_code: EXPRESS_ID
+      ftype_code: DOB
+      is_virtual: "No"
+      element_list: [{element: NO_SUCH_ELEMENT, required: "Yes"}]
+    expect: {error: NOT_FOUND}
+
+  - name: add_unknown_list_feature_is_not_found
+    fn: add_expression_call
+    args:
+      efunc_code: EXPRESS_ID
+      ftype_code: DOB
+      is_virtual: "No"
+      element_list: [{element: PHONE_NUM, required: "Yes", feature: NO_SUCH_FEATURE}]
+    expect: {error: NOT_FOUND}
+
+  - name: add_missing_efcall_section
+    fn: add_expression_call
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {efunc_code: EXPRESS_ID, ftype_code: DOB, is_virtual: "No", element_list: []}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_missing_efbom_section
+    fn: add_expression_call
+    config_literal: '{"G2_CONFIG": {"CFG_EFCALL": [], "CFG_EFUNC": [{"EFUNC_ID": 1, "EFUNC_CODE": "X"}], "CFG_FTYPE": [{"FTYPE_ID": 1, "FTYPE_CODE": "F"}]}}'
+    args: {efunc_code: X, ftype_code: F, is_virtual: "No", element_list: []}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_invalid_json
+    fn: add_expression_call
+    config_literal: "not json"
+    args: {efunc_code: EXPRESS_ID, ftype_code: DOB, is_virtual: "No", element_list: []}
+    expect: {error: JSON_PARSE}
+
+  # ---- delete_expression_call ----
+  - name: delete_cascades_bom
+    steps:
+      - fn: delete_expression_call
+        args: {efcall_id: 1}
+        expect: {kind: config}
+      - fn: get_expression_call
+        args: {call: 1}
+        expect: {error: NOT_FOUND}
+      - fn: list_expression_calls
+        expect:
+          len: 27
+          excludes:
+            - {id: 1}
+      # The (1, PHONE, PHONE_LAST_10) BOM row is gone: re-adding it is not a duplicate.
+      - fn: add_expression_call_element
+        args: {efcall_id: 1, ftype_id: 6, felem_id: 60, felem_req: "Yes"}
+        expect:
+          result: {EXEC_ORDER: 1}
+
+  - name: delete_missing_is_not_found
+    fn: delete_expression_call
+    args: {efcall_id: 9999}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_invalid_json
+    fn: delete_expression_call
+    config_literal: "not json"
+    args: {efcall_id: 1}
+    expect: {error: JSON_PARSE}
+
+  # ---- get_expression_call ----
+  - name: get_by_id
+    fn: get_expression_call
+    args: {call: 34}
+    expect:
+      kind: json
+      result: {EFCALL_ID: 34, FTYPE_ID: 14, FELEM_ID: -1, EFUNC_ID: 7, EXEC_ORDER: 1, EFEAT_FTYPE_ID: 88, IS_VIRTUAL: "No"}
+
+  - name: get_by_feature_is_case_insensitive
+    fn: get_expression_call
+    args: {call: phone}
+    expect:
+      result: {EFCALL_ID: 1, EFUNC_ID: 4}
+
+  - name: get_by_ambiguous_feature_is_invalid_input
+    fn: get_expression_call
+    args: {call: NAME}
+    expect: {error: INVALID_INPUT}
+
+  - name: get_by_feature_without_call_is_not_found
+    fn: get_expression_call
+    args: {call: DOB}
+    expect: {error: NOT_FOUND}
+
+  - name: get_by_unknown_feature_is_not_found
+    fn: get_expression_call
+    args: {call: NO_SUCH_FEATURE}
+    expect: {error: NOT_FOUND}
+
+  - name: get_missing_id_is_not_found
+    fn: get_expression_call
+    args: {call: 9999}
+    expect: {error: NOT_FOUND}
+
+  - name: get_invalid_json
+    fn: get_expression_call
+    config_literal: "not json"
+    args: {call: 1}
+    expect: {error: JSON_PARSE}
+
+  # ---- list_expression_calls ----
+  - name: list_template
+    fn: list_expression_calls
+    expect:
+      kind: json
+      len: 28
+      contains:
+        - {id: 1, feature: PHONE, element: n/a, execOrder: 1, function: PHONE_HASHER, isVirtual: "No", expressionFeature: n/a, elementList: [PHONE_LAST_10]}
+        - {id: 34, feature: EMAIL, expressionFeature: EMAIL_KEY}
+
+  - name: list_without_sections_is_empty
+    fn: list_expression_calls
+    config_literal: '{"G2_CONFIG": {}}'
+    expect: {len: 0}
+
+  - name: list_invalid_json
+    fn: list_expression_calls
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}
+
+  # ---- add_expression_call_element ----
+  - name: add_element_auto_order_then_list
+    steps:
+      - fn: add_expression_call_element
+        args: {efcall_id: 1, ftype_id: 6, felem_id: 61, felem_req: "Yes"}
+        expect:
+          kind: config_and_json
+          result: {EFCALL_ID: 1, FTYPE_ID: 6, FELEM_ID: 61, EXEC_ORDER: 2, FELEM_REQ: "Yes"}
+      - fn: list_expression_calls
+        expect:
+          contains:
+            - {id: 1, elementList: [PHONE_LAST_10, PHONE_LAST_5]}
+
+  - name: add_element_explicit_order_and_unvalidated_ids
+    fn: add_expression_call_element
+    args: {efcall_id: 5555, ftype_id: 0, felem_id: 77777, exec_order: 5, felem_req: whatever}
+    expect:
+      result: {EFCALL_ID: 5555, FTYPE_ID: 0, FELEM_ID: 77777, EXEC_ORDER: 5, FELEM_REQ: whatever}
+
+  - name: add_element_taken_order_is_already_exists
+    fn: add_expression_call_element
+    args: {efcall_id: 1, ftype_id: 6, felem_id: 61, exec_order: 1, felem_req: "No"}
+    expect: {error: ALREADY_EXISTS}
+
+  - name: add_element_duplicate_is_already_present
+    fn: add_expression_call_element
+    args: {efcall_id: 1, ftype_id: 6, felem_id: 60, exec_order: 9, felem_req: "No"}
+    expect: {error: ALREADY_PRESENT}
+
+  - name: add_element_negative_feature_is_invalid_input
+    fn: add_expression_call_element
+    args: {efcall_id: 1, ftype_id: -1, felem_id: 61, felem_req: "No"}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_element_missing_section
+    fn: add_expression_call_element
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {efcall_id: 1, ftype_id: 6, felem_id: 61, felem_req: "No"}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_element_invalid_json
+    fn: add_expression_call_element
+    config_literal: "not json"
+    args: {efcall_id: 1, ftype_id: 6, felem_id: 61, felem_req: "No"}
+    expect: {error: JSON_PARSE}
+
+  # ---- delete_expression_call_element ----
+  - name: delete_element_by_id_then_list
+    steps:
+      - fn: delete_expression_call_element
+        args: {call: 1, element_code: phone_last_10}
+        expect: {kind: config}
+      - fn: list_expression_calls
+        expect:
+          contains:
+            - {id: 1, elementList: []}
+      - fn: delete_expression_call_element
+        args: {call: 1, element_code: PHONE_LAST_10}
+        expect: {error: NOT_ON_CALL}
+
+  - name: delete_element_by_feature_selector
+    steps:
+      - fn: delete_expression_call_element
+        args: {call: PHONE, element_code: PHONE_LAST_10}
+      - fn: list_expression_calls
+        expect:
+          contains:
+            - {id: 1, elementList: []}
+
+  - name: delete_element_by_feature_selector_and_element_feature
+    steps:
+      - fn: delete_expression_call_element
+        args: {call: PHONE, element_code: PHONE_LAST_10, element_feature: PHONE}
+      - fn: list_expression_calls
+        expect:
+          contains:
+            - {id: 1, elementList: []}
+
+  - name: delete_element_disambiguated_by_element_feature
+    steps:
+      - fn: delete_expression_call_element
+        args: {call: 97, element_code: TOKENIZED_NM, element_feature: group_association}
+      - fn: list_expression_calls
+        expect:
+          contains:
+            - id: 97
+              elementList: [ORG_NAME, SUR_NAME, GIVEN_NAME, MIDDLE_NAME, FULL_NAME, CULTURE, SCRIPT, CATEGORY, ALL_NM, ALL_META, NM_PAIR, ID_NUM, TOKENIZED_NM]
+      - fn: delete_expression_call_element
+        args: {call: 97, element_code: TOKENIZED_NM, element_feature: GROUP_ASSOCIATION}
+        expect: {error: NOT_ON_CALL}
+      # Only the EMPLOYER row remains, so the feature-less delete is now unambiguous.
+      - fn: delete_expression_call_element
+        args: {call: 97, element_code: TOKENIZED_NM}
+
+  - name: delete_element_ambiguous_rows_is_invalid_input
+    fn: delete_expression_call_element
+    args: {call: 97, element_code: TOKENIZED_NM}
+    expect: {error: INVALID_INPUT}
+
+  - name: delete_element_ambiguous_feature_selector_is_invalid_input
+    fn: delete_expression_call_element
+    args: {call: NAME, element_code: FULL_NAME}
+    expect: {error: INVALID_INPUT}
+
+  - name: delete_element_missing_call_is_not_found
+    fn: delete_expression_call_element
+    args: {call: 9999, element_code: PHONE_LAST_10}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_element_unknown_element_is_not_found
+    fn: delete_expression_call_element
+    args: {call: 1, element_code: NO_SUCH_ELEMENT}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_element_unknown_element_feature_is_not_found
+    fn: delete_expression_call_element
+    args: {call: 1, element_code: PHONE_LAST_10, element_feature: NO_SUCH_FEATURE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_element_not_in_feature
+    fn: delete_expression_call_element
+    args: {call: 1, element_code: PHONE_LAST_10, element_feature: NAME}
+    expect: {error: NOT_IN_FEATURE}
+
+  - name: delete_element_not_on_call
+    fn: delete_expression_call_element
+    args: {call: 1, element_code: PHONE_NUM}
+    expect: {error: NOT_ON_CALL}
+
+  - name: delete_element_invalid_json
+    fn: delete_expression_call_element
+    config_literal: "not json"
+    args: {call: 1, element_code: PHONE_LAST_10}
+    expect: {error: JSON_PARSE}

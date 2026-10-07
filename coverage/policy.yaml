@@ -1,0 +1,87 @@
+# Coverage policy (packaging/coverage.sh -> packaging/lib/coverage_gate.py).
+# Parsed by packaging/lib/cfg.py: block-style maps of scalars only.
+#
+# Standard: 100% of lines, branches and (Rust) code regions of every gated
+# file, hand-written AND generated. The ONLY allowed gaps are the entries
+# under `exclusions`, each with its justification; an exclusion that matches
+# nothing uncovered fails the gate (delete it).
+#
+# components.<name>:
+#   report    lcov file in the report dir          regions  llvm-cov JSON (Rust code regions)
+#   jacoco    JaCoCo XML                           include  regex of gated repo-relative paths
+#   exclude   regex of paths left out of the gate (test-only source files)
+#   generated regex of files reported as generated (gated the same way)
+#   path_strip   regex removed from report paths (installed-package prefixes)
+#   path_prefix  prepended to relative report paths (the tool's base directory)
+#
+# exclusions.<id>: component, file (path suffix, "" = every gated file), and
+# ONE anchor: line (exact trimmed source text) or pattern (regex on it); it
+# excuses every uncovered line/branch/region starting on an anchor line.
+# Optional: function (regex, full match on the Rust fn name) limits anchors to
+# those fns; scope: block widens an anchor to the brace block it opens or sits
+# in; platform_dependent: "true" exempts a host-specific gap from the stale
+# check. why (the reviewed justification) is required. Policy: an exclusion is
+# allowed only for code no test on any host can execute (allocation failure,
+# generated code, a cross-process race); everything else gets a test or is
+# restructured so the dead arm does not exist.
+
+components:
+  rust:
+    report: "rust.lcov"
+    regions: "rust.json"
+    include: "^(src|api/src|ffi/src|tools/codegen/src|bindings/(python|jni|node)/src)/"
+    # ffi/src/tests_*.rs are #[cfg(test)] modules (test code, not product code).
+    exclude: "^ffi/src/tests_[a-z0-9_]+[.]rs$"
+    generated: "^api/src/dispatch_gen[.]rs$"
+  python:
+    report: "python.lcov"
+    path_strip: "^.*/site-packages/"
+    path_prefix: "bindings/python/python/"
+    include: "^bindings/python/python/sz_configtool/"
+    generated: "/generated[.]py$"
+  node:
+    report: "node.lcov"
+    path_prefix: "bindings/node/"
+    include: "^bindings/node/ts/"
+    generated: "^bindings/node/ts/generated/"
+  trpc:
+    report: "trpc.lcov"
+    path_prefix: "bindings/node/trpc/"
+    include: "^bindings/node/trpc/src/"
+    generated: "^bindings/node/trpc/src/generated/"
+  java:
+    jacoco: "java.jacoco.xml"
+    path_prefix: "bindings/java/src/main/java/"
+    include: "^bindings/java/src/main/java/"
+    generated: "/szconfigtool/(SzConfigTool|SzConfigToolErrorKind)[.]java$"
+  dotnet:
+    report: "dotnet.lcov"
+    include: "^bindings/csharp/src/"
+    generated: "/Generated/"
+  cpp:
+    report: "cpp.lcov"
+    include: "^bindings/cpp/include/"
+    generated: "/generated/"
+
+exclusions:
+  # Only gaps that no test on any host can execute. Each names the one
+  # construct it excuses; everything else is covered by a real test.
+  # ---- Rust ----
+  rust-jni-getstringutfchars-oom:
+    component: "rust"
+    file: "bindings/jni/src/lib.rs"
+    function: 'read_string'
+    line: ".map_err(|e| e.to_string())"
+    why: "Error conversion of JString::mutf8_chars (JNI GetStringUTFChars), which fails only when the JVM cannot allocate the UTF-8 copy (the null reference is handled before it). Every other JNI allocation in the seam shares a tested error path (marshal_failure, the RuntimeException fallback of throw_failure)."
+  rust-napi-register:
+    component: "rust"
+    file: "bindings/node/src/lib.rs"
+    line: "#[napi]"
+    why: "napi-derive's generated module-registration code has a single counter, in the Err arm of napi_create_function (disassembly: one counter per _napi_rs_internal_register_*); every function is registered on each module load (their exports are tested), so that arm never runs."
+  # ---- Java ----
+  java-extract-race:
+    component: "java"
+    file: "szconfigtool/NativeLoader.java"
+    pattern: '^\} catch \(FileAlreadyExistsException \| AccessDeniedException e\) \{$|^if \(!sameContent\(target, bytes\)\) \{$|^throw new IOException\("existing " \+ target'
+    why: "After the atomic rename fails, the side where ANOTHER JVM has meanwhile written the identical library (a cross-process race between the existence check and the rename) cannot be produced by a test; the differing-content side is tested on macOS via a deny-delete ACL (Linux has no unprivileged way to make the rename fail, so there the whole catch is uncovered)."
+    platform_dependent: "true"

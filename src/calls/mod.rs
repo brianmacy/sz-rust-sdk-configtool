@@ -248,23 +248,19 @@ pub(crate) fn resolve_feature_element_id(
 pub use standardize::{
     add_standardize_call, add_standardize_call_element, delete_standardize_call,
     delete_standardize_call_element, get_standardize_call, list_standardize_calls,
-    set_standardize_call, set_standardize_call_element,
 };
 
 pub use expression::{
     add_expression_call, add_expression_call_element, delete_expression_call,
     delete_expression_call_element, get_expression_call, list_expression_calls,
-    set_expression_call, set_expression_call_element,
 };
 
 pub use comparison::{
     add_comparison_call, add_comparison_call_element, delete_comparison_call,
     delete_comparison_call_element, get_comparison_call, list_comparison_calls,
-    set_comparison_call, set_comparison_call_element,
 };
 
 pub use distinct::{
     add_distinct_call, add_distinct_call_element, delete_distinct_call,
-    delete_distinct_call_element, get_distinct_call, list_distinct_calls, set_distinct_call,
-    set_distinct_call_element,
+    delete_distinct_call_element, get_distinct_call, list_distinct_calls,
 };

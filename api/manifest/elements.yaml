@@ -1,0 +1,198 @@
+# CFG_FELEM / CFG_FBOM — elements. Root module: src/elements.rs
+# (10 pub fns: 8 here, 2 excluded below).
+group: elements
+
+functions:
+  - name: add_element
+    doc: Add an element (CFG_FELEM row).
+    rust: elements::add_element
+    rust_params_struct: elements::AddElementParams
+    c_symbol: SzConfigTool_addElement
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased; duplicate (exact match on the uppercased code) is ALREADY_EXISTS.
+      - name: description
+        type: str
+        optional: true
+        semantics: FELEM_DESC, stored verbatim; absent defaults to the uppercased code.
+      - name: data_type
+        type: str
+        optional: true
+        default: string
+        semantics: Case-insensitive; normalized to lowercase string, number, date, datetime or json, else INVALID_INPUT.
+      - name: id
+        type: int
+        optional: true
+        semantics: Requested FELEM_ID. Absent OR <= 0 means auto-allocate (max existing + 1, floor 1000). A taken id > 0 is ALREADY_EXISTS.
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, INVALID_INPUT]
+    notes: >-
+      Validation order: duplicate code, id, data_type.
+    c_notes: >-
+      C typed export SzConfigTool_addElement takes the code positionally plus an element
+      JSON with keys description (or FELEM_DESC), dataType (or DATA_TYPE) and id;
+      returns -3 (not -2) for invalid element JSON.
+
+  - name: delete_element
+    doc: Delete an element that no feature uses.
+    rust: elements::delete_element
+    c_symbol: SzConfigTool_deleteElement
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup; unknown is NOT_FOUND.
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, MISSING_FIELD]
+    notes: >-
+      INVALID_INPUT when any CFG_FBOM row maps the element to an existing feature
+      ("Element linked to the following feature(s): ..."). TRAP: CFG_ATTR rows
+      naming the element are NOT checked and are left dangling. MISSING_SECTION
+      for an absent CFG_FELEM or CFG_FBOM; MISSING_FIELD when the matched row's
+      FELEM_ID is not an integer.
+
+  - name: get_element
+    doc: Get one element as a display summary by code.
+    rust: elements::get_element
+    c_symbol: SzConfigTool_getElement
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup; unknown is NOT_FOUND.
+    returns: json
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND]
+    notes: Result is exactly {id, element, datatype}; FELEM_DESC is NOT included.
+
+  - name: list_elements
+    doc: List all elements as display summaries, sorted by element code.
+    rust: elements::list_elements
+    c_symbol: SzConfigTool_listElements
+    args: []
+    returns: json
+    errors: [JSON_PARSE, MISSING_SECTION]
+    notes: Array of {id, element, datatype}, sorted alphabetically by element code (not by id).
+
+  - name: set_element
+    doc: Update an element's description and/or data type.
+    rust: elements::set_element
+    rust_params_struct: elements::SetElementParams
+    c_symbol: SzConfigTool_setElement
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup; unknown is NOT_FOUND.
+      - name: description
+        type: str
+        optional: true
+        semantics: Absent leaves FELEM_DESC; else stored verbatim.
+      - name: data_type
+        type: str
+        optional: true
+        semantics: >-
+          TRAP — absent leaves DATA_TYPE; else stored VERBATIM with no validation or
+          normalization (unlike add_element).
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND]
+    notes: >-
+      Succeeds unchanged when no update args are given.
+    c_notes: >-
+      C typed export takes an updates JSON with keys description (or FELEM_DESC) and
+      dataType (or DATA_TYPE); returns -3 for invalid updates JSON.
+
+  - name: set_feature_element
+    doc: Update one feature-element (CFG_FBOM) row's exec order, display level, delimiter or derived flag.
+    rust: elements::set_feature_element
+    rust_params_struct: elements::SetFeatureElementParams
+    c_symbol: null
+    args:
+      - name: feature_code
+        type: str
+        rust_convert: required_str_as_some
+        semantics: Required. Case-insensitive; unknown is NOT_FOUND.
+      - name: element_code
+        type: str
+        rust_convert: required_str_as_some
+        semantics: Required. Case-insensitive; unknown is NOT_FOUND.
+      - name: exec_order
+        type: int
+        optional: true
+        semantics: TRAP — stored verbatim; no uniqueness check and no <= 0 auto-allocation.
+      - name: display_level
+        type: int
+        optional: true
+        semantics: Must be >= 0, else INVALID_INPUT.
+      - name: display_delim
+        type: str
+        optional: true
+        semantics: Stored verbatim. Not tri-state; cannot be cleared back to null.
+      - name: derived
+        type: str
+        optional: true
+        semantics: Case-insensitive Yes/No, normalized, else INVALID_INPUT.
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT]
+    notes: >-
+      NOT_FOUND when the (feature, element) mapping is absent. Succeeds unchanged when
+      no update args are given. A missing CFG_FTYPE/CFG_FELEM surfaces as NOT_FOUND
+      (code lookup).
+    c_notes: >-
+      No C typed export.
+
+  - name: add_element_to_feature
+    doc: Map an existing element to a feature (append a CFG_FBOM row).
+    rust: elements::add_element_to_feature
+    rust_params_struct: elements::AddElementToFeatureParams
+    c_symbol: SzConfigTool_addElementToFeature
+    args:
+      - name: feature_code
+        type: str
+        semantics: Case-insensitive; unknown is NOT_FOUND.
+      - name: element_code
+        type: str
+        semantics: Case-insensitive; unknown is NOT_FOUND (the element is never auto-created).
+      - name: display_level
+        type: int
+        optional: true
+        default: 1
+        semantics: Must be >= 0, else INVALID_INPUT.
+      - name: display_delim
+        type: str
+        optional: true
+        semantics: Stored verbatim; absent stores null.
+      - name: derived
+        type: str
+        optional: true
+        default: "No"
+        semantics: Case-insensitive Yes/No, normalized, else INVALID_INPUT.
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT, ALREADY_EXISTS]
+    notes: >-
+      EXEC_ORDER is always auto-allocated as max(EXEC_ORDER over the WHOLE CFG_FBOM
+      table) + 1 and cannot be requested (use features.add_feature_comparison for an
+      explicit order). Duplicate (FTYPE_ID, FELEM_ID) is ALREADY_EXISTS. Validation
+      order: feature, element, display_level, derived, CFG_FBOM section, duplicate.
+    c_notes: >-
+      C typed export takes an optional options JSON (null allowed) with keys
+      displayLevel, displayDelim, derived; mistyped values are silently ignored; returns
+      -3 for invalid options JSON.
+
+  - name: delete_element_from_feature
+    doc: Remove one feature-element (CFG_FBOM) mapping.
+    rust: elements::delete_element_from_feature
+    c_symbol: SzConfigTool_deleteElementFromFeature
+    args:
+      - name: feature_code
+        type: str
+        semantics: Case-insensitive; unknown is NOT_FOUND.
+      - name: element_code
+        type: str
+        semantics: Case-insensitive; unknown is NOT_FOUND.
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND]
+    notes: NOT_FOUND when the mapping is absent. The CFG_FELEM row is kept.
+
+excluded:
+  - rust: elements::set_feature_element_display_level
+    reason: Convenience wrapper delegating to set_feature_element with only display_level; covered by set_feature_element.
+  - rust: elements::set_feature_element_derived
+    reason: Convenience wrapper delegating to set_feature_element with only derived; covered by set_feature_element.

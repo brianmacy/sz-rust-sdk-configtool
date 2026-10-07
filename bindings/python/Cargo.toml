@@ -1,0 +1,23 @@
+[package]
+name = "sz-configtool-python"
+description = "Python (pyo3) native seam over sz-configtool-api::invoke"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "szconfigtool_py"
+crate-type = ["cdylib"]
+# Exercised by the pytest suite against the built extension (no Rust tests).
+test = false
+doctest = false
+
+[dependencies]
+sz-configtool-api = { path = "../../api" }
+# `extension-module` is enabled by maturin (pyproject.toml) so plain
+# `cargo build --workspace` still links a loadable cdylib on every platform.
+pyo3 = { version = "0.29", features = ["abi3-py310"] }

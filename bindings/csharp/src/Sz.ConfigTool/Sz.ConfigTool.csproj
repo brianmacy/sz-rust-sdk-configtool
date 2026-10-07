@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>Sz.ConfigTool</RootNamespace>
+    <AssemblyName>Sz.ConfigTool</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+
+    <PackageId>Sz.ConfigTool</PackageId>
+    <Description>Unofficial .NET binding for the Senzing configuration library (libSzConfigTool): functional, stateless edits of g2config JSON documents.</Description>
+    <PackageTags>senzing;configuration;entity-resolution</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>false</IncludeSymbols>
+
+    <!-- Pack-time input: one sub-directory per RID holding that RID's native
+         library, e.g. natives/osx-arm64/libSzConfigTool.dylib (RIDs and file
+         names: ../../natives.props). Override with -p:SzNativesDir=<dir>. -->
+    <SzNativesDir Condition="'$(SzNativesDir)' == ''">$(MSBuildThisFileDirectory)../../natives/</SzNativesDir>
+    <!-- Release packaging sets this to true so a missing RID fails the pack. -->
+    <SzRequireAllNatives Condition="'$(SzRequireAllNatives)' == ''">false</SzRequireAllNatives>
+  </PropertyGroup>
+
+  <Import Project="../../natives.props" />
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
+    <InternalsVisibleTo Include="Sz.ConfigTool.Tests" />
+  </ItemGroup>
+
+  <!-- Adds every present native as runtimes/<rid>/native/<file> in the .nupkg. -->
+  <Target Name="SzPackNatives" BeforeTargets="_GetPackageFiles">
+    <ItemGroup>
+      <_SzNative Include="@(SzNativeRid->'$(SzNativesDir)%(Identity)/%(NativeFile)')">
+        <Rid>%(SzNativeRid.Identity)</Rid>
+      </_SzNative>
+      <_SzNativeMissing Include="@(_SzNative)" Condition="!Exists('%(Identity)')" />
+      <None Include="@(_SzNative)" Condition="Exists('%(Identity)')" Pack="true"
+            PackagePath="runtimes/%(_SzNative.Rid)/native/" />
+    </ItemGroup>
+    <Error Condition="'$(SzRequireAllNatives)' == 'true' and '@(_SzNativeMissing)' != ''"
+           Text="Missing native libraries for packing: @(_SzNativeMissing)" />
+    <Warning Condition="'$(SzRequireAllNatives)' != 'true' and '@(_SzNativeMissing)' != ''"
+             Text="Packing without native libraries: @(_SzNativeMissing)" />
+  </Target>
+
+</Project>

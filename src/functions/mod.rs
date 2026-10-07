@@ -6,19 +6,11 @@
 //! - Expression functions (CFG_EFUNC)
 //! - Comparison functions (CFG_CFUNC)
 //! - Distinct functions (CFG_DFUNC)
-//! - Matching functions (CFG_RTYPE - placeholder)
-//! - Scoring functions (CFG_RTYPE - placeholder)
-//! - Candidate functions (CFG_RTYPE - placeholder)
-//! - Validation functions (CFG_ATTR - placeholder)
 
-pub mod candidate;
 pub mod comparison;
 pub mod distinct;
 pub mod expression;
-pub mod matching;
-pub mod scoring;
 pub mod standardize;
-pub mod validation;
 
 // Re-export commonly used functions
 pub use standardize::{
@@ -41,22 +33,41 @@ pub use distinct::{
     list_distinct_functions, set_distinct_function,
 };
 
-pub use matching::{
-    add_matching_function, delete_matching_function, get_matching_function,
-    list_matching_functions, remove_matching_function, set_matching_function,
-};
+/// The update shared by the `set_*_function` operations: find the `section`
+/// row whose `code_field` is `code` (`not_found` when absent), let `update`
+/// edit a copy, then drop every row with that code and append the edited row
+/// (the historical delete-then-add, which moves the row to the end).
+///
+/// Errors: unparsable config -> `JsonParse`; no such row -> `not_found()`;
+/// a row matched only numerically (its code stored as a number) cannot be
+/// dropped by code -> `NotFound("<section> '<code>' not found")`.
+pub(crate) fn replace_row_at_end(
+    config_json: &str,
+    section: &str,
+    code_field: &str,
+    code: &str,
+    not_found: impl FnOnce() -> crate::error::SzConfigError,
+    update: impl FnOnce(&mut serde_json::Map<String, serde_json::Value>),
+) -> crate::error::Result<(String, serde_json::Value)> {
+    use serde_json::Value;
+    let mut config: Value = serde_json::from_str(config_json)
+        .map_err(|e| crate::error::SzConfigError::JsonParse(e.to_string()))?;
+    // A row matched by a field is an object (`get` on anything else is None).
+    let mut row = crate::helpers::find_in_section(&config, section, code_field, code)
+        .and_then(Value::as_object)
+        .cloned()
+        .ok_or_else(not_found)?;
+    update(&mut row);
 
-pub use scoring::{
-    add_scoring_function, delete_scoring_function, get_scoring_function, list_scoring_functions,
-    remove_scoring_function, set_scoring_function,
-};
-
-pub use candidate::{
-    add_candidate_function, delete_candidate_function, get_candidate_function,
-    list_candidate_functions, remove_candidate_function, set_candidate_function,
-};
-
-pub use validation::{
-    add_validation_function, delete_validation_function, get_validation_function,
-    list_validation_functions, remove_validation_function, set_validation_function,
-};
+    let rows = crate::helpers::verified_section_mut(&mut config, section);
+    let before = rows.len();
+    rows.retain(|r| r.get(code_field).and_then(Value::as_str) != Some(code));
+    if rows.len() == before {
+        return Err(crate::error::SzConfigError::NotFound(format!(
+            "{section} '{code}' not found"
+        )));
+    }
+    let row = Value::Object(row);
+    rows.push(row.clone());
+    Ok((config.to_string(), row))
+}

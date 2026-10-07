@@ -99,38 +99,6 @@ impl TryFrom<&Value> for AddComparisonCallElementParams {
     }
 }
 
-/// Parameters for setting (updating) a comparison call
-#[derive(Debug, Clone, Default)]
-pub struct SetComparisonCallParams {
-    pub cfcall_id: i64,
-    pub exec_order: Option<i64>,
-}
-
-impl TryFrom<&Value> for SetComparisonCallParams {
-    type Error = SzConfigError;
-
-    fn try_from(json: &Value) -> Result<Self> {
-        let cfcall_id = json
-            .get("cfcallId")
-            .and_then(|v| v.as_i64())
-            .ok_or_else(|| SzConfigError::MissingField("cfcallId".to_string()))?;
-
-        Ok(Self {
-            cfcall_id,
-            exec_order: json.get("execOrder").and_then(|v| v.as_i64()),
-        })
-    }
-}
-
-/// Parameters for setting a comparison call element
-#[derive(Debug, Clone)]
-pub struct SetComparisonCallElementParams {
-    pub ftype_id: i64,
-    pub felem_id: i64,
-    pub exec_order: i64,
-    pub updates: Value,
-}
-
 /// Add a new comparison call with element list
 ///
 /// Creates a new comparison call linking a function to a feature
@@ -217,7 +185,7 @@ pub fn add_comparison_call(
             felem_id: bom_felem_id,
             exec_order: idx as i64 + 1,
         };
-        cfbom_records.push(serde_json::to_value(&bom_row)?);
+        cfbom_records.push(crate::helpers::row_value(&bom_row));
     }
 
     // Create new CFG_CFCALL record via CfcallRow so every key is always present.
@@ -226,14 +194,10 @@ pub fn add_comparison_call(
         ftype_id,
         cfunc_id,
     };
-    let new_record = serde_json::to_value(&cfcall_row)?;
+    let new_record = crate::helpers::row_value(&cfcall_row);
 
-    // Add to config
-    if let Some(cfcall_array) = config_data["G2_CONFIG"]["CFG_CFCALL"].as_array_mut() {
-        cfcall_array.push(new_record.clone());
-    } else {
-        return Err(SzConfigError::MissingSection("CFG_CFCALL".to_string()));
-    }
+    // Add to config (get_desired_or_next_id_from_section proved CFG_CFCALL)
+    crate::helpers::verified_section_mut(&mut config_data, "CFG_CFCALL").push(new_record.clone());
 
     if let Some(cfbom_array) = config_data["G2_CONFIG"]["CFG_CFBOM"].as_array_mut() {
         cfbom_array.extend(cfbom_records);
@@ -241,8 +205,7 @@ pub fn add_comparison_call(
         return Err(SzConfigError::MissingSection("CFG_CFBOM".to_string()));
     }
 
-    let modified_config =
-        serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let modified_config = config_data.to_string();
 
     Ok((modified_config, new_record))
 }
@@ -280,16 +243,15 @@ pub fn delete_comparison_call(config: &str, cfcall_id: i64) -> Result<String> {
     }
 
     // Delete the comparison call
-    if let Some(cfcall_array) = config_data["G2_CONFIG"]["CFG_CFCALL"].as_array_mut() {
-        cfcall_array.retain(|record| record["CFCALL_ID"].as_i64() != Some(cfcall_id));
-    }
+    let cfcall_array = crate::helpers::verified_section_mut(&mut config_data, "CFG_CFCALL");
+    cfcall_array.retain(|record| record["CFCALL_ID"].as_i64() != Some(cfcall_id));
 
     // Delete associated CFBOM records
     if let Some(cfbom_array) = config_data["G2_CONFIG"]["CFG_CFBOM"].as_array_mut() {
         cfbom_array.retain(|record| record["CFCALL_ID"].as_i64() != Some(cfcall_id));
     }
 
-    serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))
+    Ok(config_data.to_string())
 }
 
 /// Get a single comparison call, addressed by id or by feature code.
@@ -481,19 +443,6 @@ pub fn list_comparison_calls(config: &str) -> Result<Vec<Value>> {
     Ok(items)
 }
 
-/// Update a comparison call (stub - not implemented in Python)
-///
-/// # Arguments
-/// * `config` - Configuration JSON string
-/// * `params` - Comparison call parameters (cfcall_id required, others optional to update)
-///
-/// # Returns
-/// Modified configuration JSON string
-pub fn set_comparison_call(config: &str, _params: SetComparisonCallParams) -> Result<String> {
-    // This is a stub - the Python version doesn't implement this
-    Ok(config.to_string())
-}
-
 /// Add a comparison call element (CBOM record)
 ///
 /// Creates a new comparison bill of materials entry.
@@ -566,7 +515,7 @@ pub fn add_comparison_call_element(
         felem_id: params.felem_id,
         exec_order,
     };
-    let new_record = serde_json::to_value(&row)?;
+    let new_record = crate::helpers::row_value(&row);
 
     // Add to CFG_CFBOM
     if let Some(cbom_array) = config_data["G2_CONFIG"]["CFG_CFBOM"].as_array_mut() {
@@ -575,8 +524,7 @@ pub fn add_comparison_call_element(
         return Err(SzConfigError::MissingSection("CFG_CFBOM".to_string()));
     }
 
-    let modified_config =
-        serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))?;
+    let modified_config = config_data.to_string();
 
     Ok((modified_config, new_record))
 }
@@ -662,38 +610,19 @@ pub fn delete_comparison_call_element(
         "Comparison",
     )?;
 
-    if let Some(cbom_array) = config_data["G2_CONFIG"]["CFG_CFBOM"].as_array_mut() {
-        // Mirror the derive predicate: when a feature disambiguated the target
-        // row, constrain the retain by FTYPE too. Otherwise a sibling row sharing
-        // (call, felem, exec) under another feature would be over-deleted.
-        cbom_array.retain(|item| {
-            !(item.get("CFCALL_ID").and_then(|v| v.as_i64()) == Some(cfcall_id)
-                && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
-                && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
-                && element_ftype_id
-                    .is_none_or(|ft| item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ft)))
-        });
-    }
+    let cbom_array = crate::helpers::verified_section_mut(&mut config_data, "CFG_CFBOM");
+    // Mirror the derive predicate: when a feature disambiguated the target
+    // row, constrain the retain by FTYPE too. Otherwise a sibling row sharing
+    // (call, felem, exec) under another feature would be over-deleted.
+    cbom_array.retain(|item| {
+        !(item.get("CFCALL_ID").and_then(|v| v.as_i64()) == Some(cfcall_id)
+            && item.get("FELEM_ID").and_then(|v| v.as_i64()) == Some(felem_id)
+            && item.get("EXEC_ORDER").and_then(|v| v.as_i64()) == Some(exec_order)
+            && element_ftype_id
+                .is_none_or(|ft| item.get("FTYPE_ID").and_then(|v| v.as_i64()) == Some(ft)))
+    });
 
-    serde_json::to_string(&config_data).map_err(|e| SzConfigError::JsonParse(e.to_string()))
-}
-
-/// Update a comparison call element (stub - not typically used)
-///
-/// # Arguments
-/// * `config` - Configuration JSON string
-/// * `cfcall_id` - Comparison call ID
-/// * `params` - Element parameters including updates
-///
-/// # Returns
-/// Modified configuration JSON string
-pub fn set_comparison_call_element(
-    config: &str,
-    _cfcall_id: i64,
-    _params: SetComparisonCallElementParams,
-) -> Result<String> {
-    // This is a stub - not commonly used
-    Ok(config.to_string())
+    Ok(config_data.to_string())
 }
 
 #[cfg(test)]

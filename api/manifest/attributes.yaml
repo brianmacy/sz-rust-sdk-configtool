@@ -1,0 +1,118 @@
+# CFG_ATTR — attributes. Root module: src/attributes.rs (5 pub fns, all here).
+group: attributes
+
+functions:
+  - name: add_attribute
+    doc: Add an attribute (CFG_ATTR row) mapping an input attribute to a feature element.
+    rust: attributes::add_attribute
+    rust_params_struct: attributes::AddAttributeParams
+    c_symbol: SzConfigTool_addAttribute
+    args:
+      - name: attribute
+        type: str
+        semantics: Uppercased before storage and duplicate check.
+      - name: feature
+        type: str
+        semantics: Must name an existing CFG_FTYPE (case-insensitive) or NOT_FOUND; stored uppercased in FTYPE_CODE.
+      - name: element
+        type: str
+        semantics: Must name an existing CFG_FELEM (case-insensitive) or NOT_FOUND; stored uppercased in FELEM_CODE.
+      - name: class
+        type: str
+        semantics: >-
+          CASE-SENSITIVE (not uppercased): must be exactly one of NAME, ATTRIBUTE,
+          IDENTIFIER, ADDRESS, PHONE, RELATIONSHIP, OTHER, else INVALID_INPUT.
+      - name: default_value
+        type: str
+        optional: true
+        semantics: Absent stores DEFAULT_VALUE null; any string (including "") is stored verbatim.
+      - name: internal
+        type: str
+        optional: true
+        default: "No"
+        semantics: Case-insensitive; normalized to Yes or No, else INVALID_INPUT.
+      - name: required
+        type: str
+        optional: true
+        default: "No"
+        semantics: Case-insensitive; normalized to Yes, No, Any or Desired (stored in FELEM_REQ), else INVALID_INPUT.
+      - name: id
+        type: int
+        optional: true
+        semantics: Requested ATTR_ID. Absent OR <= 0 means auto-allocate (max existing + 1, floor 1000). A taken id > 0 is ALREADY_EXISTS.
+    returns: config_and_json
+    errors: [JSON_PARSE, MISSING_SECTION, ALREADY_EXISTS, INVALID_INPUT, NOT_FOUND]
+    notes: >-
+      Returns (modified config, the new CFG_ATTR row). Validation order: class,
+      duplicate attribute, feature, element, required, internal, id. Does not create a
+      CFG_FBOM row.
+    c_notes: >-
+      TRAP: the C typed export SzConfigTool_addAttribute DROPS the new row and never
+      exposes `id` (always auto-allocates); invoke keeps both.
+
+  - name: delete_attribute
+    doc: Delete an attribute by code.
+    rust: attributes::delete_attribute
+    c_symbol: SzConfigTool_deleteAttribute
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup.
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND]
+    notes: No dependency or system-attribute protection; any attribute can be deleted.
+
+  - name: get_attribute
+    doc: Get one attribute's raw CFG_ATTR row by code.
+    rust: attributes::get_attribute
+    c_symbol: SzConfigTool_getAttribute
+    args:
+      - name: code
+        type: str
+        semantics: Uppercased before lookup.
+    returns: json
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND]
+    notes: Result uses on-disk keys (ATTR_ID, ATTR_CODE, ATTR_CLASS, FTYPE_CODE, FELEM_CODE, FELEM_REQ, DEFAULT_VALUE, INTERNAL).
+
+  - name: list_attributes
+    doc: List all attributes as camelCase summaries.
+    rust: attributes::list_attributes
+    c_symbol: SzConfigTool_listAttributes
+    args: []
+    returns: json
+    errors: [JSON_PARSE, MISSING_SECTION]
+    notes: >-
+      Result is an array of {id, attribute, class, feature, element, required,
+      default, internal} in config order; feature/element/default may be null.
+
+  - name: set_attribute
+    doc: Update an attribute's internal / required / default value.
+    rust: attributes::set_attribute
+    rust_params_struct: attributes::SetAttributeParams
+    c_symbol: SzConfigTool_setAttribute
+    args:
+      - name: attribute
+        type: str
+        semantics: Attribute code; uppercased before lookup.
+      - name: internal
+        type: str
+        optional: true
+        semantics: Absent leaves INTERNAL unchanged; else case-insensitive, normalized to Yes or No, else INVALID_INPUT.
+      - name: required
+        type: str
+        optional: true
+        semantics: Absent leaves FELEM_REQ unchanged; else normalized to Yes, No, Any or Desired, else INVALID_INPUT.
+      - name: default_value
+        type: str
+        optional: true
+        semantics: >-
+          Absent leaves DEFAULT_VALUE unchanged; a string is stored verbatim. NOT
+          tri-state: there is no way to clear DEFAULT_VALUE back to null.
+    returns: config
+    errors: [JSON_PARSE, MISSING_SECTION, NOT_FOUND, INVALID_INPUT]
+    notes: >-
+      Validation is interleaved with mutation but the input config is never modified on
+      error (a new config string is returned only on success).
+    c_notes: >-
+      C typed export takes an updates JSON object with keys internal, required and
+      `default` (not default_value); non-string values there are silently ignored.

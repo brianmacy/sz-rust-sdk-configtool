@@ -1,0 +1,184 @@
+# Conformance cases for the `functions_distinct` group (CFG_DFUNC). Every case
+# starts from the REAL template config, which has 6 DFUNC rows (ids 1-6).
+group: functions_distinct
+
+cases:
+  - name: add_defaults_then_get
+    steps:
+      - fn: add_distinct_function
+        args: {code: my_dist}
+        expect:
+          kind: config_and_json
+          result:
+            DFUNC_ID: 7
+            DFUNC_CODE: MY_DIST
+            DFUNC_DESC: null
+            CONNECT_STR: null
+            ANON_SUPPORT: "No"
+            LANGUAGE: null
+      - fn: get_distinct_function
+        args: {code: MY_DIST}
+        expect:
+          kind: json
+          result: {DFUNC_ID: 7, DFUNC_CODE: MY_DIST, DFUNC_DESC: null, CONNECT_STR: null, ANON_SUPPORT: "No", LANGUAGE: null}
+
+  - name: add_all_fields_normalizes_anon_support
+    steps:
+      - fn: add_distinct_function
+        args: {code: Full_Dist, connect_str: g2Full, description: Full one, language: en, anon_support: "yes"}
+        expect:
+          result: {DFUNC_CODE: FULL_DIST, ANON_SUPPORT: "Yes"}
+      - fn: get_distinct_function
+        args: {code: full_dist}
+        expect:
+          result: {DFUNC_ID: 7, DFUNC_DESC: Full one, CONNECT_STR: g2Full, ANON_SUPPORT: "Yes", LANGUAGE: en}
+
+  - name: add_empty_connect_str_is_stored
+    steps:
+      - fn: add_distinct_function
+        args: {code: BLANK_CONN, connect_str: ""}
+      - fn: get_distinct_function
+        args: {code: BLANK_CONN}
+        expect:
+          result: {CONNECT_STR: ""}
+
+  - name: add_duplicate_is_invalid_input
+    fn: add_distinct_function
+    args: {code: partial_names}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_bad_anon_support_is_invalid_input
+    fn: add_distinct_function
+    args: {code: NEW_DIST, anon_support: Maybe}
+    expect: {error: INVALID_INPUT}
+
+  - name: add_missing_section_is_missing_section
+    fn: add_distinct_function
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {code: X}
+    expect: {error: MISSING_SECTION}
+
+  - name: add_invalid_config_is_json_parse
+    fn: add_distinct_function
+    config_literal: "not json"
+    args: {code: X}
+    expect: {error: JSON_PARSE}
+
+  - name: list_template
+    fn: list_distinct_functions
+    expect:
+      kind: json
+      len: 6
+      contains:
+        - {id: 1, function: FELEM_STRICT_SUBSET, connectStr: g2StrictSubsetFelems, anonSupport: "Yes", language: null}
+        - {id: 6, function: PARTIAL_ADDRESSES}
+
+  - name: list_missing_section_is_empty
+    fn: list_distinct_functions
+    config_literal: '{"G2_CONFIG": {}}'
+    expect: {len: 0}
+
+  - name: list_invalid_config_is_json_parse
+    fn: list_distinct_functions
+    config_literal: "not json"
+    expect: {error: JSON_PARSE}
+
+  - name: get_missing_is_not_found
+    fn: get_distinct_function
+    args: {code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: get_invalid_config_is_json_parse
+    fn: get_distinct_function
+    config_literal: "not json"
+    args: {code: PARTIAL_NAMES}
+    expect: {error: JSON_PARSE}
+
+  - name: delete_returns_row_then_gone
+    steps:
+      - fn: delete_distinct_function
+        args: {code: partial_dates}
+        expect:
+          kind: config_and_json
+          result: {DFUNC_ID: 4, DFUNC_CODE: PARTIAL_DATES, CONNECT_STR: g2PartialDates}
+      - fn: list_distinct_functions
+        expect:
+          len: 5
+          excludes:
+            - {function: PARTIAL_DATES}
+
+  - name: delete_missing_is_not_found
+    fn: delete_distinct_function
+    args: {code: NOPE}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_missing_section_is_not_found
+    fn: delete_distinct_function
+    config_literal: '{"G2_CONFIG": {}}'
+    args: {code: PARTIAL_NAMES}
+    expect: {error: NOT_FOUND}
+
+  - name: delete_invalid_config_is_json_parse
+    fn: delete_distinct_function
+    config_literal: "not json"
+    args: {code: PARTIAL_NAMES}
+    expect: {error: JSON_PARSE}
+
+  - name: set_fields_verbatim_and_moves_to_end
+    steps:
+      - fn: set_distinct_function
+        args: {code: felem_strict_subset, connect_str: g2New, description: New desc, language: fr, anon_support: maybe}
+        expect:
+          kind: config_and_json
+          result: {DFUNC_ID: 1, CONNECT_STR: g2New, DFUNC_DESC: New desc, LANGUAGE: fr, ANON_SUPPORT: maybe}
+      - fn: get_distinct_function
+        args: {code: FELEM_STRICT_SUBSET}
+        expect:
+          result: {DFUNC_ID: 1, CONNECT_STR: g2New, DFUNC_DESC: New desc, LANGUAGE: fr, ANON_SUPPORT: maybe}
+      - fn: list_distinct_functions
+        expect:
+          result:
+            - {id: 2}
+            - {id: 3}
+            - {id: 4}
+            - {id: 5}
+            - {id: 6}
+            - {id: 1, function: FELEM_STRICT_SUBSET}
+
+  - name: set_connect_str_null_clears
+    steps:
+      - fn: set_distinct_function
+        args: {code: PARTIAL_NAMES, connect_str: null}
+      - fn: get_distinct_function
+        args: {code: PARTIAL_NAMES}
+        expect:
+          result: {CONNECT_STR: null, DFUNC_DESC: Partial names, ANON_SUPPORT: "Yes"}
+
+  - name: set_absent_leaves_row
+    steps:
+      - fn: set_distinct_function
+        args: {code: PARTIAL_NAMES}
+      - fn: get_distinct_function
+        args: {code: PARTIAL_NAMES}
+        expect:
+          result: {DFUNC_ID: 5, CONNECT_STR: g2PartialNames, DFUNC_DESC: Partial names, ANON_SUPPORT: "Yes", LANGUAGE: null}
+
+  - name: set_empty_connect_str_sets_empty
+    steps:
+      - fn: set_distinct_function
+        args: {code: PARTIAL_NAMES, connect_str: ""}
+      - fn: get_distinct_function
+        args: {code: PARTIAL_NAMES}
+        expect:
+          result: {CONNECT_STR: ""}
+
+  - name: set_missing_is_not_found
+    fn: set_distinct_function
+    args: {code: NOPE, language: en}
+    expect: {error: NOT_FOUND}
+
+  - name: set_invalid_config_is_json_parse
+    fn: set_distinct_function
+    config_literal: "not json"
+    args: {code: PARTIAL_NAMES}
+    expect: {error: JSON_PARSE}
