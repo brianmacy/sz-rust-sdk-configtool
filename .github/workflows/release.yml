@@ -3,8 +3,9 @@ name: Release
 # Full cross-platform matrix: only on a version tag push (publishes a GitHub
 # Release) or a manual dispatch (DRY RUN, from any branch or tag: builds,
 # gates, assembles every release asset + SHA256SUMS exactly as a release
-# would and uploads them as the `release-assets` workflow artifact; it never
-# attests or publishes). Publishing is gated on the EVENT, not the ref:
+# would and uploads them as the `release-assets` workflow artifact, and prints
+# the release notes (CHANGELOG.md section of the version); it never attests or
+# publishes). Publishing is gated on the EVENT, not the ref:
 # `github.ref_type == 'tag'` alone is also true for a dispatch on a tag.
 # Nothing is pushed to any package registry. Every step is a packaging/
 # script; see packaging/README.md.
@@ -80,7 +81,7 @@ jobs:
         run: packaging/release-target.sh "${{ matrix.target }}" build
       - name: Gates (exports, linkage, glibc, build paths, C tests)
         run: packaging/release-target.sh "${{ matrix.target }}" gates
-      - name: Package (C archive, wheel, npm tarball, C++ package + ctest, SBOMs)
+      - name: Package (C archive, Linux wheel, npm tarball, C++ package + ctest, SBOMs)
         run: packaging/release-target.sh "${{ matrix.target }}" package
       - name: Gates on packaged artifacts
         run: packaging/release-target.sh "${{ matrix.target }}" gates
@@ -149,9 +150,14 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: artifacts
+      # Version for the asset-set gate and the release notes (cargo metadata).
+      - name: Install pinned Rust (rust-toolchain.toml)
+        run: rustup toolchain install --no-self-update
       # out/ of every target already holds its per-artifact SBOMs
       # (packaging/package-sboms.sh), so they are release assets, in
-      # SHA256SUMS and covered by the attestation.
+      # SHA256SUMS and covered by the attestation. Python wheels (and their
+      # SBOMs) come from the Linux legs only (config.yaml python_wheel);
+      # check-release-assets.sh fails on any missing or extra asset.
       - name: Collect release assets + SHA256SUMS
         run: |
           mkdir -p release
@@ -160,11 +166,33 @@ jobs:
             cp "artifacts/${t}/out/"* release/
           done
           packaging/make-sums.sh release
+          packaging/gates/check-release-assets.sh release
           ls -la release
+      # The GitHub Release body = the CHANGELOG.md section of the version
+      # (release-notes.sh fails when it is missing or empty). A tag push uses
+      # the tag (preflight checked it equals v<workspace version>); a dispatch
+      # uses v<workspace version>. Printed here, so a dry run shows the notes.
+      - name: Release notes (CHANGELOG.md section)
+        env:
+          TAG: ${{ github.event_name == 'push' && github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          # shellcheck source=packaging/lib/common.sh
+          source packaging/lib/common.sh
+          tag="${TAG:-v$(workspace_version)}"
+          mkdir -p notes
+          packaging/release-notes.sh "${tag}" >notes/notes.md
+          echo "----- release notes for ${tag} -----"
+          cat notes/notes.md
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-assets
           path: release
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-notes
+          path: notes/notes.md
           if-no-files-found: error
           retention-days: 14
 
@@ -188,6 +216,10 @@ jobs:
         with:
           name: release-assets
           path: release
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-notes
+          path: notes
       - name: Verify SHA256SUMS
         working-directory: release
         run: sha256sum -c --strict SHA256SUMS
@@ -196,7 +228,11 @@ jobs:
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-checksums: release/SHA256SUMS
-      - name: Create the GitHub Release
+      # Idempotent: the first run creates the release; a re-run of the same
+      # tag (the release already exists) rewrites its notes and replaces every
+      # asset (--clobber) instead of failing. Any `gh release view` failure
+      # other than "release not found" stops the job without publishing.
+      - name: Publish the GitHub Release (create, or update on a re-run)
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
@@ -208,5 +244,22 @@ jobs:
           # already rejected every other form).
           prerelease=()
           if [[ "${TAG}" =~ -(rc|alpha|beta)\.[0-9]+$ ]]; then prerelease=(--prerelease); fi
-          gh release create "${TAG}" release/* --repo "${GITHUB_REPOSITORY}" \
-            --verify-tag --title "${TAG}" --generate-notes "${prerelease[@]}"
+          repo=(--repo "${GITHUB_REPOSITORY}")
+          if assets="$(gh release view "${TAG}" "${repo[@]}" --json assets -q '.assets[].name' 2>view.err)"; then
+            echo "Release ${TAG} exists (re-run): updating its notes and replacing its assets"
+            gh release edit "${TAG}" "${repo[@]}" --verify-tag --title "${TAG}" \
+              --notes-file notes/notes.md "${prerelease[@]}"
+            gh release upload "${TAG}" release/* "${repo[@]}" --clobber
+            # Assets of an earlier run that this build no longer produces are
+            # not in SHA256SUMS: flag them, never delete them automatically.
+            while IFS= read -r name; do
+              [[ -z "${name}" || -f "release/${name}" ]] ||
+                echo "::warning::asset '${name}' on ${TAG} is not part of this build (not in SHA256SUMS)"
+            done <<<"${assets}"
+          elif grep -q "release not found" view.err; then
+            gh release create "${TAG}" release/* "${repo[@]}" \
+              --verify-tag --title "${TAG}" --notes-file notes/notes.md "${prerelease[@]}"
+          else
+            echo "::error::gh release view ${TAG} failed: $(cat view.err)"
+            exit 1
+          fi

@@ -105,7 +105,10 @@ log "generating CycloneDX SBOMs"
 sbom_name="sbom-${TARGET}-$$"
 cargo cyclonedx --manifest-path "${REPO_ROOT}/Cargo.toml" -f json --spec-version 1.5 \
     --target "${RUST_TARGET}" --no-build-deps --override-filename "${sbom_name}" -q
-for crate_dir in ffi bindings/jni bindings/node bindings/python; do
+# The pyo3 SBOM only where a wheel ships (config.yaml python_wheel: Linux).
+sbom_crates=(ffi bindings/jni bindings/node)
+if target_has_python "${TARGET}"; then sbom_crates+=(bindings/python); fi
+for crate_dir in "${sbom_crates[@]}"; do
     crate="$(basename "${crate_dir}")"
     [[ "${crate_dir}" == ffi ]] && crate=c
     # Both spellings of the root: Git Bash's /d/... and the native D:/... (the

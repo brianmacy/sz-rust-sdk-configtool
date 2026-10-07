@@ -6,7 +6,8 @@
 #   out/sz-configtool-<v>-<os>-<arch>.cdx.json         C ABI (C archive, C++ package, NuGet runtime)
 #   out/sz-configtool-jni-<v>-<os>-<arch>.cdx.json     JNI library (bundled in the jar)
 #   out/sz-configtool-node-<v>-<os>-<arch>.cdx.json    napi .node (npm tarball)
-#   out/sz-configtool-python-<v>-<os>-<arch>.cdx.json  pyo3 extension (wheel)
+#   out/sz-configtool-python-<v>-<os>-<arch>.cdx.json  pyo3 extension (wheel; Linux
+#                                                      targets only, config.yaml python_wheel)
 #
 # release.yml copies out/ into the release, so each SBOM is listed in
 # SHA256SUMS and covered by the build-provenance attestation.
@@ -23,7 +24,9 @@ OUT="$(target_out "${TARGET}")"
 suffix="${VERSION}-$(tcfg "${TARGET}" os)-$(tcfg "${TARGET}" arch).cdx.json"
 mkdir -p "${OUT}"
 
-for crate in c jni node python; do
+crates=(c jni node)
+if target_has_python "${TARGET}"; then crates+=(python); fi
+for crate in "${crates[@]}"; do
     src="${STAGE}/sbom/sz-configtool-${crate}.cdx.json"
     [[ -f "${src}" ]] || die "missing ${src}; run build-native.sh ${TARGET}"
     if [[ "${crate}" == c ]]; then

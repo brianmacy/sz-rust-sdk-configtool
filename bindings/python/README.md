@@ -11,6 +11,10 @@ and it does not depend on the `senzing` package.
 
 * Distribution `sz-configtool`, import package `sz_configtool`.
 * Python 3.10+ (one `abi3` wheel per platform covers every later version).
+* **Linux only**: wheels are released for Linux x64 and arm64
+  (`manylinux_2_34`, glibc >= 2.34), matching Senzing's Python SDK, which is
+  Linux only. No macOS or Windows wheel is released; building from source on
+  those platforms (below) is possible but unsupported.
 * Every function takes the configuration JSON string first and returns a new
   string; the config is opaque and is never parsed or re-serialized by Python.
 * Functions, arguments and docstrings are generated from
@@ -21,20 +25,23 @@ and it does not depend on the `senzing` package.
 
 Wheels are attached to the project's
 [GitHub Releases](https://github.com/brianmacy/sz-rust-sdk-configtool/releases)
-(nothing is published to PyPI). Download the wheel for your platform, then:
+(nothing is published to PyPI). Download the wheel for your Linux
+architecture, then:
 
 ```bash
-pip install ./sz_configtool-<version>-cp310-abi3-<platform>.whl
+pip install ./sz_configtool-<version>-cp310-abi3-manylinux_2_34_x86_64.whl    # or _aarch64
 ```
 
 `<version>` is the PEP 440 form of the release version (`4.4.0.post1` for
 `v4.4.0-1`, `4.5.0rc1` for `v4.5.0-rc.1`). Verify the wheel with the release's `SHA256SUMS`
 and attestation (root README, "Pre-built packages"); its CycloneDX SBOM is the
-release asset `sz-configtool-python-<release-version>-<os>-<arch>.cdx.json`.
+release asset `sz-configtool-python-<release-version>-linux-<x64|arm64>.cdx.json`.
 
 ## Build from source
 
 Requires a Rust toolchain (see the workspace `rust-version`) and Python 3.10+.
+Supported on Linux; a source build on macOS or Windows works for development
+but is not a released or supported platform.
 The single build command (run in `bindings/python`):
 
 ```bash
@@ -61,15 +68,17 @@ config = Path("g2config.json").read_text()  # e.g. tests/fixtures/g2config_templ
 config = sct.add_data_source(config, "crm")
 print(json.loads(sct.get_data_source(config, "CRM"))["DSRC_CODE"])  # CRM
 
-# Functions returning a config AND a record give a ConfigAndJson named tuple.
-config, row = sct.add_attribute(config, "MY_NAME", "NAME", "FULL_NAME", "NAME")
+# Every config-changing function returns the new config, so calls chain.
+# When the operation also produces a record (e.g. the new row), the companion
+# <name>_result takes the same arguments and returns that record instead.
+row = sct.add_attribute_result(config, "MY_NAME", "NAME", "FULL_NAME", "NAME")
 print(json.loads(row)["ATTR_CODE"])  # MY_NAME
+config = sct.add_attribute(config, "MY_NAME", "NAME", "FULL_NAME", "NAME")
 
-# Functions with named results give a <Function>Result named tuple whose
-# fields are JSON text.
-plan = sct.set_generic_plan(config, "MY_PLAN", "Mine")
+# Named results are a <Function>Record named tuple whose fields are JSON text.
+plan = sct.set_generic_plan_result(config, "MY_PLAN", "Mine")
 print(plan.plan_id, plan.was_created)  # 3 true
-config = plan.config
+config = sct.set_generic_plan(config, "MY_PLAN", "Mine")
 
 # Call selectors take an id (int) or a feature code (str).
 print(
@@ -91,15 +100,15 @@ except sct.SzConfigToolError as err:
 | tri-state arg | keyword-only, `UNSET` (default) = leave, `None` = clear, value = set |
 | `returns: config` | `str` (modified config) |
 | `returns: json` | `str` (JSON text; `json.loads` it) |
-| `returns: config_and_json` | `ConfigAndJson(config, json)` (`json` is the record's JSON text) |
-| `returns: json` + `tuple_names: [a, b]` | `<Fn>Result(a, b)` named tuple, e.g. `VerifyCompatibilityVersionResult(current_version, matches)` |
-| `returns: config_and_json` + `tuple_names: [a, b]` | `<Fn>Result(config, a, b)`, e.g. `SetGenericPlanResult(config, plan_id, was_created)` |
+| `returns: config_and_json` | `<fn>` → `str` (modified config); companion `<fn>_result` (same arguments) → `str` (the record's JSON text) |
+| `returns: json` + `tuple_names: [a, b]` | `<Fn>Record(a, b)` named tuple, e.g. `VerifyCompatibilityVersionRecord(current_version, matches)` |
+| `returns: config_and_json` + `tuple_names: [a, b]` | `<fn>` → `str`; `<fn>_result` → `<Fn>Record(a, b)`, e.g. `SetGenericPlanRecord(plan_id, was_created)` |
 | `returns: int` | `int` |
 | `returns: unit` | `None` |
 | `int_or_str` arg (call selector) | `int \| str`: a call id or a feature code, sent unchanged |
 | `status: not_implemented` | no typed function; reachable via `invoke` |
 
-Each named field of a `<Fn>Result` is exactly that record member's compact JSON
+Each named field of a `<Fn>Record` is exactly that record member's compact JSON
 text (`3`, `true`, `"4.0.0"` including quotes): `json.loads` it. `<Fn>` is the
 PascalCase function name; the record types are exported from the package.
 
@@ -126,7 +135,9 @@ A `name` or `config` that is not a `str`, a `str` containing a lone surrogate
 (no UTF-8 form), or an argument JSON cannot carry (`set`, `Decimal`, `bytes`,
 any other object, `NaN`/`±Infinity`) raises `SzConfigToolError` with
 `INVALID_INPUT` (never `TypeError` / `ValueError` / `UnicodeEncodeError`), as
-in every other binding.
+in every other binding. For `config` the message names the usual cause: a
+previous call's non-config value (e.g. a `<name>_result` record) passed back
+as the config.
 
 There are deliberately no subclasses such as `SzNotFoundError` or
 `SzBadInputError`: a same-named class that is not the official `senzing` one

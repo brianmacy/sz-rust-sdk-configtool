@@ -8,7 +8,6 @@ The sz_configtool_lib provides a C-compatible FFI layer that allows the library 
 
 - C and C++
 - Python (via ctypes or cffi)
-- Go (via cgo)
 - Java (via JNA or JNI)
 - Node.js (via node-ffi or N-API)
 - Ruby (via fiddle or ffi)

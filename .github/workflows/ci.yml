@@ -66,6 +66,8 @@ jobs:
         run: |
           packaging/gates/test-version-spellings.sh
           packaging/gates/check-versions.sh
+      - name: Release notes (CHANGELOG.md section extraction self-test)
+        run: packaging/gates/test-release-notes.sh
       - name: Generated bindings are up to date
         run: cargo run -p sz-configtool-codegen -- --check
       - name: Clippy

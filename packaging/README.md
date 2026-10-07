@@ -42,6 +42,12 @@ Linux x86_64 / arm64 with glibc >= 2.34 (RHEL 9+, Amazon Linux 2023, Ubuntu
 G2's anylinux builds; **RHEL 8 (glibc 2.28) is not supported** by these
 binaries: RHEL 8 users build from source with the Rust library.
 
+**Python is Linux only** (x86_64 / arm64, `manylinux_2_34`): Senzing's Python
+SDK is Linux only ([hardware/software requirements](https://www.senzing.com/docs/release/4/4_0_hw_sw)),
+so only targets with `python_wheel: "true"` in `config.yaml` (the two Linux
+legs) build the wheel, its SBOM and the Python smoke tests. The macOS and
+Windows legs ship every other artifact.
+
 ## Matrix
 
 | Target | Runner | Build | Floor |
@@ -59,13 +65,13 @@ No musl. Targets, tool pins and policy live in [`config.yaml`](config.yaml).
 |---|---|
 | `sz-configtool-<v>-<os>-<arch>.tar.gz` (`.zip` on Windows) | C ABI: `include/libSzConfigTool.h`, shared lib (`.so` SONAME `libSzConfigTool.so` / `.dylib` id `@rpath/libSzConfigTool.dylib` / `SzConfigTool.dll` + `.pdb` + import lib `SzConfigTool.lib`), static lib (`libSzConfigTool.a` / `SzConfigTool_static.lib`), `lib/native-static-libs.txt`, CycloneDX SBOM, `LICENSE`, `README.md`, `VERSION` |
 | `sz-configtool-cpp-<v>-<os>-<arch>.tar.gz`/`.zip` | C++ header-only binding + `find_package(szconfigtool)` prefix (`cmake --install` of `bindings/cpp`) |
-| `sz_configtool-<pep440-v>-cp310-abi3-<platform>.whl` | Python distribution `sz-configtool`, import `sz_configtool` (maturin, abi3-py310): `manylinux_2_34_{x86_64,aarch64}`, `macosx_15_0_arm64`, `win_amd64`. `<pep440-v>` is the PEP 440 spelling maturin gives the version (`4.4.0-1` -> `4.4.0.post1`, `4.5.0-rc.1` -> `4.5.0rc1`; see Versions). No embedded SBOM (`[tool.maturin.sbom] rust = false`); see the SBOM row |
+| `sz_configtool-<pep440-v>-cp310-abi3-<platform>.whl` | Python distribution `sz-configtool`, import `sz_configtool` (maturin, abi3-py310): **Linux only**, `manylinux_2_34_{x86_64,aarch64}` (no macOS / Windows wheel). `<pep440-v>` is the PEP 440 spelling maturin gives the version (`4.4.0-1` -> `4.4.0.post1`, `4.5.0-rc.1` -> `4.5.0rc1`; see Versions). No embedded SBOM (`[tool.maturin.sbom] rust = false`); see the SBOM row |
 | `sz-configtool-node-<v>-<os>-<arch>.tgz`, `sz-configtool.<napi-tag>.node` | Node (napi-rs): npm tarball with `dist/` + that platform's `.node`, and the bare `.node` |
 | `sz-configtool-trpc-<v>.tgz` | tRPC router (platform independent) |
 | `sz-configtool-<v>.jar` | Java, natives bundled under `natives/<os>-<arch>/` for all four targets |
 | `Sz.ConfigTool.<v>.nupkg` | .NET, `runtimes/{linux-x64,linux-arm64,osx-arm64,win-x64}/native/` |
 | `sz-configtool-<v>-<os>-<arch>.cdx.json` | CycloneDX 1.5 SBOM of the C ABI (C archive, C++ package, NuGet runtime of that platform) |
-| `sz-configtool-{jni,node,python}-<v>-<os>-<arch>.cdx.json` | CycloneDX SBOMs of the JNI library (jar), the `.node` (npm tarball) and the pyo3 extension (wheel) of that platform (`package-sboms.sh`) |
+| `sz-configtool-{jni,node}-<v>-<os>-<arch>.cdx.json`, `sz-configtool-python-<v>-linux-<arch>.cdx.json` | CycloneDX SBOMs of the JNI library (jar), the `.node` (npm tarball) and, on Linux only, the pyo3 extension (wheel) of that platform (`package-sboms.sh`) |
 | `SHA256SUMS` | sha256 of every asset above (SBOMs included) |
 | `sz-configtool-<v>.intoto.jsonl` | Sigstore bundle of the GitHub build-provenance attestation over `SHA256SUMS` subjects (every asset above, SBOMs included) |
 
@@ -80,11 +86,11 @@ stage per step.
 | tools | `install-tools.sh <target>` — pinned Rust (rustup; + `llvm-tools` on macOS), zig + JDK + Node (sha256), Maven (sha512), cargo-zigbuild/cargo-cyclonedx (`cargo install --locked`), maturin/pytest (`pip --require-hashes`) into `target/sz-tools` |
 | build | `build-native.sh` — C ABI (cdylib + staticlib), JNI and napi cdylibs, SBOMs; `--remap-path-prefix` for source, cargo home, rustup home and target dir; strip (Linux: `strip=symbols`; macOS: linker `-x -S`, static archive `llvm-strip --strip-debug` (rustup `llvm-tools`); Windows: PDB with line tables) |
 | gates | `gates/check-exports.sh` (nm / dumpbin vs `ffi/expected-exports/*.exports`), `gates/check-linkage.sh` (SONAME / install name / deps / minos; Linux: non-executable `GNU_STACK`; Windows: no `vcruntime140*.dll` / `api-ms-win-crt-*` imports), `gates/check-glibc-ceiling.sh` (Linux, `objdump -T` <= 2.34), `gates/check-no-build-paths.sh`, `gates/run-c-tests.sh` (`ffi/tests/c` + `ffi/examples` linked shared and static against the staged files) |
-| package | `package-c.sh`, `package-python.sh`, `package-node.sh`, `package-cpp.sh` (runs the C++ ctest suite, plain optimized build), `package-sboms.sh` (per-artifact SBOM assets) |
-| smoke | `smoke-bindings.sh` — pytest (installed wheel), `npm test`, `mvn test`, `dotnet test`, all against the staged natives |
+| package | `package-c.sh`, `package-python.sh` (Linux targets only), `package-node.sh`, `package-cpp.sh` (runs the C++ ctest suite, plain optimized build), `package-sboms.sh` (per-artifact SBOM assets) |
+| smoke | `smoke-bindings.sh` — pytest (installed wheel; Linux targets only), `npm test`, `mvn test`, `dotnet test`, all against the staged natives |
 | universal | `package-java.sh linux-x64`, `package-dotnet.sh`, `package-node.sh --trpc linux-x64` (need every target's natives) |
-| assemble | collect every target's `out/` + `universal/out` and `make-sums.sh`; uploaded as the `release-assets` workflow artifact (this is also the dry run) |
-| publish | tag **push** only: `actions/attest-build-provenance`, `gh release create` |
+| assemble | collect every target's `out/` + `universal/out`, `make-sums.sh`, `gates/check-release-assets.sh` (exactly the expected asset set: no missing or extra file, e.g. no macOS / Windows wheel; `SHA256SUMS` lists exactly those files), `release-notes.sh` (notes printed in the log); uploaded as the `release-assets` and `release-notes` workflow artifacts (this is also the dry run) |
+| publish | tag **push** only: `actions/attest-build-provenance`, then `gh release create --verify-tag --notes-file` (the notes); on a re-run of a tag whose release already exists: `gh release edit` (notes) + `gh release upload --clobber` (assets), and a warning for any existing asset this build did not produce |
 
 Export baselines (`ffi/expected-exports/`): `SzConfigTool.exports` must equal
 the functions declared in `ffi/include/libSzConfigTool.h`; the JNI, napi and
@@ -142,12 +148,15 @@ macOS; the clang install's on Linux, e.g. Ubuntu package `llvm-<major>`).
    (`npm install --package-lock-only` in `bindings/node` and
    `bindings/node/trpc`); `packaging/gates/check-versions.sh v<version>` must
    pass (it also checks the lockfiles).
-2. Optional dry run: *Actions → Release → Run workflow*, on any branch or tag
+2. Add the `## [<version>] - <date>` section to `CHANGELOG.md`: it is the
+   GitHub Release body (`release-notes.sh v<version>`; the release fails when
+   it is missing or empty; self-test `gates/test-release-notes.sh`).
+3. Optional dry run: *Actions → Release → Run workflow*, on any branch or tag
    (builds, gates, assembles every asset + `SHA256SUMS` into the
-   `release-assets` workflow artifact; never attests or publishes — the
+   `release-assets` workflow artifact and prints the release notes; never attests or publishes — the
    `release` job requires `github.event_name == 'push'`, so a dispatch on a
    tag does not publish either).
-3. `git tag -a v<version> -m "Release v<version>" && git push origin v<version>`.
+4. `git tag -a v<version> -m "Release v<version>" && git push origin v<version>`.
    Only that tag push publishes; a `-rc.N` / `-alpha.N` / `-beta.N` tag is
    marked a GitHub prerelease (`-N` is a full release).
 
@@ -155,7 +164,7 @@ macOS; the clang install's on Linux, e.g. Ubuntu package `llvm-<major>`).
 
 * **Unsigned binaries.** No release binary is code-signed: no Authenticode
   signature on the Windows DLLs, no macOS `codesign` / notarization of the
-  dylibs, `.node` or wheel extension. Integrity and origin come from
+  dylibs or `.node`. Integrity and origin come from
   `SHA256SUMS` + the build-provenance attestation (below). G2 signs both
   (Authenticode, and macOS codesign + notarization); doing the same here is
   future work (it needs signing identities/secrets in the release job).
@@ -166,7 +175,7 @@ macOS; the clang install's on Linux, e.g. Ubuntu package `llvm-<major>`).
   the extracted directory: `xattr -dr com.apple.quarantine <dir>`). `curl`,
   `pip`, `npm` and Maven downloads are not quarantined.
 * **VC++ runtime (Windows).** The shipped `SzConfigTool.dll`,
-  `szconfigtool_jni.dll`, `.node` and `.pyd` are linked with the static MSVC
+  `szconfigtool_jni.dll` and `.node` are linked with the static MSVC
   runtime (`-C target-feature=+crt-static`, set in `lib/build-env.sh`): they
   import only Windows system DLLs (`check-linkage.sh` rejects
   `vcruntime140*.dll` and `api-ms-win-crt-*`), so **no VC++ Redistributable

@@ -105,11 +105,11 @@ system, or depend on `sz_configtool_lib` directly).
 |---|---|
 | C (header + shared/static library) | `sz-configtool-<v>-<os>-<arch>.tar.gz` (`.zip` on Windows) |
 | C++ (header-only + CMake package) | `sz-configtool-cpp-<v>-<os>-<arch>.tar.gz` / `.zip` |
-| Python | `sz_configtool-<v>-cp310-abi3-<platform>.whl` (`pip install` it; PEP 440 version, e.g. `4.4.0.post1` for `4.4.0-1`) |
+| Python (**Linux x64 / arm64 only**, matching Senzing's Linux-only Python SDK) | `sz_configtool-<v>-cp310-abi3-manylinux_2_34_{x86_64,aarch64}.whl` (`pip install` it; PEP 440 version, e.g. `4.4.0.post1` for `4.4.0-1`) |
 | Java | `sz-configtool-<v>.jar` (natives for all platforms inside) |
 | .NET | `Sz.ConfigTool.<v>.nupkg` (natives for all platforms inside) |
 | Node.js | `sz-configtool-node-<v>-<os>-<arch>.tgz` (`npm install` it); tRPC router `sz-configtool-trpc-<v>.tgz` |
-| SBOMs (CycloneDX) | `sz-configtool[-jni\|-node\|-python]-<v>-<os>-<arch>.cdx.json` |
+| SBOMs (CycloneDX) | `sz-configtool[-jni\|-node]-<v>-<os>-<arch>.cdx.json`; `sz-configtool-python-<v>-linux-<arch>.cdx.json` (Linux only) |
 
 Verify a download against the release's `SHA256SUMS` and its GitHub build
 provenance attestation:
