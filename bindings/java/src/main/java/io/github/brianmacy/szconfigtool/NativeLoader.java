@@ -187,6 +187,18 @@ final class NativeLoader {
      */
     static Path extract(byte[] bytes, Path base, String version, String fileName)
             throws IOException {
+        return extract(bytes, base, version, fileName,
+                (from, to) -> Files.move(from, to, StandardCopyOption.ATOMIC_MOVE));
+    }
+
+    /** The rename step of {@link #extract}, injectable so every OS can test its failure modes. */
+    @FunctionalInterface
+    interface Mover {
+        void move(Path from, Path to) throws IOException;
+    }
+
+    static Path extract(byte[] bytes, Path base, String version, String fileName, Mover mover)
+            throws IOException {
         Path dir = base.resolve(version + "-" + sha256(bytes).substring(0, HASH_HEX_CHARS));
         Files.createDirectories(dir);
         Path target = dir.resolve(fileName);
@@ -196,7 +208,7 @@ final class NativeLoader {
         Path tmp = Files.createTempFile(dir, fileName, ".tmp");
         try {
             Files.write(tmp, bytes);
-            Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE);
+            mover.move(tmp, target);
         } catch (FileAlreadyExistsException | AccessDeniedException e) {
             // Another JVM won the race, or (Windows) holds the DLL loaded.
             if (!sameContent(target, bytes)) {

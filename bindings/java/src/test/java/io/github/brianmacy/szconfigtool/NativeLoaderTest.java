@@ -13,6 +13,7 @@ import java.io.UncheckedIOException;
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AccessDeniedException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -282,6 +283,42 @@ class NativeLoaderTest {
         // The assertions above match "\n"; on Windows println would write "\r\n".
         String out = runProbe(List.of("-Dline.separator=\r\n"), classpath(), "sha256");
         assertEquals("ok " + NativeLoader.sha256(new byte[0]) + "\n", out);
+    }
+
+    @Test
+    void extractRefusesADifferentLibraryWhenReplacingItIsDenied() throws Exception {
+        // Portable twin of the macOS ACL test below: the rename-over is denied (on
+        // Windows another JVM holds the DLL; on Unix the target is protected) and the
+        // file already there differs, so extract must refuse and leave it alone.
+        Path base = scratch("denied-replace");
+        byte[] lib = "library A".getBytes(StandardCharsets.UTF_8);
+        Path target = NativeLoader.extract(lib, base, "1.0", "lib.so");
+        Files.writeString(target, "tampered");
+        IOException e = assertThrows(IOException.class, () -> NativeLoader.extract(lib, base, "1.0",
+                "lib.so", (from, to) -> {
+                    throw new AccessDeniedException(to.toString());
+                }));
+        assertEquals("existing " + target + " differs from the bundled library", e.getMessage());
+        assertEquals(AccessDeniedException.class, e.getCause().getClass());
+        assertEquals("tampered", Files.readString(target));
+        assertNoTempFiles(base);
+    }
+
+    @Test
+    void extractAcceptsAnIdenticalLibraryWhenAnotherProcessWonTheRename() throws Exception {
+        // Lost the race (or the DLL is loaded elsewhere) but the file already holds
+        // the bundled bytes: not an error.
+        Path base = scratch("race-won");
+        byte[] lib = "library B".getBytes(StandardCharsets.UTF_8);
+        Path first = NativeLoader.extract(lib, base, "1.0", "lib.so");
+        Files.delete(first);
+        Path again = NativeLoader.extract(lib, base, "1.0", "lib.so", (from, to) -> {
+            Files.write(to, lib); // the other process finished first
+            throw new FileAlreadyExistsException(to.toString());
+        });
+        assertEquals(first, again);
+        assertArrayEquals(lib, Files.readAllBytes(again));
+        assertNoTempFiles(base);
     }
 
     @Test
