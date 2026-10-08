@@ -237,8 +237,8 @@ jobs:
             diff <(echo "${listed}") <(echo "${present}") || true
             exit 1
           fi
-          if grep -E '\.(cdx\.json|intoto\.jsonl)$' <<<"${present}"; then
-            echo "::error::SBOM / attestation bundle files must never be release assets"
+          if grep -E '(\.(cdx\.json|intoto\.jsonl|node)$|^sz-configtool-cpp-)' <<<"${present}"; then
+            echo "::error::SBOM / attestation bundle / raw .node / separate C++ archive must never be release assets"
             exit 1
           fi
       # The attestation is stored in GitHub's attestation store (verify:

@@ -35,7 +35,10 @@ contents change, so anything scripted against 4.4.0-2 asset names needs updating
   (`tar -xzf sz-configtool-node-<v>-linux-x64.tgz package/sz-configtool.linux-x64-gnu.node`).
 - The release now has 14 files (13 assets + `SHA256SUMS`), down from 22 in 4.4.0-2 and 41 in
   4.4.0-1 as first published; `check-release-assets.sh` and its self-test enforce the exact set
-  and reject a leftover `sz-configtool-cpp-*` archive or a raw `.node`.
+  and reject a leftover `sz-configtool-cpp-*` archive or a raw `.node`; the publish job repeats
+  that check on the downloaded assets.
+  The Windows C++ test step now copies `SzConfigTool.dll` beside the consumer (reasoned from the
+  scripts; the Windows leg runs only in the release workflow).
 
 ### Added
 
@@ -46,10 +49,7 @@ contents change, so anything scripted against 4.4.0-2 asset names needs updating
 
 ### Fixed
 
-- Windows packaging: the shared C++ consumer now gets a copy of `SzConfigTool.dll` next to it
-  instead of a `PATH` entry (a `C:/...` path would have been split at the drive colon under Git
-  Bash). Reasoned from the scripts; the Windows leg runs only in the release workflow.
-- `bindings/cpp/README.md` pointed at `find_package(szconfigtool 0.10 ...)`; it now uses `4.4`.
+- `bindings/cpp/README.md` and the `examples/quickstart` comment pointed at `find_package(szconfigtool 0.10 ...)`; both now use `4.4`.
 
 ### Dependencies
 

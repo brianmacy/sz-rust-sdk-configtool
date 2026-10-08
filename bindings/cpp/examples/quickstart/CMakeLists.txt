@@ -5,7 +5,7 @@ project(szconfigtool_quickstart LANGUAGES CXX)
 
 # No version here: this example is built by the in-tree install test of every
 # version. A real project pins the minor it was written against, e.g.
-# find_package(szconfigtool 0.10 REQUIRED) (SameMinorVersion compatibility).
+# find_package(szconfigtool 4.4 REQUIRED) (SameMinorVersion compatibility).
 find_package(szconfigtool REQUIRED)
 
 add_executable(szconfigtool_quickstart quickstart.cpp)
