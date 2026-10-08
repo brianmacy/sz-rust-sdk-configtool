@@ -60,7 +60,7 @@ Nothing is published to npm. From the repository's GitHub Release, either:
    that platform's `.node`) and install it:
 
    ```bash
-   npm install ./sz-configtool-node-4.4.0-2-linux-x64.tgz
+   npm install ./sz-configtool-node-4.4.0-3-linux-x64.tgz
    ```
 
    The tRPC router (`sz-configtool-trpc-<version>.tgz`, platform independent)
@@ -68,7 +68,7 @@ Nothing is published to npm. From the repository's GitHub Release, either:
    it together with the platform tarball of the same version:
 
    ```bash
-   npm install ./sz-configtool-node-4.4.0-2-linux-x64.tgz ./sz-configtool-trpc-4.4.0-2.tgz
+   npm install ./sz-configtool-node-4.4.0-3-linux-x64.tgz ./sz-configtool-trpc-4.4.0-3.tgz
    ```
 
 2. **Standalone `.node`** — the release has no separate `.node` asset;

@@ -407,11 +407,11 @@ release `4.4.0-1`); see README "Versioning" and `packaging/README.md`.
 1. **Update Version**: workspace version in `Cargo.toml` + binding manifests and npm lockfiles (`packaging/README.md`, "Cutting a release")
 2. **Update CHANGELOG**: Document changes in `CHANGELOG.md`
 3. **Run Quality Checks**: Ensure all tests pass, clippy clean, deny pass, `packaging/gates/check-versions.sh v<version>`
-4. **Create Git Tag**: `git tag -a v4.4.0-2 -m "Release v4.4.0-2"`
-5. **Push to GitHub**: `git push origin main && git push origin v4.4.0-2` (the tag push publishes the GitHub Release)
+4. **Create Git Tag**: `git tag -a v4.4.0-3 -m "Release v4.4.0-3"`
+5. **Push to GitHub**: `git push origin main && git push origin v4.4.0-3` (the tag push publishes the GitHub Release)
 
 Nothing is published to crates.io or other registries; Rust users depend on
-the git tag (`tag = "v4.4.0-2"`).
+the git tag (`tag = "v4.4.0-3"`).
 
 ## Common Tasks
 

@@ -480,8 +480,8 @@ Maintainers follow this process for releases:
    `Cargo.toml` and the binding manifests/lockfiles (`packaging/README.md`,
    "Cutting a release"); `packaging/gates/check-versions.sh v<version>` must pass
 2. Update `CHANGELOG.md`
-3. Create git tag: `git tag -a v4.4.0-2 -m "Release v4.4.0-2"`
-4. Push: `git push origin main && git push origin v4.4.0-2` (the tag push
+3. Create git tag: `git tag -a v4.4.0-3 -m "Release v4.4.0-3"`
+4. Push: `git push origin main && git push origin v4.4.0-3` (the tag push
    builds and publishes the GitHub Release)
 
 Nothing is published to crates.io or any other registry.

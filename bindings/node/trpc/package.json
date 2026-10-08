@@ -1,6 +1,6 @@
 {
   "name": "sz-configtool-trpc",
-  "version": "4.4.0-2",
+  "version": "4.4.0-3",
   "description": "tRPC router over the sz-configtool Node binding (unofficial)",
   "license": "Apache-2.0",
   "private": true,
@@ -35,7 +35,7 @@
     "zod": "^4.6.5"
   },
   "peerDependencies": {
-    "sz-configtool": "4.4.0-2"
+    "sz-configtool": "4.4.0-3"
   },
   "devDependencies": {
     "@trpc/client": "^11.19.0",

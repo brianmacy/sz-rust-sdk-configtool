@@ -140,7 +140,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-sz_configtool_lib = { git = "https://github.com/brianmacy/sz-rust-sdk-configtool", tag = "v4.4.0-2" }
+sz_configtool_lib = { git = "https://github.com/brianmacy/sz-rust-sdk-configtool", tag = "v4.4.0-3" }
 ```
 
 Or from a specific commit:

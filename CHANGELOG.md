@@ -10,6 +10,55 @@ and the Rust API is additive only within `4.x` (README, "Versioning").
 
 ## [Unreleased]
 
+## [4.4.0-3] - 2026-10-08
+
+Packaging-only release (tag `v4.4.0-3`): fewer, more useful release assets. **No library, C ABI
+or binding API change** (`SZCONFIGTOOL_ABI_VERSION` stays 2); only the release asset names and
+contents change, so anything scripted against 4.4.0-2 asset names needs updating.
+
+### Changed
+
+- **BREAKING (release assets): one native archive per platform.**
+  `sz-configtool-<v>-<os>-<arch>.{tar.gz|zip}` now holds everything native for that platform:
+  `include/libSzConfigTool.h` and the C++ headers (`include/szconfigtool/`), the shared and
+  static libraries, the CMake package (`lib/cmake/szconfigtool/`), the SBOM, `LICENSE`,
+  `VERSION` and a single merged `README.md`. The separate `sz-configtool-cpp-<v>-<os>-<arch>`
+  archives are gone: they carried the same libraries a second time (about 28 MB uncompressed per
+  platform; byte-identical on Linux, and on macOS differing only inside the dylib's code
+  signature). C++ users extract the native archive and
+  `find_package(szconfigtool CONFIG)` with `CMAKE_PREFIX_PATH` set to the extracted directory.
+  The C++ layer is header-only and the binary exports only the 124 `SzConfigTool_*` C symbols
+  (no C++ ABI crosses the library boundary).
+- The standalone `sz-configtool.<platform>.node` files are no longer release assets: each is
+  byte-identical to the copy inside its `sz-configtool-node-<v>-<os>-<arch>.tgz`. To use one with
+  `SZ_CONFIGTOOL_NATIVE_PATH`, extract it from the tarball
+  (`tar -xzf sz-configtool-node-<v>-linux-x64.tgz package/sz-configtool.linux-x64-gnu.node`).
+- The release now has 14 files (13 assets + `SHA256SUMS`), down from 22 in 4.4.0-2 and 41 in
+  4.4.0-1 as first published; `check-release-assets.sh` and its self-test enforce the exact set
+  and reject a leftover `sz-configtool-cpp-*` archive or a raw `.node`.
+
+### Added
+
+- `packaging/gates/check-native-archive.sh`: the archive that ships is the archive that is tested.
+  It extracts the native archive and runs the C tests, the C++ ctest suite (including the
+  install-then-`find_package` consumer tests) and the `examples/quickstart` consumer (shared and
+  static) against the extracted tree only.
+
+### Fixed
+
+- Windows packaging: the shared C++ consumer now gets a copy of `SzConfigTool.dll` next to it
+  instead of a `PATH` entry (a `C:/...` path would have been split at the drive colon under Git
+  Bash). Reasoned from the scripts; the Windows leg runs only in the release workflow.
+- `bindings/cpp/README.md` pointed at `find_package(szconfigtool 0.10 ...)`; it now uses `4.4`.
+
+### Dependencies
+
+Merged on `main` after 4.4.0-2 (test and build tooling only, no runtime change):
+`actions/deploy-pages` 5.0.1; JUnit 6.1.3 and four Maven plugins for the Java binding
+(`maven-jar-plugin` 3.5.1 among them; the jar's entry list is unchanged); `xunit`, the Visual
+Studio runner and the .NET test SDK for the C# tests. `maturin` stays pinned at 1.9.0 (bump
+`packaging/config.yaml` and the hash-pinned requirements together if it is ever moved).
+
 ## [4.4.0-2] - 2026-10-07
 
 Follow-up to 4.4.0-1 (tag `v4.4.0-2`): the two Node-binding issues #75 and #76, Python platform
