@@ -63,18 +63,20 @@ No musl. Targets, tool pins and policy live in [`config.yaml`](config.yaml).
 
 | Asset | From |
 |---|---|
-| `sz-configtool-<v>-<os>-<arch>.tar.gz` (`.zip` on Windows) | C ABI: `include/libSzConfigTool.h`, shared lib (`.so` SONAME `libSzConfigTool.so` / `.dylib` id `@rpath/libSzConfigTool.dylib` / `SzConfigTool.dll` + `.pdb` + import lib `SzConfigTool.lib`), static lib (`libSzConfigTool.a` / `SzConfigTool_static.lib`), `lib/native-static-libs.txt`, `sbom/sz-configtool-c.cdx.json` (CycloneDX 1.5 SBOM of the C ABI, embedded; the only SBOM shipped), `LICENSE`, `README.md`, `VERSION` |
-| `sz-configtool-cpp-<v>-<os>-<arch>.tar.gz`/`.zip` | C++ header-only binding + `find_package(szconfigtool)` prefix (`cmake --install` of `bindings/cpp`) |
+| `sz-configtool-<v>-<os>-<arch>.tar.gz` (`.zip` on Windows) | Native archive, C and C++ in one (an install prefix: `cmake --install` of `bindings/cpp` over the staged natives): `include/libSzConfigTool.h`, `include/szconfigtool/` (C++20 header-only binding), shared lib (`lib/libSzConfigTool.so` SONAME `libSzConfigTool.so` / `lib/libSzConfigTool.dylib` id `@rpath/libSzConfigTool.dylib` / `bin/SzConfigTool.dll` + `.pdb` + import lib `lib/SzConfigTool.lib`), static lib (`lib/libSzConfigTool.a` / `lib/SzConfigTool_static.lib`), `lib/native-static-libs.txt`, `lib/cmake/szconfigtool/` (`find_package(szconfigtool)`; `CMAKE_PREFIX_PATH` = the extracted directory), `sbom/sz-configtool-c.cdx.json` (CycloneDX 1.5 SBOM of the C ABI, embedded; the only SBOM shipped), `LICENSE`, `README.md` (C + C++ usage), `VERSION` |
 | `sz_configtool-<pep440-v>-cp310-abi3-<platform>.whl` | Python distribution `sz-configtool`, import `sz_configtool` (maturin, abi3-py310): **Linux only**, `manylinux_2_34_{x86_64,aarch64}` (no macOS / Windows wheel). `<pep440-v>` is the PEP 440 spelling maturin gives the version (`4.4.0-1` -> `4.4.0.post1`, `4.5.0-rc.1` -> `4.5.0rc1`; see Versions). No embedded SBOM (`[tool.maturin.sbom] rust = false`) |
-| `sz-configtool-node-<v>-<os>-<arch>.tgz`, `sz-configtool.<napi-tag>.node` | Node (napi-rs): npm tarball with `dist/` + that platform's `.node`, and the bare `.node` |
+| `sz-configtool-node-<v>-<os>-<arch>.tgz` | Node (napi-rs): npm tarball with `dist/` + that platform's `.node` (`package/sz-configtool.<napi-tag>.node`; no separate `.node` asset) |
 | `sz-configtool-trpc-<v>.tgz` | tRPC router (platform independent) |
 | `sz-configtool-<v>.jar` | Java, natives bundled under `natives/<os>-<arch>/` for all four targets |
 | `Sz.ConfigTool.<v>.nupkg` | .NET, `runtimes/{linux-x64,linux-arm64,osx-arm64,win-x64}/native/` |
 | `SHA256SUMS` | sha256 of every asset above; those files are the subjects of the build-provenance attestation |
 
-That is the whole set (21 assets + `SHA256SUMS` for the four targets).
-**Never release assets**: standalone SBOMs (`*.cdx.json`) and the attestation
-bundle (`*.intoto.jsonl`). `gates/check-release-assets.sh` fails on either
+That is the whole set (13 assets + `SHA256SUMS` = 14 files for the four
+targets: 4 native archives, 4 Node tarballs, 2 Linux wheels, jar, nupkg,
+tRPC tarball). **Never release assets**: standalone SBOMs (`*.cdx.json`), the
+attestation bundle (`*.intoto.jsonl`), a separate C++ package
+(`sz-configtool-cpp-*`; the native archive holds the C++ binding) and a raw
+`.node` (inside the Node tarball). `gates/check-release-assets.sh` fails on each
 (self-test `gates/test-release-assets.sh`, run in CI), and the `release` job
 re-checks before publishing. The attestation lives in GitHub's attestation
 store (verified online, below); the full dependency list is `Cargo.lock` at
@@ -89,12 +91,12 @@ stage per step.
 | Stage | Scripts |
 |---|---|
 | tools | `install-tools.sh <target>` — pinned Rust (rustup; + `llvm-tools` on macOS), zig + JDK + Node (sha256), Maven (sha512), cargo-zigbuild/cargo-cyclonedx (`cargo install --locked`), maturin/pytest (`pip --require-hashes`) into `target/sz-tools` |
-| build | `build-native.sh` — C ABI (cdylib + staticlib), JNI and napi cdylibs, the C ABI SBOM (`cargo cyclonedx`, build paths rewritten by `lib/sbom_paths.py`; embedded in the C archive only); `--remap-path-prefix` for source, cargo home, rustup home and target dir; strip (Linux: `strip=symbols`; macOS: linker `-x -S`, static archive `llvm-strip --strip-debug` (rustup `llvm-tools`); Windows: PDB with line tables) |
-| gates | `gates/check-exports.sh` (nm / dumpbin vs `ffi/expected-exports/*.exports`), `gates/check-linkage.sh` (SONAME / install name / deps / minos; Linux: non-executable `GNU_STACK`; Windows: no `vcruntime140*.dll` / `api-ms-win-crt-*` imports), `gates/check-glibc-ceiling.sh` (Linux, `objdump -T` <= 2.34), `gates/check-no-build-paths.sh`, `gates/run-c-tests.sh` (`ffi/tests/c` + `ffi/examples` linked shared and static against the staged files) |
-| package | `package-c.sh`, `package-python.sh` (Linux targets only), `package-node.sh`, `package-cpp.sh` (runs the C++ ctest suite, plain optimized build) |
+| build | `build-native.sh` — C ABI (cdylib + staticlib), JNI and napi cdylibs, the C ABI SBOM (`cargo cyclonedx`, build paths rewritten by `lib/sbom_paths.py`; embedded in the native archive only); `--remap-path-prefix` for source, cargo home, rustup home and target dir; strip (Linux: `strip=symbols`; macOS: linker `-x -S`, static archive `llvm-strip --strip-debug` (rustup `llvm-tools`); Windows: PDB with line tables) |
+| gates | `gates/check-exports.sh` (nm / dumpbin vs `ffi/expected-exports/*.exports`), `gates/check-linkage.sh` (SONAME / install name / deps / minos; Linux: non-executable `GNU_STACK`; Windows: no `vcruntime140*.dll` / `api-ms-win-crt-*` imports), `gates/check-glibc-ceiling.sh` (Linux, `objdump -T` <= 2.34), `gates/check-no-build-paths.sh`, `gates/run-c-tests.sh` (`ffi/tests/c` + `ffi/examples` linked shared and static against the staged files; `native/c` has the archive layout) |
+| package | `package-c.sh` (the native archive; then `gates/check-native-archive.sh` extracts that archive and runs, against the extracted tree only, `run-c-tests.sh`, the `bindings/cpp` ctest suite incl. its install/`find_package` consumer tests, and `examples/quickstart` via `find_package` with `CMAKE_PREFIX_PATH` = the extracted root, shared and static; plain optimized build), `package-python.sh` (Linux targets only), `package-node.sh` |
 | smoke | `smoke-bindings.sh` — pytest (installed wheel; Linux targets only), `npm test`, `mvn test`, `dotnet test`, all against the staged natives |
 | universal | `package-java.sh linux-x64`, `package-dotnet.sh`, `package-node.sh --trpc linux-x64` (need every target's natives) |
-| assemble | collect every target's `out/` + `universal/out`, `make-sums.sh`, `gates/check-release-assets.sh` (exactly the expected asset set: no missing or extra file, e.g. no macOS / Windows wheel, and never a `*.cdx.json` / `*.intoto.jsonl`; `SHA256SUMS` lists exactly those files), `release-notes.sh` (notes printed in the log); uploaded as the `release-assets` and `release-notes` workflow artifacts (this is also the dry run) |
+| assemble | collect every target's `out/` + `universal/out`, `make-sums.sh`, `gates/check-release-assets.sh` (exactly the expected asset set: no missing or extra file, e.g. no macOS / Windows wheel, and never a `*.cdx.json` / `*.intoto.jsonl` / `sz-configtool-cpp-*` / `*.node`; `SHA256SUMS` lists exactly those files), `release-notes.sh` (notes printed in the log); uploaded as the `release-assets` and `release-notes` workflow artifacts (this is also the dry run) |
 | publish | tag **push** only: re-verify `SHA256SUMS` (`--strict`) and that `release/` is exactly those files with no SBOM / bundle, `actions/attest-build-provenance` (`subject-checksums: release/SHA256SUMS`; stored in GitHub's attestation store, its bundle file is not published), then `gh release create --verify-tag --notes-file` (the notes); on a re-run of a tag whose release already exists: `gh release edit` (notes) + `gh release upload --clobber` (assets), and a warning for any existing asset this build did not produce |
 
 Export baselines (`ffi/expected-exports/`): `SzConfigTool.exports` must equal
@@ -105,8 +107,8 @@ lists are compared, never passed to the linker. A per-OS
 
 The C++ ASan + UBSan run is CI-only (`coverage.sh cpp`, run by `ci.yml`, job
 `linux`); no release job or packaging script builds with sanitizers or
-coverage instrumentation (`build-env.sh` and `package-cpp.sh` refuse
-sanitizer flags, `package-cpp.sh` also coverage flags).
+coverage instrumentation (`build-env.sh` and `package-c.sh` refuse
+sanitizer flags, `package-c.sh` also coverage flags).
 
 ## Coverage
 

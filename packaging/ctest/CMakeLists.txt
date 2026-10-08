@@ -1,9 +1,10 @@
 # C ABI release gate: compiles ffi/tests/c/test_basic.c and
-# ffi/examples/c_ffi_example.c against a STAGED libSzConfigTool (the exact
-# files that get archived), linking the shared library and the static archive,
-# and runs them with CTest. Driven by packaging/gates/run-c-tests.sh.
+# ffi/examples/c_ffi_example.c against a libSzConfigTool tree -- the STAGED
+# natives, or the extracted native release archive (same layout) -- linking
+# the shared library and the static archive, and runs them with CTest.
+# Driven by packaging/gates/run-c-tests.sh.
 #
-#   -DSZ_NATIVE_C_DIR=<dist>/<target>/native/c   (include/, lib/, bin/, native-static-libs.txt)
+#   -DSZ_NATIVE_C_DIR=<dir>   (include/, lib/ incl. native-static-libs.txt, bin/ on Windows)
 #   -DSZ_REPO_ROOT=<repo>
 cmake_minimum_required(VERSION 3.20)
 project(sz_configtool_release_ctest LANGUAGES C)
@@ -30,7 +31,7 @@ endif()
 
 # System libraries the Rust staticlib needs, as rustc reported them
 # (-lfoo / foo.lib / -framework X; /defaultlib: entries are implied by MSVC).
-file(READ "${SZ_NATIVE_C_DIR}/native-static-libs.txt" _raw)
+file(READ "${SZ_NATIVE_C_DIR}/lib/native-static-libs.txt" _raw)
 string(STRIP "${_raw}" _raw)
 separate_arguments(_tokens UNIX_COMMAND "${_raw}")
 set(_static_deps "")

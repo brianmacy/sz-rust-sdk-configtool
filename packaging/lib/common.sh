@@ -138,10 +138,10 @@ shared_lib_name() {
 }
 
 # Per-target staging layout under ${SZ_DIST_DIR}/<target>/:
-#   native/c/{lib,bin,include}   C ABI (shared + static + header)
+#   native/c/{lib,bin,include}   C ABI (shared + static + header; native archive layout)
 #   native/jni/                  JNI library
 #   native/node/                 sz-configtool.<napi_tag>.node
-#   sbom/                        CycloneDX SBOM of the C ABI (C archive only)
+#   sbom/                        CycloneDX SBOM of the C ABI (native archive only)
 #   out/                         release assets for this target
 target_stage() { echo "${SZ_DIST_DIR}/$1"; }
 target_out() { echo "${SZ_DIST_DIR}/$1/out"; }

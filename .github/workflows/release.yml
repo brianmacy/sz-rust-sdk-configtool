@@ -81,7 +81,7 @@ jobs:
         run: packaging/release-target.sh "${{ matrix.target }}" build
       - name: Gates (exports, linkage, glibc, build paths, C tests)
         run: packaging/release-target.sh "${{ matrix.target }}" gates
-      - name: Package (C archive + embedded SBOM, Linux wheel, npm tarball, C++ package + ctest)
+      - name: Package (native archive = C ABI + C++ binding + SBOM, tested as shipped; Linux wheel; npm tarball)
         run: packaging/release-target.sh "${{ matrix.target }}" package
       - name: Gates on packaged artifacts
         run: packaging/release-target.sh "${{ matrix.target }}" gates
@@ -152,11 +152,14 @@ jobs:
       # Version for the asset-set gate and the release notes (cargo metadata).
       - name: Install pinned Rust (rust-toolchain.toml)
         run: rustup toolchain install --no-self-update
-      # No standalone SBOM (the C archive embeds its own under sbom/) and no
-      # attestation bundle is ever a release asset. Python wheels come from
-      # the Linux legs only (config.yaml python_wheel).
+      # No standalone SBOM (the native archive embeds its own under sbom/),
+      # no attestation bundle, no separate C++ package (the native archive
+      # holds it) and no raw .node (it ships inside the Node tarball) is ever
+      # a release asset. Python wheels come from the Linux legs only
+      # (config.yaml python_wheel). Per target: native archive + Node
+      # tarball (+ Linux wheel); universal: jar, nupkg, tRPC tarball.
       # check-release-assets.sh fails on any missing or extra asset, and
-      # explicitly on any *.cdx.json / *.intoto.jsonl
+      # explicitly on any *.cdx.json / *.intoto.jsonl / sz-configtool-cpp-* / *.node
       # (self-test: gates/test-release-assets.sh, run in ci.yml).
       - name: Collect release assets + SHA256SUMS
         run: |
@@ -234,8 +237,8 @@ jobs:
             diff <(echo "${listed}") <(echo "${present}") || true
             exit 1
           fi
-          if grep -E '\.(cdx\.json|intoto\.jsonl)$' <<<"${present}"; then
-            echo "::error::SBOM / attestation bundle files must never be release assets"
+          if grep -E '(\.(cdx\.json|intoto\.jsonl|node)$|^sz-configtool-cpp-)' <<<"${present}"; then
+            echo "::error::SBOM / attestation bundle / raw .node / separate C++ archive must never be release assets"
             exit 1
           fi
       # The attestation is stored in GitHub's attestation store (verify:

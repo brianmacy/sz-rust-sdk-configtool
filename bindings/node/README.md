@@ -60,7 +60,7 @@ Nothing is published to npm. From the repository's GitHub Release, either:
    that platform's `.node`) and install it:
 
    ```bash
-   npm install ./sz-configtool-node-4.4.0-2-linux-x64.tgz
+   npm install ./sz-configtool-node-4.4.0-3-linux-x64.tgz
    ```
 
    The tRPC router (`sz-configtool-trpc-<version>.tgz`, platform independent)
@@ -68,14 +68,16 @@ Nothing is published to npm. From the repository's GitHub Release, either:
    it together with the platform tarball of the same version:
 
    ```bash
-   npm install ./sz-configtool-node-4.4.0-2-linux-x64.tgz ./sz-configtool-trpc-4.4.0-2.tgz
+   npm install ./sz-configtool-node-4.4.0-3-linux-x64.tgz ./sz-configtool-trpc-4.4.0-3.tgz
    ```
 
-2. **Bare `.node`** — install a tarball (any platform) or a source build, then
-   point the loader at the downloaded binary:
+2. **Standalone `.node`** — the release has no separate `.node` asset;
+   extract it from the platform tarball, install a tarball (any platform) or
+   a source build, then point the loader at the extracted binary:
 
    ```bash
-   export SZ_CONFIGTOOL_NATIVE_PATH=/opt/senzing/sz-configtool.linux-x64-gnu.node
+   tar -xzf sz-configtool-node-<version>-linux-x64.tgz package/sz-configtool.linux-x64-gnu.node
+   export SZ_CONFIGTOOL_NATIVE_PATH="$PWD/package/sz-configtool.linux-x64-gnu.node"
    ```
 
 To produce a tarball yourself: `npm run build && npm pack`.

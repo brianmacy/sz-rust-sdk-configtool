@@ -5,11 +5,13 @@
 #   native/c/include/libSzConfigTool.h
 #   native/c/lib/   libSzConfigTool.{so,dylib} + libSzConfigTool.a          (Linux/macOS)
 #                   SzConfigTool.lib (DLL import lib) + SzConfigTool_static.lib (MSVC)
+#                   native-static-libs.txt (system libs the static archive needs)
 #   native/c/bin/   SzConfigTool.dll + SzConfigTool.pdb                     (Windows)
-#   native/c/native-static-libs.txt   system libs the static archive needs
 #   native/jni/     JNI library (Java binding)
 #   native/node/    sz-configtool.<napi_tag>.node
-#   sbom/           CycloneDX SBOM of the C ABI (embedded in the C archive)
+#   sbom/           CycloneDX SBOM of the C ABI (embedded in the native archive)
+#
+# native/c has the native archive's layout (package-c.sh).
 #
 # Linux: cargo-zigbuild against glibc 2.34 (generic x86-64 / aarch64; no
 # target-cpu). macOS: plain cargo, MACOSX_DEPLOYMENT_TARGET from config.yaml.
@@ -64,7 +66,7 @@ static_libs="$(sed -n 's/.*native-static-libs: //p' "${log_file}" | tail -1 | tr
 # above; CI sets it to always, and the trailing ESC[0m turned `-lc` into an
 # unknown library), and checked to be plain text.
 [[ "${static_libs}" =~ ^[[:print:]]+$ ]] || die "unprintable characters in native-static-libs: $(printf '%q' "${static_libs}")"
-printf '%s\n' "${static_libs}" >"${STAGE}/native/c/native-static-libs.txt"
+printf '%s\n' "${static_libs}" >"${STAGE}/native/c/lib/native-static-libs.txt"
 rm -f "${log_file}"
 
 cp "${REPO_ROOT}/ffi/include/libSzConfigTool.h" "${STAGE}/native/c/include/"
@@ -99,7 +101,7 @@ cp "${OUT_DIR}/$(shared_lib_name "${OS}" szconfigtool_node)" \
     "${STAGE}/native/node/sz-configtool.$(tcfg "${TARGET}" napi_tag).node"
 
 # 3. SBOM (CycloneDX 1.5, dependencies resolved for this target) of the C ABI
-#    crate, embedded in the C archive (package-c.sh); no SBOM is a release
+#    crate, embedded in the native archive (package-c.sh); no SBOM is a release
 #    asset. The tool writes next to every workspace Cargo.toml; keep ffi's,
 #    remove them all, and replace the absolute workspace path (every host
 #    spelling) with the remap prefix.

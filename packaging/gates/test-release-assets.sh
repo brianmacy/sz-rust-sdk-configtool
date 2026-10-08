@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Self-test of packaging/gates/check-release-assets.sh against mock release
 # directories: the expected set (spelled out here independently of the gate,
-# for the four config.yaml targets) must PASS; a standalone SBOM
+# for the four config.yaml targets: 13 assets) must PASS; a standalone SBOM
 # (*.cdx.json), an attestation bundle (*.intoto.jsonl) — even when listed in
-# SHA256SUMS —, a stray file, a subdirectory, a missing asset, a macOS wheel
-# and a stale SHA256SUMS must each FAIL.
+# SHA256SUMS —, a stray file, a subdirectory, a missing asset, a macOS wheel,
+# a leftover separate C++ package (sz-configtool-cpp-*), a raw Node addon
+# (*.node; it ships only inside the Node tarball) and a stale SHA256SUMS must
+# each FAIL.
 #
 # Usage: packaging/gates/test-release-assets.sh
 # shellcheck source=../lib/common.sh
@@ -20,12 +22,8 @@ PY_V="$(pep440_version "${V}")"
 ASSETS=(
     "sz-configtool-${V}-linux-x64.tar.gz" "sz-configtool-${V}-linux-arm64.tar.gz"
     "sz-configtool-${V}-macos-arm64.tar.gz" "sz-configtool-${V}-windows-x64.zip"
-    "sz-configtool-cpp-${V}-linux-x64.tar.gz" "sz-configtool-cpp-${V}-linux-arm64.tar.gz"
-    "sz-configtool-cpp-${V}-macos-arm64.tar.gz" "sz-configtool-cpp-${V}-windows-x64.zip"
     "sz-configtool-node-${V}-linux-x64.tgz" "sz-configtool-node-${V}-linux-arm64.tgz"
     "sz-configtool-node-${V}-macos-arm64.tgz" "sz-configtool-node-${V}-windows-x64.tgz"
-    "sz-configtool.linux-x64-gnu.node" "sz-configtool.linux-arm64-gnu.node"
-    "sz-configtool.darwin-arm64.node" "sz-configtool.win32-x64-msvc.node"
     "sz_configtool-${PY_V}-cp310-abi3-manylinux_2_34_x86_64.whl"
     "sz_configtool-${PY_V}-cp310-abi3-manylinux_2_34_aarch64.whl"
     "sz-configtool-${V}.jar" "Sz.ConfigTool.${V}.nupkg" "sz-configtool-trpc-${V}.tgz"
@@ -62,6 +60,7 @@ expect() {
 
 d="$(mock good)"
 sums "${d}"
+[[ ${#ASSETS[@]} -eq 13 ]] || die "self-test lists ${#ASSETS[@]} assets, expected 13"
 expect pass "expected set (${#ASSETS[@]} assets + SHA256SUMS)" "${d}"
 
 d="$(mock sbom)"
@@ -93,6 +92,16 @@ d="$(mock macwheel)"
 echo x >"${d}/sz_configtool-${PY_V}-cp310-abi3-macosx_11_0_arm64.whl"
 sums "${d}"
 expect fail "macOS wheel" "${d}" "macosx_11_0_arm64.whl"
+
+d="$(mock cpp)"
+echo x >"${d}/sz-configtool-cpp-${V}-linux-x64.tar.gz"
+sums "${d}"
+expect fail "leftover C++ package (in SHA256SUMS)" "${d}" "C++ binding ships inside the native archive"
+
+d="$(mock rawnode)"
+echo x >"${d}/sz-configtool.linux-x64-gnu.node"
+sums "${d}"
+expect fail "raw Node addon (in SHA256SUMS)" "${d}" "Node addon ships only inside"
 
 d="$(mock stale)"
 sums "${d}"
