@@ -103,15 +103,14 @@ system, or depend on `sz_configtool_lib` directly).
 
 | Language | Asset (`<v>` = version, `<os>-<arch>` = platform) |
 |---|---|
-| C (header + shared/static library) | `sz-configtool-<v>-<os>-<arch>.tar.gz` (`.zip` on Windows) |
-| C++ (header-only + CMake package) | `sz-configtool-cpp-<v>-<os>-<arch>.tar.gz` / `.zip` |
+| C and C++ (C header, shared/static library, C++20 header-only binding, CMake package `find_package(szconfigtool)`) | `sz-configtool-<v>-<os>-<arch>.tar.gz` (`.zip` on Windows); one archive for both languages, see its `README.md` |
 | Python (**Linux x64 / arm64 only**, matching Senzing's Linux-only Python SDK) | `sz_configtool-<v>-cp310-abi3-manylinux_2_34_{x86_64,aarch64}.whl` (`pip install` it; PEP 440 version, e.g. `4.4.0.post1` for `4.4.0-1`) |
 | Java | `sz-configtool-<v>.jar` (natives for all platforms inside) |
 | .NET | `Sz.ConfigTool.<v>.nupkg` (natives for all platforms inside) |
 | Node.js | `sz-configtool-node-<v>-<os>-<arch>.tgz` (`npm install` it); tRPC router `sz-configtool-trpc-<v>.tgz` |
 | Checksums | `SHA256SUMS` (every asset above) |
 
-No SBOM is published as a separate asset: the C archive embeds the CycloneDX
+No SBOM is published as a separate asset: the native archive embeds the CycloneDX
 SBOM of the C ABI (`sbom/sz-configtool-c.cdx.json`), and the full dependency
 list of every artifact is `Cargo.lock` at the release tag.
 

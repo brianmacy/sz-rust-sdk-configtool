@@ -96,20 +96,37 @@ repository root (see `packaging/README.md`, Coverage).
 
 ## Install and consume
 
+**From a GitHub Release**: the native archive
+`sz-configtool-<version>-<os>-<arch>.tar.gz` (`.zip` on Windows) is the C ABI
+and this binding in one, laid out as an install prefix (`include/`,
+`include/szconfigtool/`, `lib/` incl. `lib/cmake/szconfigtool/`, `bin/` on
+Windows). Unpack it and point `CMAKE_PREFIX_PATH` at the extracted directory:
+
+```bash
+tar -xzf sz-configtool-<version>-linux-x64.tar.gz -C /opt
+cmake -S . -B build -DCMAKE_PREFIX_PATH=/opt/sz-configtool-<version>-linux-x64
+```
+
+**From this repository**:
+
 ```bash
 cmake --install bindings/cpp/build --prefix /opt/szconfigtool
 ```
 
-installs the headers, `libSzConfigTool.h`, the shared and static libraries
-and `lib/cmake/szconfigtool/szconfigtool-config.cmake`. In a consumer:
+installs the same layout (headers, `libSzConfigTool.h`, the shared and static
+libraries and `lib/cmake/szconfigtool/szconfigtool-config.cmake`). In a
+consumer:
 
 ```cmake
-find_package(szconfigtool 0.10 REQUIRED)   # set SZCONFIGTOOL_USE_STATIC=ON first for the .a
+find_package(szconfigtool 4.4 REQUIRED)   # set SZCONFIGTOOL_USE_STATIC=ON first for the .a
 target_link_libraries(app PRIVATE SzConfigTool::szconfigtool)
 ```
 
-A GitHub Release archive of the binding has the same layout as the install
-prefix: unpack it and point `CMAKE_PREFIX_PATH` at it.
+`SzConfigTool::szconfigtool` defines `SZCONFIGTOOL_STATIC` for the static
+flavour (required on Windows, where the header otherwise declares the
+functions `__declspec(dllimport)`). Windows shared: put `bin/SzConfigTool.dll`
+next to the executable or on `PATH`. The release pipeline validates every
+native archive this way (`packaging/gates/check-native-archive.sh`).
 
 ## Runnable example
 

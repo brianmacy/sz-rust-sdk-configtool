@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Node binding artifacts.
 #
-#   package-node.sh <target>        per-target package: the .node + an npm tarball holding
-#                                   dist/ and that target's .node:
-#                                     out/sz-configtool.<napi_tag>.node
+#   package-node.sh <target>        per-target npm tarball holding dist/ and that
+#                                   target's staged .node (the .node is no
+#                                   separate release asset):
 #                                     out/sz-configtool-node-<version>-<os>-<arch>.tgz
 #   package-node.sh --trpc <target> the platform-independent tRPC router tarball, tested
 #                                   against <target>'s staged .node (host must run it):
@@ -52,7 +52,6 @@ rm -rf "${STAGE}/pkg-node" && mkdir -p "${pkg}" "${out}"
 cp "${NODE_DIR}/package.json" "${NODE_DIR}/README.md" "${pkg}/"
 cp -R "${NODE_DIR}/dist" "${pkg}/dist"
 cp "${node_file}" "${pkg}/"
-cp "${node_file}" "${out}/"
 tgz="$(cd "${pkg}" && npm pack --silent --pack-destination "$(native_path "${out}")" | tail -1)"
 final="sz-configtool-node-${VERSION}-$(tcfg "${TARGET}" os)-$(tcfg "${TARGET}" arch).tgz"
 [[ "${tgz}" == "${final}" ]] || mv "${out}/${tgz}" "${out}/${final}"

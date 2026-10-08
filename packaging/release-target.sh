@@ -5,9 +5,10 @@
 #   build    build-native.sh                       (natives + the C ABI SBOM)
 #   gates    exports, linkage, glibc ceiling (Linux), no build paths, C tests
 #            — over everything staged so far (run after build AND after package)
-#   package  C archive (embeds the C ABI SBOM), Python wheel (Linux targets
-#            only: config.yaml python_wheel), Node tarball, C++ package
-#            (runs its ctest)
+#   package  native archive (C ABI + C++ binding + CMake package + C ABI SBOM;
+#            package-c.sh, which extracts it and runs the C tests, the C++
+#            ctest suite and find_package consumers against it), Python wheel
+#            (Linux targets only: config.yaml python_wheel), Node tarball
 #   smoke    each binding's test suite against the staged natives (Python on
 #            Linux targets only)
 #   all      build gates package gates smoke
@@ -44,7 +45,6 @@ stage_package() {
         log "no Python wheel for ${TARGET} (Senzing's Python SDK is Linux only)"
     fi
     "${P}/package-node.sh" "${TARGET}"
-    "${P}/package-cpp.sh" "${TARGET}"
 }
 
 stage_smoke() { "${P}/smoke-bindings.sh" "${TARGET}"; }

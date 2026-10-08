@@ -7,7 +7,8 @@
 #   node    npm test with SZ_CONFIGTOOL_NATIVE_PATH = staged .node
 #   java    mvn test with the staged JNI library (-Dnative.lib.dir)
 #   dotnet  dotnet test with SZCONFIGTOOL_NATIVE_DIR = staged C ABI
-# (C++ is tested by package-cpp.sh, the C ABI by gates/run-c-tests.sh.)
+# (C and C++ are tested against the native archive by package-c.sh via
+# gates/check-native-archive.sh, the staged C ABI by gates/run-c-tests.sh.)
 #
 # Usage: packaging/smoke-bindings.sh <target> [python|node|java|dotnet ...]
 #        (default: all that the target ships)
