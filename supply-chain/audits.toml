@@ -204,3 +204,115 @@ who = "Brian Macy <brian@senzing.com>"
 criteria = "safe-to-deploy"
 version = "2.5.0"
 notes = "AI-assisted review (Claude) of the full crate source on behalf of the auditor. No unsafe anywhere in the crate. Recursive directory iterator over std::fs (its advertised capability), loop detection via same-file Handle::from_path. Build-time dependency of jni only. Full traversal logic not reviewed beyond that."
+
+[[trusted.bytes]]
+criteria = "safe-to-deploy"
+user-id = 6741 # Alice Ryhl (Darksonn)
+start = "2021-01-11"
+end = "2027-10-25"
+notes = "Alice Ryhl (Darksonn): Tokio and Rust project maintainer; publisher is in the [[trusted]] sets of the imported Mozilla and Bytecode Alliance audits (checked 2026-10-25)."
+
+[[trusted.futures-util]]
+criteria = "safe-to-deploy"
+user-id = 33035 # Taiki Endo (taiki-e)
+start = "2020-10-05"
+end = "2027-10-25"
+notes = "Taiki Endo (taiki-e): maintainer of rust-lang/futures-rs, crossbeam, pin-project and portable-atomic; recognized maintainer of widely used foundational crates (not in an imported trust list)."
+
+[[trusted.hashbrown]]
+criteria = "safe-to-deploy"
+user-id = 55123 # rust-lang-owner
+start = "2025-04-30"
+end = "2027-10-25"
+notes = "rust-lang-owner: the Rust project's crates.io publishing account; in the [[trusted]] sets of the imported Mozilla, ISRG, Bytecode Alliance and Ariel OS audits (checked 2026-10-25)."
+
+[[trusted.libc]]
+criteria = "safe-to-deploy"
+trusted-publisher = "github:rust-lang/libc"
+start = "2026-10-02"
+end = "2027-10-25"
+notes = "crates.io trusted publishing from the Rust project's own rust-lang/libc GitHub repository (replaces the rust-lang-owner account that Mozilla, ISRG and Bytecode Alliance trust for libc; checked 2026-10-25)."
+
+[[trusted.linux-raw-sys]]
+criteria = "safe-to-run"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2021-06-12"
+end = "2027-10-25"
+notes = "Dan Gohman (sunfishcode): Bytecode Alliance, maintainer of rustix/linux-raw-sys; publisher is in the [[trusted]] sets of the imported Mozilla, ISRG, Bytecode Alliance and Ariel OS audits (checked 2026-10-25)."
+
+[[trusted.memchr]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-07-07"
+end = "2027-10-25"
+notes = "Andrew Gallant (BurntSushi): maintainer of regex/memchr/walkdir; publisher is in the [[trusted]] sets of the imported Mozilla, ISRG, Bytecode Alliance and Ariel OS audits (checked 2026-10-25)."
+
+[[trusted.once_cell]]
+criteria = "safe-to-deploy"
+user-id = 2699 # Alex Kladov (matklad)
+start = "2019-05-07"
+end = "2027-10-25"
+notes = "Alex Kladov (matklad): rust-analyzer creator, former Rust project member; once_cell is the basis of std OnceCell/LazyLock; recognized maintainer of foundational crates (not in an imported trust list)."
+
+[[trusted.portable-atomic]]
+criteria = "safe-to-deploy"
+trusted-publisher = "github:taiki-e/portable-atomic"
+start = "2026-07-17"
+end = "2027-10-25"
+notes = "crates.io trusted publishing from taiki-e/portable-atomic, Taiki Endo's own repository (maintainer of rust-lang/futures-rs and crossbeam); not in an imported trust list."
+
+[[trusted.rustix]]
+criteria = "safe-to-run"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2021-10-29"
+end = "2027-10-25"
+notes = "Dan Gohman (sunfishcode): Bytecode Alliance, maintainer of rustix/linux-raw-sys; publisher is in the [[trusted]] sets of the imported Mozilla, ISRG, Bytecode Alliance and Ariel OS audits (checked 2026-10-25)."
+
+[[trusted.ryu]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-05-02"
+end = "2027-10-25"
+notes = "David Tolnay (dtolnay): maintainer of serde/syn/quote/anyhow/thiserror; this publisher is in the [[trusted]] sets of the imported Mozilla, ISRG, Bytecode Alliance and Ariel OS audits (checked 2026-10-25)."
+
+[[trusted.serde_json]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-02-28"
+end = "2027-10-25"
+notes = "David Tolnay (dtolnay): maintainer of serde/syn/quote/anyhow/thiserror; this publisher is in the [[trusted]] sets of the imported Mozilla, ISRG, Bytecode Alliance and Ariel OS audits (checked 2026-10-25)."
+
+[[trusted.syn]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-03-01"
+end = "2027-10-25"
+notes = "David Tolnay (dtolnay): maintainer of serde/syn/quote/anyhow/thiserror; this publisher is in the [[trusted]] sets of the imported Mozilla, ISRG, Bytecode Alliance and Ariel OS audits (checked 2026-10-25)."
+
+[[trusted.unsafe-libyaml]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2022-07-03"
+end = "2027-10-25"
+notes = "David Tolnay (dtolnay): maintainer of serde/syn/quote/anyhow/thiserror; this publisher is in the [[trusted]] sets of the imported Mozilla, ISRG, Bytecode Alliance and Ariel OS audits (checked 2026-10-25)."
+
+[[trusted.winapi-util]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2020-01-11"
+end = "2027-10-25"
+notes = "Andrew Gallant (BurntSushi): maintainer of regex/memchr/walkdir; publisher is in the [[trusted]] sets of the imported Mozilla, ISRG, Bytecode Alliance and Ariel OS audits (checked 2026-10-25)."
+
+[[trusted.windows-sys]]
+criteria = "safe-to-deploy"
+user-id = 64539 # Kenny Kerr (kennykerr)
+start = "2021-11-15"
+end = "2027-10-25"
+notes = "Kenny Kerr (kennykerr): Microsoft, maintainer of windows-rs; publisher is in the [[trusted]] sets of the imported Mozilla, ISRG, Bytecode Alliance, Zcash and Ariel OS audits (checked 2026-10-25)."
+
+[[trusted.zmij]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2025-12-18"
+end = "2027-10-25"
+notes = "David Tolnay (dtolnay): maintainer of serde/syn/quote/anyhow/thiserror; this publisher is in the [[trusted]] sets of the imported Mozilla, ISRG, Bytecode Alliance and Ariel OS audits (checked 2026-10-25)."
