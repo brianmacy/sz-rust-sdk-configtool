@@ -18,6 +18,12 @@ and the Rust API is additive only within `4.x` (README, "Versioning").
   `pyo3-macros`). Every remaining exemption has a `notes` justification. Result: 48 fully
   audited / 30 exempted (was 0 / 78). The weekly `cargo vet` job writes that ratio to the job
   summary.
+- Supply chain: 16 `cargo vet trust` entries for reputable publishers (dtolnay, BurntSushi,
+  Darksonn, sunfishcode, kennykerr, rust-lang-owner, rust-lang/libc, taiki-e, matklad), each
+  noting its evidence (listed in an imported set's `[[trusted]]` section, or a recognized
+  maintainer of foundational crates). Exemptions regenerated and pruned: 65 fully audited /
+  13 exempted (was 48 / 30); every remaining exemption's notes say why its publisher is not
+  trusted.
 
 ## [4.4.0-3] - 2026-10-08
 
