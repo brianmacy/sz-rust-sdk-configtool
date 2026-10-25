@@ -104,5 +104,12 @@ jobs:
       - name: Install cargo-vet
         run: cargo install cargo-vet --locked
 
+      # The success line carries the audited/exempted ratio
+      # ("Vetting Succeeded (N fully audited, M exempted)"); echo it into the
+      # job summary so exemption drift is visible without opening the log.
       - name: Run cargo vet
-        run: cargo vet --locked
+        run: |
+          set -o pipefail
+          cargo vet --locked 2>&1 | tee vet-output.txt
+          grep -E 'Vetting (Succeeded|Failed)' vet-output.txt \
+            >> "$GITHUB_STEP_SUMMARY"

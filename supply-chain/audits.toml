@@ -1,4 +1,206 @@
 
 # cargo-vet audits file
 
-[audits]
+[[audits.anyhow]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.103 -> 1.0.104"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. Version bump, doc root URL, and dev-dependency syn 2 -> 3; no logic or unsafe changes."
+
+[[audits.bitflags]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "2.11.1 -> 2.13.2"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. Adds flag_name renaming attribute, all_named(), iter_equal_names() via macro_rules token munchers; crate keeps forbid(unsafe_code) (the only unsafe is the pre-existing optional bytemuck impls in external.rs, unchanged)."
+
+[[audits.cfg-if]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.4 -> 1.0.5"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. Deprecation notice in README/rustdoc and CI action bumps; no macro changes."
+
+[[audits.convert_case]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.0 -> 0.12.0"
+notes = "AI-assisted review (Claude) of the cargo vet diff on behalf of the auditor. Rewrite of the case-conversion API (Boundary/Pattern/Converter). No unsafe, no filesystem/network/process access; pure string manipulation used at build time by napi-derive-backend. Full logic not reviewed beyond that."
+
+[[audits.fastrand]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "2.3.0 -> 2.5.0"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. f32/f64 generation via u64 >> 1 times 2^-63 with rejection loop for exclusive range; const with_seed; getrandom 0.4 API (fill). No unsafe changes."
+
+[[audits.futures]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.31 -> 0.3.34"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. Facade crate: Cargo.toml feature reorder, new `spin` feature passthrough, test updates (pin! migration). No library source changes."
+
+[[audits.futures-channel]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.31 -> 0.3.34"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. Adds recv()/try_recv() and TryRecvError enum, deprecates try_next; Recv future is safe Pin::new on &mut Unpin stream; cfg(target_has_atomic) cleanup. No new unsafe."
+
+[[audits.futures-executor]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.31 -> 0.3.34"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. num_cpus replaced by std::thread::available_parallelism; pin_mut! -> std::pin::pin!; const thread_local. No new unsafe."
+
+[[audits.futures-io]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.31 -> 0.3.34"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. Cargo.toml reordering and version bump; no source changes."
+
+[[audits.futures-macro]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.32 -> 0.3.34"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. Version bump and syn 2 -> 3 dependency change only; no source changes."
+
+[[audits.futures-sink]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.32 -> 0.3.34"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. Version bump only in Cargo.toml; no source changes."
+
+[[audits.futures-task]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+version = "0.3.31"
+notes = "AI-assisted review (Claude) of the full crate source on behalf of the auditor. Unsafe reviewed: Arc-based RawWakerVTable keeps refcounts balanced (clone increments via ManuallyDrop clone, wake consumes, wake_by_ref borrows, drop releases); WakerRef copies the Waker with ptr::read under ManuallyDrop and a borrow lifetime; noop_waker_ref casts RawWaker to Waker, relying on Waker being repr(transparent); LocalFutureObj erases the future lifetime but re-binds it with PhantomData<&'a ()>, and each UnsafeFutureObj impl's drop matches its into_raw. No I/O."
+
+[[audits.indexmap]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "2.14.0 -> 2.14.2"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. New map/disjoint.rs moves the existing get_disjoint_mut unsafe: indices are bounds- and duplicate-checked before raw-pointer derefs, so the returned &mut are unique and in-bounds. Index asserts consolidated in util.rs; macros use const blocks."
+
+[[audits.itoa]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.15 -> 1.0.18"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. Formatting rewritten. Unsafe reviewed: buffer cast in format() targets Buffer arrays <= 40 bytes (i128::MAX_STR_LEN); DECIMAL_PAIRS get_unchecked indices are pair*2+{0,1} with pair < 100 from divmod100 of values < 10000; slice_buffer_to_str only called with offsets produced by bounds-checked contiguous writes from the end of buf, so all bytes from offset are initialized ASCII. Signed path offset math verified for i8..i128."
+
+[[audits.jni-sys]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+version = "0.4.1"
+notes = 'AI-assisted review (Claude) of the full crate source on behalf of the auditor. Raw JNI FFI declarations; vtable field order and signatures checked against the JNI spec (variadic Call*Method use extern "C", others extern "system"). Discretion: jboolean is Rust bool (relies on the JVM only producing 0/1, true for HotSpot); va_list is an opaque *mut c_void (only *V entry points affected); the Debug impl for jvalue reads every union member, which reads uninitialized bytes if the value was written via a narrower member, reachable only by Debug-formatting a jvalue.'
+
+[[audits.jni-sys-macros]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+version = "0.4.1"
+notes = "AI-assisted review (Claude) of the full crate source on behalf of the auditor. Proc macro (no unsafe, no I/O) that expands a struct into versioned #[repr(C)] structs plus a union; fields newer than a version are replaced by *mut c_void padding, which is ABI-correct because every JNI vtable slot is pointer-sized."
+
+[[audits.log]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.33 -> 0.4.34"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. New `alloc` feature (std implies alloc) gating Box<Log> impl and set_boxed_logger; uses Box::leak as before. No new unsafe."
+
+[[audits.napi-build]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+version = "2.6.0"
+notes = "AI-assisted review (Claude) of the full crate source on behalf of the auditor. Build-script helper, no unsafe. Emits cargo link args per target; writes small files only into OUT_DIR; on wasm32-wasi runs `rustc --print sysroot` and a probe compile. Discretion: embeds a prebuilt wasm object (src/wasi_heap_sync_exports.o, C source shipped alongside) that is only linked for wasm32-wasip1-threads with the wasi-heap-sync feature, not for native targets."
+
+[[audits.napi-sys]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+version = "3.4.0"
+notes = "AI-assisted review (Claude) of the full crate source on behalf of the auditor. Raw Node-API FFI declarations (spot-checked against node_api.h: size_t->usize, length params as isize so NAPI_AUTO_LENGTH=-1). With the default dyn-symbols feature, setup() resolves symbols from the host process (libloading Library::this / node.exe on Windows) into a `static mut` table; stubs return a zeroed napi_status/c_int, never a non-nullable type. Discretion: the static mut table is only sound if setup() runs before any N-API call and not concurrently, which the napi crate guarantees at module registration. wasi_* modules are compiled only for wasm32-wasip1-threads."
+
+[[audits.pin-project-lite]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.16 -> 0.2.17"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. Only rustdoc/doc-test attribute and lint-list changes in src/lib.rs; macro expansion (incl. unsafe projection code) unchanged."
+
+[[audits.proc-macro2]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.106 -> 1.0.107"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. MSRV 1.68 -> 1.71, doc links to syn 3, map_or -> is_some_and, else-branch flattening. No unsafe or behavior changes."
+
+[[audits.pyo3-macros]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+version = "0.29.3"
+notes = "AI-assisted review (Claude) of the full crate source on behalf of the auditor. Thin proc-macro shim (no unsafe, no I/O): parses attributes with syn and forwards to pyo3-macros-backend. The generated code itself comes from pyo3-macros-backend, which is audited/exempted separately."
+
+[[audits.rustc-hash]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "2.1.1 -> 2.1.3"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. multiply_mix cfg -> cfg! with wrapping_mul; hash_bytes bulk loop uses split_first_chunk (safe, equivalent bounds); nightly derive_const; rand 0.9 API. No unsafe."
+
+[[audits.same-file]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+version = "1.0.6"
+notes = "AI-assisted review (Claude) of the full crate source on behalf of the auditor. Build-time dependency only (walkdir -> jni build script). Unix: compares (dev, ino) from fstat; stdin/stdout/stderr wrap fds 0/1/2 with File::from_raw_fd and leak them back on drop via into_raw_fd. Windows: delegates to winapi-util handles. Discretion: on Unix, if metadata() fails in from_std the temporary File is dropped and closes the std fd; not reachable here: walkdir, its only consumer in this graph, only calls Handle::from_path (checked walkdir 2.5.0 src)."
+
+[[audits.serde]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.228 -> 1.0.229"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. Mirrors serde_core 1.0.229 (same seq visitor reborrow, build.rs MSRV cfg); never_type feature gated on docsrs. No new unsafe."
+
+[[audits.serde_core]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.228 -> 1.0.229"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. build.rs MSRV cfg threshold moved (no_serde_derive below 1.71); seq visitor reborrows &mut *self.0; lint rename. No new unsafe, no I/O."
+
+[[audits.serde_derive]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.228 -> 1.0.229"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. Port to syn 3 (FnPtr, TraitBoundModifiers, attrs fields) and iterator chains rewritten as loops; generated code replaces `?` with explicit Ok/Err matches (equivalent). Generated code has no new unsafe."
+
+[[audits.simd_cesu8]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+version = "1.2.0"
+notes = "AI-assisted review (Claude) of the full crate source on behalf of the auditor. CESU-8/MUTF-8 codec used by jni for Java strings (untrusted input). Unsafe reviewed: decode() bounds-checks every get_unchecked (next! checks index<len, surrogate path checks index+4<=len) and only pushes fully validated sequences (no surrogates, no overlongs, paired surrogates rebuilt as 4-byte UTF-8), so String::from_utf8_unchecked is sound; lossy mode never returns Err so unwrap_unchecked is sound; borrowed fast paths are guarded by simdutf8 validation. word.rs unaligned/aligned usize reads stay within [0,len) given the len >= size_of::<usize>() and len >= align_offset guards. simd.rs is nightly-only."
+
+[[audits.slab]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.11 -> 0.4.12"
+notes = "AI-assisted review (Claude) of the full cargo vet diff on behalf of the auditor. try_remove rewritten to check Occupied before mem::replace (safe code, same semantics); SECURITY.md added. No unsafe changes."
+
+[[audits.target-lexicon]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+version = "0.13.5"
+notes = "AI-assisted review (Claude) of the full crate source on behalf of the auditor. No unsafe anywhere in the crate. Target-triple parser/data model; build.rs parses $TARGET, writes host.rs into OUT_DIR, and runs `$RUSTC --version`. Used only by pyo3-build-config at build time. Full parsing logic not reviewed beyond that."
+
+[[audits.thiserror]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.69 -> 2.0.21"
+notes = "AI-assisted review (Claude) of the cargo vet diff on behalf of the auditor. No unsafe in the crate. no_std support (core::error::Error), new __private module generated by build.rs into OUT_DIR, build.rs additionally runs `rustc --version` and the existing nightly probe compile into OUT_DIR only. Var<T> Pointer wrapper is safe."
+
+[[audits.thiserror-impl]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.69 -> 2.0.21"
+notes = "AI-assisted review (Claude) of the cargo vet diff on behalf of the auditor. Proc macro with no unsafe and no I/O; generated code is safe Error/Display/From impls now routed through ::thiserror::__private paths; adds fmt= attribute, raw-ident handling, turbofish parsing and recursion lint. The only `unsafe` token is a keyword in scan_expr's parser table."
+
+[[audits.unicode-ident]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.18 -> 1.0.26"
+notes = "AI-assisted review (Claude) of the cargo vet diff on behalf of the auditor. Tables regenerated for Unicode 18; ASCII lookup now a u128 bitmask; out-of-range chunks map to ZERO_START/ZERO_CONTINUE. The get_unchecked into LEAF was checked against the shipped tables: max trie entry 247 gives max offset 247*32+63 = 7967 < LEAF.len() 7968."
+
+[[audits.walkdir]]
+who = "Brian Macy <brian@senzing.com>"
+criteria = "safe-to-deploy"
+version = "2.5.0"
+notes = "AI-assisted review (Claude) of the full crate source on behalf of the auditor. No unsafe anywhere in the crate. Recursive directory iterator over std::fs (its advertised capability), loop detection via same-file Handle::from_path. Build-time dependency of jni only. Full traversal logic not reviewed beyond that."

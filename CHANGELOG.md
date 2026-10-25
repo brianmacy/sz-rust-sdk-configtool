@@ -10,6 +10,15 @@ and the Rust API is additive only within `4.x` (README, "Versioning").
 
 ## [Unreleased]
 
+### Changed
+
+- Supply chain (`supply-chain/`, #70): `cargo vet` now imports the Bytecode Alliance, Embark,
+  Google, ISRG, Mozilla, Zcash, Actix, Ariel OS and Fermyon audit sets and records 34 local
+  audits (24 delta, 10 full, among them `jni-sys`, `napi-sys`, `simd_cesu8`, `napi-build` and
+  `pyo3-macros`). Every remaining exemption has a `notes` justification. Result: 48 fully
+  audited / 30 exempted (was 0 / 78). The weekly `cargo vet` job writes that ratio to the job
+  summary.
+
 ## [4.4.0-3] - 2026-10-08
 
 Packaging-only release (tag `v4.4.0-3`): fewer, more useful release assets. **No library, C ABI
