@@ -1,8 +1,8 @@
 # Build-time Python tools for release packaging. Installed with
 #   pip install --only-binary :all: --require-hashes -r packaging/requirements-build.txt
-# maturin: G2 pins none; 1.9.0 is the lowest version bindings/python/pyproject.toml
-# allows (maturin>=1.9) and was verified to build the abi3 wheel (macOS + --zig manylinux_2_34).
-# Hashes: every published file of the version (https://pypi.org/pypi/maturin/1.9.0/json).
+# maturin: G2 pins none; Dependabot-tracked within bindings/python/pyproject.toml
+# (maturin>=1.9,<2). 1.15.0 was verified to build the abi3 wheel (--zig manylinux_2_34).
+# Hashes: every published file of the version (https://pypi.org/pypi/maturin/1.15.0/json).
 # Keep equal to tools.maturin in packaging/config.yaml (packaging/gates/check-versions.sh).
 # Needs Python >= 3.11 (on 3.10 maturin also needs tomli, which is not pinned here).
 maturin==1.15.0 \

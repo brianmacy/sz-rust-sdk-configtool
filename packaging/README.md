@@ -241,7 +241,7 @@ the standard GitHub-hosted images of G2's larger/self-hosted runners.
 | Linux arm64 runner | `ubuntu-24.04-arm` | `Ubuntu-24.04-16Core-ARM`, `build_anylinux_arm.yml:102` |
 | macOS runner | `macos-26` | `macos-26-xlarge`, `build_macos.yml:129` |
 | Windows runner | `windows-2025` | `Windows-2025-16Core`, `build_win.yml:123` |
-| maturin | `1.9.0` — **G2 pins none**; lowest allowed by `bindings/python/pyproject.toml` (`>=1.9`), verified | — |
+| maturin | `1.15.0` — **G2 pins none**; Dependabot-tracked within `bindings/python/pyproject.toml` (`>=1.9,<2`), verified | — |
 | Node / npm | `22.18.0` (npm 10.9.3 bundled) — **G2 pins none**; lowest the Node tests support | — |
 | CMake / Ninja | runner image — **G2 pins none** (apt `cmake ninja-build`, `docker-anylinux/Dockerfile:23`); `bindings/cpp` needs CMake >= 3.20 | — |
 | cargo-cyclonedx | `0.5.9` — **G2 pins none** | — |

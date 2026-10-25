@@ -21,7 +21,7 @@ tools:
   # Coverage only (install-tools.sh component `coverage`, packaging/coverage.sh); G2 pins none.
   cargo_llvm_cov: "0.9.1"
   # Installed with `pip install --require-hashes -r packaging/requirements-build.txt`.
-  maturin: "1.9.0"
+  maturin: "1.15.0"
   python: "3.12"
   dotnet: "8.0.x"
   jdk:
