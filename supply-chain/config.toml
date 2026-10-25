@@ -31,11 +31,6 @@ url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
 [imports.zcash]
 url = "https://raw.githubusercontent.com/zcash/rust-ecosystem/main/supply-chain/audits.toml"
 
-[[exemptions.bytes]]
-version = "1.12.1"
-criteria = "safe-to-deploy"
-notes = "Byte-buffer types; pulled in by combine -> jni (shipped in the JNI binding). ~150 unsafe sites (raw buffer/vtable management); full audit deferred. Mozilla and Bytecode Alliance trust its publisher (Darksonn) but this repo has no trust entries yet. cargo audit (2026-10-25): no advisory."
-
 [[exemptions.combine]]
 version = "4.6.8"
 criteria = "safe-to-deploy"
@@ -46,16 +41,6 @@ version = "1.0.13"
 criteria = "safe-to-deploy"
 notes = "Module-constructor macro/runtime used by napi to register the Node addon at load time (shipped in the Node binding). ~190 unsafe sites incl. link-section constructors; full audit deferred. cargo audit (2026-10-25): no advisory."
 
-[[exemptions.futures-util]]
-version = "0.3.34"
-criteria = "safe-to-deploy"
-notes = "Future/stream combinators; transitive via futures -> napi (shipped in the Node binding). Imported delta audits reach 0.3.34 from 0.3.21, but no full audit of the 0.3.21 base exists (~25k lines, ~140 unsafe); that base audit is deferred. cargo audit (2026-10-25): no advisory."
-
-[[exemptions.hashbrown]]
-version = "0.17.1"
-criteria = "safe-to-deploy"
-notes = "SwissTable hash map behind indexmap (serde_json preserve_order), so it is in every shipped artifact. ~490 unsafe sites; the imported audit chain to 0.17.1 is missing only the 0.14.0 -> 0.14.2 delta (~4.7k insertions of unsafe-heavy table code), which is not reviewed. Mozilla/ISRG trust its publisher (Amanieu) but this repo has no trust entries yet. cargo audit (2026-10-25): no advisory."
-
 [[exemptions.jni]]
 version = "0.22.4"
 criteria = "safe-to-deploy"
@@ -65,21 +50,6 @@ notes = "Safe JNI wrapper used directly by bindings/jni (shipped). ~430 unsafe s
 version = "0.22.4"
 criteria = "safe-to-deploy"
 notes = "Proc macros of jni 0.22 (generated code contains unsafe JNI calls); 8.6k lines; audit deferred together with jni. cargo audit (2026-10-25): no advisory."
-
-[[exemptions.libc]]
-version = "0.2.190"
-criteria = "safe-to-deploy"
-notes = "Raw libc FFI bindings; used by pyo3/pyo3-ffi/napi (shipped Python and Node bindings) and dev-only tempfile deps. 133k lines of generated declarations; full audit impractical. Mozilla/ISRG trust rust-lang-owner as publisher but this repo has no trust entries yet. cargo audit (2026-10-25): no advisory."
-
-[[exemptions.linux-raw-sys]]
-version = "0.12.1"
-criteria = "safe-to-run"
-notes = "Generated Linux syscall/ABI definitions used by rustix -> tempfile; DEV-ONLY (test temp dirs), safe-to-run criteria. Imported audits cover 0.6.5; the 0.6.5 -> 0.12.1 delta (~200k generated insertions) is not reviewed. cargo audit (2026-10-25): no advisory."
-
-[[exemptions.memchr]]
-version = "2.8.3"
-criteria = "safe-to-deploy"
-notes = "SIMD byte search used by serde_json/combine/futures-util (shipped). ~340 unsafe sites (SIMD intrinsics); full audit deferred. Mozilla/ISRG trust its publisher (BurntSushi) but this repo has no trust entries yet. cargo audit (2026-10-25): no advisory."
 
 [[exemptions.napi]]
 version = "3.14.1"
@@ -95,16 +65,6 @@ notes = "#[napi] proc macro for bindings/node; generated code makes unsafe Node-
 version = "6.1.5"
 criteria = "safe-to-deploy"
 notes = "Code generator behind napi-derive (proc-macro only, emits unsafe N-API glue); 6k lines; audit deferred. cargo audit (2026-10-25): no advisory."
-
-[[exemptions.once_cell]]
-version = "1.21.4"
-criteria = "safe-to-deploy"
-notes = "Lazy/once cells used by pyo3 (shipped Python binding) and dev-only tempfile. Imported delta audits reach 1.21.4 from 1.12.0, but no full audit of the 1.12.0 base exists (~4k lines, ~50 unsafe); deferred. cargo audit (2026-10-25): no advisory."
-
-[[exemptions.portable-atomic]]
-version = "1.15.0"
-criteria = "safe-to-deploy"
-notes = "Portable atomics polyfill used by pyo3 (shipped Python binding); ~700 unsafe sites incl. inline asm; 30k-line full audit deferred. cargo audit (2026-10-25): no advisory."
 
 [[exemptions.pyo3]]
 version = "0.29.3"
@@ -131,52 +91,7 @@ version = "6.0.0"
 criteria = "safe-to-run"
 notes = "UEFI definitions pulled by getrandom -> tempfile; DEV-ONLY, compiled only for UEFI targets, safe-to-run criteria; not audited. cargo audit (2026-10-25): no advisory."
 
-[[exemptions.rustix]]
-version = "1.1.5"
-criteria = "safe-to-run"
-notes = "Safe syscall wrappers used by tempfile; DEV-ONLY (tests), safe-to-run criteria. Imported audits cover 0.38.x; the 0.38 -> 1.1.5 delta (~21k insertions) is not reviewed. cargo audit (2026-10-25): no advisory."
-
-[[exemptions.ryu]]
-version = "1.0.23"
-criteria = "safe-to-deploy"
-notes = "Float-to-string used by serde_yaml_ng in the codegen dev tool only (tools/codegen, publish=false; not in shipped artifacts). 30 unsafe sites; audit deferred. cargo audit (2026-10-25): no advisory."
-
-[[exemptions.serde_json]]
-version = "1.0.151"
-criteria = "safe-to-deploy"
-notes = "JSON (de)serialization; direct dependency of the library and every binding (shipped). 18k lines, 16 unsafe sites; full audit deferred. Mozilla/ISRG trust its publisher (dtolnay) but this repo has no trust entries yet. cargo audit (2026-10-25): no advisory."
-
 [[exemptions.serde_yaml_ng]]
 version = "0.10.0"
 criteria = "safe-to-deploy"
 notes = "YAML parsing for the codegen dev tool only (tools/codegen reads api/manifest/*.yaml; publish=false; not in shipped artifacts). 59 unsafe sites; audit deferred. cargo audit (2026-10-25): no advisory."
-
-[[exemptions.syn]]
-version = "2.0.119"
-criteria = "safe-to-deploy"
-notes = "Rust parser used only by proc macros at compile time (two major versions: 2.x via jni-macros/jni-sys-macros/pyo3-macros*, 3.x via serde_derive/thiserror-impl/napi-derive*/futures-macro). ~50k lines each; not shipped as runtime code; audit deferred. cargo audit (2026-10-25): no advisory."
-
-[[exemptions.syn]]
-version = "3.0.6"
-criteria = "safe-to-deploy"
-notes = "Rust parser used only by proc macros at compile time (two major versions: 2.x via jni-macros/jni-sys-macros/pyo3-macros*, 3.x via serde_derive/thiserror-impl/napi-derive*/futures-macro). ~50k lines each; not shipped as runtime code; audit deferred. cargo audit (2026-10-25): no advisory."
-
-[[exemptions.unsafe-libyaml]]
-version = "0.2.11"
-criteria = "safe-to-deploy"
-notes = "C-to-Rust translation of libyaml used by serde_yaml_ng in the codegen dev tool only (not in shipped artifacts). ~240 unsafe sites; 13k-line audit deferred. cargo audit reports RUSTSEC-2024-0449 (unmaintained warning, no vulnerability); not ignored/suppressed."
-
-[[exemptions.winapi-util]]
-version = "0.1.11"
-criteria = "safe-to-deploy"
-notes = "Windows API helpers for walkdir/same-file; BUILD-TIME only (jni build script) on Windows hosts. 24 unsafe sites; imported delta audits reach 0.1.11 from 0.1.9, but no full audit of the 0.1.9 base exists (~1.3k lines of Windows FFI); deferred. cargo audit (2026-10-25): no advisory."
-
-[[exemptions.windows-sys]]
-version = "0.61.2"
-criteria = "safe-to-deploy"
-notes = "Generated Windows API bindings; only reached via dev-only tempfile/rustix/errno and build-time winapi-util (not in shipped artifacts). 335k generated lines; not audited. Several imported sets trust its publisher (kennykerr) but this repo has no trust entries yet. cargo audit (2026-10-25): no advisory."
-
-[[exemptions.zmij]]
-version = "1.0.23"
-criteria = "safe-to-deploy"
-notes = "Float-to-string used by serde_json (shipped). Imported audits cover 1.0.21; the 1.0.21 -> 1.0.23 delta rewrites formatting with new SIMD unsafe (~1.2k insertions) and was NOT certified because the SIMD paths were not fully reasoned through. cargo audit (2026-10-25): no advisory."
