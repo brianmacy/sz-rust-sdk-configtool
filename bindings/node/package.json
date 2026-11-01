@@ -44,8 +44,8 @@
     "test": "node --test --experimental-strip-types test/*.test.ts"
   },
   "devDependencies": {
-    "@napi-rs/cli": "^3.10.0",
-    "@types/node": "^26.6.0",
+    "@napi-rs/cli": "^3.10.8",
+    "@types/node": "^26.6.5",
     "typescript": "^7.0.2"
   }
 }
