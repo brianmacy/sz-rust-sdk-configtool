@@ -32,7 +32,7 @@
   "dependencies": {
     "@trpc/server": "^11.19.0",
     "superjson": "^2.2.6",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "peerDependencies": {
     "sz-configtool": "4.4.0-3"
