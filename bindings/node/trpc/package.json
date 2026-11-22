@@ -30,16 +30,16 @@
     "test": "node --test --experimental-strip-types test/*.test.ts"
   },
   "dependencies": {
-    "@trpc/server": "^11.19.0",
+    "@trpc/server": "^11.22.1",
     "superjson": "^2.2.6",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "peerDependencies": {
     "sz-configtool": "4.4.0-3"
   },
   "devDependencies": {
-    "@trpc/client": "^11.19.0",
-    "@types/node": "^26.6.0",
+    "@trpc/client": "^11.22.1",
+    "@types/node": "^26.6.6",
     "sz-configtool": "file:..",
     "typescript": "^7.0.2"
   }
